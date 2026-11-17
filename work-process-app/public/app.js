@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.174';
+const APP_VERSION = '15.178';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -345,18 +345,18 @@ async function saveNewAttachments(entity, row, draft, form) {
 // 메뉴: 업무 → 하위 메뉴 → 화면. 입력과 목록(조회·검색)은 서로 다른 화면입니다(VIEW_SPLIT).
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
-  { group: '영업', items: [{ sub: '견적', items: [['#/sales/quotes/new', '견적서 작성'], ['#/sales/quotes', '견적서 목록']] }, { sub: '수주', items: [['#/sales/orders/new', '수주 입력'], ['#/sales/orders', '수주 목록']] }, { sub: '매출전표', items: [['#/sales/bills', '매출전표 관리'], ['#/sales/calendar', '매출 달력'], ['#/sales/returns/new', '반입(반품) 입력'], ['#/sales/returns', '반입 목록'], ['#/sales/delivery-status', '납품현황'], ['#/sales/ledger', '기간별 거래보고'], ['#/sales/closing', '매출 마감']] }, { sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
+  { group: '영업', items: [{ sub: '견적', items: [['#/sales/quotes', '견적서 관리']] }, { sub: '수주', items: [['#/sales/orders', '수주 관리']] }, { sub: '매출전표', items: [['#/sales/bills', '매출전표 관리'], ['#/sales/calendar', '매출 달력'], ['#/sales/returns', '반입(반품) 관리'], ['#/sales/delivery-status', '납품현황'], ['#/sales/closing', '매출 마감']] }, { sub: '생산의뢰', items: [['#/sales/mr', '생산의뢰 관리']] }, { sub: '구매의뢰', items: [['#/sales/pr', '구매의뢰 관리']] }] },
   { group: '구매', items: [
-    { sub: '발주', items: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
-    { sub: '매입전표', items: [['#/purchase/bills/new', '매입전표 입력'], ['#/purchase/bills', '매입전표 목록'], ['#/purchase/returns/new', '반출(반품) 입력'], ['#/purchase/returns', '반출 목록'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/closing', '매입 마감']] },
-    { sub: '샘플(상품)', items: [['#/purchase/sample/request', '샘플의뢰'], ['#/purchase/sample/list', '샘플리스트']] },
+    { sub: '발주', items: [['#/purchase/po', '발주 관리']] },
+    { sub: '매입전표', items: [['#/purchase/bills', '매입전표 관리'], ['#/purchase/calendar', '매입 달력'], ['#/purchase/returns', '반출(반품) 관리'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/closing', '매입 마감']] },
+    { sub: '샘플(상품)', items: [['#/purchase/sample/request', '상품 샘플의뢰'], ['#/purchase/sample/list', '상품 샘플리스트']] },
     { sub: '세탁', items: [['#/purchase/laundry/new', '불량·폐기 입력'], ['#/purchase/laundry', '불량·폐기 목록'], ['#/purchase/laundry-reports', '세탁 검수·성적서']] },
   ] },
   // 15.164 경리: 매입·매출 세금계산서, 매입·매출 거래처별 장부, 대금(입금·지급·원장·연령표)을 한곳에. 화면 주소는 그대로라 볼 수 있는 사람(영업·구매 메뉴 권한)도 그대로이고, 권한 없는 화면은 메뉴에서 빠진다.
   { group: '경리', items: [
     { sub: '세금계산서', items: [['#/sales/tax', '매출 세금계산서 관리'], ['#/sales/tax-check', '매출 발행 체크'], ['#/purchase/tax', '매입 세금계산서'], ['#/purchase/tax-check', '매입 발행 체크']] },
     { sub: '거래처별 장부', items: [['#/sales/book', '매출 거래처별 장부'], ['#/purchase/book', '매입 거래처별 장부']] },
-    { sub: '대금', items: [['#/purchase/payments', '입금확인'], ['#/purchase/disbursements', '지급확인'], ['#/purchase/notes', '어음 관리'], ['#/purchase/ledger', '매입처 원장'], ['#/sales/aging', '채권 연령표'], ['#/purchase/aging', '채무 연령표']] },
+    { sub: '대금', items: [['#/purchase/payments', '입금확인'], ['#/purchase/disbursements', '지급확인'], ['#/purchase/notes', '어음 관리'], ['#/sales/aging', '채권 연령표'], ['#/purchase/aging', '채무 연령표']] },
   ] },
   { group: '품질', items: [
     ['#/quality/inspections', '수입·출하 검사 이력'],
@@ -365,12 +365,12 @@ const NAV = [
   ] },
   { group: '개발', items: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
   { group: '생산', items: [
-    { sub: '샘플(제품)', items: [['#/prod/request', '샘플의뢰'], ['#/prod/list', '샘플리스트']] },
+    { sub: '샘플(제품)', items: [['#/prod/request', '제품 샘플의뢰'], ['#/prod/list', '제품 샘플리스트']] },
     ['#/prod/orders', '생산의뢰 접수'],
-    { sub: '완제품 생산', items: [['#/prod/finished/new', '생산계획 입력'], ['#/prod/finished', '생산일정 · 실적']] },
-    { sub: '반제품 생산', items: [['#/prod/semi/new', '생산계획 입력'], ['#/prod/semi', '생산일정']] },
-    { sub: '커팅/융착', items: [['#/prod/semi/cut/new', '작업 입력'], ['#/prod/semi/cut', '작업 기록']] },
-    { sub: '세탁(호기별)', items: [['#/prod/semi/wash/new', '작업 입력'], ['#/prod/semi/wash', '작업 기록']] },
+    { sub: '완제품 생산', items: [['#/prod/finished/new', '완제품 생산계획 입력'], ['#/prod/finished', '완제품 생산일정 · 실적']] },
+    { sub: '반제품 생산', items: [['#/prod/semi/new', '반제품 생산계획 입력'], ['#/prod/semi', '반제품 생산일정']] },
+    { sub: '커팅/융착', items: [['#/prod/semi/cut/new', '커팅/융착 작업 입력'], ['#/prod/semi/cut', '커팅/융착 작업 기록']] },
+    { sub: '세탁(호기별)', items: [['#/prod/semi/wash/new', '세탁 작업 입력'], ['#/prod/semi/wash', '세탁 작업 기록']] },
   ] },
   { group: '물류', items: [
     { sub: '입고', items: [['#/logistics/receipt/new', '입고 입력'], ['#/logistics/receive', '입고목록'], ['#/logistics/receipts', '입고증 목록']] },
@@ -420,7 +420,7 @@ function applyMenuAccess(main) {
 }
 // 관리 메뉴(15.38): 거래처·검사규격 같은 기준 정보는 업무 메뉴가 아닌 관리 묶음에 둔다. 주소는 그대로다.
 const NAV_MANAGE = [['#/purchase/vendors', '거래처 관리'], ['#/purchase/prices', '단가표'], ['#/quality/specs', '검사규격 설정']];
-const NAV_ADMIN = [['#/admin', '관리자 설정'], ['#/admin/org', '조직 구성'], ['#/admin/bom', '제품등록']];
+const NAV_ADMIN = [['#/admin/users', '회원 관리'], ['#/admin', '관리자 설정'], ['#/admin/org', '조직 구성'], ['#/admin/bom', '제품등록']]; // 15.175 회원 관리 분리
 // Entry and list screens built from one page: the page renders both parts and the view hides one.
 // key: route → [page route, view, title, other route, link label]
 const VIEW_SPLIT = {
@@ -480,6 +480,7 @@ function applyView(main, route) {
     }
   }
   const h1 = $('h1', main);
+  if (MANAGE[navRoute(route)]) { if (view === 'entry') showRecentEntries(main, route); return; } // 15.178 관리 화면: 제목·전환은 managedTabs
   if (h1) { const text = [...h1.childNodes].find(n => n.nodeType === 3 && n.nodeValue.trim()); if (text) text.nodeValue = title + ' '; }
   const link = document.createElement('a'); link.className = `btn view-switch ${view === 'list' ? 'primary' : ''}`; link.href = other;
   link.textContent = (view === 'entry' ? '' : '＋ ') + otherLabel + (view === 'entry' ? ' →' : '');
@@ -517,8 +518,8 @@ function showRecentEntries(main, route) {
 const PAGES = {
   '#/': pageHome,
   '#/reports': pageReports,
-  '#/purchase/po': pagePO,
-  '#/purchase/po/new': pagePO,
+  '#/purchase/po': main => managedPage(main, '#/purchase/po', pagePO), // 15.178 발주 관리
+  '#/purchase/po/new': main => managedPage(main, '#/purchase/po/new', pagePO),
   '#/purchase/laundry': pageLaundry,
   '#/purchase/laundry/new': pageLaundry,
   '#/purchase/laundry-reports': pageLaundryReports,
@@ -544,34 +545,35 @@ const PAGES = {
   '#/logistics/other/new': main => pageReceipts(main, 'other-entry'),
   '#/logistics/receipt/new': main => pageReceiptEntry(main),
   '#/logistics/receipts': main => pageReceiptList(main),
-  '#/purchase/bills/new': main => pageBillEntry(main),
-  '#/purchase/bills': main => pageBillList(main),
+  '#/purchase/bills/new': main => managedPage(main, '#/purchase/bills/new', pageBillEntry), // 15.177 매입전표 관리(입력)
+  '#/purchase/bills': main => managedPage(main, '#/purchase/bills', pageBillList), // 15.177 매입전표 관리(목록)
   '#/purchase/closing': main => pageBillClosing(main),
   '#/purchase/receipt-status': main => pageReceiptStatus(main),
   '#/sales/delivery-status': main => pageReceiptStatus(main, 'sales'),
-  '#/sales/quotes/new': main => pageQuoteEntry(main), // 15.163 견적서
-  '#/sales/quotes': main => pageQuoteList(main),
+  '#/sales/quotes/new': main => managedPage(main, '#/sales/quotes/new', pageQuoteEntry), // 15.163 견적서 · 15.178 견적서 관리
+  '#/sales/quotes': main => managedPage(main, '#/sales/quotes', pageQuoteList),
   '#/purchase/notes': main => pageNotes(main), // 15.165 어음 관리
+  '#/purchase/calendar': main => pagePurchaseCalendar(main), // 15.176 매입 달력
   '#/sales/calendar': main => pageSalesCalendar(main), // 15.166 매출 달력 // 15.157 납품현황(입고현황의 매출 쪽)
-  '#/sales/orders/new': main => pageSalesOrderEntry(main),
+  '#/sales/orders/new': main => managedPage(main, '#/sales/orders/new', pageSalesOrderEntry), // 15.178 수주 관리
   '#/sales/orders/edit': main => { let id = null; try { id = sessionStorage.getItem('wpa:so-edit'); } catch { id = null; } if (!id) { location.hash = '#/sales/orders'; return; } return pageSalesOrderEntry(main, id); },
-  '#/sales/orders': main => pageSalesOrderList(main),
+  '#/sales/orders': main => managedPage(main, '#/sales/orders', pageSalesOrderList),
   '#/logistics/ship-orders': main => pageShipInstructions(main),
   '#/sales/bills/new': main => managedPage(main, '#/sales/bills/new', pageSalesBillEntry), // 15.170 매출전표 관리(입력)
   '#/sales/bills': main => managedPage(main, '#/sales/bills', pageSalesBillList), // 15.170 매출전표 관리(목록)
   '#/purchase/payments': main => pagePayments(main, 'sales'),
   '#/purchase/disbursements': main => pagePayments(main, 'purchase'),
-  '#/purchase/ledger': main => pagePurchaseLedger(main),
+  '#/purchase/ledger': main => managedPage(main, '#/purchase/ledger', pagePurchaseLedger), // 15.177 매입 거래처별 장부 › 품목 줄별 원장
   '#/sales/payments': () => { location.replace('#/purchase/payments'); }, // 15.109 구매로 옮김
-  '#/sales/ledger': main => pageSalesLedger(main),
-  '#/sales/book': main => pagePartnerBook(main, 'sales'),
+  '#/sales/ledger': main => managedPage(main, '#/sales/ledger', pageSalesLedger), // 15.177 매출 거래처별 장부 › 품목 줄별 원장
+  '#/sales/book': main => managedPage(main, '#/sales/book', m => pagePartnerBook(m, 'sales')),
   '#/sales/returns/new': main => pageReturnEntry(main, 'in'),
   '#/sales/returns': main => pageReturnList(main, 'in'),
   '#/sales/returns/edit': main => { let id = null; try { id = sessionStorage.getItem('wpa:ret-edit'); } catch { id = null; } if (!id) { location.hash = '#/sales/returns'; return; } return pageReturnEntry(main, 'in', id); },
   '#/purchase/returns/edit': main => { let id = null; try { id = sessionStorage.getItem('wpa:ret-edit'); } catch { id = null; } if (!id) { location.hash = '#/purchase/returns'; return; } return pageReturnEntry(main, 'out', id); },
   '#/purchase/returns/new': main => pageReturnEntry(main, 'out'),
   '#/purchase/returns': main => pageReturnList(main, 'out'),
-  '#/purchase/book': main => pagePartnerBook(main, 'purchase'),
+  '#/purchase/book': main => managedPage(main, '#/purchase/book', m => pagePartnerBook(m, 'purchase')),
   '#/sales/aging': main => pageAging(main, 'sales'),
   '#/purchase/aging': main => pageAging(main, 'purchase'),
   '#/sales/closing': main => pageSalesClosing(main),
@@ -590,12 +592,15 @@ const PAGES = {
   '#/prod/semi/cut/new': main => pageSemi(main, 'cut'),
   '#/prod/semi/wash': main => pageSemi(main, 'wash'),
   '#/prod/semi/wash/new': main => pageSemi(main, 'wash'),
-  '#/sales/pr': pageSalesPrList,
-  '#/sales/mr': main => pageMrList(main, 'sales'),
-  '#/sales/mr/new': pageSalesMrEntry,
+  '#/sales/pr': main => managedPage(main, '#/sales/pr', pageSalesPrList), // 15.178 구매의뢰 관리
+  '#/sales/mr': main => managedPage(main, '#/sales/mr', m => pageMrList(m, 'sales')), // 15.178 생산의뢰 관리
+  '#/sales/mr/new': main => managedPage(main, '#/sales/mr/new', pageSalesMrEntry),
   '#/prod/orders': main => pageMrList(main, 'production'),
-  '#/sales/pr/new': pageSalesPrEntry,
+  '#/sales/pr/new': main => managedPage(main, '#/sales/pr/new', pageSalesPrEntry),
   '#/admin': pageAdmin,
+  '#/admin/users': main => managedPage(main, '#/admin/users', m => pageMembers(m, 'info')), // 15.175 회원 관리 · 회원 정보
+  '#/admin/users/roles': main => managedPage(main, '#/admin/users/roles', m => pageMembers(m, 'roles')), // 사용 권한
+  '#/admin/users/menus': main => managedPage(main, '#/admin/users/menus', m => pageMembers(m, 'menus')), // 메뉴 보기
   '#/admin/org': pageOrg,
   '#/admin/bom': pageBoms,
   '#/me': pageMe,
@@ -626,13 +631,23 @@ function refreshFavNav() {
 const MANAGE = {
   '#/sales/bills': { title: '매출전표 관리', tabs: [['#/sales/bills', '전표 목록'], ['#/sales/bills/new', '전표 입력']] },
   '#/sales/tax': { title: '세금계산서 관리', tabs: [['#/sales/tax', '계산서 목록'], ['#/sales/tax/new', '계산서 만들기']] },
+  '#/sales/quotes': { title: '견적서 관리', tabs: [['#/sales/quotes', '견적서 목록'], ['#/sales/quotes/new', '견적서 작성']] },
+  '#/sales/orders': { title: '수주 관리', tabs: [['#/sales/orders', '수주 목록'], ['#/sales/orders/new', '수주 입력']] },
+  '#/sales/mr': { title: '생산의뢰 관리', tabs: [['#/sales/mr', '생산의뢰 목록'], ['#/sales/mr/new', '생산의뢰 작성']] },
+  '#/sales/pr': { title: '구매의뢰 관리', tabs: [['#/sales/pr', '구매의뢰 목록'], ['#/sales/pr/new', '구매의뢰 작성']] },
+  '#/purchase/po': { title: '발주 관리', tabs: [['#/purchase/po', '발주 목록'], ['#/purchase/po/new', '발주 입력']] },
+  '#/purchase/bills': { title: '매입전표 관리', tabs: [['#/purchase/bills', '전표 목록'], ['#/purchase/bills/new', '전표 입력']] },
+  '#/sales/book': { title: '매출 거래처별 장부', tabs: [['#/sales/book', '전표별 장부'], ['#/sales/ledger', '품목 줄별 원장']] },
+  '#/purchase/book': { title: '매입 거래처별 장부', tabs: [['#/purchase/book', '전표별 장부'], ['#/purchase/ledger', '품목 줄별 원장']] },
+  '#/admin/users': { title: '회원 관리', tabs: [['#/admin/users', '회원 정보'], ['#/admin/users/roles', '사용 권한'], ['#/admin/users/menus', '메뉴 보기']] },
 };
-const ROUTE_ALIAS = { '#/sales/bills/new': '#/sales/bills', '#/sales/tax/new': '#/sales/tax' };
+const ROUTE_ALIAS = { '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users' };
 const navRoute = r => ROUTE_ALIAS[String(r || '#/').split('?')[0]] || String(r || '#/').split('?')[0];
 function managedTabs(main, route) {
   const m = MANAGE[navRoute(route)], h1 = $('h1', main); if (!m || !h1 || $('.manage-tabs', main)) return;
-  const t = [...h1.childNodes].find(n => n.nodeType === 3 && n.nodeValue.trim()); if (t) t.nodeValue = m.title + ' '; else h1.prepend(m.title + ' ');
-  h1.insertAdjacentHTML('afterend', `<nav class="manage-tabs" aria-label="${esc(m.title)}">${m.tabs.map(([h, l]) => `<a href="${h}" class="${h === route ? 'on' : ''}"${h === route ? ' aria-current="page"' : ''}>${esc(l)}</a>`).join('')}</nav>`);
+  const t = [...h1.childNodes].find(n => n.nodeType === 3 && n.nodeValue.trim());
+  if (t) t.nodeValue = /수정|고치기/.test(t.nodeValue) ? `${m.title} · ${t.nodeValue.trim()} ` : m.title + ' '; else h1.prepend(m.title + ' '); // 15.178 고치는 중 표시 유지
+  h1.insertAdjacentHTML('afterend', `<nav class="manage-tabs" aria-label="${esc(m.title)}">${m.tabs.filter(([h]) => canSeeRoute(h)).map(([h, l]) => `<a href="${h}" class="${h === route ? 'on' : ''}"${h === route ? ' aria-current="page"' : ''}>${esc(l)}</a>`).join('')}</nav>`);
 }
 async function managedPage(main, route, fn) { await fn(main); managedTabs(main, route); }
 function shell() {
@@ -1104,7 +1119,8 @@ function tasksCard(tasks) {
 // 3) 좁은 화면에서는 표를 카드로 보여 주기 위해 각 칸에 머리글을 붙입니다 (CSS가 data-label을 사용).
 // Phone cards show the main fields; the rest (memo, entered by, row buttons…) opens with 「자세히」. Long lists show 30 at a time.
 const CARD_SECONDARY = new Set(['COA 요청', '비고', '메모', '입력자', '입고 처리자', '처리자', '사진·검수', 'LOT', '분류', '1차 분류', '2차 분류', '3차 분류', '입고', '생산', '사용', '출하', '조정', '안전재고', '최근 일자', '입력자 · 검사일', '입력자 / 입력시각', '수정', '사유', '거래처 · 담당', '시작', '종료', '작업시간', '인원', '불량 사유', '단가', '비용']);
-const NOWRAP_HEADS = new Set(['분류', '거래처', '납기일', '입고일', '출고일', '작업일', '세탁일', '의뢰일', '상태', '입고상태', '수량', '발주수량', '실입고', '입력자', 'COA 요청', '단위', '현재고']);
+const ITEM_HEADS = new Set(['품목', '품목명', '품명', '제품명', '제품', '자재명', '샘플명', '품명 · LOT']); // 15.177 최소 너비
+const NOWRAP_HEADS = new Set(['코드', '품목코드', '제품코드', '전표번호', '구매의뢰번호', '수주번호', '발주번호', '입고번호', '출하번호', '접수번호', '어음번호', '계산서번호', '승인번호', '전표 일자', '명세서 일자', '수주일', '발주일', '만기일자', '발행일자', '분류', '거래처', '납기일', '입고일', '출고일', '작업일', '세탁일', '의뢰일', '상태', '입고상태', '수량', '발주수량', '실입고', '입력자', 'COA 요청', '단위', '현재고']);
 // ── 15.173 표 열 너비·순서(엑셀처럼): 머리글 오른쪽 경계를 끌어 너비 조절(두 번 누르면 원래 너비),
 // 머리글을 끌어 다른 머리글 위에 놓으면 열 순서 바꿈. 사용자·화면·표(머리글 이름)마다 이 브라우저에 저장, 「열 배치 초기화」로 되돌림.
 // 순서 바꾸기는 입력칸·합친 칸·두 줄 머리글·합계 줄이 없는 표만(칸 번호로 읽는 코드 보호). 휴대폰 카드 모양에서는 쓰지 않음.
@@ -1207,6 +1223,7 @@ function labelGridTables() {
       const cells = rows.map(tr => tr.children[i]).filter(Boolean);
       if (head && rows.length && !table.hasAttribute('data-keep-cols') && !table.querySelector('[colspan]') && cells.every(td => (!td.textContent.trim() || td.textContent.trim() === '—') && !td.querySelector('input, select, button, textarea'))) [ths[i], ...cells].forEach(c => c?.classList.add('col-empty'));
       if (NOWRAP_HEADS.has(head)) [ths[i], ...cells].forEach(c => c?.classList.add('nowrap-cell'));
+      if (ITEM_HEADS.has(head)) ths[i]?.classList.add('item-col'); // 15.177
     });
     gridLayout(table); // 15.173 열 너비·순서(빈 열 숨긴 뒤)
     if (!table.classList.contains('as-cards')) return;
@@ -1261,7 +1278,19 @@ function foldReportSections() {
   });
 }
 new MutationObserver(foldReportSections).observe(document.body, { childList: true, subtree: true });
-new MutationObserver(labelGridTables).observe(document.body, { childList: true, subtree: true });
+// 15.177 조회 줄의 「~」 라벨(끝 날짜)을 시작 날짜 칸 옆으로 붙인다: [전표 일자: 시작 ~ 끝]. 입력 이름·이벤트는 그대로.
+function pairDateRanges() {
+  $$('form.list-filters > label:not([data-paired])').forEach(l => {
+    l.dataset.paired = '1';
+    const own = [...l.childNodes].filter(n => n.nodeType === 3).map(n => n.nodeValue.trim()).join('');
+    const end = l.querySelector(':scope > input[type=date]'), prev = l.previousElementSibling;
+    if (own !== '~' || !end || !prev?.matches('label') || !prev.querySelector(':scope > input[type=date]')) return;
+    const start = prev.querySelector(':scope > input[type=date]'), pair = document.createElement('span'); pair.className = 'lf-pair';
+    start.replaceWith(pair); pair.append(start, Object.assign(document.createElement('span'), { className: 'muted', textContent: '~' }), end);
+    end.setAttribute('aria-label', (prev.childNodes[0]?.nodeValue || '').trim() + ' 끝'); prev.classList.add('lf-period'); l.remove();
+  });
+}
+new MutationObserver(() => { labelGridTables(); pairDateRanges(); }).observe(document.body, { childList: true, subtree: true });
 
 async function pageHome(main) {
   const [d, tasks, alerts] = await Promise.all([api('GET', '/api/dashboard'), api('GET', '/api/my-tasks'), api('GET', '/api/alerts').catch(() => null)]);
@@ -1567,7 +1596,7 @@ async function pageReceive(main) {
     <span id="rcSelectedCount" class="muted">0개 선택</span>
     <button class="btn green" data-st="ok" title="수량상이 항목은 실입고 수량 그대로 입고 종결">✔ 입고확인·완료</button>
     <button class="btn red" data-st="mismatch">수량상이</button>
-    <button class="btn yellow" data-st="checking">확인중</button>
+    <button class="btn yellow" data-st="checking" title="고른 줄을 「확인중」 상태로 바꿉니다">확인중으로 표시</button>
     <button class="btn" data-st="">미입고로 되돌리기</button>
     <button class="btn primary" data-rc-lot title="체크한 발주(같은 거래처)를 입고 입력 화면으로 불러와 LOT별·부분 입고로 받습니다">LOT·부분 입고 처리</button>
   </div>
@@ -2479,30 +2508,7 @@ async function pageAdmin(main) {
   <div class="card"><h3>회사 사진 저장소</h3><p id="imageStorageStatus" role="status">연결 상태를 확인하고 있습니다…</p><p class="muted small">기존 사진을 회사 저장소로 복사하고 원본과 비교합니다. 복사 중에는 사진 등록·수정·삭제를 잠시 멈춰 주세요. 원본은 보존하며 복사만으로 저장 위치가 바뀌지 않습니다.</p><div class="actions"><button class="btn" id="imageCheckBtn" disabled>연결 확인</button><button class="btn" id="imageCopyBtn" disabled>기존 사진 복사·검증</button></div><p id="imageCopyStatus" role="status" class="muted small"></p></div>
   <form class="card" id="invForm"><h3>초대코드</h3><p class="muted small">가입할 때 이 코드를 입력해야 합니다. 바꾸면 이후 가입부터 새 코드가 필요합니다.</p>
     <div class="row"><input name="invite_code" value="${esc(s.invite_code)}" required minlength="4" aria-label="초대코드"><button class="btn primary">변경</button></div></form>
-  <form class="card" id="userNew"><h3>사용자 추가</h3><p class="muted small">관리자가 계정을 바로 만듭니다. 만든 계정은 승인된 상태이며, 본인이 로그인한 뒤 「내 정보」에서 비밀번호를 바꿀 수 있습니다.</p>
-    <div class="form-grid"><label>이름 *<input name="name" required maxlength="30" autocomplete="off"></label><label>비밀번호 * (4자 이상)<input name="password" type="password" required minlength="4" autocomplete="new-password"></label>${orgFields(org)}</div>
-    <p class="small muted">오퍼레이터를 선택한 일반 계정은 다른 업무 권한보다 입력 전용 모드가 우선합니다. 관리자는 전체 권한을 유지합니다.</p><div class="role-checks">${Object.entries(ROLE_LABEL).map(([role, label]) => `<label class="check"><input type="checkbox" data-new-role="${role}"> ${label}</label>`).join('')}</div>
-    <div class="actions"><button class="btn primary">계정 만들기</button></div></form>
-  <div class="card"><h3>가입 승인 · 사용자 권한</h3><p class="small muted">오퍼레이터: 반제품 커팅/융착·세탁과 완제품 실적만 입력합니다. 다른 업무 권한을 함께 선택해도 일반 계정은 입력 전용으로 제한됩니다. 관리자 계정은 제외됩니다.</p><p class="muted">승인 대기 ${users.filter(u => u.approval_status === 'pending').length}명 · 신규 가입자는 승인 후 로그인할 수 있습니다.</p>
-    <p class="muted small">품질·개발은 업무 담당 권한입니다. 분석의뢰·VOC 승인·반려는 품질책임자, 개발의뢰 승인·반려는 개발책임자를 체크해 지정하세요. 책임자는 해당 팀의 업무 처리 권한도 갖습니다. 가입 승인된 사용자만 책임자로 지정할 수 있습니다. 관리자는 모든 의뢰를 승인할 수 있으며 생산의 샘플 승인 권한은 유지됩니다.</p>
-    ${listControls('users', { placeholder: '사용자 이름 검색', extra: `<label>가입 상태<select name="approval"><option value="">전체 상태</option><option value="pending">승인 대기</option><option value="approved">승인 완료</option><option value="rejected">반려</option></select></label><label>권한<select name="role"><option value="">전체 권한</option><option value="admin">관리자</option>${Object.entries(ROLE_LABEL).map(([role, label]) => `<option value="${role}">${label}</option>`).join('')}</select></label>` })}
-    <div class="table-wrap"><table class="grid users-table"><thead><tr><th>이름</th><th>가입 상태</th><th>권한 <span class="small muted">(체크하면 바로 저장)</span></th><th></th></tr></thead>
-    <tbody>${users.map((u) => `<tr data-u="${u.id}"><td class="user-name"><b>${esc(u.name)}</b>${u.department || u.position ? `<div class="small muted">${esc([u.department, u.position].filter(Boolean).join(' · '))}</div>` : ''}</td><td>${esc(({pending:"승인 대기",approved:"승인 완료",rejected:"반려"})[u.approval_status])}${u.approval_note ? `<br><small>${esc(u.approval_note)}</small>` : ""}${u.reviewed_by ? `<br><small>${esc(u.reviewed_by)} · ${esc(u.reviewed_at)}</small>` : ""}<div class="small muted">가입 ${esc(u.created_at.slice(0, 10))}</div></td>
-      <td class="role-cell"><div class="role-chips">${Object.keys(ROLE_LABEL).map((r) => `<label class="role-chip" title="${ROLE_LABEL[r]}"><input type="checkbox" data-role="${r}" ${u.roles.includes(r) ? 'checked' : ''} ${["quality_approver","dev_approver","production_approver","logistics_approver"].includes(r) && u.approval_status !== "approved" ? 'disabled' : ''} aria-label="${ROLE_LABEL[r]}"><span aria-hidden="true">${ROLE_SHORT[r]}</span></label>`).join('')}<label class="role-chip admin-chip" title="관리자(모든 화면·설정)"><input type="checkbox" data-admin ${u.is_admin ? 'checked' : ''} ${u.id === ME.id || u.approval_status !== 'approved' ? 'disabled' : ''} aria-label="관리자"><span aria-hidden="true">관리자</span></label></div></td>
-      <td class="user-actions"><div class="user-tools">${u.approval_status !== "approved" ? '<button class="btn small primary" data-approve>가입 승인</button> ' : ""}${!u.is_admin && u.approval_status !== "rejected" ? '<button class="btn small danger" data-reject>반려</button> ' : ""}<button class="btn small" data-profile>직급·부서</button> ${u.is_admin ? '' : `<button class="btn small" data-menu-access>메뉴: ${esc(u.menu_mode === 'all' ? '전체' : u.menu_mode === 'custom' ? menuSummary(u.menu_custom || []) : '부서 기본')}</button>`} <button class="btn small" data-pw>비밀번호 초기화</button> ${u.id !== ME.id ? '<button class="btn small danger" data-del>삭제</button>' : ''}</div></td></tr>`).join('')}</tbody></table></div></div>`;
-  $('#userNew').onsubmit = async (e) => { e.preventDefault(); try { const made = await api('POST', '/api/admin/users', { ...formObj(e.target), roles: $$('[data-new-role]:checked', e.target).map((box) => box.dataset.newRole) }); toast(`${made.name} 계정을 만들었습니다.`); pageAdmin(main); } catch (err) { fail(err); } };
-  $('#invForm').onsubmit = async (e) => { e.preventDefault(); try { const r = await api('PUT', '/api/admin/invite', formObj(e.target)); toast(`초대코드: ${r.invite_code}`); } catch (err) { fail(err); } };
-  const userFilter = $('#usersFilters', main);
-  const filterUsers = () => {
-    const values = formObj(userFilter); const q = values.q.trim().toLocaleLowerCase(); let count = 0;
-    $$('tr[data-u]', main).forEach(tr => {
-      const user = users.find(user => user.id === Number(tr.dataset.u));
-      const visible = user.name.toLocaleLowerCase().includes(q) && (!values.approval || user.approval_status === values.approval) && (!values.role || (values.role === 'admin' ? user.is_admin : userHasRole(user, values.role)));
-      tr.hidden = !visible; if (visible) count++;
-    });
-    listCount(userFilter, count);
-  };
-  bindListControls(userFilter, filterUsers); filterUsers();
+  <div class="card"><h3>회원 관리</h3><p class="muted small">가입 승인·회원 정보, 사용 권한(승인·처리), 메뉴 보기는 「회원 관리」에서 나눠 관리합니다.</p><p>${(() => { const n = users.filter(u => u.approval_status === 'pending').length; return n ? `<span class="chip yellow">가입 승인 대기 ${n}명</span> ` : ''; })()}<a class="btn" href="#/admin/users">회원 관리 열기</a></p></div>`;
   const imageCheck = $('#imageCheckBtn'), imageCopy = $('#imageCopyBtn'), imageStatus = $('#imageStorageStatus');
   try {
     const storage = await api('GET', '/api/admin/image-storage');
@@ -2559,33 +2565,6 @@ async function pageAdmin(main) {
     } catch (error) { status.textContent = '백업에 실패했습니다. 다시 시도해 주세요.'; fail(error); }
     finally { button.disabled = false; }
   };
-  $$('tr[data-u]').forEach((tr) => {
-    const id = tr.dataset.u; const name = $('b', tr).textContent;
-    const save = async (body) => { try { const changed = await api('PUT', '/api/admin/users/' + id, body); Object.assign(users.find(user => user.id === Number(id)), changed); filterUsers(); toast('저장했습니다.'); if (Number(id) === ME.id) { ME = (await api('GET', '/api/me')).user; } } catch (e) { fail(e); render(); } };
-    $$('[data-role]', tr).forEach((c) => (c.onchange = () => save({ roles: $$('[data-role]:checked', tr).map((x) => x.dataset.role) })));
-    $('[data-admin]', tr).onchange = (e) => save({ is_admin: e.target.checked });
-    const review = async (status, note = '') => { try { await api('POST', '/api/admin/users/' + id + '/approval', { status, note }); toast(status === 'approved' ? '가입을 승인했습니다.' : '가입을 반려했습니다.'); render(); } catch (e) { fail(e); } };
-    const approve = $('[data-approve]', tr); if (approve) approve.onclick = async () => { if (await confirmBox(`${name} 님의 가입을 승인할까요?`)) review('approved'); };
-    const reject = $('[data-reject]', tr); if (reject) reject.onclick = async () => { const value = await promptBox(`${name} 님의 가입 반려`, '<label>반려 사유<input name="note" maxlength="500"></label>'); if (value) review('rejected', value.note); };
-    $('[data-profile]', tr).onclick = async () => { const u = users.find(user => user.id === Number(id)); const v = await promptBox(`${name} 직급·부서`, `<p class="small muted">부서·직급 목록은 「조직 구성」에서 관리합니다.</p>${orgFields(org, u)}`); if (v) { await save(v); pageAdmin(main); } };
-    const menuButton = $('[data-menu-access]', tr);
-    if (menuButton) menuButton.onclick = async () => {
-      const u = users.find(user => user.id === Number(id));
-      const m = modal(`<h3>${esc(name)} 메뉴 열람</h3><form class="stack" data-no-author>
-        <fieldset class="menu-mode"><legend>방식</legend>
-          <label class="inline"><input type="radio" name="menu_mode" value="department"${u.menu_mode === 'department' ? ' checked' : ''}> 부서 기본 따름 <span class="small muted">(${esc(u.department || '부서 미지정')} · 조직 구성에서 설정)</span></label>
-          <label class="inline"><input type="radio" name="menu_mode" value="all"${u.menu_mode === 'all' ? ' checked' : ''}> 전체 보임</label>
-          <label class="inline"><input type="radio" name="menu_mode" value="custom"${u.menu_mode === 'custom' ? ' checked' : ''}> 직접 지정</label></fieldset>
-        <div data-menu-custom>${menuChecks(u.menu_mode === 'custom' ? u.menu_custom || [] : null)}</div>
-        <p class="small muted">숨긴 메뉴는 메뉴와 대시보드에서 빠지고, 주소로 들어와도 열리지 않습니다. 이미 받은 승인·접수 권한(체크한 역할)은 그대로입니다.</p>
-        <div class="actions"><button class="btn primary">저장</button></div></form>`);
-      const form = $('form', m.el), custom = $('[data-menu-custom]', form);
-      const sync = () => { custom.hidden = formObj(form).menu_mode !== 'custom'; }; form.addEventListener('change', sync); sync();
-      form.onsubmit = async event => { event.preventDefault(); const v = formObj(form); m.close(); await save({ menu_mode: v.menu_mode, menus: v.menus || [] }); pageAdmin(main); };
-    };
-    $('[data-pw]', tr).onclick = async () => { const v = await promptBox(`${name} 비밀번호 초기화`, '<label>새 비밀번호 *<input name="password" required minlength="4"></label>'); if (v) save(v); };
-    const del = $('[data-del]', tr); if (del) del.onclick = async () => { if (await confirmBox(`${name} 사용자를 삭제할까요?`)) { try { await api('DELETE', '/api/admin/users/' + id); render(); } catch (e) { fail(e); } } };
-  });
 }
 
 async function pageMe(main) {

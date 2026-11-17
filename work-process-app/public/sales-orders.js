@@ -152,7 +152,7 @@ function salesOrderSheet(order, after = null, { onClose = null } = {}) {
 async function pageSalesOrderList(main) {
   main.innerHTML = `<h1>수주 목록</h1>
   <div class="seg class-tabs" id="soTabs" role="group" aria-label="진행 상태"></div>
-  <form class="list-filters toolbar" data-read-only id="soFilters"><label>수주일<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>거래처<input name="customer" maxlength="100"></label><label class="grow">검색<input type="search" name="q" placeholder="수주번호·거래처·코드·고객 발주번호·비고"></label><button class="btn primary">조회</button><a class="btn" href="#/sales/orders/new">수주 입력</a></form>
+  <form class="list-filters toolbar" data-read-only id="soFilters"><label>수주일<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>거래처<input name="customer" maxlength="100"></label><label class="grow">검색<input type="search" name="q" placeholder="수주번호·거래처·코드·고객 발주번호·비고"></label><button class="btn primary">조회</button></form>
   <div id="soSummary" class="counts"></div><div id="soList"></div><div class="actions"><button type="button" class="btn" id="soMore" hidden>더 보기</button></div>`;
   const form = $('#soFilters', main); let rows = [], page = 0, version = 0;
   let state = 'open'; try { state = localStorage.getItem('wpa:so-state') ?? 'open'; } catch { /* 편의 기능 */ }
@@ -465,7 +465,7 @@ async function pageQuoteList(main) {
   let month = ''; try { month = sessionStorage.getItem('wpa:quote-month') || ''; sessionStorage.removeItem('wpa:quote-month'); } catch { month = ''; }
   const r0 = month ? monthRange(month) : rpRange('month'); // 방금 저장한 견적서의 달로 열기
   main.innerHTML = `<h1>견적서 목록</h1>
-  <form class="list-filters toolbar lf-oneline" data-read-only id="qtFilters"><label class="lf-period">견적일<span class="lf-pair"><input type="date" name="from" value="${r0.from}" aria-label="견적일 시작"><span class="muted">~</span><input type="date" name="to" value="${r0.to}" aria-label="견적일 끝"></span></label><label class="lf-partner">수신(거래처)<input name="customer" maxlength="100"></label><label class="grow lf-q">검색<input type="search" name="q" placeholder="견적번호·품명·품목코드·참조·담당자"></label><label class="lf-sel">상태<select name="status"><option value="">유효</option><option value="cancelled">취소</option><option value="all">전체</option></select></label><button class="btn primary">조회</button><a class="btn" href="#/sales/quotes/new">+ 견적서 작성</a></form>
+  <form class="list-filters toolbar lf-oneline" data-read-only id="qtFilters"><label class="lf-period">견적일<span class="lf-pair"><input type="date" name="from" value="${r0.from}" aria-label="견적일 시작"><span class="muted">~</span><input type="date" name="to" value="${r0.to}" aria-label="견적일 끝"></span></label><label class="lf-partner">수신(거래처)<input name="customer" maxlength="100"></label><label class="grow lf-q">검색<input type="search" name="q" placeholder="견적번호·품명·품목코드·참조·담당자"></label><label class="lf-sel">상태<select name="status"><option value="">유효</option><option value="cancelled">취소</option><option value="all">전체</option></select></label><button class="btn primary">조회</button></form>
   <div id="qtList"></div>`;
   const form = $('#qtFilters', main); let rows = [];
   bindPartnerPicker(form.elements.customer, null, { type: 'sales' }).catch(() => {});

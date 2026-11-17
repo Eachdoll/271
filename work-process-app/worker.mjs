@@ -105,6 +105,12 @@ function menuText(list, label) {
 // 역할(구매·품질·개발·생산·물류와 그 책임자)을 받은 업무는 메뉴 제한과 관계없이 보인다(승인·접수 화면이 그 묶음에 있으므로).
 const ROLE_MENU = { purchase: 'purchase', quality: 'quality', quality_approver: 'quality', dev: 'dev', dev_approver: 'dev', production: 'production', production_approver: 'production', logistics: 'logistics', logistics_approver: 'logistics' };
 async function effectiveMenus(u) {
+  const list = await baseMenus(u); if (!list) return null;
+  const fromRoles = publicUser(u).roles.map(r => ROLE_MENU[r]).filter(Boolean);
+  return MENU_GROUPS.filter(k => list.includes(k) || fromRoles.includes(k));
+}
+// 15.175 메뉴 설정만으로 정해지는 목록(사용 권한으로 더해지는 묶음 제외). null = 전체.
+async function baseMenus(u) {
   if (!u || u.is_admin || u.menu_mode === 'all') return null;
   let list = null;
   if (u.menu_mode === 'custom') list = menuList(u.menus) || [];
@@ -116,9 +122,7 @@ async function effectiveMenus(u) {
       d = d.parent_id ? departments.find(x => x.id === d.parent_id) : null;
     }
   }
-  if (!list) return null;
-  const fromRoles = publicUser(u).roles.map(r => ROLE_MENU[r]).filter(Boolean);
-  return MENU_GROUPS.filter(k => list.includes(k) || fromRoles.includes(k));
+  return list || null;
 }
 // 사람별 화면 설정(15.62): 자주 쓰는 화면(★)과 목록 조건(상태·구분 같은 선택값). settings 표의 'prefs:<id>' 한 줄에 둔다(마이그레이션 없음).
 async function userPrefs(id) {
@@ -402,7 +406,7 @@ route('GET', '/api/approval-managers', async () => {
     development: users.filter(u => (u.roles || '').split(',').includes('dev_approver')).map(u => ({ id: u.id, name: u.name })),
   };
 });
-route('GET', '/api/admin/users', async ({ user }) => { requireAdmin(user); return (await db.prepare('SELECT * FROM users ORDER BY id').all()).map(publicUser); });
+route('GET', '/api/admin/users', async ({ user }) => { requireAdmin(user); return Promise.all((await db.prepare('SELECT * FROM users ORDER BY id').all()).map(async u => ({ ...publicUser(u), menus_base: await baseMenus(u), menus_effective: await effectiveMenus(u) }))); }); // 15.175 메뉴 보기 표: 설정값·실제 보임
 // An administrator can open an account directly; it is approved from the start.
 route('POST', '/api/admin/users', async ({ user, body }) => {
   requireAdmin(user);
@@ -1714,6 +1718,16 @@ route('GET', '/api/sales-calendar', async ({ user, query }) => {
   const where = ["status='confirmed'", 'bill_date>=?', 'bill_date<=?'], args = [`${month}-01`, monthEnd(month)];
   if (query.customer) { where.push(`${customerKey('customer')}=?`); args.push(nameKey(str(query.customer, 100))); }
   const days = await db.prepare(`SELECT bill_date AS date, COUNT(*) AS n, COALESCE(SUM(supply_total),0) AS supply, COALESCE(SUM(vat_total),0) AS vat, COALESCE(SUM(total),0) AS total FROM sales_bills WHERE ${where.join(' AND ')} GROUP BY bill_date ORDER BY bill_date`).all(...args);
+  const sum = k => days.reduce((t, d) => t + d[k], 0);
+  return { month, days, totals: { n: sum('n'), supply: sum('supply'), vat: sum('vat'), total: sum('total') } };
+});
+// 15.176 매입 달력: 확정 매입전표를 날짜별로(매출 달력과 같은 모양)
+route('GET', '/api/purchase-calendar', async ({ user, query }) => {
+  requirePurchase(user);
+  const month = String(query.month || today().slice(0, 7)); if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw bad('연·월을 확인하세요.');
+  const where = ["status='confirmed'", 'bill_date>=?', 'bill_date<=?'], args = [`${month}-01`, monthEnd(month)];
+  if (query.vendor) { where.push(`${billVendorKey('vendor')}=?`); args.push(nameKey(str(query.vendor, 100))); }
+  const days = await db.prepare(`SELECT bill_date AS date, COUNT(*) AS n, COALESCE(SUM(supply_total),0) AS supply, COALESCE(SUM(vat_total),0) AS vat, COALESCE(SUM(total),0) AS total FROM purchase_bills WHERE ${where.join(' AND ')} GROUP BY bill_date ORDER BY bill_date`).all(...args);
   const sum = k => days.reduce((t, d) => t + d[k], 0);
   return { month, days, totals: { n: sum('n'), supply: sum('supply'), vat: sum('vat'), total: sum('total') } };
 });
