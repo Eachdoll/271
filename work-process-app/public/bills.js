@@ -416,7 +416,8 @@ const RET_SIDE = {
 };
 const RET_PROCESS_LABEL = { stock_amount: '재고+금액', amount: '금액만', stock: '재고만', none: '처리 안 함' };
 // 15.144 처리구분은 기존 ERP 이름 그대로(재고만은 예전 전표 보기용)
-const RET_PROCESS = { in: { stock_amount: '재납품+금액삭감', amount: '금액삭감만', none: '처리안함' }, out: { stock_amount: '재입고+금액삭감', amount: '금액삭감만', none: '미처리' } };
+// 15.146 교환(다른 사이즈 등): 재고만 돌려받고 금액은 그대로 — 새로 내보내는 것은 출하·납품전표 0원으로
+const RET_PROCESS = { in: { stock_amount: '재납품+금액삭감', amount: '금액삭감만', stock: '교환(재고만·금액 그대로)', none: '처리안함' }, out: { stock_amount: '재입고+금액삭감', amount: '금액삭감만', stock: '교환(재고만·금액 그대로)', none: '미처리' } };
 const retProcessLabel = (side, p) => RET_PROCESS[side]?.[p] || RET_PROCESS_LABEL[p] || p;
 const RET_REASONS = ['불량', '오배송·오발주', '수량 초과', '변심·취소', '기타'];
 const retTabs = (side, list) => `<div class="seg class-tabs tax-side" role="tablist" aria-label="반입·반출">${(ME.is_admin || ME.roles.includes('sales')) ? `<a role="tab" href="#/sales/returns${list ? '' : '/new'}" class="${side === 'in' ? 'on' : ''}">반입 <span class="small muted">(거래처 → 우리)</span></a>` : ''}${(ME.is_admin || ME.roles.includes('purchase')) ? `<a role="tab" href="#/purchase/returns${list ? '' : '/new'}" class="${side === 'out' ? 'on' : ''}">반출 <span class="small muted">(우리 → 매입처)</span></a>` : ''}</div>`;

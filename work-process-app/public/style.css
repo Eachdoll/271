@@ -1709,3 +1709,5 @@ tr.book-pay td { background: var(--green-bg, #eefaf1); } tr.book-open td { backg
 .book-pay { margin: 8px 0 10px; } .book-pay .erp-grid th { width: auto; } .book-pay .erp-grid td input, .book-pay .erp-grid td select { min-width: 90px; } .book-pay .erp-grid td:nth-child(8) input { min-width: 120px; } .book-pay p { margin: 4px 0 0; }
 @media (max-width: 900px) { .book-pay .erp-grid, .book-pay .erp-grid tbody, .book-pay .erp-grid tr { display: block; } .book-pay .erp-grid tr { display: grid; grid-template-columns: 90px minmax(0, 1fr); } .book-pay .erp-grid th, .book-pay .erp-grid td { display: block; } .book-pay .erp-grid td:last-child { grid-column: 1 / -1; } }
 .book-pay .erp-grid td:nth-child(2) { white-space: nowrap; min-width: 90px; }
+/* 15.146 거래처 찾기 버튼을 글자로 보이게 */
+.partner-picker > .btn.partner-find { font-size: 13px; width: auto; min-width: 72px; padding: 0 10px; gap: 4px; color: var(--text); white-space: nowrap; }
