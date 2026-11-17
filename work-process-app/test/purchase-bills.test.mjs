@@ -473,3 +473,42 @@ test('15.138 Tax invoice states: reverse-issue customers, recipient confirmation
   assert.equal((await admin('POST', '/api/tax-invoices/state', { ids: [ni.id], action: 'nonsense' })).status, 400);
   assert.equal((await admin('GET', `/api/tax-invoices?state=bogus`)).status, 400);
 });
+
+test('15.140 Returns: 반입 restocks and cuts receivable, refund keeps balance, 반출 cuts payable, caps, cancel', async () => {
+  const g = (await admin('POST', '/api/boms', { product: '반품장갑', product_code: 'RT-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  const stockOf = async () => ((await admin('GET', '/api/inventory?q=' + encodeURIComponent('반품장갑'))).body.rows.find(r => r.item === '반품장갑')?.stock) || 0;
+  const s = (await admin('POST', '/api/shipments', { ship_date: today, bom_id: g.id, item: g.product, qty: 10, customer: '반품고객', unit: 'EA', lot: 'G-LOT1' })).body;
+  const sb = (await admin('POST', '/api/sales-bills', { customer: '반품고객', bill_date: today, request_id: rid(), lines: [{ source_type: 'ship', source_id: s.id, unit_price: 1000 }] })).body;
+  const before = await stockOf();
+  const src = (await admin('GET', `/api/returns/sources?side=in&party=${encodeURIComponent('반품고객')}`)).body.rows;
+  assert.equal(src.length, 1); assert.equal(src[0].left, 10);
+  assert.match((await admin('POST', '/api/returns', { side: 'in', return_date: today, party: '반품고객', process: 'stock_amount', request_id: rid(), lines: [{ source_id: src[0].id, qty: 11 }] })).body.error, /10까지/);
+  const r1 = (await admin('POST', '/api/returns', { side: 'in', return_date: today, party: '반품고객', process: 'stock_amount', settle: 'offset', request_id: rid(), lines: [{ source_id: src[0].id, qty: 3, reason: '불량' }] })).body;
+  assert.match(r1.return_no, /^RI-\d{6}-01$/); assert.equal(r1.total, 3300); assert.ok(r1.bill?.bill_no);
+  assert.equal(await stockOf(), before + 3, 'restocked');
+  const book = (await admin('GET', `/api/partner-book?side=sales&from=${today}&to=${today}&party=${encodeURIComponent('반품고객')}`)).body;
+  assert.equal(book.totals.balance, 11000 - 3300, 'receivable reduced');
+  const lots = (await admin('GET', '/api/lots/available?item=' + encodeURIComponent('반품장갑'))).body.rows; assert.ok(lots.length === 0 || lots.every(l => l.lot !== 'G-LOT1' || l.balance >= 0));
+  assert.match((await admin('POST', `/api/sales-bills/${r1.bill_id}/cancel`, { reason: 'x' })).body.error, /반입 RI-/);
+  assert.equal((await admin('GET', `/api/returns/sources?side=in&party=${encodeURIComponent('반품고객')}`)).body.rows[0].left, 7);
+  const r2 = (await admin('POST', '/api/returns', { side: 'in', return_date: today, party: '반품고객', process: 'amount', settle: 'refund', request_id: rid(), lines: [{ source_id: src[0].id, qty: 2 }] })).body;
+  assert.equal(await stockOf(), before + 3, 'amount only: no stock');
+  const book2 = (await admin('GET', `/api/partner-book?side=sales&from=${today}&to=${today}&party=${encodeURIComponent('반품고객')}`)).body;
+  assert.equal(book2.totals.balance, 11000 - 3300, 'refund keeps balance'); assert.ok(r2.payment_id);
+  const c1 = (await admin('POST', `/api/returns/${r1.id}/cancel`, { reason: '잘못 입력' })).body;
+  assert.equal(c1.status, 'cancelled'); assert.equal(await stockOf(), before);
+  assert.equal((await admin('GET', `/api/partner-book?side=sales&from=${today}&to=${today}&party=${encodeURIComponent('반품고객')}`)).body.totals.balance, 11000);
+  // 반출
+  const p = (await buyer('POST', '/api/po', { req_no: 'PR-R', vendor: '반출상사', bom_id: g.id, item: g.product, qty: 20, due_date: today, unit_price: 500 })).body;
+  await staff('POST', '/api/receipts', { receipt_date: today, vendor: '반출상사', request_id: rid(), lines: [{ po_id: p.id, lot: 'G-IN', qty: 20 }] });
+  const open = (await buyer('GET', '/api/purchase-bills/unbilled?vendor=' + encodeURIComponent('반출상사'))).body.rows;
+  await buyer('POST', '/api/purchase-bills', { vendor: '반출상사', bill_date: today, request_id: rid(), lines: open.map(r => ({ source_type: r.source_type, source_id: r.source_id })) });
+  const before2 = await stockOf();
+  const ps = (await buyer('GET', `/api/returns/sources?side=out&party=${encodeURIComponent('반출상사')}`)).body.rows;
+  const o1 = (await buyer('POST', '/api/returns', { side: 'out', return_date: today, party: '반출상사', process: 'stock_amount', request_id: rid(), lines: [{ source_id: ps[0].id, qty: 4 }] })).body;
+  assert.match(o1.return_no, /^RO-/); assert.equal(o1.total, 2200); assert.equal(await stockOf(), before2 - 4);
+  const pb = (await buyer('GET', `/api/partner-book?side=purchase&from=${today}&to=${today}&party=${encodeURIComponent('반출상사')}`)).body;
+  assert.equal(pb.totals.balance, 11000 - 2200, 'payable reduced');
+  assert.equal((await buyer('GET', `/api/purchase-bills/${o1.bill_id}`)).status, 200, 'negative purchase bill opens');
+  assert.equal((await staff('POST', '/api/returns', { side: 'out', return_date: today, party: '반출상사', lines: [] })).status, 403);
+});

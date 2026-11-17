@@ -408,3 +408,152 @@ async function bulkPurchaseTax(bills, reload) {
   } catch (error) { fail(error); }
   await reload();
 }
+
+// ── 15.140 반입(매출 반품)·반출(매입 반품) ──
+const RET_SIDE = {
+  in: { label: '반입', title: '반입전표', party: '거래처', type: 'sales', src: '납품목록', offset: '미수금 삭감', route: '#/sales/returns', role: 'sales', billOpen: id => api('GET', '/api/sales-bills/' + id).then(b => salesBillSheet(b)) },
+  out: { label: '반출', title: '반출전표', party: '매입처', type: 'purchase', src: '매입목록', offset: '미지급 삭감', route: '#/purchase/returns', role: 'purchase', billOpen: id => api('GET', '/api/purchase-bills/' + id).then(b => billSheet(b)) },
+};
+const RET_PROCESS_LABEL = { stock_amount: '재고+금액', amount: '금액만', stock: '재고만', none: '처리 안 함' };
+const RET_REASONS = ['불량', '오배송·오발주', '수량 초과', '변심·취소', '기타'];
+const retTabs = (side, list) => `<div class="seg class-tabs tax-side" role="tablist" aria-label="반입·반출">${(ME.is_admin || ME.roles.includes('sales')) ? `<a role="tab" href="#/sales/returns${list ? '' : '/new'}" class="${side === 'in' ? 'on' : ''}">반입 <span class="small muted">(거래처 → 우리)</span></a>` : ''}${(ME.is_admin || ME.roles.includes('purchase')) ? `<a role="tab" href="#/purchase/returns${list ? '' : '/new'}" class="${side === 'out' ? 'on' : ''}">반출 <span class="small muted">(우리 → 매입처)</span></a>` : ''}</div>`;
+async function pageReturnEntry(main, side = 'in') {
+  const S = RET_SIDE[side];
+  main.innerHTML = `<h1>${S.title} 입력</h1>${retTabs(side, false)}
+  <p class="muted">${side === 'in' ? '거래처에서 돌아온 제품을 넣습니다. 「재고」를 처리하면 재고로 다시 들어오고, 「금액」을 처리하면 음수 매출전표가 생겨 미수금이 줄어듭니다(세금계산서 관리에서 수정 계산서로 담을 수 있음).' : '매입처로 돌려보내는 자재를 넣습니다. 「재고」를 처리하면 재고에서 빠지고, 「금액」을 처리하면 음수 매입전표가 생겨 미지급금이 줄어듭니다.'} 「${S.src}(F5)」에서 원래 전표 줄을 고르면 남은 수량까지만 넣을 수 있습니다.</p>
+  <form class="stack bill-form" id="retForm" data-no-author novalidate>
+    <div class="form-grid">
+      <label>${S.label}일자 *<input name="return_date" type="date" required value="${todayStr()}" max="${todayStr()}"></label>
+      <label>처리구분<select name="process">${Object.entries(RET_PROCESS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
+      <label>${S.party} *<input name="party" required maxlength="100" autocomplete="off" placeholder="${S.party} 이름 또는 코드"></label><span class="partner-hint small muted" data-partner-hint></span>
+      <label>부가세<select name="tax_type"><option value="taxable">별도 (10%)</option><option value="zero">영세·면세</option></select></label>
+      <fieldset class="ret-settle"><legend>금액 처리 방법</legend><label class="inline"><input type="radio" name="settle" value="offset" checked> ${S.offset}</label><label class="inline"><input type="radio" name="settle" value="refund"> 현금 환불</label></fieldset>
+      <label class="span2">비고<input name="note" maxlength="500"></label>
+    </div>
+    <div class="actions" style="justify-content:flex-start"><button type="button" class="btn" data-ret-src>${S.src} (F5)</button><button type="button" class="btn" data-ret-all>전체 품목 (F6)</button></div>
+    <div data-ret-lines></div><div data-ret-total></div>
+    <div class="actions"><button class="btn primary" data-ret-save>${S.label} 저장</button></div>
+  </form>`;
+  const form = $('#retForm', main), box = $('[data-ret-lines]', form), partyIn = form.elements.party;
+  let lines = [], requestId = crypto.randomUUID(), busy = false, catalog = null;
+  bindPartnerPicker(partyIn, $('[data-partner-hint]', form), { type: S.type }).catch(() => {});
+  const amountOn = () => ['stock_amount', 'amount'].includes(form.elements.process.value);
+  const syncSettle = () => { $('.ret-settle', form).disabled = !amountOn(); };
+  form.elements.process.onchange = syncSettle; syncSettle();
+  const amt = l => Number(l.qty) > 0 && l.unit_price !== '' ? billTruncC(Number(l.qty) * Number(l.unit_price)) : 0;
+  const draw = () => {
+    box.innerHTML = lines.length ? `<div class="table-wrap"><table class="grid bill-grid ret-grid" data-keep-cols data-no-sort><thead><tr><th>품목코드</th><th>품명</th><th>규격</th><th>단위</th><th class="r">수량</th><th class="r">단가</th><th class="r">금액</th><th>${S.label}유형</th><th>LOT</th><th>원래 전표</th><th></th></tr></thead><tbody>${lines.map((l, i) => `<tr>
+      <td class="small">${esc(l.product_code || '')}</td><td data-card-primary><b>${esc(l.item)}</b></td><td>${esc(l.spec || '')}</td><td>${esc(l.unit || '')}</td>
+      <td class="r"><input type="number" min="0" step="any" inputmode="decimal" data-r="qty" data-i="${i}" value="${esc(l.qty)}" aria-label="${esc(l.item)} 수량"${l.left != null ? ` max="${l.left}"` : ''}>${l.left != null ? `<div class="small muted">남은 ${fmtNum(l.left)}</div>` : ''}</td>
+      <td class="r"><input type="number" min="0" step="any" inputmode="decimal" data-r="unit_price" data-i="${i}" value="${esc(l.unit_price)}" aria-label="${esc(l.item)} 단가"></td>
+      <td class="r" data-r-amt="${i}">${won(amt(l))}</td>
+      <td><select data-r="reason" data-i="${i}" aria-label="${esc(l.item)} ${S.label}유형"><option value="">선택</option>${RET_REASONS.map(x => `<option${x === l.reason ? ' selected' : ''}>${x}</option>`).join('')}</select></td>
+      <td><input data-r="lot" data-i="${i}" maxlength="100" value="${esc(l.lot || '')}" aria-label="${esc(l.item)} LOT"></td>
+      <td class="small">${l.source_bill_no ? `${esc(l.source_bill_no)}<div class="muted">${esc(l.source_date || '')}</div>` : '<span class="muted">직접</span>'}</td>
+      <td><button type="button" class="btn small danger" data-ret-del="${i}" aria-label="줄 삭제">×</button></td></tr>`).join('')}</tbody></table></div>`
+      : `<p class="muted small">「${S.src}(F5)」 또는 「전체 품목(F6)」으로 ${S.label}할 품목을 고르세요.</p>`;
+    totals();
+  };
+  const totals = () => {
+    const supply = lines.reduce((t, l) => t + amt(l), 0), vat = form.elements.tax_type.value === 'zero' ? 0 : billTruncC(supply * 0.1);
+    $('[data-ret-total]', form).innerHTML = lines.length ? `<div class="bill-sum"><span>${esc(`${lines.length}줄`)}</span><span>${esc(`공급가액 ${won(supply)}원`)}</span><span>${esc(`부가세 ${won(vat)}원`)}</span><span class="bill-grand">${esc(`${S.label} 합계 ${won(supply + vat)}원`)}</span></div>` : '';
+  };
+  form.elements.tax_type.onchange = totals;
+  box.addEventListener('input', e => { const k = e.target.dataset.r; if (!k) return; const i = Number(e.target.dataset.i); lines[i][k] = e.target.value; if (k === 'qty' || k === 'unit_price') { $(`[data-r-amt="${i}"]`, box).textContent = won(amt(lines[i])); totals(); } });
+  box.addEventListener('change', e => { const k = e.target.dataset.r; if (k) lines[Number(e.target.dataset.i)][k] = e.target.value; });
+  box.addEventListener('click', e => { const d = e.target.closest('[data-ret-del]'); if (d) { lines.splice(Number(d.dataset.retDel), 1); draw(); } });
+  const pickSources = async () => {
+    const party = partyIn.value.trim(); if (!party) { partyIn.focus(); return toast(`${S.party}를 먼저 고르세요.`, 'err'); }
+    let months = 6, data = null;
+    const m = modal(`<h3>${esc(S.src)} · ${esc(party)}</h3><div class="toolbar"><label>기간<select data-rs-months>${[1, 3, 6, 12, 24].map(n => `<option value="${n}"${n === 6 ? ' selected' : ''}>${n}개월</option>`).join('')}</select></label><label class="grow">결과 내 찾기<input type="search" data-rs-q placeholder="품명·코드·전표번호·LOT"></label></div><div data-rs-list>불러오는 중…</div>
+      <div class="actions"><button type="button" class="btn" data-close>닫기</button><button type="button" class="btn primary" data-rs-ok>체크한 줄 추가</button></div>`, { wide: true });
+    const draw2 = () => {
+      const q = searchKey($('[data-rs-q]', m.el).value), rows = data.rows.filter(r => !q || searchKey([r.item, r.product_code, r.bill_no, r.lot, r.spec].join(' ')).includes(q));
+      $('[data-rs-list]', m.el).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th><input type="checkbox" data-rs-all aria-label="모두 고르기"></th><th>${side === 'in' ? '납품일자' : '매입일자'}</th><th>전표번호</th><th>품목코드</th><th>품명</th><th>규격</th><th class="r">수량</th><th class="r">반품됨</th><th class="r">남은</th><th class="r">단가</th><th>LOT</th></tr></thead><tbody>${rows.map(r => `<tr class="${r.left <= 0 ? 'row-off' : ''}"><td>${r.left > 0 ? `<input type="checkbox" data-rs-pick="${r.id}" aria-label="${esc(r.item)} 고르기"${lines.some(l => l.source_id === r.id) ? ' disabled title="이미 담음"' : ''}>` : ''}</td><td class="nowrap">${esc(r.date)}</td><td class="small">${esc(r.bill_no)}</td><td class="small">${esc(r.product_code || '')}</td><td data-card-primary><b>${esc(r.item)}</b></td><td>${esc(r.spec || '')}</td><td class="r">${fmtNum(r.qty)} ${esc(r.unit || '')}</td><td class="r">${r.returned ? fmtNum(r.returned) : ''}</td><td class="r"><b>${fmtNum(r.left)}</b></td><td class="r">${won(r.unit_price)}</td><td class="small">${esc(r.lot || '')}</td></tr>`).join('')}</tbody></table></div>${data.more ? '<p class="small muted">500줄까지만 보입니다. 기간을 줄이세요.</p>' : ''}` : `<div class="empty">${months}개월 안에 ${esc(party)}와의 ${side === 'in' ? '매출(납품)' : '매입'} 전표 줄이 없습니다.</div>`;
+      const all = $('[data-rs-all]', m.el); if (all) all.onchange = () => $$('[data-rs-pick]:not(:disabled)', m.el).forEach(x => { x.checked = all.checked; });
+    };
+    const load = async () => { data = await api('GET', '/api/returns/sources?' + new URLSearchParams({ side, party, months })); if (m.el.isConnected) draw2(); };
+    $('[data-rs-months]', m.el).onchange = e => { months = Number(e.target.value); load().catch(fail); };
+    $('[data-rs-q]', m.el).oninput = () => data && draw2();
+    $('[data-close]', m.el).onclick = m.close;
+    $('[data-rs-ok]', m.el).onclick = () => {
+      const ids = $$('[data-rs-pick]:checked', m.el).map(x => Number(x.dataset.rsPick)); if (!ids.length) return toast('추가할 줄을 체크하세요.', 'err');
+      for (const r of data.rows.filter(r => ids.includes(r.id))) lines.push({ source_id: r.id, item: r.item, product_code: r.product_code, spec: r.spec, unit: r.unit, qty: r.left, left: r.left, unit_price: r.unit_price, reason: '', lot: r.lot || '', source_bill_no: r.bill_no, source_date: r.date });
+      m.close(); draw(); $$('[data-r="qty"]', box)[lines.length - ids.length]?.focus();
+    };
+    await load().catch(fail);
+  };
+  const pickAll = async () => {
+    if (!catalog) catalog = await api('GET', '/api/boms').catch(error => { fail(error); return null; }); if (!catalog) return;
+    const got = ((await openItemPicker(catalog, { title: `${S.label}할 품목`, filter: b => b.active !== 0 && !b.is_temp, multi: true, lots: false }))?.items || []).map(x => x.bom);
+    if (!got.length) return;
+    const tp = partyIn.value.trim() ? await tablePrices(S.type, partyIn.value.trim(), form.elements.return_date.value || todayStr()).catch(() => ({})) : {};
+    for (const b of got) lines.push({ bom_id: b.id, item: b.product, product_code: b.product_code || '', spec: b.spec || '', unit: b.unit || '', qty: '', unit_price: tp[b.id]?.unit_price ?? '', reason: '', lot: '', left: null });
+    draw(); $$('[data-r="qty"]', box)[lines.length - got.length]?.focus();
+  };
+  $('[data-ret-src]', form).onclick = () => pickSources().catch(fail);
+  $('[data-ret-all]', form).onclick = () => pickAll().catch(fail);
+  const keys = e => { if (!form.isConnected) return document.removeEventListener('keydown', keys); if ($('.modal-wrap')) return; if (e.key === 'F5') { e.preventDefault(); pickSources().catch(fail); } else if (e.key === 'F6') { e.preventDefault(); pickAll().catch(fail); } };
+  document.addEventListener('keydown', keys);
+  form.onsubmit = async e => {
+    e.preventDefault(); if (busy) return;
+    const v = formObj(form);
+    if (!v.party) { partyIn.focus(); return toast(`${S.party}를 넣으세요.`, 'err'); }
+    if (!lines.length) return toast(`${S.label}할 품목을 넣으세요.`, 'err');
+    const bad1 = lines.findIndex(l => !(Number(l.qty) > 0) || (l.left != null && Number(l.qty) > l.left + 0.000001)); if (bad1 >= 0) { $$('[data-r="qty"]', box)[bad1]?.focus(); return toast(`${lines[bad1].item}: 수량을 확인하세요${lines[bad1].left != null ? `(남은 ${fmtNum(lines[bad1].left)}까지)` : ''}.`, 'err'); }
+    if (amountOn() && !lines.some(l => amt(l) > 0)) return toast('금액을 처리하려면 단가를 넣으세요. 재고만 처리하려면 처리구분을 「재고만」으로 고르세요.', 'err');
+    busy = true; const btn = $('[data-ret-save]', form); btn.disabled = true;
+    try {
+      const r = await api('POST', '/api/returns', { side, return_date: v.return_date, party: v.party, process: v.process, settle: v.settle || 'offset', tax_type: v.tax_type, note: v.note, request_id: requestId, lines: lines.map(l => ({ source_id: l.source_id || undefined, bom_id: l.bom_id || undefined, spec: l.spec, qty: l.qty, unit_price: l.unit_price, reason: l.reason, lot: l.lot })) });
+      toast(`${r.return_no} ${S.label}을 저장했습니다.${r.bill ? ` 금액 전표 ${r.bill.bill_no}` : ''}`);
+      requestId = crypto.randomUUID(); lines = []; form.elements.note.value = ''; draw();
+      returnSheet(r);
+    } catch (error) { fail(error); } finally { busy = false; btn.disabled = false; }
+  };
+  draw();
+}
+function returnSheet(r, after = null) {
+  const S = RET_SIDE[r.side];
+  const m = modal(`<h3 class="po-print-title">${S.title} <span class="small muted">${esc(r.return_no)}${r.status === 'cancelled' ? ' · 취소됨' : ''}</span></h3>
+    <section class="cert po-doc">
+      <div class="po-doc-head"><img src="/assets/seoulsemi-logo-blue.png" alt="SEOUL SEMITECH"><h2>${r.side === 'in' ? '반 입 전 표' : '반 출 전 표'}</h2></div>
+      <table class="po-info"><tbody>
+        <tr><th>전표번호</th><td><b>${esc(r.return_no)}</b>${r.status === 'cancelled' ? ' (취소)' : ''}</td><th>${S.label}일자</th><td>${esc(r.return_date)}</td></tr>
+        <tr><th>${S.party}</th><td><b>${esc(r.party)}</b></td><th>처리구분</th><td>${RET_PROCESS_LABEL[r.process]}${['stock_amount', 'amount'].includes(r.process) ? ` · ${r.settle === 'refund' ? '현금 환불' : S.offset}` : ''}</td></tr>
+        <tr><th>금액 전표</th><td>${r.bill ? `<button type="button" class="link-btn" data-ret-bill="${r.bill.id}">${esc(r.bill.bill_no)}</button>` : '—'}</td><th>작성</th><td>${esc(r.created_by)} · ${esc(String(r.created_at).slice(0, 16))}</td></tr>
+        ${r.note ? `<tr><th>비고</th><td colspan="3">${esc(r.note)}</td></tr>` : ''}
+        ${r.status === 'cancelled' ? `<tr><th>취소</th><td colspan="3">${esc(r.cancelled_by || '')} · ${esc(String(r.cancelled_at || '').slice(0, 16))} · ${esc(r.cancel_reason)}</td></tr>` : ''}
+      </tbody></table>
+      <table class="po-items"><thead><tr><th>No</th><th>품목</th><th>규격</th><th class="r">수량</th><th>단위</th><th class="r">단가</th><th class="r">공급가액</th><th>${S.label}유형</th><th>LOT</th><th>원래 전표</th></tr></thead>
+      <tbody>${r.lines.map((l, i) => `<tr><td class="c">${i + 1}</td><td>${esc(l.item)}${l.product_code ? `<div class="po-code">${esc(l.product_code)}</div>` : ''}</td><td>${esc(l.spec || '')}</td><td class="r">${fmtNum(l.qty)}</td><td>${esc(l.unit || '')}</td><td class="r">${won(l.unit_price)}</td><td class="r">${won(l.supply)}</td><td>${esc(l.reason || '')}</td><td>${esc(l.lot || '')}</td><td class="small">${esc(l.source_bill_no || '')}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><th colspan="6" class="r">공급가액</th><td class="r">${won(r.supply_total)}</td><td colspan="3"></td></tr><tr><th colspan="6" class="r">부가세</th><td class="r">${won(r.vat_total)}</td><td colspan="3"></td></tr><tr><th colspan="6" class="r">합계</th><td class="r"><b>${won(r.total)}</b></td><td colspan="3"></td></tr></tfoot></table>
+    </section>
+    <div class="actions"><button class="btn" data-close>닫기</button>${r.status === 'confirmed' ? `<button class="btn danger" data-ret-cancel>${S.label} 취소</button>` : ''}<button class="btn primary" data-print>인쇄 · PDF 저장</button></div>`, { wide: true });
+  m.el.parentElement.classList.add('lr-cert-wrap');
+  $('[data-close]', m.el).onclick = m.close;
+  $('[data-print]', m.el).onclick = () => rcPrint(`${S.title}_${r.return_no}`);
+  $('[data-ret-bill]', m.el)?.addEventListener('click', e => S.billOpen(e.currentTarget.dataset.retBill).catch(fail));
+  $('[data-ret-cancel]', m.el)?.addEventListener('click', async () => {
+    const v = await promptBox(`${S.label} 취소 · ${r.return_no}`, `<p class="small muted">재고·금액 처리(금액 전표·환불)가 모두 되돌려집니다.</p><label>취소 사유 *<input name="reason" required maxlength="200"></label>`);
+    if (!v) return;
+    try { const x = await api('POST', `/api/returns/${r.id}/cancel`, v); toast('취소했습니다.'); m.close(); returnSheet(x, after); await after?.(); } catch (error) { fail(error); }
+  });
+}
+async function pageReturnList(main, side = 'in') {
+  const S = RET_SIDE[side];
+  main.innerHTML = `<h1>${S.title} 목록</h1>${retTabs(side, true)}
+  <form class="list-filters toolbar" data-read-only id="retFilters"><label>${S.label}일자<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>${S.party}<input name="party" maxlength="100"></label><label>상태<select name="status"><option value="">전체</option><option value="confirmed">확정</option><option value="cancelled">취소</option></select></label><label class="grow">검색<input type="search" name="q" placeholder="전표번호·거래처·비고"></label><button class="btn primary">조회</button><a class="btn" href="${S.route}/new">＋ ${S.label} 입력</a></form>
+  <div id="retSum" class="counts"></div><div id="retList"></div>`;
+  const form = $('#retFilters', main); let rows = [];
+  bindPartnerPicker(form.elements.party, null, { type: S.type }).catch(() => {});
+  const load = async () => {
+    rows = (await api('GET', '/api/returns?' + new URLSearchParams({ side, ...formObj(form) }))).rows; if (!main.isConnected) return;
+    const live = rows.filter(r => r.status === 'confirmed');
+    $('#retSum', main).innerHTML = sumLine([['합계', `${fmtNum(live.length)}건`], ['공급가액', `${won(live.reduce((t, r) => t + r.supply_total, 0))}원`], ['부가세', `${won(live.reduce((t, r) => t + r.vat_total, 0))}원`], [`${S.label} 합계`, `<b>${won(live.reduce((t, r) => t + r.total, 0))}원</b>`]]);
+    $('#retList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>전표번호</th><th>${S.label}일자</th><th>${S.party}</th><th>품목</th><th>처리구분</th><th>금액 처리</th><th class="r">공급가액</th><th class="r">부가세</th><th class="r">합계</th><th>금액 전표</th><th>상태</th><th></th></tr></thead><tbody>${rows.map(r => `<tr class="${r.status === 'cancelled' ? 'row-off' : ''}"><td data-card-primary><button type="button" class="link-btn" data-ret-open="${r.id}">${esc(r.return_no)}</button></td><td>${esc(r.return_date)}</td><td>${esc(r.party)}</td><td>${esc(r.first_item || '')}${r.line_count > 1 ? ` 외 ${r.line_count - 1}` : ''}</td><td>${RET_PROCESS_LABEL[r.process]}</td><td>${['stock_amount', 'amount'].includes(r.process) ? (r.settle === 'refund' ? '현금 환불' : S.offset) : ''}</td><td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b></td><td class="small">${esc(r.bill_no || '')}</td><td>${r.status === 'confirmed' ? '<span class="chip green">확정</span>' : '<span class="chip">취소</span>'}</td><td><button class="btn small" data-ret-open="${r.id}">보기</button></td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">조건에 맞는 ${S.label}이 없습니다.</div>`;
+  };
+  rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
+  form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
+  $('#retList', main).addEventListener('click', async e => { const b = e.target.closest('[data-ret-open]'); if (!b) return; try { returnSheet(await api('GET', '/api/returns/' + b.dataset.retOpen), () => load()); } catch (error) { fail(error); } });
+  await load().catch(fail);
+}

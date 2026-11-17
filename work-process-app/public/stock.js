@@ -1,5 +1,5 @@
 // 물류 → 재고 현황. 재고는 저장하지 않고 입고·생산실적·생산 투입·출하·재고 조정에서 계산합니다.
-const STOCK_SOURCE = { po: '발주입고', other: '기타입고', prod: '생산', use: '생산 투입', ship: '출하', adjust: '재고 조정' };
+const STOCK_SOURCE = { po: '발주입고', other: '기타입고', prod: '생산', use: '생산 투입', ship: '출하', adjust: '재고 조정', return_in: '반입(반품 재입고)', return_out: '반출(반품)' };
 const STOCK_KIND = { opening: '기초재고 (시스템 도입 전 보유분)', count: '재고 실사 (실제로 센 수량)', adjust: '조정 (증가 +, 감소 −)' };
 function stockCsv(rows, bySpec) {
   const safe = value => { const text = String(value ?? ''); return '"' + (/^[=+\-@]/.test(text) && isNaN(Number(text)) ? "'" + text : text).replace(/"/g, '""') + '"'; };
