@@ -56,7 +56,7 @@ async function installLineTable(legacy, entity) {
       <th scope="col">품목 *</th><th scope="col">규격</th><th scope="col" class="r">수량 *</th><th scope="col">단위</th>${cfg.price ? '<th scope="col" class="r">단가</th><th scope="col" class="r">금액</th><th scope="col">납기</th><th scope="col">분류</th><th scope="col">COA</th>' : ''}<th scope="col">LOT</th><th scope="col">비고</th><th scope="col"><span class="sr-only">삭제</span></th></tr></thead>
       <tbody>${lines.map((l, i) => `<tr data-lt-row="${i}">
         <td data-card-primary>${fixed(l) ? `<button type="button" class="btn small" data-lt-pick="${i}">바꾸기</button> <b>${esc(l.item)}</b>${l.product_code ? ` <span class="small muted">${esc(l.product_code)}</span>` : ''}` : `<input data-l="item" data-i="${i}" maxlength="200" value="${esc(l.item)}" placeholder="품목명 (임시 코드)" aria-label="${i + 1}번째 줄 품목명">`}</td>
-        <td>${l.sizeLine || (fixed(l) && l.fixedSpec) ? esc(l.spec) : `<input data-l="spec" data-i="${i}" maxlength="100" value="${esc(l.spec)}" aria-label="${i + 1}번째 줄 규격">`}</td>
+        <td>${l.sizeLine || (fixed(l) && l.fixedSpec) ? `<span class="spec-fixed" title="제품등록 규격(고정)">${esc(l.spec)}</span>` : `<input data-l="spec" data-i="${i}" maxlength="100" value="${esc(l.spec)}" aria-label="${i + 1}번째 줄 규격">`}</td>
         <td class="r"><input type="number" min="0" step="any" inputmode="decimal" data-l="qty" data-i="${i}" value="${esc(l.qty)}" aria-label="${esc(l.item || (i + 1) + '번째 줄')} 수량"></td>
         <td>${fixed(l) ? esc(l.unit) : `<input data-l="unit" data-i="${i}" maxlength="20" value="${esc(l.unit)}" class="rc-unit" placeholder="EA" aria-label="${i + 1}번째 줄 단위">`}</td>
         ${cfg.price ? `<td class="r"><input type="number" min="0" step="any" inputmode="decimal" data-l="price" data-i="${i}" value="${esc(l.price ?? '')}" aria-label="${esc(l.item || (i + 1) + '번째 줄')} 단가">${l.tablePrice != null && String(l.tablePrice) !== String(l.price) ? `<div class="small muted">${esc(`단가표 ${fmtNum(l.tablePrice)}`)}</div>` : ''}</td><td class="r nowrap" data-lt-amount="${i}">${amount(l) == null ? '' : won(amount(l))}</td>
@@ -76,7 +76,7 @@ async function installLineTable(legacy, entity) {
     box.insertAdjacentHTML('beforeend', `<div data-lt-sum>${sumLine([['품목', esc(`${filled.length}줄`)], ['수량', filled.length ? esc(unitTotals(filled, l => l.qty, l => l.unit)) : ''], cfg.price ? ['발주 금액', esc(`${won(filled.reduce((t, l) => t + (amount(l) || 0), 0))}원`)] : null])}</div>`);
     submit.textContent = `${filled.length || lines.length}품목 등록`;
   };
-  const lineFrom = (bom, extra = {}) => ({ bom_id: bom.id, item: bom.product, product_code: bom.product_code || '', unit: bom.unit || '', spec: bom.spec || '', fixedSpec: !!bom.spec, item_category: bom.item_category || '', qty: '', price: '', due_date: form.elements.due_date?.value || '', lot: '', note: '', coa: false, ...extra });
+  const lineFrom = (bom, extra = {}) => ({ bom_id: bom.id, item: bom.product, product_code: bom.product_code || '', unit: bom.unit || '', spec: bom.spec || '', fixedSpec: !!bom.spec && !(bom.sizes || []).length, item_category: bom.item_category || '', qty: '', price: '', due_date: form.elements.due_date?.value || '', lot: '', note: '', coa: false, ...extra });
   const expand = bom => (bom.sizes || []).length ? bom.sizes.map(size => lineFrom(bom, { spec: size, sizeLine: true })) : [lineFrom(bom)];
   // 15.111 발주는 매입 단가표 단가를 미리 채운다(직접 고친 단가는 그대로). 단가표 단가는 칸 아래 작게 보인다.
   const fillPrices = async () => {

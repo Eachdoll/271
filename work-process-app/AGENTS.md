@@ -866,3 +866,8 @@ INVITE_CODE=local-test-code npm start
 - 기준값 settings report_thresholds(REPORT_THRESHOLDS: ar_overdue_days 90, old_lot_days 90, due_grace_days 0, plan_late_days 0, dev_long_days 30). GET /api/report-settings 누구나, PUT 관리자(0~3650 정수). 화면 「기준값 설정」.
 - 재사용: agingData(side, asof)(연령표, 줄마다 aged[{age,left}] — /api/aging 응답에서는 뺌), lotStockReport(query)(LOT별 재고).
 - 개발·VOC·분석 처리 기간은 등록일 → 마지막 변경일(updated_at) 기준(완료 시각을 따로 저장하지 않음).
+
+## 제품등록 규격 고정 (15.121)
+- 규칙: 제품등록에 규격(boms.spec)이 있으면 그 값으로 고정(입력값 무시) · 사이즈가 등록된 품목은 등록 사이즈 중 하나만 · 둘 다 없으면 입력값(줄마다 사이즈를 적는 품목).
+- 서버: catalogSpec(bom, typed, keep)(발주·출하·기타입고·완제품 생산계획 묶음 저장, 수주, 입고, 기록 고치기 PUT /api/items/:entity/:id — 지금 값은 그대로 둘 수 있음), lockedSpec(생산의뢰·구매의뢰: 고치는 의뢰의 기존 줄 값은 유지).
+- 화면: 줄 표(발주·출하·기타입고)·입고·수주는 .spec-fixed 표시(입력칸 없음), 카드(생산계획 포함)는 규격 칸 숨기고 「규격(고정)」 요약, 생산의뢰·구매의뢰 줄(itemLockApply)은 읽기 전용.

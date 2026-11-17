@@ -37,14 +37,14 @@ function sizeGrid(row, sizes) {
 // Orders, shipments and other receipts: a picked product code already fixes spec, unit and category,
 // so those inputs are hidden and the code's values are shown instead. Direct entry keeps the inputs.
 function fromCatalog(row, entity, bom) {
-  if (!['purchase_order', 'shipment', 'other_receipt'].includes(entity)) return;
+  if (!['purchase_order', 'shipment', 'other_receipt', 'schedule'].includes(entity)) return;
   $('[data-catalog-summary]', row)?.remove();
   const fields = ['spec', 'unit', 'item_category'].map(key => $(`[data-line-key=${key}]`, row)).filter(Boolean);
-  for (const input of fields) input.closest('label').hidden = !!bom && !(input.dataset.lineKey === 'spec' && !bom.spec && !(bom.sizes || []).length);
+  for (const input of fields) input.closest('label').hidden = !!bom && !(input.dataset.lineKey === 'spec' && !bom.spec); // 15.121 등록 규격이 있으면 숨김(고정)
   if (!bom) return;
-  const spec = $('[data-line-key=spec]', row); if (spec && !(bom.sizes || []).length) spec.value = bom.spec || ''; // 15.107 코드 규격을 그대로(없으면 직접 입력)
+  const spec = $('[data-line-key=spec]', row); if (spec && bom.spec && !(bom.sizes || []).length) spec.value = bom.spec; // 15.121 등록 규격 고정(없으면 직접 입력)
   const box = document.createElement('p'); box.className = 'span3 catalog-summary'; box.dataset.catalogSummary = '';
-  box.innerHTML = [['규격', bom.spec], ['단위', bom.unit], ['분류', bom.item_category || '미분류'], ['제품코드', bom.product_code]].filter(([, v]) => v).map(([label, value]) => `<span class="muted">${esc(label)}</span> <b>${esc(value)}</b>`).join('<span class="muted"> · </span>');
+  box.innerHTML = [['규격(고정)', bom.spec], ['단위', bom.unit], ['분류', bom.item_category || '미분류'], ['제품코드', bom.product_code]].filter(([, v]) => v).map(([label, value]) => `<span class="muted">${esc(label)}</span> <b>${esc(value)}</b>`).join('<span class="muted"> · </span>');
   $('[data-line-key=bom_id]', row).closest('label').after(box);
   // 15.70 현재고(재고 현황과 같은 계산)
   box.insertAdjacentHTML('beforeend', '<span class="muted"> · </span><span class="muted">현재고</span> <b data-item-stock>…</b>');
