@@ -686,9 +686,10 @@ async function pageNotes(main) {
   main.innerHTML = `<h1>어음 관리</h1>
   <form class="list-filters toolbar lf-oneline" data-read-only id="noteFilters">
     <div class="seg result-seg" role="group" aria-label="어음구분"><label><input type="radio" name="kind" value="receivable" checked> 받을어음</label><label><input type="radio" name="kind" value="payable"> 지급어음</label></div>
-    <label class="lf-period">발행일자<span class="lf-pair"><input type="date" name="from" value="${y}-01-01" aria-label="발행일자 시작"><span class="muted">~</span><input type="date" name="to" value="${y}-12-31" aria-label="발행일자 끝"></span></label>
+    <label class="lf-sel">날짜 기준<select name="basis"><option value="issue">발행일자</option><option value="due">만기일자</option><option value="processed">처리일자</option></select></label>
+    <label class="lf-period">기간<span class="lf-pair"><input type="date" name="from" value="${y}-01-01" aria-label="기간 시작"><span class="muted">~</span><input type="date" name="to" value="${y}-12-31" aria-label="기간 끝"></span></label>
     <label class="lf-partner">거래처<input name="partner" maxlength="100"></label>
-    <label class="lf-sel">처리구분<select name="status"><option value="open">미처리</option><option value="collected">만기회수</option><option value="">전체</option></select></label>
+    <div class="seg result-seg" role="group" aria-label="처리구분"><label><input type="radio" name="status" value="collected"> 처리</label><label><input type="radio" name="status" value="open" checked> 미처리</label><label><input type="radio" name="status" value=""> 전체</label></div>
     <label class="grow lf-q">검색<input type="search" name="q" placeholder="어음번호·발행은행·비고"></label>
     <button class="btn primary">조회</button><button type="button" class="btn" data-note-new>+ 어음 등록</button></form>
   <div id="noteList"></div>`;
@@ -706,7 +707,7 @@ async function pageNotes(main) {
     if (rows.length) $('#noteList', main).insertAdjacentHTML('beforeend', sumLine([['합계', esc(`${rows.length}건`)], ['발행금액', esc(`${won(data.totals.all)}원`)], ['미처리', esc(`${won(data.totals.open)}원`)], ['만기회수', esc(`${won(data.totals.collected)}원`)]]));
   };
   form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
-  $$('[name=kind]', form).forEach(r => { r.onchange = () => load().catch(fail); });
+  $$('[name=kind], [name=status], [name=basis], [name=from], [name=to]', form).forEach(r => { r.addEventListener('change', () => load().catch(fail)); }); // 15.165 구분·처리·날짜 기준·기간을 바꾸면 바로 조회
   $('[data-note-new]', form).onclick = () => noteDialog(kind(), null, load).catch(fail);
   const list = $('#noteList', main);
   list.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('tr[data-note-edit]')) e.target.click(); });

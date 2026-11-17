@@ -1494,11 +1494,13 @@ const noteDup = (n, id = 0) => db.prepare("SELECT 1 FROM bill_notes WHERE kind=?
 route('GET', '/api/notes', async ({ user, query }) => {
   requirePayments(user);
   const kind = query.kind === 'payable' ? 'payable' : 'receivable', where = ['kind=?'], args = [kind];
-  applyListDates(where, args, query, 'issue_date');
+  // 15.165 날짜 기준: 발행일자(기본)·만기일자·처리일자
+  applyListDates(where, args, query, { due: 'due_date', processed: 'processed_date' }[query.basis] || 'issue_date');
   if (query.status === 'open' || query.status === 'collected') { where.push('status=?'); args.push(query.status); } else where.push("status<>'cancelled'");
   if (query.partner) { where.push(`${customerKey('partner')}=?`); args.push(nameKey(str(query.partner, 100))); }
   const kw = str(query.q, 50).trim(); if (kw) { where.push('(note_no LIKE ? OR bank LIKE ? OR memo LIKE ?)'); args.push(`%${kw}%`, `%${kw}%`, `%${kw}%`); }
-  const rows = await db.prepare(`SELECT * FROM bill_notes WHERE ${where.join(' AND ')} ORDER BY issue_date, id LIMIT 2001`).all(...args);
+  const order = { due: 'due_date', processed: 'processed_date' }[query.basis] || 'issue_date';
+  const rows = await db.prepare(`SELECT * FROM bill_notes WHERE ${where.join(' AND ')} ORDER BY ${order}, id LIMIT 2001`).all(...args);
   if (rows.length > 2000) throw bad('어음이 너무 많습니다. 기간을 좁히세요.');
   const sum = st => rows.filter(r => !st || r.status === st).reduce((t, r) => t + r.amount, 0);
   return { kind, rows, totals: { all: sum(''), open: sum('open'), collected: sum('collected'), count: rows.length } };

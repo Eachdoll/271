@@ -655,6 +655,9 @@ test('15.165 Bill notes: register, duplicate no, edit with history, collect/reop
   const u = await buyer('PUT', `/api/notes/${n.body.id}`, { bank: '우리은행', due_date: '2026-11-30' }); assert.equal(u.body.bank, '우리은행');
   const c = (await buyer('POST', `/api/notes/${n.body.id}/collect`, { date: '2026-11-30' })).body; assert.deepEqual([c.status, c.processed_date], ['collected', '2026-11-30']);
   assert.equal((await buyer('GET', '/api/notes?kind=receivable&status=open&from=2026-01-01&to=2026-12-31')).body.rows.length, 1);
+  // 날짜 기준: 처리일자로 11월 → 회수한 1건, 만기일자로 12월 → IMK8-3(12-09) 1건
+  assert.deepEqual((await buyer('GET', '/api/notes?kind=receivable&status=collected&basis=processed&from=2026-11-01&to=2026-11-30')).body.rows.map(r => r.note_no), ['260828 서브원7']);
+  assert.deepEqual((await buyer('GET', '/api/notes?kind=receivable&status=&basis=due&from=2026-12-01&to=2026-12-31')).body.rows.map(r => r.note_no), ['260911 IMK8-3']);
   assert.equal((await buyer('POST', `/api/notes/${n.body.id}/reopen`, {})).body.status, 'open');
   assert.equal((await buyer('POST', `/api/notes/${n.body.id}/cancel`, {})).body.status, 'cancelled');
   assert.equal((await buyer('GET', '/api/notes?kind=receivable&from=2026-01-01&to=2026-12-31')).body.rows.length, 1, 'cancelled hidden');
