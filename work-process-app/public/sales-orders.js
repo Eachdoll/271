@@ -58,14 +58,18 @@ async function pageSalesOrderEntry(main, editId = null) {
   const pick = async (index = -1) => {
     if (!catalog) catalog = await api('GET', '/api/boms').catch(error => { fail(error); return null; });
     if (!catalog) return;
-    const bom = await openItemPicker(catalog, { title: '수주 품목 찾기', filter: b => b.active !== 0 && !b.is_temp, emptyText: '찾는 품목이 없습니다. 분류 탭을 「전체」로 바꾸거나 검색어를 줄이세요. 새 품목은 제품등록에서 먼저 등록합니다.' });
-    if (!bom) return;
-    const row = { bom_id: bom.id, item: bom.product, product_code: bom.product_code || '', unit: bom.unit || '', spec: bom.spec || '', fixedSpec: !!bom.spec && !(bom.sizes || []).length, sizes: bom.sizes || [] };
-    const tp = (await tablePrices('sales', input.value, form.elements.order_date.value || todayStr()))[bom.id];
-    if (tp) row.price = tp.unit_price; // 15.111 매출 단가표 단가를 미리 채움
-    if (index >= 0) Object.assign(lines[index], row); else lines.push({ qty: '', price: '', due_date: form.elements.due_date.value, note: '', ...row });
+    const pickOpts = { title: '수주 품목 찾기', filter: b => b.active !== 0 && !b.is_temp, emptyText: '찾는 품목이 없습니다. 분류 탭을 「전체」로 바꾸거나 검색어를 줄이세요. 새 품목은 제품등록에서 먼저 등록합니다.' };
+    // 15.137 새 줄은 체크해 여러 품목을 한 번에, 「바꾸기」는 한 품목
+    const boms = index >= 0 ? [await openItemPicker(catalog, pickOpts)].filter(Boolean) : ((await openItemPicker(catalog, { ...pickOpts, multi: true, lots: false }))?.items || []).map(x => x.bom);
+    if (!boms.length) return;
+    for (const bom of boms) {
+      const row = { bom_id: bom.id, item: bom.product, product_code: bom.product_code || '', unit: bom.unit || '', spec: bom.spec || '', fixedSpec: !!bom.spec && !(bom.sizes || []).length, sizes: bom.sizes || [] };
+      const tp = (await tablePrices('sales', input.value, form.elements.order_date.value || todayStr()))[bom.id];
+      if (tp) row.price = tp.unit_price; // 15.111 매출 단가표 단가를 미리 채움
+      if (index >= 0) Object.assign(lines[index], row); else lines.push({ qty: '', price: '', due_date: form.elements.due_date.value, note: '', ...row });
+    }
     draw();
-    $$('[data-l="qty"]', box)[index >= 0 ? index : lines.length - 1]?.focus();
+    $$('[data-l="qty"]', box)[index >= 0 ? index : lines.length - boms.length]?.focus();
   };
   enterMovesInTable(box);
   $('[data-so-add]', form).onclick = () => pick().catch(fail);
@@ -161,7 +165,7 @@ async function pageSalesOrderList(main) {
     rows = next ? rows.concat(data.rows) : data.rows; page = data.page; $('#soMore', main).hidden = !data.more;
     $('#soSummary', main).innerHTML = `<b>${esc(`${rows.length}건 · 수주 금액 ${won(rows.reduce((t, r) => t + r.amount, 0))}원`)}</b>${data.more ? ' <span>(더 있음)</span>' : ''}`;
     $('#soList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>수주번호</th><th>수주일</th><th>거래처</th><th>비고</th><th>품목</th><th class="r">수주</th><th class="r">전표</th><th class="r">잔량</th><th class="r">금액</th><th>납기</th><th>상태</th><th>입력</th><th></th></tr></thead><tbody>${rows.map((r, i) => `<tr class="${['closed', 'cancelled'].includes(r.state) ? 'row-off' : ''}">
-      <td data-card-primary><b>${esc(r.order_no)}</b>${poOf(r.customer_po, r.note) ? `<div class="small muted">PO ${esc(poOf(r.customer_po, r.note))}</div>` : ''}</td><td>${esc(r.order_date)}</td><td>${esc(r.customer)}${r.customer_code ? `<div class="small muted">${esc(r.customer_code)}</div>` : ''}</td><td class="so-list-note" title="${esc(r.note || '')}">${r.note ? esc(r.note) : '<span class="muted">—</span>'}</td>
+      <td data-card-primary><b>${esc(r.order_no)}</b>${soPoInfo(r)}</td><td>${esc(r.order_date)}</td><td>${esc(r.customer)}${r.customer_code ? `<div class="small muted">${esc(r.customer_code)}</div>` : ''}</td><td class="so-list-note" title="${esc(r.note || '')}">${r.note ? esc(r.note) : '<span class="muted">—</span>'}</td>
       <td>${esc(r.first_item || '')}${r.line_count > 1 ? ` <span class="small muted">${esc(`외 ${r.line_count - 1}`)}</span>` : ''}</td><td class="r">${fmtNum(r.ordered_qty)}</td><td class="r">${fmtNum(r.billed_qty)}</td>
       <td class="r"><b>${r.status === 'open' ? fmtNum(Math.max(0, r.ordered_qty - r.billed_qty)) : ''}</b></td><td class="r">${won(r.amount)}</td><td>${esc(r.due_date || '')}</td><td>${soChip(r.state)}</td><td class="small muted">${esc(r.created_by)}</td>
       <td data-card-primary><button class="btn small" data-so-open="${r.id}">보기</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">조건에 맞는 수주가 없습니다.</div>';
@@ -314,4 +318,11 @@ function shipBatchSheet(b, after = null) {
     try { const r = await api('POST', '/api/ship-instructions/ship', { ids: ready.map(l => l.id), ship_date: date, lots }); toast(`${r.shipped}줄을 출하 처리했습니다.`); await reopen(await api('GET', '/api/ship-batches/' + b.id)); refreshNavBadges?.(); }
     catch (error) { fail(error); e.target.disabled = false; }
   });
+}
+
+// 15.137 수주목록 PO 칸: 고객 비고(예: 0C0827-27 (P1DD) OLED Asan mj1938,seon 2008315425)에서 주문번호·주문자명도 읽어 함께 보여 준다.
+function soPoInfo(r) {
+  const p = parseCustomerNote(r.note), po = poOf(r.customer_po, r.note);
+  if (!po && !p) return '';
+  return `<div class="small so-po">${po ? `<span>PO <b>${esc(po)}</b></span>` : ''}${p?.req ? `<span>주문번호 <b>${esc(p.req)}</b></span>` : ''}${p?.person ? `<span>주문자 <b>${esc(p.person)}</b></span>` : ''}${p?.line ? `<span class="muted">${esc([p.line, p.site].filter(Boolean).join(' · '))}</span>` : ''}</div>`;
 }

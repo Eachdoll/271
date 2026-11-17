@@ -431,3 +431,19 @@ test('15.133 LOT prefix by category and sub-LOTs per package', async () => {
   assert.equal(rc2.lines[0].sub_lot, '004', 'continues after earlier sub-LOTs');
   assert.equal((await staff('GET', `/api/lots/next?prefix=R&date=2026-08-04`)).body.lots[0], 'R260804_002');
 });
+
+test('15.137 Partner book: per-bill rows with tax invoice, payments, running balance; summary per partner', async () => {
+  const g = (await admin('POST', '/api/boms', { product: '장부상품', product_code: 'BK-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  const sell = async () => { const s = (await admin('POST', '/api/shipments', { ship_date: today, bom_id: g.id, item: g.product, qty: 1, customer: '장부고객', unit: 'EA' })).body; return (await admin('POST', '/api/sales-bills', { customer: '장부고객', bill_date: today, request_id: rid(), lines: [{ source_type: 'ship', source_id: s.id, unit_price: 1000 }] })).body; };
+  const b1 = await sell(); await sell();
+  const inv = (await admin('POST', '/api/tax-invoices', { request_id: rid(), kind: 'single', bill_ids: [b1.id] })).body.rows[0];
+  await admin('POST', '/api/sales-payments', { request_id: rid(), customer: '장부고객', pay_date: today, kind: 'payment', amount: 500 });
+  const d = (await admin('GET', `/api/partner-book?side=sales&from=${today}&to=${today}&party=${encodeURIComponent('장부 고객')}`)).body;
+  const bills = d.rows.filter(r => r.kind === 'bill');
+  assert.equal(bills.length, 2); assert.equal(bills[0].invoice_no, inv.invoice_no); assert.equal(bills[1].invoice_no, '');
+  assert.equal(d.totals.total, 2200); assert.equal(d.totals.paid, 500); assert.equal(d.totals.balance, 1700); assert.equal(d.totals.uninvoiced, 1100);
+  const sum = (await admin('GET', `/api/partner-book?side=sales&from=${today}&to=${today}`)).body.rows.find(r => r.name === '장부고객');
+  assert.deepEqual([sum.bills, sum.total, sum.paid, sum.balance, sum.invoiced, sum.uninvoiced], [2, 2200, 500, 1700, 1100, 1100]);
+  assert.equal((await staff('GET', `/api/partner-book?side=sales&from=${today}&to=${today}`)).status, 403);
+  assert.equal((await buyer('GET', `/api/partner-book?side=purchase&from=${today}&to=${today}`)).status, 200);
+});

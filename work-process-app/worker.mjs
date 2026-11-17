@@ -1705,6 +1705,44 @@ async function agingData(side, asof) {
   rows.sort((a, b) => b.days - a.days || b.balance - a.balance);
   return { side, asof, labels: AGING_BUCKETS.map(b => b[1]), rows };
 }
+// ── 15.137 거래처별 장부(매출·매입): 기간의 전표마다 공급가액·부가세·합계·세금계산서(번호·상태)와 입금/지급을 날짜순으로 잇고 잔액을 낸다.
+// 거래처를 비우면 거래처별 요약(기초·전표·입금/지급·잔액·계산서 발행/미발행 금액).
+const BOOK = {
+  sales: { bills: 'sales_bills', col: 'customer', key: customerKey, pays: 'sales_payments', link: 'tax_invoice_bills', inv: 'tax_invoices', live: "i.status<>'cancelled'", lines: 'sales_bill_lines', need: requireSales },
+  purchase: { bills: 'purchase_bills', col: 'vendor', key: billVendorKey, pays: 'purchase_payments', link: 'purchase_tax_invoice_bills', inv: 'purchase_tax_invoices', live: "i.status='received'", lines: 'purchase_bill_lines', need: requirePurchase },
+};
+route('GET', '/api/partner-book', async ({ user, query }) => {
+  const side = query.side === 'purchase' ? 'purchase' : 'sales', c = BOOK[side]; c.need(user);
+  const from = dateStr(query.from, '시작일'), to = dateStr(query.to, '종료일'); if (from > to) throw bad('시작일이 종료일보다 늦습니다.');
+  const party = str(query.party, 100), K = c.key(c.col), filter = party ? ` AND ${K}=?` : '', fargs = party ? [nameKey(party)] : [];
+  const INV = `(SELECT i.invoice_no || '|' || i.status || '|' || i.id || '|' || COALESCE(i.approval_no,'') FROM ${c.link} t JOIN ${c.inv} i ON i.id=t.invoice_id WHERE t.bill_id=b.id AND t.active=1 AND ${c.live})`;
+  const before = new Map();
+  for (const r of await db.prepare(`SELECT ${K} AS k, MIN(${c.col}) AS name, SUM(total) AS t FROM ${c.bills} WHERE status='confirmed' AND bill_date<?${filter} GROUP BY k`).all(from, ...fargs)) before.set(r.k, { name: r.name, opening: r.t || 0 });
+  for (const r of await db.prepare(`SELECT ${K} AS k, MIN(${c.col}) AS name, SUM(CASE WHEN kind='opening' THEN amount ELSE -amount END) AS t FROM ${c.pays} WHERE status='confirmed' AND pay_date<?${filter} GROUP BY k`).all(from, ...fargs)) { const g = before.get(r.k) || { name: r.name, opening: 0 }; g.opening += r.t || 0; before.set(r.k, g); }
+  if (!party) {
+    const map = new Map(), get = (k, name) => { if (!map.has(k)) map.set(k, { name, opening: 0, bills: 0, supply: 0, vat: 0, total: 0, paid: 0, invoiced: 0, uninvoiced: 0 }); return map.get(k); };
+    for (const [k, g] of before) get(k, g.name).opening = g.opening;
+    for (const b of await db.prepare(`SELECT ${c.key('b.' + c.col)} AS k, MIN(b.${c.col}) AS name, COUNT(*) AS bills, SUM(b.supply_total) AS supply, SUM(b.vat_total) AS vat, SUM(b.total) AS total, SUM(CASE WHEN ${INV} IS NOT NULL THEN b.total ELSE 0 END) AS invoiced FROM ${c.bills} b WHERE b.status='confirmed' AND b.bill_date BETWEEN ? AND ? GROUP BY k`).all(from, to))
+      Object.assign(get(b.k, b.name), { bills: b.bills, supply: b.supply, vat: b.vat, total: b.total, invoiced: b.invoiced, uninvoiced: b.total - b.invoiced });
+    for (const p of await db.prepare(`SELECT ${K} AS k, MIN(${c.col}) AS name, SUM(CASE WHEN kind='payment' THEN amount ELSE 0 END) AS paid, SUM(CASE WHEN kind='opening' THEN amount ELSE 0 END) AS opening FROM ${c.pays} WHERE status='confirmed' AND pay_date BETWEEN ? AND ? GROUP BY k`).all(from, to)) { const g = get(p.k, p.name); g.paid = p.paid; g.opening += p.opening; }
+    const rows = [...map.values()].map(r => ({ ...r, balance: r.opening + r.total - r.paid })).filter(r => r.opening || r.total || r.paid || r.balance).sort((a, b) => stockCompare(a.name, b.name));
+    const sum = k => rows.reduce((t, r) => t + (r[k] || 0), 0);
+    return { side, from, to, party: '', rows, totals: Object.fromEntries(['opening', 'bills', 'supply', 'vat', 'total', 'paid', 'invoiced', 'uninvoiced', 'balance'].map(k => [k, sum(k)])) };
+  }
+  const opening = [...before.values()][0]?.opening || 0;
+  const bills = await db.prepare(`SELECT b.id, b.bill_no, b.bill_date AS date, b.supply_total AS supply, b.vat_total AS vat, b.total, b.note, ${INV} AS invoice,
+      (SELECT item FROM ${c.lines} l WHERE l.bill_id=b.id ORDER BY l.id LIMIT 1) AS first_item, (SELECT COUNT(*) FROM ${c.lines} l WHERE l.bill_id=b.id) AS line_count
+    FROM ${c.bills} b WHERE b.status='confirmed' AND b.bill_date BETWEEN ? AND ? AND ${c.key('b.' + c.col)}=? ORDER BY b.bill_date, b.id LIMIT 5001`).all(from, to, nameKey(party));
+  const pays = await db.prepare(`SELECT id, pay_date AS date, kind, amount, method, note FROM ${c.pays} WHERE status='confirmed' AND pay_date BETWEEN ? AND ? AND ${K}=? ORDER BY pay_date, id LIMIT 5001`).all(from, to, nameKey(party));
+  if (bills.length > 5000 || pays.length > 5000) throw bad('줄이 너무 많습니다. 기간을 좁히세요.');
+  const rows = [
+    ...pays.map(p => ({ kind: p.kind, date: p.date, order: p.kind === 'opening' ? -1 : 2, id: p.id, label: p.kind === 'opening' ? (side === 'sales' ? '기초 미수금' : '기초 미지급') : (side === 'sales' ? '입금' : '지급') + (p.method ? ` · ${p.method}` : ''), note: p.note, total: p.kind === 'opening' ? p.amount : 0, paid: p.kind === 'payment' ? p.amount : 0 })),
+    ...bills.map(b => { const [invoice_no, invoice_status, invoice_id, approval_no] = b.invoice ? b.invoice.split('|') : []; return { kind: 'bill', date: b.date, order: 1, id: b.id, bill_no: b.bill_no, label: b.first_item ? `${b.first_item}${b.line_count > 1 ? ` 외 ${b.line_count - 1}건` : ''}` : '', note: b.note, supply: b.supply, vat: b.vat, total: b.total, paid: 0, invoice_no: invoice_no || '', invoice_status: invoice_status || '', invoice_id: invoice_id ? Number(invoice_id) : null, approval_no: approval_no || '' }; }),
+  ].sort((a, b) => stockCompare(a.date, b.date) || a.order - b.order || a.id - b.id);
+  let balance = opening; for (const r of rows) { balance += r.total - r.paid; r.balance = balance; delete r.order; }
+  const sum = k => rows.reduce((t, r) => t + (r[k] || 0), 0), billRows = rows.filter(r => r.kind === 'bill');
+  return { side, from, to, party, opening, rows, totals: { supply: sum('supply'), vat: sum('vat'), total: sum('total'), paid: sum('paid'), balance, invoiced: billRows.filter(r => r.invoice_no).reduce((t, r) => t + r.total, 0), uninvoiced: billRows.filter(r => !r.invoice_no).reduce((t, r) => t + r.total, 0) } };
+});
 route('GET', '/api/sales-ledger', async ({ user, query }) => {
   requireSales(user);
   const from = dateStr(query.from, '시작일'), to = dateStr(query.to, '종료일');

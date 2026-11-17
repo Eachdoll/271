@@ -28,7 +28,8 @@ async function editCompanyTaxInfo() {
 }
 
 async function pageTaxMake(main) {
-  const ym = prevMonth(), r0 = monthRange(ym);
+  // 15.137 지난 달 1일 ~ 오늘(이번 달 전표도 바로 보이게. 예전에는 지난 달만 보여 「조회가 안 된다」로 보였음)
+  const r0 = { from: monthRange(prevMonth()).from, to: todayStr() };
   main.innerHTML = `<h1>세금계산서 만들기</h1>
   <p class="muted">매출전표를 세금계산서로 담습니다. <b>건별</b>은 전표 1건이 계산서 1장, <b>월별</b>은 거래처의 기간(보통 한 달) 전표를 합쳐 1장입니다. 담은 계산서는 「세금계산서 관리」에서 체크해 발행합니다. 한 전표는 계산서 하나에만 담깁니다.</p>
   <div class="seg class-tabs" role="group" aria-label="담는 방식"><button type="button" data-tax-mode="single" class="on">건별</button><button type="button" data-tax-mode="monthly">월별</button></div>
@@ -108,7 +109,7 @@ function taxInvoiceView(inv, after) {
 }
 
 async function pageTaxList(main) {
-  const r0 = monthRange(todayStr().slice(0, 7));
+  const r0 = { from: monthRange(prevMonth()).from, to: monthRange(todayStr().slice(0, 7)).to }; // 15.137 지난 달 월별 계산서(작성일 말일)도 보이게
   main.innerHTML = `<h1>세금계산서 관리</h1>${taxSideTabs('sales')}
   <p class="muted">담은 세금계산서를 체크하고 「발행」을 누르면 트러스빌로 발행합니다. 발행 전에는 작성일자·받는 이메일(2곳까지)을 고치거나 「담기 취소」할 수 있습니다.</p>
   <div class="tax-link" id="taxLink"></div>

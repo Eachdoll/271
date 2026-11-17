@@ -1639,3 +1639,6 @@ body.printing-cert .sb-doc .sb-lot input { border: 0; padding: 0; } body.printin
 tr.rc-group td { background: var(--panel); } tr.rc-child td:first-child { border-left: 3px solid var(--accent, #2b6de5); } tr.rc-child td:nth-child(3) { padding-left: 22px; }
 .lot-hint { min-height: 0; } .lot-hint:empty { display: none; } body.printing-cert .lot-hint { display: none; }
 .lot-in-grid select { min-width: 220px; } .lot-in-grid input { width: 110px; }
+.so-po { display: flex; flex-wrap: wrap; gap: 2px 8px; color: var(--muted); } .so-po b { color: var(--text); font-weight: 600; }
+tr.sort-aux-hidden { display: none; }
+tr.book-pay td { background: var(--green-bg, #eefaf1); } tr.book-open td { background: var(--panel); font-weight: 600; }

@@ -90,9 +90,11 @@ async function installLineTable(legacy, entity) {
   };
   const pick = async (index = -1) => {
     if (loading) return toast('품목 목록을 불러오는 중입니다.', 'err');
-    const bom = await openItemPicker(boms, { title: `${cfg.title.replace(' 등록', '').replace(' 입력', '')} 품목 찾기` });
-    if (!bom) return;
-    const made = expand(bom);
+    // 15.137 새 줄은 체크해 여러 품목을 한 번에(「바꾸기」는 한 품목)
+    const title = `${cfg.title.replace(' 등록', '').replace(' 입력', '')} 품목 찾기`;
+    const pickedBoms = index >= 0 ? [await openItemPicker(boms, { title })].filter(Boolean) : ((await openItemPicker(boms, { title, multi: true, lots: false }))?.items || []).map(x => x.bom);
+    if (!pickedBoms.length) return;
+    const made = pickedBoms.flatMap(expand);
     if (lines.length - (index >= 0 ? 1 : 0) + made.length > 30) return toast('한 번에 30줄까지 등록할 수 있습니다.', 'err');
     if (index >= 0) lines.splice(index, 1, ...made); else lines.push(...made);
     draw(); await fillPrices();
