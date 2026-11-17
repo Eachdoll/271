@@ -1477,3 +1477,41 @@ table.grid.po-grid td:nth-child(1) { white-space: nowrap; }
   :root:not([data-theme="light"]) .cat-chip.cat-green { color: #8fd6a8; border-color: #2f6b45; background: #17301f; }
   :root:not([data-theme="light"]) .cat-chip.cat-orange { color: #f3b77a; border-color: #7a4a1c; background: #33220f; }
 }
+/* 15.118 생산계획표 */
+.g-legend { margin: 4px 0 8px; }
+.g-key { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin: 0 3px 0 8px; vertical-align: -2px; border: 1px solid var(--muted); }
+.g-wrap { overflow-x: auto; }
+.g-table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13px; background: var(--panel); }
+.g-table th, .g-table td { border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); padding: 6px 8px; }
+.g-table thead th { position: sticky; top: 0; background: var(--accent-soft); font-weight: 600; text-align: center; white-space: nowrap; z-index: 2; }
+.g-table .g-prod { position: sticky; left: 0; background: var(--panel); text-align: left; min-width: 160px; max-width: 220px; z-index: 1; font-weight: 600; }
+.g-table thead .g-prod { z-index: 3; background: var(--accent-soft); }
+.g-table .g-col.g-sun { color: var(--red); }
+.g-table .g-col.g-today { box-shadow: inset 0 -3px 0 var(--accent); }
+.g-cell { text-align: right; cursor: pointer; min-width: 64px; white-space: nowrap; }
+.g-cell b, .g-foot td b { display: block; font-variant-numeric: tabular-nums; }
+.g-cell span, .g-foot td span { display: block; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.g-cell i { font-style: normal; color: var(--line); display: block; text-align: center; }
+.g-cell:hover i { color: var(--accent); }
+.g-cell:hover, .g-cell:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+.g-table .g-col.g-today { color: var(--accent); }
+.g-done, .g-key.g-done { background: var(--green-bg); }
+.g-part, .g-key.g-part { background: var(--yellow-bg); }
+.g-late, .g-key.g-late { background: var(--red-bg); }
+.g-late span { color: var(--red); }
+.g-none, .g-key.g-none { background: var(--bg); }
+.g-tot { text-align: right; white-space: nowrap; min-width: 96px; background: var(--bg); font-variant-numeric: tabular-nums; }
+.g-foot td, .g-foot th { background: var(--bg); text-align: right; font-weight: 600; }
+.g-foot .g-prod { background: var(--bg); text-align: left; }
+.g-band td { padding: 4px 6px; }
+.g-bar { position: relative; display: block; width: 100%; text-align: left; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; cursor: pointer; overflow: hidden; color: var(--text); font: inherit; }
+.g-bar .g-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent-soft); z-index: 0; }
+.g-bar b { position: relative; z-index: 1; font-weight: 600; font-size: 12.5px; }
+.g-bar.g-done { border-color: var(--green); } .g-bar.g-late { border-color: var(--red); }
+.g-table.g-wide .g-cell { min-width: 52px; padding: 5px 6px; }
+.sc-day-sum { display: block; width: 100%; text-align: left; border: 1px solid var(--line); border-radius: 6px; background: var(--accent-soft); padding: 6px 8px; cursor: pointer; color: var(--text); font: inherit; }
+.sc-day-sum:hover { border-color: var(--accent); }
+.sc-pop .sc-item { margin-bottom: 8px; }
+@media print { .g-table thead th, .g-table .g-prod { position: static; } }
+.g-key.g-done { border-color: var(--green); } .g-key.g-part { border-color: var(--yellow); } .g-key.g-late { border-color: var(--red); }
+.g-cell.g-done { box-shadow: inset 0 -2px 0 var(--green); } .g-cell.g-late { box-shadow: inset 0 -2px 0 var(--red); } .g-cell.g-part { box-shadow: inset 0 -2px 0 var(--yellow); }
