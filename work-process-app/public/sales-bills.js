@@ -658,3 +658,68 @@ async function pagePartnerBook(main, side = 'sales') {
   };
   await load().catch(fail);
 }
+
+// ── 15.165 어음 관리(경리 › 대금) ── 받을어음·지급어음. 발행일자·어음번호·거래처·발행금액·만기일자·발행은행·처리구분(미처리/만기회수)·처리일자.
+// 줄을 누르면 고치기(이력 남음), 「만기회수」로 처리일자 기록, 되돌리기·삭제. 미처리 어음은 만기 7일 안이면 노랑, 지나면 빨강.
+const NOTE_STATE = { open: ['미처리', ''], collected: ['만기회수', 'green'] };
+async function noteDialog(kind, note = null, done = null) {
+  const n = note || { kind, issue_date: todayStr(), note_no: '', partner: '', amount: '', due_date: '', bank: '', memo: '' };
+  const v = await promptBox(note ? `어음 고치기 · ${note.note_no}` : '어음 등록', `
+    <div class="form-grid">
+      <label>어음구분<select name="kind"><option value="receivable"${n.kind !== 'payable' ? ' selected' : ''}>받을어음</option><option value="payable"${n.kind === 'payable' ? ' selected' : ''}>지급어음</option></select></label>
+      <label>발행일자 *<input type="date" name="issue_date" required value="${esc(n.issue_date)}"></label>
+      <label>어음번호 *<input name="note_no" required maxlength="50" value="${esc(n.note_no)}" placeholder="예) 260828 서브원7"></label>
+      <label>거래처 *<input name="partner" required maxlength="100" value="${esc(n.partner)}" autocomplete="off"></label>
+      <label>발행금액 *<input type="number" name="amount" required min="1" step="1" value="${n.amount ?? ''}" inputmode="numeric"></label>
+      <label>만기일자 *<input type="date" name="due_date" required value="${esc(n.due_date)}"></label>
+      <label>발행은행<input name="bank" maxlength="50" value="${esc(n.bank)}" placeholder="예) 하나은행" list="noteBanks"></label>
+      <label class="span2">비고<input name="memo" maxlength="300" value="${esc(n.memo)}"></label>
+    </div><datalist id="noteBanks">${['하나은행', '기업은행', '우리은행', '국민은행', '신한은행', '농협은행', '산업은행', 'SC제일은행', '씨티은행', '수협은행', '대구은행', '부산은행'].map(b => `<option value="${b}">`).join('')}</datalist>
+    ${note ? `<div class="small muted" data-note-hist></div>` : ''}`, { wide: true, onOpen: el => {
+      bindPartnerPicker($('[name=partner]', el), null, {}).catch(() => {});
+      if (note) api('GET', `/api/notes/${note.id}/history`).then(h => { const box = $('[data-note-hist]', el); if (box && h.length) box.innerHTML = `<details><summary>고친 이력 ${h.length}건</summary>${h.map(x => `<div>${esc(String(x.changed_at).slice(0, 16))} · ${esc(x.changed_by)} · ${esc(x.summary)}</div>`).join('')}</details>`; }).catch(() => {});
+    }, submit: async v => note ? api('PUT', `/api/notes/${note.id}`, v) : api('POST', '/api/notes', { ...v, request_id: crypto.randomUUID() }) });
+  if (v) { toast(note ? '어음을 고쳤습니다.' : '어음을 등록했습니다.'); await done?.(); }
+}
+async function pageNotes(main) {
+  const y = todayStr().slice(0, 4);
+  main.innerHTML = `<h1>어음 관리</h1>
+  <form class="list-filters toolbar lf-oneline" data-read-only id="noteFilters">
+    <div class="seg result-seg" role="group" aria-label="어음구분"><label><input type="radio" name="kind" value="receivable" checked> 받을어음</label><label><input type="radio" name="kind" value="payable"> 지급어음</label></div>
+    <label class="lf-period">발행일자<span class="lf-pair"><input type="date" name="from" value="${y}-01-01" aria-label="발행일자 시작"><span class="muted">~</span><input type="date" name="to" value="${y}-12-31" aria-label="발행일자 끝"></span></label>
+    <label class="lf-partner">거래처<input name="partner" maxlength="100"></label>
+    <label class="lf-sel">처리구분<select name="status"><option value="open">미처리</option><option value="collected">만기회수</option><option value="">전체</option></select></label>
+    <label class="grow lf-q">검색<input type="search" name="q" placeholder="어음번호·발행은행·비고"></label>
+    <button class="btn primary">조회</button><button type="button" class="btn" data-note-new>+ 어음 등록</button></form>
+  <div id="noteList"></div>`;
+  const form = $('#noteFilters', main); let rows = [];
+  bindPartnerPicker(form.elements.partner, null, {}).catch(() => {});
+  const kind = () => form.querySelector('[name=kind]:checked').value;
+  const dday = r => { if (r.status !== 'open') return ''; const d = Math.round((new Date(r.due_date) - new Date(todayStr())) / 86400000); return d < 0 ? `<span class="chip red">${-d}일 지남</span>` : d <= 7 ? `<span class="chip yellow">D-${d}</span>` : ''; };
+  const load = async () => {
+    const data = await api('GET', '/api/notes?' + new URLSearchParams(formObj(form))); if (!main.isConnected) return; rows = data.rows;
+    $('#noteList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid note-grid"><thead><tr><th>발행일자</th><th>어음번호</th><th>거래처</th><th class="r">발행금액</th><th>만기일자</th><th>발행은행</th><th>처리구분</th><th>처리일자</th><th>비고</th><th></th></tr></thead>
+      <tbody>${rows.map(r => `<tr class="note-row ${r.status === 'open' && r.due_date < todayStr() ? 'row-red' : ''}" data-note-edit="${r.id}" tabindex="0" title="눌러서 고치기"><td class="nowrap">${esc(r.issue_date)}</td><td class="nowrap">${esc(r.note_no)}</td><td>${esc(r.partner)}</td><td class="r"><b>${won(r.amount)}</b></td>
+        <td class="nowrap">${esc(r.due_date)} ${dday(r)}</td><td>${esc(r.bank || '')}</td><td>${(([t, c]) => `<span class="chip ${c}">${t}</span>`)(NOTE_STATE[r.status] || NOTE_STATE.open)}</td><td class="nowrap">${esc(r.processed_date || '')}</td><td class="small">${esc(r.memo || '')}</td>
+        <td class="nowrap">${r.status === 'open' ? `<button type="button" class="btn small primary" data-note-collect="${r.id}">만기회수</button>` : `<button type="button" class="btn small" data-note-reopen="${r.id}">미처리로</button>`} <button type="button" class="btn small danger" data-note-del="${r.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>`
+      : `<div class="empty">조건에 맞는 ${kind() === 'payable' ? '지급어음' : '받을어음'}이 없습니다.</div>`;
+    if (rows.length) $('#noteList', main).insertAdjacentHTML('beforeend', sumLine([['합계', esc(`${rows.length}건`)], ['발행금액', esc(`${won(data.totals.all)}원`)], ['미처리', esc(`${won(data.totals.open)}원`)], ['만기회수', esc(`${won(data.totals.collected)}원`)]]));
+  };
+  form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
+  $$('[name=kind]', form).forEach(r => { r.onchange = () => load().catch(fail); });
+  $('[data-note-new]', form).onclick = () => noteDialog(kind(), null, load).catch(fail);
+  const list = $('#noteList', main);
+  list.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('tr[data-note-edit]')) e.target.click(); });
+  list.addEventListener('click', async e => {
+    const id = b => Number(b.dataset.noteCollect || b.dataset.noteReopen || b.dataset.noteDel);
+    const c = e.target.closest('[data-note-collect]'), o = e.target.closest('[data-note-reopen]'), d = e.target.closest('[data-note-del]');
+    try {
+      if (c) { const r = rows.find(x => x.id === id(c)); const v = await promptBox(`만기회수 · ${r.note_no}`, `<p class="small">${esc(`${r.partner} · ${won(r.amount)}원 · 만기 ${r.due_date}`)}</p><label>처리일자 *<input type="date" name="date" required value="${esc(r.due_date <= todayStr() ? r.due_date : todayStr())}"></label>`); if (!v) return; await api('POST', `/api/notes/${r.id}/collect`, v); toast('만기회수로 처리했습니다.'); return load(); }
+      if (o) { if (!await confirmBox('미처리로 되돌릴까요? (처리일자가 지워집니다)')) return; await api('POST', `/api/notes/${id(o)}/reopen`, {}); toast('미처리로 되돌렸습니다.'); return load(); }
+      if (d) { const r = rows.find(x => x.id === id(d)); if (!await confirmBox(`어음 ${r.note_no}(${won(r.amount)}원)를 삭제할까요? 기록은 남습니다.`)) return; await api('POST', `/api/notes/${r.id}/cancel`, {}); toast('어음을 삭제했습니다.'); return load(); }
+      if (e.target.closest('button, a, input')) return;
+      const tr = e.target.closest('tr[data-note-edit]'); if (tr) await noteDialog(kind(), rows.find(x => x.id === Number(tr.dataset.noteEdit)), load);
+    } catch (error) { fail(error); }
+  });
+  await load();
+}

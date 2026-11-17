@@ -476,7 +476,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -1478,6 +1478,67 @@ route('GET', '/api/purchase-receipt-status', async ({ user, query }) => {
   const freight = (await db.prepare(`SELECT COALESCE(SUM(freight),0) AS f, COUNT(*) AS c FROM purchase_bills WHERE ${fw.join(' AND ')}`).get(...fa));
   return { from, to, vendor, categories, vendors, freight: { total: freight.f, bills: freight.c }, lines: lines.slice(0, 3000), more: lines.length > 3000, line_count: lines.length };
 });
+// ── 경리: 어음 관리 (15.165) ── 받을어음·지급어음. 발행일자·어음번호·거래처·발행금액·만기일자·발행은행·처리구분(미처리 open / 만기회수 collected).
+// 입금확인·지급확인과 같은 권한(영업·구매). 같은 구분에서 살아 있는 어음번호는 겹치지 못한다. 고치면 이력(doc_changes note), 삭제는 상태만(cancelled).
+const NOTE_KIND = { receivable: '받을어음', payable: '지급어음' };
+async function noteFields(body, old = {}) {
+  const kind = (body.kind ?? old.kind) === 'payable' ? 'payable' : 'receivable';
+  const issue = dateStr(body.issue_date ?? old.issue_date, '발행일자'), due = dateStr(body.due_date ?? old.due_date, '만기일자');
+  if (due < issue) throw bad('만기일자는 발행일자 이후여야 합니다.');
+  const amount = num(body.amount ?? old.amount, '발행금액'); if (!(amount > 0)) throw bad('발행금액을 0보다 크게 넣으세요.');
+  const noteNo = reqStr(body.note_no ?? old.note_no, '어음번호', 50);
+  const partner = reqStr(body.partner ?? old.partner, '거래처', 100), v = await vendorByName(partner);
+  return { kind, issue_date: issue, note_no: noteNo, partner: v?.name || partner, amount: billTrunc(amount), due_date: due, bank: str(body.bank ?? old.bank, 50), memo: str(body.memo ?? old.memo, 300) };
+}
+const noteDup = (n, id = 0) => db.prepare("SELECT 1 FROM bill_notes WHERE kind=? AND note_no=? AND status<>'cancelled' AND id<>?").get(n.kind, n.note_no, id);
+route('GET', '/api/notes', async ({ user, query }) => {
+  requirePayments(user);
+  const kind = query.kind === 'payable' ? 'payable' : 'receivable', where = ['kind=?'], args = [kind];
+  applyListDates(where, args, query, 'issue_date');
+  if (query.status === 'open' || query.status === 'collected') { where.push('status=?'); args.push(query.status); } else where.push("status<>'cancelled'");
+  if (query.partner) { where.push(`${customerKey('partner')}=?`); args.push(nameKey(str(query.partner, 100))); }
+  const kw = str(query.q, 50).trim(); if (kw) { where.push('(note_no LIKE ? OR bank LIKE ? OR memo LIKE ?)'); args.push(`%${kw}%`, `%${kw}%`, `%${kw}%`); }
+  const rows = await db.prepare(`SELECT * FROM bill_notes WHERE ${where.join(' AND ')} ORDER BY issue_date, id LIMIT 2001`).all(...args);
+  if (rows.length > 2000) throw bad('어음이 너무 많습니다. 기간을 좁히세요.');
+  const sum = st => rows.filter(r => !st || r.status === st).reduce((t, r) => t + r.amount, 0);
+  return { kind, rows, totals: { all: sum(''), open: sum('open'), collected: sum('collected'), count: rows.length } };
+});
+route('POST', '/api/notes', async ({ user, body }) => {
+  requirePayments(user);
+  const key = str(body.request_id, 80);
+  if (key) { const old = await db.prepare('SELECT * FROM bill_notes WHERE request_id=?').get(key); if (old) return { ...old, duplicate: true }; }
+  const n = await noteFields(body);
+  if (await noteDup(n)) throw new HttpError(409, `${NOTE_KIND[n.kind]} ${n.note_no}는 이미 등록되어 있습니다.`);
+  const token = key || 'srv:' + crypto.randomUUID();
+  await db.prepare('INSERT INTO bill_notes(kind,issue_date,note_no,partner,amount,due_date,bank,memo,created_by,created_by_id,request_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)')
+    .run(n.kind, n.issue_date, n.note_no, n.partner, n.amount, n.due_date, n.bank, n.memo, user.name, user.id, token);
+  return db.prepare('SELECT * FROM bill_notes WHERE request_id=?').get(token);
+});
+route('PUT', '/api/notes/:id', async ({ user, params, body }) => {
+  requirePayments(user);
+  const old = await mustGet('bill_notes', params.id); if (old.status === 'cancelled') throw bad('삭제된 어음입니다.');
+  const n = await noteFields(body, old);
+  if (await noteDup(n, old.id)) throw new HttpError(409, `${NOTE_KIND[n.kind]} ${n.note_no}는 이미 등록되어 있습니다.`);
+  const labels = { kind: '구분', issue_date: '발행일자', note_no: '어음번호', partner: '거래처', amount: '발행금액', due_date: '만기일자', bank: '발행은행', memo: '비고' };
+  const diff = Object.keys(labels).filter(k => String(n[k]) !== String(old[k])).map(k => k === 'memo' ? labels[k] : `${labels[k]} ${old[k]} → ${n[k]}`);
+  if (!diff.length) return old;
+  await db.batch([{ sql: "UPDATE bill_notes SET kind=?,issue_date=?,note_no=?,partner=?,amount=?,due_date=?,bank=?,memo=?,updated_by=?,updated_at=? WHERE id=? AND status<>'cancelled'", args: [n.kind, n.issue_date, n.note_no, n.partner, n.amount, n.due_date, n.bank, n.memo, user.name, now(), old.id] }, RC_GUARD, docChange('note', old.id, diff.join(' · '), user)])
+    .catch(error => { if (isGuardError(error)) throw new HttpError(409, '그 사이 어음이 삭제되었습니다. 새로 불러오세요.'); throw error; });
+  return mustGet('bill_notes', old.id);
+});
+// 처리구분: collect(만기회수, 처리일자) · reopen(미처리로 되돌림) · cancel(삭제 — 기록은 남김)
+route('POST', '/api/notes/:id/:action', async ({ user, params, body }) => {
+  requirePayments(user);
+  const n = await mustGet('bill_notes', params.id), action = params.action;
+  let sql, args, summary;
+  if (action === 'collect') { if (n.status !== 'open') throw bad('미처리 어음만 만기회수로 처리할 수 있습니다.'); const d = dateStr(body.date || today(), '처리일자'); sql = "UPDATE bill_notes SET status='collected',processed_date=?,updated_by=?,updated_at=? WHERE id=? AND status='open'"; args = [d, user.name, now(), n.id]; summary = `만기회수 ${d}`; }
+  else if (action === 'reopen') { if (n.status !== 'collected') throw bad('만기회수한 어음만 미처리로 되돌릴 수 있습니다.'); sql = "UPDATE bill_notes SET status='open',processed_date=NULL,updated_by=?,updated_at=? WHERE id=? AND status='collected'"; args = [user.name, now(), n.id]; summary = '미처리로 되돌림'; }
+  else if (action === 'cancel') { if (n.status === 'cancelled') throw bad('이미 삭제된 어음입니다.'); sql = "UPDATE bill_notes SET status='cancelled',updated_by=?,updated_at=? WHERE id=? AND status<>'cancelled'"; args = [user.name, now(), n.id]; summary = '삭제'; }
+  else throw new HttpError(404, '없는 동작입니다.');
+  await db.batch([{ sql, args }, RC_GUARD, docChange('note', n.id, summary, user)]).catch(error => { if (isGuardError(error)) throw new HttpError(409, '그 사이 어음 상태가 바뀌었습니다. 새로 불러오세요.'); throw error; });
+  return mustGet('bill_notes', n.id);
+});
+route('GET', '/api/notes/:id/history', async ({ user, params }) => { requirePayments(user); return db.prepare("SELECT summary, changed_by, changed_at FROM doc_changes WHERE doc_type='note' AND doc_id=? ORDER BY id DESC LIMIT 30").all(Number(params.id) || 0); });
 // ── 영업: 견적서 (15.163) ── 수신(거래처, 거래처코드로 찾기)·참조·견적일·유효기간·통화(원/달러)·담당자·기타 + 품목 줄(품목코드로 찾기, 단가 입력).
 // 금액은 V.A.T 별도 공급가액: 원화는 원 미만 절사, 달러는 센트(소수 둘째 자리) 반올림. 견적번호 SST-연도-월일-순번. 고치면 이력, 취소는 상태만.
 const QUOTE_MAX_LINES = 60;

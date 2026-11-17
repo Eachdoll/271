@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.164';
+const APP_VERSION = '15.165';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -345,7 +345,7 @@ const NAV = [
   { group: '경리', items: [
     { sub: '세금계산서', items: [['#/sales/tax/new', '매출 세금계산서 만들기'], ['#/sales/tax', '매출 세금계산서 관리'], ['#/sales/tax-check', '매출 발행 체크'], ['#/purchase/tax', '매입 세금계산서'], ['#/purchase/tax-check', '매입 발행 체크']] },
     { sub: '거래처별 장부', items: [['#/sales/book', '매출 거래처별 장부'], ['#/purchase/book', '매입 거래처별 장부']] },
-    { sub: '대금', items: [['#/purchase/payments', '입금확인'], ['#/purchase/disbursements', '지급확인'], ['#/purchase/ledger', '매입처 원장'], ['#/sales/aging', '채권 연령표'], ['#/purchase/aging', '채무 연령표']] },
+    { sub: '대금', items: [['#/purchase/payments', '입금확인'], ['#/purchase/disbursements', '지급확인'], ['#/purchase/notes', '어음 관리'], ['#/purchase/ledger', '매입처 원장'], ['#/sales/aging', '채권 연령표'], ['#/purchase/aging', '채무 연령표']] },
   ] },
   { group: '품질', items: [
     ['#/quality/inspections', '수입·출하 검사 이력'],
@@ -539,7 +539,8 @@ const PAGES = {
   '#/purchase/receipt-status': main => pageReceiptStatus(main),
   '#/sales/delivery-status': main => pageReceiptStatus(main, 'sales'),
   '#/sales/quotes/new': main => pageQuoteEntry(main), // 15.163 견적서
-  '#/sales/quotes': main => pageQuoteList(main), // 15.157 납품현황(입고현황의 매출 쪽)
+  '#/sales/quotes': main => pageQuoteList(main),
+  '#/purchase/notes': main => pageNotes(main), // 15.165 어음 관리 // 15.157 납품현황(입고현황의 매출 쪽)
   '#/sales/orders/new': main => pageSalesOrderEntry(main),
   '#/sales/orders/edit': main => { let id = null; try { id = sessionStorage.getItem('wpa:so-edit'); } catch { id = null; } if (!id) { location.hash = '#/sales/orders'; return; } return pageSalesOrderEntry(main, id); },
   '#/sales/orders': main => pageSalesOrderList(main),

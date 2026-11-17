@@ -2037,3 +2037,8 @@ form.list-filters, .rs-page .rs-filter, .table-wrap, .card, .xf-pop, .xf-bar { b
 /* 15.164 경리 메뉴 색 · 세금계산서 목록 줄 누르기 */
 .nav-group[data-dept="accounting"] { --dept: #0f766e; }
 tr.tax-row { cursor: pointer; } tr.tax-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* 15.165 어음 관리 */
+tr.note-row { cursor: pointer; } tr.note-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+#noteFilters .result-seg { align-self: flex-end; } #noteFilters .result-seg label { min-height: 40px; }
+form.list-filters .result-seg label { flex-direction: row; align-items: center; gap: 6px; min-width: 0; color: var(--text); font-size: 13.5px; padding: 0 14px; } /* 15.165 조회 칸 안의 버튼형 선택(받을/지급어음) */
