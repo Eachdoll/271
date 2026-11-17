@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.172';
+const APP_VERSION = '15.173';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -782,7 +782,7 @@ function sortKey(td) {
 }
 document.addEventListener('click', event => {
   const th = event.target.closest('table.grid > thead > tr > th');
-  if (!th || event.target.closest('input, button, a, select') || !th.textContent.trim()) return;
+  if (!th || grNoClick || event.target.closest('input, button, a, select, .gr-rz') || !th.textContent.trim()) return;
   const table = th.closest('table'); if (!sortableTable(table)) return;
   const body = table.tBodies[0], all = [...body.rows];
   all.forEach((tr, k) => { if (tr.dataset.orig === undefined) tr.dataset.orig = String(k); });
@@ -1105,6 +1105,94 @@ function tasksCard(tasks) {
 // Phone cards show the main fields; the rest (memo, entered by, row buttons…) opens with 「자세히」. Long lists show 30 at a time.
 const CARD_SECONDARY = new Set(['COA 요청', '비고', '메모', '입력자', '입고 처리자', '처리자', '사진·검수', 'LOT', '분류', '1차 분류', '2차 분류', '3차 분류', '입고', '생산', '사용', '출하', '조정', '안전재고', '최근 일자', '입력자 · 검사일', '입력자 / 입력시각', '수정', '사유', '거래처 · 담당', '시작', '종료', '작업시간', '인원', '불량 사유', '단가', '비용']);
 const NOWRAP_HEADS = new Set(['분류', '거래처', '납기일', '입고일', '출고일', '작업일', '세탁일', '의뢰일', '상태', '입고상태', '수량', '발주수량', '실입고', '입력자', 'COA 요청', '단위', '현재고']);
+// ── 15.173 표 열 너비·순서(엑셀처럼): 머리글 오른쪽 경계를 끌어 너비 조절(두 번 누르면 원래 너비),
+// 머리글을 끌어 다른 머리글 위에 놓으면 열 순서 바꿈. 사용자·화면·표(머리글 이름)마다 이 브라우저에 저장, 「열 배치 초기화」로 되돌림.
+// 순서 바꾸기는 입력칸·합친 칸·두 줄 머리글·합계 줄이 없는 표만(칸 번호로 읽는 코드 보호). 휴대폰 카드 모양에서는 쓰지 않음.
+const grKey = table => { const names = [...table.tHead.rows[0].cells].map(c => c.textContent.trim()).filter(Boolean); return names.length ? `wpa:grid:${ME?.id || 0}:${navRoute(location.hash)}:${[...names].sort().join('|')}` : ''; };
+const grRead = k => { try { const v = JSON.parse(localStorage.getItem(k) || 'null'); return v && typeof v === 'object' ? v : {}; } catch { return {}; } };
+const grWrite = (k, v) => { try { if (!v.order && !v.widths) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch { /* 저장 못 해도 화면은 그대로 */ } };
+const grName = th => [...th.childNodes].filter(n => n.nodeType === 3 || !n.matches?.('.xf-btn, .gr-rz')).map(n => n.textContent).join('').trim();
+function grCanMove(table) {
+  if (table.hasAttribute('data-no-reorder') || table.tHead.rows.length > 1) return false;
+  if (table.querySelector('[colspan], [rowspan], tbody input:not([type=checkbox]), tbody select, tbody textarea')) return false;
+  return ![...(table.tBodies[0]?.rows || [])].some(auxRow);
+}
+function grMove(table, order) { // order: 머리글 이름 순서. 이름 없는 칸(체크·단추)은 원래 자리 순서대로 남은 자리에
+  const head = [...table.tHead.rows[0].cells], names = head.map(grName), n = head.length;
+  const want = order.filter(x => names.includes(x)); if (want.length < 2) return;
+  const named = names.map((x, i) => x && want.includes(x) ? i : -1).filter(i => i >= 0);
+  const target = names.map((_, i) => i); const slots = [...named]; // 이름 있는 칸이 있던 자리에 원하는 순서로
+  want.forEach((x, k) => { target[slots[k]] = names.indexOf(x); });
+  if (target.every((v, i) => v === i)) return;
+  for (const tr of table.rows) { if (tr.cells.length !== n) continue; const cells = [...tr.cells]; target.forEach(i => tr.appendChild(cells[i])); }
+  $$('.xf-btn', table.tHead).forEach(b => { b.dataset.xfCol = String(b.closest('th').cellIndex); });
+  if (typeof XF !== 'undefined' && XF.has(table)) { XF.delete(table); xfApply(table); }
+}
+function grWidths(table, widths) {
+  const head = [...table.tHead.rows[0].cells];
+  if (!widths || !Object.keys(widths).length) { table.classList.remove('gr-fixed'); table.style.width = ''; head.forEach(th => { th.style.width = ''; }); return; }
+  const shown = th => getComputedStyle(th).display !== 'none'; // 빈 칸이라 숨긴 열은 너비 합에서 뺀다
+  const cur = head.map(th => th.getBoundingClientRect().width);
+  head.forEach((th, i) => { if (!shown(th)) { th.style.width = ''; return; } const w = widths[grName(th) || `#${i}`]; th.style.width = `${Math.max(40, Math.round(w || cur[i] || 80))}px`; });
+  table.classList.add('gr-fixed'); table.style.width = `${head.filter(shown).reduce((t, th) => t + parseFloat(th.style.width), 0)}px`;
+}
+function grReset(table) {
+  const host = table.closest('.table-wrap') || table, prev = host.previousElementSibling;
+  const has = !!(table.dataset.grKey && (grRead(table.dataset.grKey).order || grRead(table.dataset.grKey).widths));
+  if (prev?.classList.contains('gr-bar')) { if (has) return; prev.remove(); return; }
+  if (!has) return;
+  host.insertAdjacentHTML('beforebegin', `<div class="gr-bar"><button type="button" class="btn small" data-gr-reset>열 배치 초기화</button></div>`);
+  host.previousElementSibling.querySelector('[data-gr-reset]').onclick = () => { grWrite(table.dataset.grKey, {}); render(); };
+}
+function gridLayout(table) {
+  if (table.dataset.gr || table.hasAttribute('data-no-layout') || !table.tHead?.rows[0] || table.closest('.modal-wrap, .xf-pop')) return;
+  const head = [...table.tHead.rows[0].cells]; if (head.length < 2 || head.some(c => c.colSpan > 1)) return;
+  const k = grKey(table); if (!k) return; table.dataset.gr = '1'; table.dataset.grKey = k;
+  const st = grRead(k), move = grCanMove(table);
+  if (move && Array.isArray(st.order)) grMove(table, st.order);
+  if (st.widths) grWidths(table, st.widths);
+  [...table.tHead.rows[0].cells].forEach((th, i) => {
+    th.insertAdjacentHTML('beforeend', '<span class="gr-rz" aria-hidden="true" title="끌어서 너비 조절 · 두 번 누르면 원래대로"></span>');
+    const name = grName(th);
+    if (move && name) { th.draggable = true; th.classList.add('gr-drag'); }
+  });
+  grReset(table);
+}
+// 너비 조절(포인터 끌기)
+let grNoClick = false;
+document.addEventListener('pointerdown', e => {
+  const rz = e.target.closest('.gr-rz'); if (!rz || e.button !== 0) return;
+  e.preventDefault(); e.stopPropagation();
+  const th = rz.closest('th'), table = th.closest('table'), k = table.dataset.grKey; if (!k) return;
+  const head = [...table.tHead.rows[0].cells], x0 = e.clientX;
+  const widths = Object.fromEntries(head.map((c, i) => [grName(c) || `#${i}`, Math.round(c.getBoundingClientRect().width)]).filter(([, w]) => w > 0));
+  const key = grName(th) || `#${th.cellIndex}`, w0 = widths[key];
+  let moved = false; document.body.classList.add('gr-resizing');
+  const mv = ev => { if (!moved && Math.abs(ev.clientX - x0) < 3) return; moved = true; widths[key] = Math.max(40, Math.round(w0 + ev.clientX - x0)); grWidths(table, widths); };
+  const up = () => { document.removeEventListener('pointermove', mv); document.removeEventListener('pointerup', up); document.body.classList.remove('gr-resizing');
+    if (!moved) return; grNoClick = true; setTimeout(() => { grNoClick = false; }, 0); // 손을 뗄 때 생기는 click이 정렬로 가지 않게
+    const st = grRead(k); st.widths = widths; grWrite(k, st); grReset(table); };
+  document.addEventListener('pointermove', mv); document.addEventListener('pointerup', up);
+}, true);
+document.addEventListener('dblclick', e => {
+  const rz = e.target.closest('.gr-rz'); if (!rz) return; e.preventDefault();
+  const th = rz.closest('th'), table = th.closest('table'), k = table.dataset.grKey; if (!k) return;
+  const st = grRead(k); if (!st.widths) return; delete st.widths[grName(th) || `#${th.cellIndex}`];
+  if (!Object.keys(st.widths).length) delete st.widths; grWrite(k, st); render();
+});
+// 순서 바꾸기(머리글 끌어 놓기)
+let grDragTh = null;
+document.addEventListener('dragstart', e => { const th = e.target.closest?.('th.gr-drag'); if (!th) return; grDragTh = th; th.classList.add('gr-dragging'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', grName(th)); } catch { /* */ } });
+document.addEventListener('dragover', e => { const th = e.target.closest?.('th.gr-drag'); if (!grDragTh || !th || th === grDragTh || th.closest('table') !== grDragTh.closest('table')) return; e.preventDefault(); $$('.gr-over', th.parentElement).forEach(c => c.classList.remove('gr-over')); th.classList.add('gr-over'); });
+document.addEventListener('dragend', () => { if (!grDragTh) return; grDragTh.classList.remove('gr-dragging'); $$('.gr-over').forEach(c => c.classList.remove('gr-over')); grDragTh = null; });
+document.addEventListener('drop', e => {
+  const th = e.target.closest?.('th.gr-drag'); if (!grDragTh || !th || th === grDragTh) return; e.preventDefault();
+  const table = th.closest('table'); if (table !== grDragTh.closest('table')) return;
+  const names = [...table.tHead.rows[0].cells].map(grName).filter(Boolean), from = grName(grDragTh), to = grName(th);
+  const order = names.filter(x => x !== from); const at = order.indexOf(to);
+  order.splice(names.indexOf(from) < names.indexOf(to) ? at + 1 : at, 0, from); // 오른쪽으로 끌면 놓은 칸 뒤, 왼쪽이면 앞
+  grMove(table, order); const st = grRead(table.dataset.grKey); st.order = order; grWrite(table.dataset.grKey, st); grReset(table);
+});
 function labelGridTables() {
   $$('table.grid:not([data-labeled])').forEach(table => {
     table.dataset.labeled = 'true';
@@ -1120,6 +1208,7 @@ function labelGridTables() {
       if (head && rows.length && !table.hasAttribute('data-keep-cols') && !table.querySelector('[colspan]') && cells.every(td => (!td.textContent.trim() || td.textContent.trim() === '—') && !td.querySelector('input, select, button, textarea'))) [ths[i], ...cells].forEach(c => c?.classList.add('col-empty'));
       if (NOWRAP_HEADS.has(head)) [ths[i], ...cells].forEach(c => c?.classList.add('nowrap-cell'));
     });
+    gridLayout(table); // 15.173 열 너비·순서(빈 열 숨긴 뒤)
     if (!table.classList.contains('as-cards')) return;
     let secondary = 0;
     rows.forEach(tr => [...tr.children].forEach(td => {
