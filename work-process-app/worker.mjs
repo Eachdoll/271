@@ -2953,9 +2953,27 @@ function inspectionSnapshotSQL(title, kind, category, code = "''") {
 async function inspectionSnapshot(f) {
   if (!['수입검사','출하검사'].includes(f.category)) return '';
   const keys = [...new Set([inspectionKey(f.title), inspectionKey(f.data.product_code)].filter(Boolean))];
-  const rows = await db.prepare(`SELECT DISTINCT s.* FROM inspection_specs s JOIN inspection_spec_keys k ON k.spec_id=s.id WHERE s.active=1 AND s.kind=? AND s.item_category=? AND k.name_key IN (${keys.map(() => '?').join(',')})`).all(f.category, f.data.item_category || '', ...keys);
-  return rows.length === 1 ? JSON.stringify({ ...JSON.parse(rows[0].definition), id: rows[0].id, revision: rows[0].revision }) : '';
+  const m = await inspectionSpecMatch(f.category, f.data.item_category || '', f.title, f.data.product_code);
+  return m.exact.length === 1 ? m.exact[0].snapshot : '';
 }
+// 15.174 의뢰 ↔ 검사규격 찾기. exact: 품명·제품코드가 규격 품명·별칭과 같음(공백·대소문자 무시),
+// partial: 서로 포함(3자 이상) — 추천으로만 보여 주고 자동 연결하지 않는다. 의뢰에 품목 카테고리가 있으면 같은 카테고리만.
+async function inspectionSpecMatch(kind, category, title, code) {
+  if (!['수입검사','출하검사'].includes(kind)) return { exact: [], partial: [] };
+  const specs = await db.prepare('SELECT s.*, (SELECT GROUP_CONCAT(name_key, char(31)) FROM inspection_spec_keys k WHERE k.spec_id=s.id) keys FROM inspection_specs s WHERE s.active=1 AND s.kind=?').all(kind);
+  const loose = k => String(k || '').toLowerCase().replace(/[\s\-_.,·()[\]{}\/]/g, ''); // 하이픈·괄호·점·공백 무시(NX-707 = nx 707)
+  const want = [...new Set([loose(title), loose(code)].filter(Boolean))], exact = [], partial = [];
+  for (const sp of specs) {
+    if (category && sp.item_category !== category) continue;
+    const keys = [...new Set(String(sp.keys || '').split('\u001f').map(loose).filter(Boolean))];
+    const def = JSON.parse(sp.definition), row = { id: sp.id, product: def.product, item_category: sp.item_category, revision: sp.revision, items: def.items.map(i => i.name), snapshot: JSON.stringify({ ...def, id: sp.id, revision: sp.revision }) };
+    if (keys.some(k => want.includes(k))) exact.push(row);
+    else if (keys.some(k => want.some(w => (k.length >= 3 && w.includes(k)) || (w.length >= 3 && k.includes(w))))) partial.push(row);
+  }
+  return { exact, partial };
+}
+const specBrief = ({ snapshot, ...r }) => r;
+route('GET','/api/inspection-specs/match',async ({query}) => { const m = await inspectionSpecMatch(query.kind, query.item_category || '', query.title, query.code); return { exact: m.exact.map(specBrief), partial: m.partial.map(specBrief) }; });
 function requireInspectionManager(user) { requireRole(user,'quality_approver','품질팀장'); }
 function validateInspectionSpec(body) {
   if (!['수입검사','출하검사'].includes(body.kind)) throw bad('수입검사 또는 출하검사를 선택하세요.');
@@ -3022,8 +3040,15 @@ route('PUT','/api/inspection-specs/:id',({user,body,params})=>saveInspectionSpec
 function decodeInspection(row) { return row ? {...row,values:JSON.parse(row.values_json)} : null; }
 async function inspectionRequest(id) { const r=await getRequest(id); if(r.type!=='analysis'||!['수입검사','출하검사'].includes(r.category)) throw bad('수입검사·출하검사 의뢰를 선택하세요.'); return r; }
 route('GET','/api/requests/:id/inspection',async ({user,params})=>{
-  const r=await inspectionRequest(params.id);
-  return { request:decodeRequest(r), spec:r.inspection_snapshot?JSON.parse(r.inspection_snapshot):null, measurement:decodeInspection(await db.prepare('SELECT * FROM inspection_measurements WHERE request_id=?').get(r.id)), can_manage:!isOperator(user)&&hasRole(user,'quality_approver'),can_write:!isOperator(user)&&hasRole(user,'quality')&&WORK_STATUSES.includes(r.status),history:await db.prepare('SELECT id,revision,result,reason,saved_by,saved_at FROM inspection_measurement_history WHERE request_id=? ORDER BY id DESC LIMIT 50').all(r.id) };
+  let r=await inspectionRequest(params.id), suggest=null;
+  if(!r.inspection_snapshot){
+    const d=JSON.parse(r.data||'{}'), m=await inspectionSpecMatch(r.category,d.item_category||'',r.title,d.product_code);
+    if(m.exact.length===1&&r.status!=='done'){
+      await db.prepare("UPDATE requests SET inspection_snapshot=? WHERE id=? AND inspection_snapshot=''").run(m.exact[0].snapshot,r.id);
+      r=await inspectionRequest(params.id);
+    } else suggest={exact:m.exact.map(specBrief),partial:m.partial.map(specBrief)};
+  }
+  return { suggest, request:decodeRequest(r), spec:r.inspection_snapshot?JSON.parse(r.inspection_snapshot):null, measurement:decodeInspection(await db.prepare('SELECT * FROM inspection_measurements WHERE request_id=?').get(r.id)), can_manage:!isOperator(user)&&hasRole(user,'quality_approver'),can_write:!isOperator(user)&&hasRole(user,'quality')&&WORK_STATUSES.includes(r.status),history:await db.prepare('SELECT id,revision,result,reason,saved_by,saved_at FROM inspection_measurement_history WHERE request_id=? ORDER BY id DESC LIMIT 50').all(r.id) };
 });
 route('POST','/api/requests/:id/inspection/spec',async ({user,params,body})=>{
   requireInspectionManager(user); const r=await inspectionRequest(params.id), s=await mustGet('inspection_specs',body.spec_id);

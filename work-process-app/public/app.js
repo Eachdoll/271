@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.173';
+const APP_VERSION = '15.174';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -1890,6 +1890,33 @@ function requestDetail(type, r, reload) {
 }
 
 // 의뢰 접수 페이지: 양식 + 접수대기 목록
+// 15.174 분석의뢰 작성: 검사 구분이 수입·출하검사이면 샘플명 아래에 연결될 검사규격을 바로 보여 준다(이름 목록 제안 포함).
+function bindSpecHint(form) {
+  const title = form.elements.title; if (!title) return;
+  const box = document.createElement('p'); box.className = 'small spec-hint'; box.setAttribute('role', 'status'); box.hidden = true;
+  title.insertAdjacentElement('afterend', box); // 샘플명 칸 바로 아래
+  let names = null, seq = 0, timer = 0;
+  const val = n => form.querySelector(`[name=${n}]:checked`)?.value || '';
+  const run = async () => {
+    const kind = val('category'), cat = val('item_category'), q = title.value.trim(), my = ++seq;
+    if (!['수입검사', '출하검사'].includes(kind)) { box.hidden = true; return; }
+    if (!names) { try { const d = await api('GET', '/api/inspection-specs'); names = d.specs.filter(s => s.active); const dl = document.createElement('datalist'); dl.id = 'specNames'; dl.innerHTML = [...new Set(names.flatMap(s => [s.product, ...(s.aliases || [])]))].map(n => `<option value="${esc(n)}">`).join(''); form.append(dl); title.setAttribute('list', 'specNames'); } catch { names = []; } }
+    if (!q) { box.hidden = false; box.innerHTML = `<span class="muted">샘플명을 검사규격의 품명·제품코드와 같게 쓰면 규격이 자동으로 연결됩니다.</span>`; return; }
+    try {
+      const m = await api('GET', '/api/inspection-specs/match?' + new URLSearchParams({ kind, item_category: cat, title: q })); if (my !== seq) return;
+      box.hidden = false;
+      box.innerHTML = m.exact.length === 1 ? `<span class="chip green">검사규격 연결</span> ${esc(m.exact[0].product)} · ${esc(m.exact[0].item_category)} · 규격 ${m.exact[0].revision} (${esc(m.exact[0].items.join(', '))})`
+        : m.exact.length > 1 ? `<span class="chip yellow">규격 ${m.exact.length}개 일치</span> 품목 카테고리를 고르면 하나로 정해집니다.`
+        : m.partial.length ? `<span class="chip yellow">이름이 같은 규격 없음</span> 비슷한 규격: ${m.partial.map(s => `<button type="button" class="linklike" data-spec-use="${esc(s.product)}">${esc(s.product)}</button>`).join(', ')} — 누르면 샘플명이 바뀝니다.`
+        : `<span class="chip">맞는 규격 없음</span> 접수 뒤 품질팀장이 규격을 고르거나 새로 등록합니다.`;
+      $$('[data-spec-use]', box).forEach(b => b.onclick = () => { title.value = b.dataset.specUse; title.dispatchEvent(new Event('input', { bubbles: true })); });
+    } catch { box.hidden = true; }
+  };
+  const later = () => { clearTimeout(timer); timer = setTimeout(() => run().catch(() => {}), 250); };
+  form.addEventListener('input', e => { if (e.target === title) later(); });
+  form.addEventListener('change', e => { if (['category', 'item_category'].includes(e.target.name)) later(); });
+  form.addEventListener('reset', () => setTimeout(later, 0));
+}
 async function pageIntake(type) {
   const cfg = REQ[type]; const main = $('#main'); const mgr = canApproveRequest(type);
   const managers = ['analysis','development','voc'].includes(type) ? (await api('GET', '/api/approval-managers'))[type === 'voc' ? 'analysis' : type] : null;
@@ -1922,6 +1949,7 @@ async function pageIntake(type) {
   // 15.58: 고객사 칸은 매출처 목록에서 고른다(상품 샘플의 「공급처 · 고객사」는 양쪽이라 전체 목록).
   const customerInput = $('[name=customer]', newForm); if (customerInput) bindPartnerPicker(customerInput, null, { type: type === 'sample_goods' ? '' : 'sales' });
   // 15.62: 의뢰서 입력 초안(이 탭). 라디오·체크 묶음도 칸 순서로 보관한다. 사진은 보관하지 않는다.
+  if (type === 'analysis') bindSpecHint(newForm); // 15.174 수입·출하검사면 연결될 검사규격 미리 보기
   const intakeDraft = bindEntryDraft(newForm, 'intake:' + type, { read: () => uxIndexRead(newForm), restore: value => uxIndexRestore(newForm, value) });
   bindListControls(filterForm, load);
   newForm.onsubmit = async (e) => {
