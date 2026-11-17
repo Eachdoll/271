@@ -2228,3 +2228,7 @@ table.grid td .chip.green { color: var(--green, #027a4a); } table.grid td .chip.
 :root[data-density="compact"] body:not(.operator-mode) .result-bar { margin: 6px 0; }
 :root[data-density="compact"] body:not(.operator-mode) .xf-btn { width: 20px; height: 20px; }
 :root[data-density="compact"] body:not(.operator-mode) .kpi b { font-size: 20px; }
+/* 15.181 키보드로 고른 줄(Enter로 선택): 칸마다 상자 대신 줄 전체를 옅은 파랑 + 왼쪽 파란 막대로 */
+.partner-results tbody tr.ip-active > td, .ip-table tbody tr.ip-active > td { outline: 0 !important; background: var(--accent-soft, rgba(49, 130, 246, .10)) !important; }
+.ip-table tbody tr.ip-active { outline: 0 !important; }
+.partner-results tbody tr.ip-active > td:first-child, .ip-table tbody tr.ip-active > td:first-child { box-shadow: inset 4px 0 0 var(--ns-pill, var(--accent)); }
