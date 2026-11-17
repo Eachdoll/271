@@ -2140,3 +2140,9 @@ table.grid.gr-fixed td, table.grid.gr-fixed th { overflow: hidden; text-overflow
 .spec-pick input { margin-top: 3px; min-height: 0; }
 .spec-hint { margin: 4px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 button.linklike { border: 0; background: none; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; }
+/* 15.175 회원 관리 */
+.member-grid.matrix th.c, .member-grid.matrix td.c { text-align: center; padding-left: 6px; padding-right: 6px; }
+.member-grid.matrix td.c input[type=checkbox] { width: 18px; height: 18px; min-height: 0; cursor: pointer; }
+.member-grid .mv-on { color: var(--green, #027a4a); font-weight: 700; } .member-grid .mv-off { color: var(--muted); }
+.member-grid select[data-menu-mode] { min-height: 34px; padding: 4px 8px; }
+.member-new > summary { cursor: pointer; padding: 4px 0; } .member-new form { margin-top: 12px; }

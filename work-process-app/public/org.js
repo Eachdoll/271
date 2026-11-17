@@ -108,3 +108,89 @@ async function pageOrg(main) {
     run(() => api('PUT', `/api/admin/users/${box.dataset.user}`, { department: $('[name=department]', box).value, position: $('[name=position]', box).value }), '저장했습니다.');
   }));
 }
+
+// ── 15.175 회원 관리(관리 › 회원 관리) ── 한 화면에 섞여 있던 것을 세 탭으로 나눈다.
+//  · 회원 정보: 가입 승인·반려, 사용자 추가, 부서·직급, 비밀번호 초기화, 삭제
+//  · 사용 권한: 승인·처리 같은 업무 권한(역할)과 관리자 — 사람 × 권한 표, 누르면 바로 저장
+//  · 메뉴 보기: 화면 메뉴에 보이는 업무 묶음 — 사람 × 메뉴 표(부서 기본/전체/직접 지정)
+// 사용 권한이 있는 업무는 그 화면이 있어야 일을 하므로 메뉴를 꺼도 보인다(표에 「권한」으로 따로 표시).
+const MEMBER_ROLE_COLS = [['sales', '영업'], ['purchase', '구매'], ['quality', '품질'], ['quality_approver', '품질책임자'], ['dev', '개발'], ['dev_approver', '개발책임자'], ['production', '생산'], ['production_approver', '생산팀장'], ['logistics', '물류'], ['logistics_approver', '물류팀장'], ['operator', '오퍼레이터']];
+const MEMBER_APPROVER = ['quality_approver', 'dev_approver', 'production_approver', 'logistics_approver'];
+const MEMBER_STATE = { pending: ['승인 대기', 'yellow'], approved: ['승인 완료', 'green'], rejected: ['반려', 'red'] };
+const memberMenuName = k => (MENU_GROUP_LABELS.find(([x]) => x === k) || [, k])[1].replace(/ \(.*\)$/, '');
+async function pageMembers(main, tab) {
+  if (!ME.is_admin) { main.innerHTML = '<h1>회원 관리</h1><div class="empty">관리자만 볼 수 있습니다.</div>'; return; }
+  const org = await api('GET', '/api/org');
+  const intro = {
+    info: '가입 승인과 회원 기본 정보(이름·부서·직급·비밀번호)를 관리합니다. 업무 권한은 「사용 권한」, 화면 메뉴는 「메뉴 보기」 탭에서 따로 정합니다.',
+    roles: '무엇을 <b>할 수 있는지</b>(입력·처리·승인)를 정합니다. 체크하면 바로 저장됩니다. 책임자(승인권자)는 가입 승인된 사람만 지정할 수 있습니다. 오퍼레이터는 입력 전용 화면으로 제한됩니다(관리자 제외).',
+    menus: '화면 메뉴에 무엇이 <b>보이는지</b>만 정합니다. 숨긴 메뉴는 메뉴·대시보드에서 빠지고 주소로 들어와도 열리지 않습니다. 단, 사용 권한이 있는 업무는 일을 해야 하므로 메뉴를 꺼도 보입니다(<span class="chip">권한</span> 표시). 「부서 기본」은 관리 › 조직 구성의 부서 설정을 따릅니다.',
+  }[tab];
+  main.innerHTML = `<h1>회원 관리</h1><p class="muted">${intro}</p>
+    ${tab === 'info' ? `<details class="card member-new"><summary><b>+ 사용자 추가</b> <span class="small muted">관리자가 바로 만드는 계정은 승인된 상태입니다</span></summary>
+      <form id="userNew"><div class="form-grid"><label>이름 *<input name="name" required maxlength="30" autocomplete="off"></label><label>비밀번호 * (4자 이상)<input name="password" type="password" required minlength="4" autocomplete="new-password"></label>${orgFields(org)}</div>
+      <p class="small muted">만든 뒤 「사용 권한」·「메뉴 보기」 탭에서 권한과 메뉴를 정하세요.</p><div class="actions"><button class="btn primary">계정 만들기</button></div></form></details>` : ''}
+    <form class="list-filters toolbar lf-oneline" data-read-only id="memberFilters">
+      <label class="grow lf-q">이름·부서 검색<input type="search" name="q" placeholder="이름·부서·직급"></label>
+      <label class="lf-sel">가입 상태<select name="approval"><option value="">전체</option><option value="pending">승인 대기</option><option value="approved">승인 완료</option><option value="rejected">반려</option></select></label>
+      ${tab === 'roles' ? `<label class="lf-sel lf-wide">권한<select name="role"><option value="">전체</option><option value="admin">관리자</option>${MEMBER_ROLE_COLS.map(([r, l]) => `<option value="${r}">${l}</option>`).join('')}<option value="none">권한 없음</option></select></label>` : ''}
+      ${tab === 'menus' ? `<label class="lf-sel lf-wide">메뉴 방식<select name="mode"><option value="">전체</option><option value="department">부서 기본</option><option value="all">전체 보임</option><option value="custom">직접 지정</option></select></label>` : ''}
+      <span class="small muted" data-member-count></span></form>
+    <div id="memberList"></div>`;
+  const filters = $('#memberFilters', main); let users = [];
+  const visible = u => { const v = formObj(filters), q = (v.q || '').trim().toLowerCase();
+    if (q && ![u.name, u.department, u.position].join(' ').toLowerCase().includes(q)) return false;
+    if (v.approval && u.approval_status !== v.approval) return false;
+    if (v.role) { if (v.role === 'admin' ? !u.is_admin : v.role === 'none' ? (u.is_admin || u.roles.length) : !u.roles.includes(v.role)) return false; }
+    if (v.mode && (u.is_admin || u.menu_mode !== v.mode)) return false;
+    return true; };
+  const who = u => `<b>${esc(u.name)}</b>${u.id === ME.id ? ' <span class="chip">나</span>' : ''}${u.department || u.position ? `<div class="small muted">${esc([u.department, u.position].filter(Boolean).join(' · '))}</div>` : ''}`;
+  const state = u => { const [t, c] = MEMBER_STATE[u.approval_status] || ['', '']; return `<span class="chip ${c}">${t}</span>${u.approval_note ? `<div class="small muted">${esc(u.approval_note)}</div>` : ''}`; };
+  const roleSummary = u => u.is_admin ? '<span class="chip">관리자 · 전체</span>' : u.roles.length ? u.roles.map(r => esc(ROLE_SHORT[r] || r)).join(' · ') : '<span class="muted">없음</span>';
+  const menuSummaryOf = u => u.is_admin ? '전체(관리자)' : u.menu_mode === 'all' ? '전체 보임' : u.menu_mode === 'custom' ? `직접 · ${menuSummary(u.menu_custom || [])}` : `부서 기본 · ${u.menus_base ? menuSummary(u.menus_base) : '전체'}`;
+  const tables = {
+    info: list => `<table class="grid member-grid" data-no-reorder><thead><tr><th>이름</th><th>가입 상태</th><th>가입일</th><th>사용 권한</th><th>메뉴 보기</th><th></th></tr></thead><tbody>${list.map(u => `<tr data-u="${u.id}">
+      <td>${who(u)}</td><td>${state(u)}</td><td class="nowrap small">${esc(String(u.created_at || '').slice(0, 10))}</td>
+      <td class="small"><a href="#/admin/users/roles" data-goto-q="${esc(u.name)}">${roleSummary(u)}</a></td><td class="small"><a href="#/admin/users/menus" data-goto-q="${esc(u.name)}">${esc(menuSummaryOf(u))}</a></td>
+      <td class="nowrap">${u.approval_status !== 'approved' ? '<button class="btn small primary" data-approve>가입 승인</button> ' : ''}${!u.is_admin && u.approval_status !== 'rejected' && u.id !== ME.id ? '<button class="btn small danger" data-reject>반려</button> ' : ''}<button class="btn small" data-profile>부서·직급</button> <button class="btn small" data-pw>비밀번호 초기화</button> ${u.id !== ME.id ? '<button class="btn small danger" data-del>삭제</button>' : ''}</td></tr>`).join('')}</tbody></table>`,
+    roles: list => `<table class="grid member-grid matrix" data-no-reorder><thead><tr><th>이름</th><th class="c">관리자</th>${MEMBER_ROLE_COLS.map(([r, l]) => `<th class="c" title="${esc(ROLE_LABEL[r])}">${l}</th>`).join('')}</tr></thead><tbody>${list.map(u => `<tr data-u="${u.id}"><td>${who(u)}${u.approval_status !== 'approved' ? ` ${state(u)}` : ''}</td>
+      <td class="c"><input type="checkbox" data-admin ${u.is_admin ? 'checked' : ''} ${u.id === ME.id || u.approval_status !== 'approved' ? 'disabled' : ''} aria-label="${esc(u.name)} 관리자"></td>
+      ${MEMBER_ROLE_COLS.map(([r, l]) => `<td class="c"><input type="checkbox" data-role="${r}" ${u.roles.includes(r) ? 'checked' : ''} ${MEMBER_APPROVER.includes(r) && u.approval_status !== 'approved' ? 'disabled title="가입 승인 후 지정"' : ''} aria-label="${esc(u.name)} ${l}"></td>`).join('')}</tr>`).join('')}</tbody></table>`,
+    menus: list => `<table class="grid member-grid matrix" data-no-reorder><thead><tr><th>이름</th><th>방식</th>${MENU_GROUP_LABELS.map(([k, l]) => `<th class="c">${esc(l.replace(/ \(.*\)$/, ''))}</th>`).join('')}</tr></thead><tbody>${list.map(u => {
+      if (u.is_admin) return `<tr data-u="${u.id}"><td>${who(u)}</td><td colspan="${MENU_GROUP_LABELS.length + 1}" class="muted">관리자 — 모든 메뉴가 보입니다</td></tr>`;
+      const base = u.menu_mode === 'custom' ? (u.menu_custom || []) : u.menu_mode === 'all' ? null : u.menus_base, eff = u.menus_effective;
+      return `<tr data-u="${u.id}"><td>${who(u)}</td><td><select data-menu-mode aria-label="${esc(u.name)} 메뉴 방식"><option value="department"${u.menu_mode === 'department' ? ' selected' : ''}>부서 기본</option><option value="all"${u.menu_mode === 'all' ? ' selected' : ''}>전체 보임</option><option value="custom"${u.menu_mode === 'custom' ? ' selected' : ''}>직접 지정</option></select></td>
+        ${MENU_GROUP_LABELS.map(([k, l]) => { const on = !base || base.includes(k), byRole = !on && (!eff || eff.includes(k));
+          return `<td class="c">${u.menu_mode === 'custom' ? `<input type="checkbox" data-menu="${k}" ${on ? 'checked' : ''} aria-label="${esc(u.name)} ${esc(l)}">` : on ? '<span class="mv-on" aria-label="보임">✓</span>' : '<span class="mv-off" aria-label="숨김">—</span>'}${byRole ? ' <span class="chip" title="사용 권한이 있어 메뉴를 꺼도 보입니다">권한</span>' : ''}</td>`; }).join('')}</tr>`; }).join('')}</tbody></table>`,
+  };
+  const draw = () => { const list = users.filter(visible); $('[data-member-count]', filters).textContent = `${list.length}명`; $('#memberList', main).innerHTML = list.length ? `<div class="table-wrap">${tables[tab](list)}</div>` : '<div class="empty">조건에 맞는 회원이 없습니다.</div>'; };
+  const load = async () => { users = await api('GET', '/api/admin/users'); if (main.isConnected) draw(); };
+  const save = async (id, body, msg = '저장했습니다.') => {
+    try { await api('PUT', '/api/admin/users/' + id, body); toast(msg); if (Number(id) === ME.id) ME = (await api('GET', '/api/me')).user; }
+    catch (e) { fail(e); }
+    await load();
+  };
+  try { const q = sessionStorage.getItem('wpa:member-q'); if (q) { filters.elements.q.value = q; sessionStorage.removeItem('wpa:member-q'); } } catch { /* 편의 */ }
+  filters.addEventListener('input', draw); filters.addEventListener('change', draw); filters.onsubmit = e => e.preventDefault();
+  const list = $('#memberList', main);
+  list.addEventListener('click', async e => {
+    const g = e.target.closest('[data-goto-q]'); if (g) { try { sessionStorage.setItem('wpa:member-q', g.dataset.gotoQ); } catch { /* */ } return; }
+    const tr = e.target.closest('tr[data-u]'); if (!tr) return; const id = Number(tr.dataset.u), u = users.find(x => x.id === id); if (!u) return;
+    const review = async (status, note = '') => { try { await api('POST', `/api/admin/users/${id}/approval`, { status, note }); toast(status === 'approved' ? '가입을 승인했습니다.' : '가입을 반려했습니다.'); } catch (err) { fail(err); } await load(); };
+    if (e.target.closest('[data-approve]')) { if (await confirmBox(`${u.name} 님의 가입을 승인할까요?`)) await review('approved'); return; }
+    if (e.target.closest('[data-reject]')) { const v = await promptBox(`${u.name} 님의 가입 반려`, '<label>반려 사유<input name="note" maxlength="500"></label>'); if (v) await review('rejected', v.note); return; }
+    if (e.target.closest('[data-profile]')) { const v = await promptBox(`${u.name} 부서·직급`, `<p class="small muted">부서·직급 목록은 「조직 구성」에서 관리합니다. 「부서 기본」 메뉴는 부서를 따라 바뀝니다.</p>${orgFields(org, u)}`); if (v) await save(id, v); return; }
+    if (e.target.closest('[data-pw]')) { const v = await promptBox(`${u.name} 비밀번호 초기화`, '<label>새 비밀번호 *<input name="password" required minlength="4"></label><p class="small muted">바꾸면 이 사람은 다시 로그인해야 합니다.</p>'); if (v) await save(id, v, '비밀번호를 바꿨습니다.'); return; }
+    if (e.target.closest('[data-del]')) { if (await confirmBox(`${u.name} 사용자를 삭제할까요?`)) { try { await api('DELETE', '/api/admin/users/' + id); toast('삭제했습니다.'); } catch (err) { fail(err); } await load(); } return; }
+  });
+  list.addEventListener('change', async e => {
+    const tr = e.target.closest('tr[data-u]'); if (!tr) return; const id = Number(tr.dataset.u), u = users.find(x => x.id === id);
+    if (e.target.matches('[data-role]')) return save(id, { roles: $$('[data-role]:checked', tr).map(x => x.dataset.role) }, `${u.name} 사용 권한을 저장했습니다.`);
+    if (e.target.matches('[data-admin]')) { if (e.target.checked && !await confirmBox(`${u.name} 님을 관리자로 지정할까요? 관리자는 모든 화면·설정을 볼 수 있습니다.`)) { e.target.checked = false; return; } return save(id, { is_admin: e.target.checked }, '관리자 권한을 저장했습니다.'); }
+    if (e.target.matches('[data-menu-mode]')) { const mode = e.target.value; const menus = mode === 'custom' ? (u.menu_mode === 'custom' ? u.menu_custom || [] : u.menus_base || MENU_GROUP_LABELS.map(([k]) => k)) : []; return save(id, { menu_mode: mode, menus }, `${u.name} 메뉴 보기를 저장했습니다.`); }
+    if (e.target.matches('[data-menu]')) return save(id, { menu_mode: 'custom', menus: $$('[data-menu]:checked', tr).map(x => x.dataset.menu) }, `${u.name} 메뉴 보기를 저장했습니다.`);
+  });
+  const nf = $('#userNew', main);
+  if (nf) nf.onsubmit = async e => { e.preventDefault(); try { const made = await api('POST', '/api/admin/users', { ...formObj(nf), roles: [] }); toast(`${made.name} 계정을 만들었습니다. 사용 권한·메뉴 보기를 정하세요.`); nf.reset(); await load(); } catch (err) { fail(err); } };
+  await load();
+}

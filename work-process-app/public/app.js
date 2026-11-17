@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.174';
+const APP_VERSION = '15.175';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -420,7 +420,7 @@ function applyMenuAccess(main) {
 }
 // 관리 메뉴(15.38): 거래처·검사규격 같은 기준 정보는 업무 메뉴가 아닌 관리 묶음에 둔다. 주소는 그대로다.
 const NAV_MANAGE = [['#/purchase/vendors', '거래처 관리'], ['#/purchase/prices', '단가표'], ['#/quality/specs', '검사규격 설정']];
-const NAV_ADMIN = [['#/admin', '관리자 설정'], ['#/admin/org', '조직 구성'], ['#/admin/bom', '제품등록']];
+const NAV_ADMIN = [['#/admin/users', '회원 관리'], ['#/admin', '관리자 설정'], ['#/admin/org', '조직 구성'], ['#/admin/bom', '제품등록']]; // 15.175 회원 관리 분리
 // Entry and list screens built from one page: the page renders both parts and the view hides one.
 // key: route → [page route, view, title, other route, link label]
 const VIEW_SPLIT = {
@@ -596,6 +596,9 @@ const PAGES = {
   '#/prod/orders': main => pageMrList(main, 'production'),
   '#/sales/pr/new': pageSalesPrEntry,
   '#/admin': pageAdmin,
+  '#/admin/users': main => managedPage(main, '#/admin/users', m => pageMembers(m, 'info')), // 15.175 회원 관리 · 회원 정보
+  '#/admin/users/roles': main => managedPage(main, '#/admin/users/roles', m => pageMembers(m, 'roles')), // 사용 권한
+  '#/admin/users/menus': main => managedPage(main, '#/admin/users/menus', m => pageMembers(m, 'menus')), // 메뉴 보기
   '#/admin/org': pageOrg,
   '#/admin/bom': pageBoms,
   '#/me': pageMe,
@@ -626,8 +629,9 @@ function refreshFavNav() {
 const MANAGE = {
   '#/sales/bills': { title: '매출전표 관리', tabs: [['#/sales/bills', '전표 목록'], ['#/sales/bills/new', '전표 입력']] },
   '#/sales/tax': { title: '세금계산서 관리', tabs: [['#/sales/tax', '계산서 목록'], ['#/sales/tax/new', '계산서 만들기']] },
+  '#/admin/users': { title: '회원 관리', tabs: [['#/admin/users', '회원 정보'], ['#/admin/users/roles', '사용 권한'], ['#/admin/users/menus', '메뉴 보기']] },
 };
-const ROUTE_ALIAS = { '#/sales/bills/new': '#/sales/bills', '#/sales/tax/new': '#/sales/tax' };
+const ROUTE_ALIAS = { '#/sales/bills/new': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users' };
 const navRoute = r => ROUTE_ALIAS[String(r || '#/').split('?')[0]] || String(r || '#/').split('?')[0];
 function managedTabs(main, route) {
   const m = MANAGE[navRoute(route)], h1 = $('h1', main); if (!m || !h1 || $('.manage-tabs', main)) return;
@@ -2479,30 +2483,7 @@ async function pageAdmin(main) {
   <div class="card"><h3>회사 사진 저장소</h3><p id="imageStorageStatus" role="status">연결 상태를 확인하고 있습니다…</p><p class="muted small">기존 사진을 회사 저장소로 복사하고 원본과 비교합니다. 복사 중에는 사진 등록·수정·삭제를 잠시 멈춰 주세요. 원본은 보존하며 복사만으로 저장 위치가 바뀌지 않습니다.</p><div class="actions"><button class="btn" id="imageCheckBtn" disabled>연결 확인</button><button class="btn" id="imageCopyBtn" disabled>기존 사진 복사·검증</button></div><p id="imageCopyStatus" role="status" class="muted small"></p></div>
   <form class="card" id="invForm"><h3>초대코드</h3><p class="muted small">가입할 때 이 코드를 입력해야 합니다. 바꾸면 이후 가입부터 새 코드가 필요합니다.</p>
     <div class="row"><input name="invite_code" value="${esc(s.invite_code)}" required minlength="4" aria-label="초대코드"><button class="btn primary">변경</button></div></form>
-  <form class="card" id="userNew"><h3>사용자 추가</h3><p class="muted small">관리자가 계정을 바로 만듭니다. 만든 계정은 승인된 상태이며, 본인이 로그인한 뒤 「내 정보」에서 비밀번호를 바꿀 수 있습니다.</p>
-    <div class="form-grid"><label>이름 *<input name="name" required maxlength="30" autocomplete="off"></label><label>비밀번호 * (4자 이상)<input name="password" type="password" required minlength="4" autocomplete="new-password"></label>${orgFields(org)}</div>
-    <p class="small muted">오퍼레이터를 선택한 일반 계정은 다른 업무 권한보다 입력 전용 모드가 우선합니다. 관리자는 전체 권한을 유지합니다.</p><div class="role-checks">${Object.entries(ROLE_LABEL).map(([role, label]) => `<label class="check"><input type="checkbox" data-new-role="${role}"> ${label}</label>`).join('')}</div>
-    <div class="actions"><button class="btn primary">계정 만들기</button></div></form>
-  <div class="card"><h3>가입 승인 · 사용자 권한</h3><p class="small muted">오퍼레이터: 반제품 커팅/융착·세탁과 완제품 실적만 입력합니다. 다른 업무 권한을 함께 선택해도 일반 계정은 입력 전용으로 제한됩니다. 관리자 계정은 제외됩니다.</p><p class="muted">승인 대기 ${users.filter(u => u.approval_status === 'pending').length}명 · 신규 가입자는 승인 후 로그인할 수 있습니다.</p>
-    <p class="muted small">품질·개발은 업무 담당 권한입니다. 분석의뢰·VOC 승인·반려는 품질책임자, 개발의뢰 승인·반려는 개발책임자를 체크해 지정하세요. 책임자는 해당 팀의 업무 처리 권한도 갖습니다. 가입 승인된 사용자만 책임자로 지정할 수 있습니다. 관리자는 모든 의뢰를 승인할 수 있으며 생산의 샘플 승인 권한은 유지됩니다.</p>
-    ${listControls('users', { placeholder: '사용자 이름 검색', extra: `<label>가입 상태<select name="approval"><option value="">전체 상태</option><option value="pending">승인 대기</option><option value="approved">승인 완료</option><option value="rejected">반려</option></select></label><label>권한<select name="role"><option value="">전체 권한</option><option value="admin">관리자</option>${Object.entries(ROLE_LABEL).map(([role, label]) => `<option value="${role}">${label}</option>`).join('')}</select></label>` })}
-    <div class="table-wrap"><table class="grid users-table"><thead><tr><th>이름</th><th>가입 상태</th><th>권한 <span class="small muted">(체크하면 바로 저장)</span></th><th></th></tr></thead>
-    <tbody>${users.map((u) => `<tr data-u="${u.id}"><td class="user-name"><b>${esc(u.name)}</b>${u.department || u.position ? `<div class="small muted">${esc([u.department, u.position].filter(Boolean).join(' · '))}</div>` : ''}</td><td>${esc(({pending:"승인 대기",approved:"승인 완료",rejected:"반려"})[u.approval_status])}${u.approval_note ? `<br><small>${esc(u.approval_note)}</small>` : ""}${u.reviewed_by ? `<br><small>${esc(u.reviewed_by)} · ${esc(u.reviewed_at)}</small>` : ""}<div class="small muted">가입 ${esc(u.created_at.slice(0, 10))}</div></td>
-      <td class="role-cell"><div class="role-chips">${Object.keys(ROLE_LABEL).map((r) => `<label class="role-chip" title="${ROLE_LABEL[r]}"><input type="checkbox" data-role="${r}" ${u.roles.includes(r) ? 'checked' : ''} ${["quality_approver","dev_approver","production_approver","logistics_approver"].includes(r) && u.approval_status !== "approved" ? 'disabled' : ''} aria-label="${ROLE_LABEL[r]}"><span aria-hidden="true">${ROLE_SHORT[r]}</span></label>`).join('')}<label class="role-chip admin-chip" title="관리자(모든 화면·설정)"><input type="checkbox" data-admin ${u.is_admin ? 'checked' : ''} ${u.id === ME.id || u.approval_status !== 'approved' ? 'disabled' : ''} aria-label="관리자"><span aria-hidden="true">관리자</span></label></div></td>
-      <td class="user-actions"><div class="user-tools">${u.approval_status !== "approved" ? '<button class="btn small primary" data-approve>가입 승인</button> ' : ""}${!u.is_admin && u.approval_status !== "rejected" ? '<button class="btn small danger" data-reject>반려</button> ' : ""}<button class="btn small" data-profile>직급·부서</button> ${u.is_admin ? '' : `<button class="btn small" data-menu-access>메뉴: ${esc(u.menu_mode === 'all' ? '전체' : u.menu_mode === 'custom' ? menuSummary(u.menu_custom || []) : '부서 기본')}</button>`} <button class="btn small" data-pw>비밀번호 초기화</button> ${u.id !== ME.id ? '<button class="btn small danger" data-del>삭제</button>' : ''}</div></td></tr>`).join('')}</tbody></table></div></div>`;
-  $('#userNew').onsubmit = async (e) => { e.preventDefault(); try { const made = await api('POST', '/api/admin/users', { ...formObj(e.target), roles: $$('[data-new-role]:checked', e.target).map((box) => box.dataset.newRole) }); toast(`${made.name} 계정을 만들었습니다.`); pageAdmin(main); } catch (err) { fail(err); } };
-  $('#invForm').onsubmit = async (e) => { e.preventDefault(); try { const r = await api('PUT', '/api/admin/invite', formObj(e.target)); toast(`초대코드: ${r.invite_code}`); } catch (err) { fail(err); } };
-  const userFilter = $('#usersFilters', main);
-  const filterUsers = () => {
-    const values = formObj(userFilter); const q = values.q.trim().toLocaleLowerCase(); let count = 0;
-    $$('tr[data-u]', main).forEach(tr => {
-      const user = users.find(user => user.id === Number(tr.dataset.u));
-      const visible = user.name.toLocaleLowerCase().includes(q) && (!values.approval || user.approval_status === values.approval) && (!values.role || (values.role === 'admin' ? user.is_admin : userHasRole(user, values.role)));
-      tr.hidden = !visible; if (visible) count++;
-    });
-    listCount(userFilter, count);
-  };
-  bindListControls(userFilter, filterUsers); filterUsers();
+  <div class="card"><h3>회원 관리</h3><p class="muted small">가입 승인·회원 정보, 사용 권한(승인·처리), 메뉴 보기는 「회원 관리」에서 나눠 관리합니다.</p><p>${(() => { const n = users.filter(u => u.approval_status === 'pending').length; return n ? `<span class="chip yellow">가입 승인 대기 ${n}명</span> ` : ''; })()}<a class="btn" href="#/admin/users">회원 관리 열기</a></p></div>`;
   const imageCheck = $('#imageCheckBtn'), imageCopy = $('#imageCopyBtn'), imageStatus = $('#imageStorageStatus');
   try {
     const storage = await api('GET', '/api/admin/image-storage');
@@ -2559,33 +2540,6 @@ async function pageAdmin(main) {
     } catch (error) { status.textContent = '백업에 실패했습니다. 다시 시도해 주세요.'; fail(error); }
     finally { button.disabled = false; }
   };
-  $$('tr[data-u]').forEach((tr) => {
-    const id = tr.dataset.u; const name = $('b', tr).textContent;
-    const save = async (body) => { try { const changed = await api('PUT', '/api/admin/users/' + id, body); Object.assign(users.find(user => user.id === Number(id)), changed); filterUsers(); toast('저장했습니다.'); if (Number(id) === ME.id) { ME = (await api('GET', '/api/me')).user; } } catch (e) { fail(e); render(); } };
-    $$('[data-role]', tr).forEach((c) => (c.onchange = () => save({ roles: $$('[data-role]:checked', tr).map((x) => x.dataset.role) })));
-    $('[data-admin]', tr).onchange = (e) => save({ is_admin: e.target.checked });
-    const review = async (status, note = '') => { try { await api('POST', '/api/admin/users/' + id + '/approval', { status, note }); toast(status === 'approved' ? '가입을 승인했습니다.' : '가입을 반려했습니다.'); render(); } catch (e) { fail(e); } };
-    const approve = $('[data-approve]', tr); if (approve) approve.onclick = async () => { if (await confirmBox(`${name} 님의 가입을 승인할까요?`)) review('approved'); };
-    const reject = $('[data-reject]', tr); if (reject) reject.onclick = async () => { const value = await promptBox(`${name} 님의 가입 반려`, '<label>반려 사유<input name="note" maxlength="500"></label>'); if (value) review('rejected', value.note); };
-    $('[data-profile]', tr).onclick = async () => { const u = users.find(user => user.id === Number(id)); const v = await promptBox(`${name} 직급·부서`, `<p class="small muted">부서·직급 목록은 「조직 구성」에서 관리합니다.</p>${orgFields(org, u)}`); if (v) { await save(v); pageAdmin(main); } };
-    const menuButton = $('[data-menu-access]', tr);
-    if (menuButton) menuButton.onclick = async () => {
-      const u = users.find(user => user.id === Number(id));
-      const m = modal(`<h3>${esc(name)} 메뉴 열람</h3><form class="stack" data-no-author>
-        <fieldset class="menu-mode"><legend>방식</legend>
-          <label class="inline"><input type="radio" name="menu_mode" value="department"${u.menu_mode === 'department' ? ' checked' : ''}> 부서 기본 따름 <span class="small muted">(${esc(u.department || '부서 미지정')} · 조직 구성에서 설정)</span></label>
-          <label class="inline"><input type="radio" name="menu_mode" value="all"${u.menu_mode === 'all' ? ' checked' : ''}> 전체 보임</label>
-          <label class="inline"><input type="radio" name="menu_mode" value="custom"${u.menu_mode === 'custom' ? ' checked' : ''}> 직접 지정</label></fieldset>
-        <div data-menu-custom>${menuChecks(u.menu_mode === 'custom' ? u.menu_custom || [] : null)}</div>
-        <p class="small muted">숨긴 메뉴는 메뉴와 대시보드에서 빠지고, 주소로 들어와도 열리지 않습니다. 이미 받은 승인·접수 권한(체크한 역할)은 그대로입니다.</p>
-        <div class="actions"><button class="btn primary">저장</button></div></form>`);
-      const form = $('form', m.el), custom = $('[data-menu-custom]', form);
-      const sync = () => { custom.hidden = formObj(form).menu_mode !== 'custom'; }; form.addEventListener('change', sync); sync();
-      form.onsubmit = async event => { event.preventDefault(); const v = formObj(form); m.close(); await save({ menu_mode: v.menu_mode, menus: v.menus || [] }); pageAdmin(main); };
-    };
-    $('[data-pw]', tr).onclick = async () => { const v = await promptBox(`${name} 비밀번호 초기화`, '<label>새 비밀번호 *<input name="password" required minlength="4"></label>'); if (v) save(v); };
-    const del = $('[data-del]', tr); if (del) del.onclick = async () => { if (await confirmBox(`${name} 사용자를 삭제할까요?`)) { try { await api('DELETE', '/api/admin/users/' + id); render(); } catch (e) { fail(e); } } };
-  });
 }
 
 async function pageMe(main) {
