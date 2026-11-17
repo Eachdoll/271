@@ -683,7 +683,7 @@ async function noteDialog(kind, note = null, done = null) {
 }
 async function pageNotes(main) {
   const y = todayStr().slice(0, 4);
-  main.innerHTML = `<h1>어음 관리</h1>
+  main.innerHTML = `<h1>어음 관리 <button type="button" class="btn primary view-switch" data-note-new style="margin-left:auto">+ 어음 등록</button></h1>
   <form class="list-filters toolbar lf-oneline" data-read-only id="noteFilters">
     <div class="seg result-seg" role="group" aria-label="어음구분"><label><input type="radio" name="kind" value="receivable" checked> 받을어음</label><label><input type="radio" name="kind" value="payable"> 지급어음</label></div>
     <label class="lf-sel">날짜 기준<select name="basis"><option value="issue">발행일자</option><option value="due">만기일자</option><option value="processed">처리일자</option></select></label>
@@ -691,7 +691,7 @@ async function pageNotes(main) {
     <label class="lf-partner">거래처<input name="partner" maxlength="100"></label>
     <div class="seg result-seg" role="group" aria-label="처리구분"><label><input type="radio" name="status" value="collected"> 처리</label><label><input type="radio" name="status" value="open" checked> 미처리</label><label><input type="radio" name="status" value=""> 전체</label></div>
     <label class="grow lf-q">검색<input type="search" name="q" placeholder="어음번호·발행은행·비고"></label>
-    <button class="btn primary">조회</button><button type="button" class="btn" data-note-new>+ 어음 등록</button></form>
+    <button class="btn primary">조회</button></form>
   <div id="noteList"></div>`;
   const form = $('#noteFilters', main); let rows = [];
   bindPartnerPicker(form.elements.partner, null, {}).catch(() => {});
@@ -708,7 +708,7 @@ async function pageNotes(main) {
   };
   form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
   $$('[name=kind], [name=status], [name=basis], [name=from], [name=to]', form).forEach(r => { r.addEventListener('change', () => load().catch(fail)); }); // 15.165 구분·처리·날짜 기준·기간을 바꾸면 바로 조회
-  $('[data-note-new]', form).onclick = () => noteDialog(kind(), null, load).catch(fail);
+  $('[data-note-new]', main).onclick = () => noteDialog(kind(), null, load).catch(fail);
   const list = $('#noteList', main);
   list.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('tr[data-note-edit]')) e.target.click(); });
   list.addEventListener('click', async e => {
