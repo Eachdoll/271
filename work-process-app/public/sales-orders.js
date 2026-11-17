@@ -185,7 +185,7 @@ async function pageShipInstructions(main) {
   main.innerHTML = `<h1>출하지시</h1>
   <p class="muted">영업이 수주로 매출전표를 잡으면 여기에 출하지시가 내려옵니다. 출고할 줄을 체크하고 LOT을 넣어 「출하 처리」하면 출하 목록에 기록되고 재고가 빠집니다. 전표가 취소되면 대기 중인 지시도 함께 취소됩니다. 여러 줄을 체크해 「출고지시서 묶기」하면 한 장(DO-…)의 피킹·출고 지시서로 인쇄하고 한 번에 출하 처리할 수 있습니다.</p>
   <div class="seg class-tabs" id="siTabs" role="group" aria-label="지시 상태"></div>
-  <form class="list-filters toolbar" data-read-only id="siFilters"><label>지시일<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>거래처<input name="customer" maxlength="100"></label><label class="grow">검색<input type="search" name="q" placeholder="품목·제품코드·거래처·출고지시서 번호"></label><label class="inline" data-si-nobatch><input type="checkbox" name="nobatch"> 묶음 안 된 것만</label><button class="btn primary">조회</button></form>
+  <form class="list-filters toolbar lf-oneline" data-read-only id="siFilters"><label class="lf-period">지시일<span class="lf-pair"><input type="date" name="from" aria-label="지시일 시작"><span class="muted">~</span><input type="date" name="to" aria-label="지시일 끝"></span></label><label class="lf-partner">거래처<input name="customer" maxlength="100"></label><label class="grow lf-q">검색<input type="search" name="q" placeholder="품목·제품코드·거래처·지시서 번호"></label><label class="lf-check" data-si-nobatch><input type="checkbox" name="nobatch"> 묶음 안 된 것만</label><button class="btn primary">조회</button></form>
   <div id="siList"></div>
   <div class="actionbar" id="siBar"><span class="small" id="siCount"></span><label class="inline">출고일 <input type="date" id="siDate" value="${todayStr()}" max="${todayStr()}"></label><button type="button" class="btn" id="siBatch" title="체크한 지시를 출고지시서 한 장으로 묶어 인쇄">출고지시서 묶기</button><button type="button" class="btn primary" id="siShip">출하 처리</button></div>`;
   const form = $('#siFilters', main); let rows = [], status = 'pending', version = 0, busy = false, lotPickers = new Map();
@@ -267,7 +267,7 @@ async function pageShipInstructions(main) {
   };
   drawTabs();
   $('#siTabs', main).addEventListener('click', e => { const b = e.target.closest('[data-si-tab]'); if (!b) return; status = b.dataset.siTab; drawTabs(); load().catch(fail); });
-  rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
+  // 15.155 출하지시는 기간 빠른 선택을 쓰지 않는다(대기 지시는 날짜를 비워 두고 전부 보는 경우가 대부분)
   form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
   bindPartnerPicker(form.elements.customer, null, { type: 'sales' }).catch(() => {});
   await load();

@@ -11,20 +11,18 @@ async function pageStock(main) {
   main.innerHTML = `
   <h1>재고 현황 <span class="dept">물류</span></h1>
   <p class="muted">입고(발주·기타) + 생산실적·반제품 커팅/융착 − 생산 투입(BOM 기준) − 출하 ± 재고 조정으로 계산한 수량입니다. 품목명과 단위가 같은 기록끼리 합산하므로, <b>같은 품목은 같은 이름·단위</b>로 입력하세요. 시스템 도입 전부터 있던 재고는 <b>기초재고</b>로 한 번 입력합니다.</p>
-  <form id="stockFilters" class="toolbar list-filters" data-read-only="true">
-    <label>기준일<input type="date" name="asof" value="${todayStr()}" max="${todayStr()}" required></label>
+  <form id="stockFilters" class="toolbar list-filters lf-oneline" data-read-only="true">
+    <label class="lf-date">기준일<input type="date" name="asof" value="${todayStr()}" max="${todayStr()}" required></label>
     <label class="list-search">품목 검색<input type="search" name="q" maxlength="200" placeholder="품목명·규격"></label>
-    <label>분류<select name="item_category">${categoryOptions('', true)}</select></label>
-    <label>1차 분류<select name="cat1" id="stockCat1"><option value="">전체</option></select></label>
-    <label>2차 분류<select name="cat2" id="stockCat2"><option value="">전체</option></select></label>
-    <label>재고 상태<select name="state"><option value="">전체</option><option value="instock">재고 있음</option><option value="low">안전재고 미달</option><option value="negative">재고 음수 (기록 확인 필요)</option></select></label>
-    <label>보기<select name="group"><option value="item">품목 합계</option><option value="spec">규격·사이즈별</option></select></label>
+    <label class="lf-sel">분류<select name="item_category">${categoryOptions('', true)}</select></label>
+    <label class="lf-sel">1차 분류<select name="cat1" id="stockCat1"><option value="">전체</option></select></label>
+    <label class="lf-sel">2차 분류<select name="cat2" id="stockCat2"><option value="">전체</option></select></label>
+    <label class="lf-sel lf-wide">재고 상태<select name="state"><option value="">전체</option><option value="instock">재고 있음</option><option value="low">안전재고 미달</option><option value="negative">재고 음수(기록 확인)</option></select></label>
     <button type="submit" class="btn primary">조회</button>
-    <button type="button" class="btn" id="stockCsv">CSV 저장</button>
-    <button type="button" class="btn" id="stockLots" title="LOT가 적힌 입고 − 같은 LOT 출하">LOT별 재고</button>
-    <span id="stockAdjustSlot"></span>
   </form>
-  <div id="stockSummary" class="counts"></div>
+  <div class="result-bar"><div id="stockSummary" class="counts"></div>
+    <div class="seg result-seg" role="group" aria-label="보기"><label><input type="radio" name="group" value="item" form="stockFilters" checked> 품목 합계</label><label><input type="radio" name="group" value="spec" form="stockFilters"> 규격·사이즈별</label></div>
+    <span class="result-tools"><button type="button" class="btn" id="stockLots" title="LOT가 적힌 입고 − 같은 LOT 출하">LOT별 재고</button><button type="button" class="btn" id="stockCsv">CSV 저장</button><span id="stockAdjustSlot"></span></span></div>
   <div id="stockList"></div>`;
   const form = $('#stockFilters', main); let version = 0, current = { rows: [], group: 'item' };
   $('#stockLots', main).onclick = () => stockLotWindow(form.elements.asof.value || todayStr(), form.elements.q.value);
@@ -97,6 +95,9 @@ async function pageStock(main) {
     $$('[data-stock-count]', main).forEach(button => button.onclick = () => { const r = rows[button.dataset.stockCount]; adjust({ item: r.item, spec: bySpec ? r.spec : '', unit: r.unit, kind: 'count' }); });
   };
   form.onsubmit = event => { event.preventDefault(); load().catch(fail); };
+  // 15.155 보기(품목 합계/규격별)는 결과 위 버튼 — 바꾸면 바로 다시 조회하고, 다음에 열 때도 그 보기로
+  try { const g = localStorage.getItem('wpa:stock-group'); if (g) $$('[name=group]', main).forEach(r => { r.checked = r.value === g; }); } catch { /* 편의 */ }
+  $$('[name=group]', main).forEach(r => { r.onchange = () => { try { localStorage.setItem('wpa:stock-group', r.value); } catch { /* 편의 */ } load().catch(fail); }; });
   $('#stockCsv').onclick = () => {
     if (!current.rows.length) return toast('저장할 재고가 없습니다.', 'err');
     const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([stockCsv(current.rows, current.group === 'spec')], { type: 'text/csv;charset=utf-8' }));

@@ -1830,3 +1830,23 @@ main:has(> .rs-page) { max-width: 1760px; }
 .si-batch-tag { margin-top: 4px; white-space: nowrap; } .si-batch-tag .chip.blue { background: #dbe7ff; color: #1d4ed8; font-weight: 700; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #siList tr.si-batched > td { background: #1f2a40; } :root:not([data-theme="light"]) .si-batch-tag .chip.blue { background: #23365c; color: #9cc0ff; } }
 :root[data-theme="dark"] #siList tr.si-batched > td { background: #1f2a40; } :root[data-theme="dark"] .si-batch-tag .chip.blue { background: #23365c; color: #9cc0ff; }
+
+/* 15.155 목록 조회 칸 한 줄 정리: 같은 높이·아래 맞춤, 기간은 한 칸(시작~끝), 체크는 가로, 결과 위 도구 줄 */
+form.list-filters.lf-oneline { flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; }
+form.list-filters.lf-oneline > label { min-width: 0; }
+form.list-filters.lf-oneline .lf-pair { display: flex; align-items: center; gap: 6px; } form.list-filters.lf-oneline .lf-pair input { width: 10.6em; }
+form.list-filters.lf-oneline .lf-q { flex: 1 1 220px; }
+form.list-filters.lf-oneline .lf-date { flex: 0 0 auto; } form.list-filters.lf-oneline .lf-date input { width: 9.6em; }
+form.list-filters.lf-oneline .lf-sel { flex: 0 1 120px; } form.list-filters.lf-oneline .lf-sel.lf-wide { flex-basis: 160px; }
+form.list-filters.lf-oneline .list-search { flex: 1 1 200px; min-width: 160px; }
+form.list-filters.lf-oneline > label.lf-check { flex-direction: row; align-items: center; gap: 6px; min-height: 40px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius, 0); background: var(--panel); color: var(--text); white-space: nowrap; cursor: pointer; font-size: 13px; }
+form.list-filters.lf-oneline > label.lf-check input { width: auto; min-height: 0; margin: 0; }
+form.list-filters.lf-oneline > label.lf-check:has(input:checked) { border-color: var(--accent, #2563eb); background: var(--accent-soft, #eef4ff); }
+form.list-filters.lf-oneline > .btn { flex: 0 0 auto; }
+form.list-filters.lf-oneline .partner-picker > input { width: 9em; }
+#siBar label { white-space: nowrap; }
+.result-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 4px 0 10px; }
+.result-bar .counts { margin: 0; } .result-bar .result-tools { margin-left: auto; display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.result-seg { display: inline-flex; } .result-seg label { display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; font-size: 13px; white-space: nowrap; }
+.result-seg label + label { border-left: 0; } .result-seg input { width: auto; min-height: 0; margin: 0; } .result-seg label:has(input:checked) { background: var(--accent-soft, #eef4ff); border-color: var(--accent, #2563eb); color: var(--accent, #2563eb); font-weight: 700; }
+@media (max-width: 700px) { form.list-filters.lf-oneline .lf-pair input, form.list-filters.lf-oneline .lf-date input { width: 100%; } form.list-filters.lf-oneline .lf-period { flex: 1 1 100%; } .result-bar .result-tools { margin-left: 0; } }
