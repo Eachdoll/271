@@ -334,19 +334,18 @@ async function saveNewAttachments(entity, row, draft, form) {
 // 메뉴: 업무 → 하위 메뉴 → 화면. 입력과 목록(조회·검색)은 서로 다른 화면입니다(VIEW_SPLIT).
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
-  { group: '영업', items: [{ sub: '견적', items: [['#/sales/quotes/new', '견적서 작성'], ['#/sales/quotes', '견적서 목록']] }, { sub: '수주', items: [['#/sales/orders/new', '수주 입력'], ['#/sales/orders', '수주 목록']] }, { sub: '매출전표', items: [['#/sales/bills/new', '매출전표 입력'], ['#/sales/bills', '매출전표 목록'], ['#/sales/book', '거래처별 장부'], ['#/sales/returns/new', '반입(반품) 입력'], ['#/sales/returns', '반입 목록'], ['#/sales/delivery-status', '납품현황']] }, { sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
+  { group: '영업', items: [{ sub: '견적', items: [['#/sales/quotes/new', '견적서 작성'], ['#/sales/quotes', '견적서 목록']] }, { sub: '수주', items: [['#/sales/orders/new', '수주 입력'], ['#/sales/orders', '수주 목록']] }, { sub: '매출전표', items: [['#/sales/bills/new', '매출전표 입력'], ['#/sales/bills', '매출전표 목록'], ['#/sales/returns/new', '반입(반품) 입력'], ['#/sales/returns', '반입 목록'], ['#/sales/delivery-status', '납품현황'], ['#/sales/ledger', '기간별 거래보고'], ['#/sales/closing', '매출 마감']] }, { sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
   { group: '구매', items: [
     { sub: '발주', items: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
-    { sub: '매입전표', items: [['#/purchase/bills/new', '매입전표 입력'], ['#/purchase/bills', '매입전표 목록'], ['#/purchase/book', '거래처별 장부'], ['#/purchase/returns/new', '반출(반품) 입력'], ['#/purchase/returns', '반출 목록'], ['#/purchase/receipt-status', '입고현황']] },
+    { sub: '매입전표', items: [['#/purchase/bills/new', '매입전표 입력'], ['#/purchase/bills', '매입전표 목록'], ['#/purchase/returns/new', '반출(반품) 입력'], ['#/purchase/returns', '반출 목록'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/closing', '매입 마감']] },
     { sub: '샘플(상품)', items: [['#/purchase/sample/request', '샘플의뢰'], ['#/purchase/sample/list', '샘플리스트']] },
     { sub: '세탁', items: [['#/purchase/laundry/new', '불량·폐기 입력'], ['#/purchase/laundry', '불량·폐기 목록'], ['#/purchase/laundry-reports', '세탁 검수·성적서']] },
   ] },
-  // 15.164 경리: 세금계산서·입금/지급·원장/연령표·마감을 한곳에. 화면 주소는 그대로라 볼 수 있는 사람(영업·구매 메뉴 권한)도 그대로이고, 권한 없는 화면은 메뉴에서 빠진다.
+  // 15.164 경리: 매입·매출 세금계산서, 매입·매출 거래처별 장부, 대금(입금·지급·원장·연령표)을 한곳에. 화면 주소는 그대로라 볼 수 있는 사람(영업·구매 메뉴 권한)도 그대로이고, 권한 없는 화면은 메뉴에서 빠진다.
   { group: '경리', items: [
     { sub: '세금계산서', items: [['#/sales/tax/new', '매출 세금계산서 만들기'], ['#/sales/tax', '매출 세금계산서 관리'], ['#/sales/tax-check', '매출 발행 체크'], ['#/purchase/tax', '매입 세금계산서'], ['#/purchase/tax-check', '매입 발행 체크']] },
-    { sub: '입금·지급', items: [['#/purchase/payments', '입금확인'], ['#/purchase/disbursements', '지급확인']] },
-    { sub: '원장·연령표', items: [['#/sales/ledger', '기간별 거래보고'], ['#/purchase/ledger', '매입처 원장'], ['#/sales/aging', '채권 연령표'], ['#/purchase/aging', '채무 연령표']] },
-    { sub: '마감', items: [['#/sales/closing', '매출 마감'], ['#/purchase/closing', '매입 마감']] },
+    { sub: '거래처별 장부', items: [['#/sales/book', '매출 거래처별 장부'], ['#/purchase/book', '매입 거래처별 장부']] },
+    { sub: '대금', items: [['#/purchase/payments', '입금확인'], ['#/purchase/disbursements', '지급확인'], ['#/purchase/ledger', '매입처 원장'], ['#/sales/aging', '채권 연령표'], ['#/purchase/aging', '채무 연령표']] },
   ] },
   { group: '품질', items: [
     ['#/quality/inspections', '수입·출하 검사 이력'],
