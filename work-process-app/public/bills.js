@@ -187,7 +187,7 @@ function billMonthBody(rows, lead, tail, rowHtml) {
 async function pageBillList(main) {
   main.innerHTML = `<h1>매입전표 목록</h1>
   <form class="list-filters toolbar" data-read-only id="billFilters"><label>명세서 일자<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>거래처<input name="vendor" maxlength="100"></label><label>상태<select name="status"><option value="">전체</option><option value="confirmed">확정</option><option value="cancelled">취소</option></select></label><label>분류<select name="category">${catOptions(['원자재', '부자재', '임가공', '상품', '제품', '반제품', '미분류'])}</select></label><label class="grow">검색<input type="search" name="q" placeholder="전표번호·거래처·명세서 번호·비고·입력자"></label><button class="btn primary">조회</button><button type="button" class="btn" data-xlsx>엑셀 (줄별)</button></form>
-  <div id="billSummary" class="counts"></div><div id="billList"></div><div class="actions"><button type="button" class="btn" id="billMore" hidden>더 보기</button></div>`;
+  <div id="billSummary" class="counts"></div><div class="bulk-bar" id="billBulk"><span data-bulk-info>체크한 전표 없음</span><button type="button" class="btn primary" data-bulk-tax disabled>체크한 전표로 받은 세금계산서 등록</button><span class="small muted">한 매입처씩 · 이미 등록된 전표는 체크할 수 없습니다(중복 방지).</span></div><div id="billList"></div><div class="actions"><button type="button" class="btn" id="billMore" hidden>더 보기</button></div>`;
   const form = $('#billFilters', main); let rows = [], page = 0;
   const load = async (next = false) => {
     const data = await api('GET', '/api/purchase-bills?' + new URLSearchParams({ ...formObj(form), page: next ? page + 1 : 0 }));
@@ -195,12 +195,13 @@ async function pageBillList(main) {
     rows = next ? rows.concat(data.rows) : data.rows; page = data.page; $('#billMore', main).hidden = !data.more;
     const live = rows.filter(r => r.status === 'confirmed');
     $('#billSummary', main).innerHTML = `<b>${esc(`${rows.length}건 · 확정 합계 ${won(live.reduce((t, r) => t + r.total, 0))}원 (공급가액 ${won(live.reduce((t, r) => t + r.supply_total, 0))} · 부가세 ${won(live.reduce((t, r) => t + r.vat_total, 0))})`)}</b>${data.more ? ' <span>(더 있음)</span>' : ''}${catSummary(data.by_category, '확정 전표 분류별 공급가액')}`;
-    $('#billList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid bill-list" data-no-sort><thead><tr><th>전표번호</th><th>명세서 일자</th><th>거래처</th><th>명세서 번호</th><th class="r">줄</th><th class="r">공급가액</th><th class="r">부가세</th><th class="r">합계</th><th>상태</th><th>입력</th><th></th></tr></thead>${billMonthBody(rows, 5, 3, r => `<tr class="${r.status === 'cancelled' ? 'row-off' : ''}"><td data-card-primary><button type="button" class="link-btn" data-bill-open="${r.id}">${esc(r.bill_no)}</button></td><td>${esc(r.bill_date)}</td><td>${esc(r.vendor)}<div>${catChips(r.categories)}</div></td><td>${esc(r.statement_no || '')}</td><td class="r">${fmtNum(r.line_count)}</td><td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b>${r.statement_total != null && r.statement_total !== r.total ? '<div class="small red-text">명세서 차이</div>' : ''}</td><td>${r.status === 'confirmed' ? '<span class="chip green">확정</span>' : '<span class="chip">취소</span>'}</td><td class="small muted">${esc(r.created_by)}</td><td data-card-primary><button class="btn small" data-bill-open="${r.id}">보기</button></td></tr>`)}</table></div>` : '<div class="empty">조건에 맞는 매입전표가 없습니다.</div>';
+    $('#billList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid bill-list" data-no-sort><thead><tr><th class="pick-cell"><input type="checkbox" data-bulk-all aria-label="등록할 수 있는 전표 모두 고르기"></th><th>전표번호</th><th>명세서 일자</th><th>거래처</th><th>명세서 번호</th><th class="r">줄</th><th class="r">공급가액</th><th class="r">부가세</th><th class="r">합계</th><th>상태</th><th>세금계산서</th><th>입력</th><th></th></tr></thead>${billMonthBody(rows, 6, 4, r => `<tr class="${r.status === 'cancelled' ? 'row-off' : ''}"><td class="pick-cell">${r.status === 'confirmed' && !r.invoice ? `<input type="checkbox" data-bulk-pick="${r.id}" aria-label="${esc(r.bill_no)} 고르기">` : `<input type="checkbox" disabled title="${r.invoice ? '이미 세금계산서에 담김' : '취소된 전표'}" aria-label="${esc(r.bill_no)} 고를 수 없음">`}</td><td data-card-primary><button type="button" class="link-btn" data-bill-open="${r.id}">${esc(r.bill_no)}</button></td><td>${esc(r.bill_date)}</td><td>${esc(r.vendor)}<div>${catChips(r.categories)}</div></td><td>${esc(r.statement_no || '')}</td><td class="r">${fmtNum(r.line_count)}</td><td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b>${r.statement_total != null && r.statement_total !== r.total ? '<div class="small red-text">명세서 차이</div>' : ''}</td><td>${r.status === 'confirmed' ? '<span class="chip green">확정</span>' : '<span class="chip">취소</span>'}</td><td>${r.invoice ? `<span class="chip green">받음</span><div class="small muted">${esc(r.invoice.split('|')[1] || r.invoice.split('|')[0])}</div>` : r.status === 'confirmed' ? '<span class="small muted">안 받음</span>' : ''}</td><td class="small muted">${esc(r.created_by)}</td><td data-card-primary><button class="btn small" data-bill-open="${r.id}">보기</button></td></tr>`)}</table></div>` : '<div class="empty">조건에 맞는 매입전표가 없습니다.</div>';
   };
   rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
   $('[data-xlsx]', form).onclick = () => billLinesExcel('purchase', { from: form.elements.from.value, to: form.elements.to.value, party: form.elements.vendor.value.trim() }).catch(fail);
   form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
   $('#billMore', main).onclick = () => load(true).catch(fail);
+  bulkPicks(main, () => rows, 'purchase', () => load());
   $('#billList', main).addEventListener('click', async e => { const b = e.target.closest('[data-bill-open]'); if (!b) return; try { billSheet(await api('GET', '/api/purchase-bills/' + b.dataset.billOpen), () => load()); } catch (error) { fail(error); } });
   let preset = null; try { preset = JSON.parse(sessionStorage.getItem('wpa:bill-filter') || 'null'); sessionStorage.removeItem('wpa:bill-filter'); } catch { preset = null; }
   if (preset) for (const [k, v] of Object.entries(preset)) if (form.elements[k]) form.elements[k].value = v;
@@ -353,4 +354,57 @@ async function pageReceiptStatus(main) {
     } catch (error) { fail(error); }
   };
   await load();
+}
+
+// ── 15.131 전표 목록에서 체크 → 세금계산서 일괄 담기(매출) / 받은 계산서 등록(매입). 이미 담긴 전표는 체크칸이 잠겨 중복으로 못 담고, 서버도 다시 막는다.
+function bulkPicks(main, getRows, side, reload) {
+  const list = $('#billList', main), bar = $('#billBulk', main), btn = $('[data-bulk-tax]', bar);
+  const picked = () => { const ids = new Set($$('[data-bulk-pick]:checked', list).map(x => Number(x.dataset.bulkPick))); return getRows().filter(r => ids.has(r.id)); };
+  const party = r => side === 'sales' ? r.customer : r.vendor;
+  const update = () => {
+    const p = picked(), parties = new Set(p.map(r => nameKeyC(party(r))));
+    $('[data-bulk-info]', bar).textContent = p.length ? `체크 ${p.length}장 · ${parties.size}곳 · 합계 ${won(p.reduce((t, r) => t + r.total, 0))}원` : '체크한 전표 없음';
+    btn.disabled = !p.length;
+    const all = $('[data-bulk-all]', list), boxes = $$('[data-bulk-pick]', list); if (all) { all.checked = boxes.length > 0 && boxes.every(x => x.checked); all.disabled = !boxes.length; }
+  };
+  list.addEventListener('change', e => {
+    if (e.target.matches('[data-bulk-all]')) $$('[data-bulk-pick]', list).forEach(x => { x.checked = e.target.checked; });
+    if (e.target.matches('[data-bulk-all], [data-bulk-pick]')) update();
+  });
+  new MutationObserver(update).observe(list, { childList: true });
+  btn.onclick = () => (side === 'sales' ? bulkSalesTax : bulkPurchaseTax)(picked(), reload).catch(fail);
+  update();
+}
+const nameKeyC = v => String(v ?? '').normalize('NFC').toLowerCase().replace(/\s+/g, '');
+async function bulkSalesTax(bills, reload) {
+  if (!bills.length) return;
+  const parties = new Set(bills.map(b => nameKeyC(b.customer))).size;
+  const v = await promptBox(`세금계산서 담기 · 전표 ${bills.length}장`, `<p>${esc(`${parties}곳 · 공급가액 ${won(bills.reduce((t, b) => t + b.supply_total, 0))}원 · 부가세 ${won(bills.reduce((t, b) => t + b.vat_total, 0))}원 · 합계 ${won(bills.reduce((t, b) => t + b.total, 0))}원`)}</p>
+    <fieldset class="stack"><legend>담는 방식</legend>
+      <label class="inline"><input type="radio" name="kind" value="single" checked> 건별 — 전표 1장마다 계산서 1장 (${bills.length}장)</label>
+      <label class="inline"><input type="radio" name="kind" value="merge"> 거래처별 합산 — 거래처마다 1장 (${parties}장)</label></fieldset>
+    <label>작성일자 <span class="hint">(비우면 건별은 전표 일자, 합산은 마지막 전표 일자)</span><input type="date" name="write_date"></label>
+    <label>영수/청구<select name="charge"><option value="receipt">영수</option><option value="claim">청구</option></select></label>`);
+  if (!v) return;
+  try {
+    const r = await api('POST', '/api/tax-invoices', { kind: v.kind === 'merge' ? 'merge' : 'single', bill_ids: bills.map(b => b.id), write_date: v.write_date || undefined, charge: v.charge, request_id: crypto.randomUUID() });
+    toast(`세금계산서 ${r.rows.length}장을 담았습니다(발행 전). 「세금계산서 관리」에서 발행하세요.`);
+  } catch (error) { fail(error); }
+  await reload();
+}
+async function bulkPurchaseTax(bills, reload) {
+  if (!bills.length) return;
+  if (new Set(bills.map(b => nameKeyC(b.vendor))).size > 1) return toast('받은 세금계산서는 한 매입처씩 등록합니다. 한 매입처의 전표만 체크하세요.', 'err');
+  const supply = bills.reduce((t, b) => t + b.supply_total, 0), vat = bills.reduce((t, b) => t + b.vat_total, 0), last = bills.map(b => b.bill_date).sort().pop();
+  const v = await promptBox(`받은 세금계산서 등록 · ${bills[0].vendor}`, `<p>${esc(`전표 ${bills.length}장 · 공급가액 ${won(supply)}원 · 부가세 ${won(vat)}원 · 합계 ${won(supply + vat)}원`)}</p>
+    <p class="small muted">${bills.map(b => esc(b.bill_no)).join(', ')}</p>
+    <label>국세청 승인번호<input name="approval_no" maxlength="40" placeholder="예) 20261117-41000012-00000001"></label>
+    <label>작성일자 *<input type="date" name="write_date" required value="${esc(last)}"></label>
+    <label>비고<input name="note" maxlength="500"></label>`);
+  if (!v) return;
+  try {
+    const r = await api('POST', '/api/purchase-tax-invoices', { vendor: bills[0].vendor, bill_ids: bills.map(b => b.id), approval_no: v.approval_no, write_date: v.write_date, note: v.note, request_id: crypto.randomUUID() });
+    toast(`${r.invoice_no} 받은 세금계산서를 등록했습니다.`);
+  } catch (error) { fail(error); }
+  await reload();
 }

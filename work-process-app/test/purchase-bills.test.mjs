@@ -404,3 +404,18 @@ test('15.127 Purchase tax invoices: register from purchase bills, one invoice pe
   assert.ok(ti.rows.some(r => r.customer === '계산서고객' && r.cats === '상품:1000'), JSON.stringify(ti.rows.map(r => r.cats)));
   assert.equal((await admin('GET', `/api/tax-invoices?category=원자재&customer=${encodeURIComponent('계산서고객')}&from=${today}&to=${today}`)).body.rows.length, 0);
 });
+
+test('15.131 Bulk tax invoices from bill lists: merge per customer, no double add; purchase list shows received invoice', async () => {
+  const g = (await admin('POST', '/api/boms', { product: '합산상품', product_code: 'MG-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  const sell = async c => { const s = (await admin('POST', '/api/shipments', { ship_date: today, bom_id: g.id, item: g.product, qty: 1, customer: c, unit: 'EA' })).body; return (await admin('POST', '/api/sales-bills', { customer: c, bill_date: today, request_id: rid(), lines: [{ source_type: 'ship', source_id: s.id, unit_price: 1000 }] })).body; };
+  const a1 = await sell('합산갑'), a2 = await sell('합산갑'), b1 = await sell('합산을');
+  const r = await admin('POST', '/api/tax-invoices', { request_id: rid(), kind: 'merge', bill_ids: [a1.id, a2.id, b1.id] });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual(r.body.rows.map(x => [x.customer, x.total]).sort(), [['합산갑', 2200], ['합산을', 1100]]);
+  const list = (await admin('GET', '/api/sales-bills?customer=' + encodeURIComponent('합산갑'))).body.rows;
+  assert.ok(list.every(x => x.invoice), 'both bills now carry the invoice');
+  assert.equal((await admin('POST', '/api/tax-invoices', { request_id: rid(), kind: 'single', bill_ids: [a1.id] })).status, 409, 'no double add');
+  assert.equal((await admin('POST', '/api/tax-invoices', { request_id: rid(), kind: 'merge', bill_ids: [b1.id] })).status, 409, 'no double add (merge)');
+  const pb = (await buyer('GET', '/api/purchase-bills?vendor=' + encodeURIComponent('계산서상사'))).body.rows;
+  assert.ok(pb.length && pb.every(x => x.invoice === null), 'cancelled purchase invoice does not count');
+});

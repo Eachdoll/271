@@ -1152,7 +1152,7 @@ route('GET', '/api/purchase-bills', async ({ user, query }) => {
   if (query.category) { const c = query.category === '미분류' ? '' : itemCategory(query.category); where.push(BILL_CATEGORY_FILTER('purchase_bill_lines', 'purchase_bills')); args.push(c); }
   const page = Math.max(0, Math.min(1000, Number(query.page) || 0));
   const by_category = await billCategoryTotals('purchase_bill_lines', 'purchase_bills', where, args);
-  const rows = await db.prepare(`SELECT purchase_bills.*, (SELECT COUNT(*) FROM purchase_bill_lines l WHERE l.bill_id=purchase_bills.id) AS line_count, (SELECT group_concat(DISTINCT c) FROM (SELECT ${LINE_CAT('l')} AS c FROM purchase_bill_lines l WHERE l.bill_id=purchase_bills.id AND l.active=1)) AS categories FROM purchase_bills ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY bill_date DESC, id DESC LIMIT 201 OFFSET ?`).all(...args, page * 200);
+  const rows = await db.prepare(`SELECT purchase_bills.*, (SELECT COUNT(*) FROM purchase_bill_lines l WHERE l.bill_id=purchase_bills.id) AS line_count, (SELECT i.invoice_no || '|' || i.approval_no || '|' || i.id FROM purchase_tax_invoice_bills t JOIN purchase_tax_invoices i ON i.id=t.invoice_id WHERE t.bill_id=purchase_bills.id AND t.active=1 AND i.status='received') AS invoice, (SELECT group_concat(DISTINCT c) FROM (SELECT ${LINE_CAT('l')} AS c FROM purchase_bill_lines l WHERE l.bill_id=purchase_bills.id AND l.active=1)) AS categories FROM purchase_bills ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY bill_date DESC, id DESC LIMIT 201 OFFSET ?`).all(...args, page * 200);
   return { rows: rows.slice(0, 200), page, more: rows.length > 200, by_category };
 });
 route('GET', '/api/purchase-bills/:id', async ({ user, params }) => { requirePurchase(user); return billDetail(await mustGet('purchase_bills', params.id)); });
@@ -1874,6 +1874,25 @@ route('POST', '/api/tax-invoices', async ({ user, body }) => {
       const writeDate = body.write_date ? dateStr(body.write_date, '작성일자') : b.bill_date;
       const items = lines.map(l => ({ date: b.bill_date, item: l.item, spec: l.spec, qty: l.qty, unit_price: l.unit_price, supply: l.supply, vat: l.vat, note: l.note }));
       cmds.push(invoiceRow(v, { kind: 'single', customer: b.customer, writeDate, charge, email1: taxEmail(v?.tax_email, '이메일 1'), email2: taxEmail(v?.tax_email2, '이메일 2'), note, items, bills: [b], uid, token, user }), ...linkBill(uid, b.id));
+      made.push(uid);
+    }
+  } else if (body.kind === 'merge') {
+    // 15.131 매출전표 목록에서 체크한 전표를 거래처마다 한 장으로 합산
+    const ids = Array.isArray(body.bill_ids) ? [...new Set(body.bill_ids.map(Number))] : [];
+    if (!ids.length || ids.length > 100 || ids.some(id => !Number.isSafeInteger(id) || id <= 0)) throw bad('담을 전표를 1~100건 고르세요.');
+    const groups = new Map();
+    for (const id of ids) {
+      const b = await db.prepare(`SELECT b.*, (SELECT COUNT(*) FROM sales_bill_lines l WHERE l.bill_id=b.id) AS line_count, (SELECT item FROM sales_bill_lines l WHERE l.bill_id=b.id ORDER BY l.id LIMIT 1) AS first_item FROM sales_bills b WHERE b.id=? AND b.status='confirmed' AND ${UNINVOICED}`).get(id);
+      if (!b) throw new HttpError(409, '이미 계산서에 담겼거나 취소된 전표가 있습니다. 목록을 새로 불러오세요.');
+      const k = nameKey(b.customer); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(b);
+    }
+    for (const bills of groups.values()) {
+      bills.sort((x, y) => x.bill_date.localeCompare(y.bill_date) || x.id - y.id);
+      const customer = bills[0].customer, from = bills[0].bill_date, to = bills[bills.length - 1].bill_date;
+      const writeDate = body.write_date ? dateStr(body.write_date, '작성일자') : to;
+      const v = await vendorByName(customer), uid = crypto.randomUUID();
+      const items = bills.map(b => ({ date: b.bill_date, item: itemLabel(b.first_item, b.line_count), spec: '', qty: null, unit_price: null, supply: b.supply_total, vat: b.vat_total, note: b.bill_no }));
+      cmds.push(invoiceRow(v, { kind: 'monthly', customer, writeDate, from, to, charge, email1: taxEmail(v?.tax_email, '이메일 1'), email2: taxEmail(v?.tax_email2, '이메일 2'), note, items, bills, uid, token, user }), ...bills.flatMap(b => linkBill(uid, b.id)));
       made.push(uid);
     }
   } else throw bad('담는 방식(건별·월별)을 고르세요.');

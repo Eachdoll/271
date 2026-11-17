@@ -523,3 +523,5 @@ Sites가 새 마이그레이션을 적용한 뒤 Worker를 배포합니다. 환�
 마이그레이션 없음. 트러스빌 연동 전에는 홈택스에서 발행한 뒤 「직접 발행 기록」으로 승인번호를 남기세요.
 
 - 15.130 일부 출고된 수주 고치기: PUT /api/sales-orders/:id는 줄 id로 기존 줄 유지(삭제·재삽입 안 함). 수량 ≥ 잡은 수량(ORDER_TAKEN), 전표·출하가 있던 줄(ORDER_LINE_USED)은 품목·규격 고정·삭제 불가, 그런 수주는 거래처 변경 불가. 새 줄 추가 자유. 상세 응답 줄에 used.
+
+- 15.131 전표 목록 체크 → 세금계산서 일괄 담기: 매출전표 목록(체크 → 건별 kind single / 거래처별 합산 kind merge, merge는 monthly 형식으로 저장·기간=전표 일자 처음~끝·전표마다 linkBill), 매입전표 목록(세금계산서 열 + 한 매입처씩 체크 → POST /api/purchase-tax-invoices). 이미 담긴·취소 전표는 체크칸 잠금, 서버는 UNINVOICED 확인 + 활성 고유 인덱스로 중복 거절(409). GET /api/purchase-bills 줄에 invoice(번호|승인번호|id). 마이그레이션 없음.

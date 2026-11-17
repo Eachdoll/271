@@ -1631,3 +1631,5 @@ input.auto-filled { background: var(--green-bg); }
 .tax-check-side { margin: 0 0 10px; } .tax-check-side a { text-decoration: none; color: inherit; padding: 6px 12px; } .tax-check-side a.on { background: var(--panel); font-weight: 700; }
 tr.tc-missing td { background: var(--red-bg); } tr.tc-pending td { background: var(--yellow-bg); }
 .yellow-text { color: var(--yellow); }
+.bulk-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 6px 0 8px; } .bulk-bar [data-bulk-info] { font-weight: 700; }
+.pick-cell { width: 36px; text-align: center; } .pick-cell input { width: 18px; height: 18px; }
