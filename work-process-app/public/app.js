@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.159';
+const APP_VERSION = '15.161';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -583,16 +583,34 @@ const PAGES = {
   '#/favorites': pageFavorites,
 };
 
+// 15.161 메뉴 맨 위 「★ 마이메뉴」(삼성 N-SRM My Menu 참고): 화면 제목 옆 ☆나 메뉴 줄의 ☆로 고른 화면(내 설정, 다른 기기에서도 같음).
+// 좌측 메뉴에서는 맨 위 그룹(접기 가능), 상단 메뉴에서는 맨 앞 파란 버튼 → 안내 카드 + 메뉴 칸. 줄의 ★를 누르면 바로 빠진다.
+const favList = () => ((ME && ME.ui && ME.ui.favorites) || []).filter(f => canSeeRoute(f.href));
+const isFav = href => favList().some(f => f.href === href);
+const navStar = (href, label) => FAVORITE_SKIP.includes(href) ? '' : `<span class="nav-star${isFav(href) ? ' on' : ''}" data-fav-star="${esc(href)}" data-fav-label="${esc(label)}" title="${isFav(href) ? '마이메뉴에서 빼기' : '마이메뉴에 추가'}" aria-hidden="true">${isFav(href) ? '★' : '☆'}</span>`;
+function favNavHtml(cur) {
+  const favs = favList();
+  let shut = false; try { shut = JSON.parse(localStorage.getItem('wpa:nav-shut') || '[]').includes('fav') && !favs.some(f => f.href === cur); } catch { /* 편의 */ }
+  return `<div class="nav-group nav-fav${shut ? ' shut' : ''}" data-dept="fav"><button type="button" class="nav-title" data-nav-toggle="fav" aria-expanded="${!shut}">★ 마이메뉴</button><div class="nav-body"><div class="mymenu-head"><b>마이메뉴</b><span>즐겨찾기(☆)로 추가한 메뉴입니다.</span></div>${favs.length ? favs.map(f => `<a href="${esc(f.href)}" class="${cur === f.href ? 'active' : ''}">${esc(f.label)}${navStar(f.href, f.label)}</a>`).join('') : '<p class="mymenu-empty">메뉴 이름 옆 ☆를 누르면 여기에 모입니다.</p>'}</div></div>`;
+}
+function refreshFavNav() {
+  const side = $('.side'); if (!side) return;
+  side.querySelector(':scope > .nav-fav')?.remove();
+  const html = favNavHtml(location.hash || '#/'); if (!html) return;
+  $$('[data-fav-star]', side).forEach(x => { const on = isFav(x.dataset.favStar); x.classList.toggle('on', on); x.textContent = on ? '★' : '☆'; x.title = on ? '마이메뉴에서 빼기' : '마이메뉴에 추가'; });
+  const after = side.querySelector(':scope > .side-prefs'); after ? after.insertAdjacentHTML('afterend', html) : side.insertAdjacentHTML('afterbegin', html);
+  $$('.nav-fav a', side).forEach(a => { a.onclick = () => document.body.classList.remove('nav-open'); });
+}
 function shell() {
   const cur = location.hash || '#/';
-  const link = ([h, l]) => `<a href="${h}" class="${cur === h ? 'active' : ''}">${l}</a>`;
+  const link = ([h, l]) => `<a href="${h}" class="${cur === h ? 'active' : ''}">${l}${navStar(h, l)}</a>`;
   const entry = item => Array.isArray(item) ? link(item)
     : `<details class="nav-sub" data-sub="${esc(item.sub)}" ${item.items.some(([h]) => h === cur) ? 'open' : ''}><summary>${item.sub}</summary>${item.items.map(link).join('')}</details>`;
   // 15.156 부서별 메뉴 접기: 머리글을 누르면 접고 펼침(기억). 지금 화면이 들어 있는 부서는 늘 펼친다.
   let navShut = new Set(); try { navShut = new Set(JSON.parse(localStorage.getItem('wpa:nav-shut') || '[]')); } catch { /* 편의 */ }
   const hasCur = items => items.some(i => Array.isArray(i) ? i[0] === cur : i.items.some(([h]) => h === cur));
   const group = (dept, title, items, body) => { const shut = navShut.has(dept) && !hasCur(items); return `<div class="nav-group${shut ? ' shut' : ''}" data-dept="${dept}"><button type="button" class="nav-title" data-nav-toggle="${dept}" aria-expanded="${!shut}">${title}</button><div class="nav-body">${body}</div></div>`; };
-  const nav = NAV.filter(g => canSeeMenu(NAV_GROUP_KEY[g.group])).map((g) => group(NAV_GROUP_KEY[g.group] || 'home', g.group, g.items, g.items.map(entry).join(''))).join('')
+  const nav = favNavHtml(cur) + NAV.filter(g => canSeeMenu(NAV_GROUP_KEY[g.group])).map((g) => group(NAV_GROUP_KEY[g.group] || 'home', g.group, g.items, g.items.map(entry).join(''))).join('')
     // 관리: 기준 정보 화면(메뉴 권한 「기준 정보」, 권한은 각 화면과 서버가 그대로 판단) + 관리자 전용 화면
     + ((manage => manage.length ? group('manage', '관리', manage, manage.map(link).join('')) : '')([...(canSeeMenu('master') ? NAV_MANAGE : []), ...(ME.is_admin ? NAV_ADMIN : [])]));
   const roles = ME.roles.map((r) => ROLE_LABEL[r]).join(', ');
@@ -842,9 +860,20 @@ function favoriteTools(main, route) {
   button.onclick = async () => {
     const on = favs().some(f => f.href === path);
     const next = on ? favs().filter(f => f.href !== path) : [...favs(), { href: path, label: title }].slice(-20);
-    try { ME.ui = await api('PUT', '/api/me/prefs', { favorites: next }); paint(); toast(on ? '자주 쓰는 화면에서 뺐습니다.' : '자주 쓰는 화면에 추가했습니다.'); } catch (error) { fail(error); }
+    try { ME.ui = await api('PUT', '/api/me/prefs', { favorites: next }); paint(); refreshFavNav(); toast(on ? '마이메뉴에서 뺐습니다.' : '마이메뉴에 추가했습니다(메뉴 맨 위 ★ 마이메뉴).'); } catch (error) { fail(error); }
   };
 }
+document.addEventListener('click', async e => {
+  const st = e.target.closest('[data-fav-star]'); if (!st) return;
+  e.preventDefault(); e.stopPropagation();
+  const href = st.dataset.favStar, label = st.dataset.favLabel, cur = (ME.ui && ME.ui.favorites) || [], on = cur.some(f => f.href === href);
+  const next = on ? cur.filter(f => f.href !== href) : [...cur, { href, label }].slice(-20);
+  try {
+    ME.ui = await api('PUT', '/api/me/prefs', { favorites: next }); refreshFavNav();
+    const tg = $('h1 .fav-toggle'); if (tg && (location.hash || '#/').split('?')[0] === href) { tg.textContent = on ? '☆' : '★'; tg.setAttribute('aria-pressed', String(!on)); }
+    toast(on ? `${label}: 마이메뉴에서 뺐습니다.` : `${label}: 마이메뉴에 추가했습니다.`);
+  } catch (error) { fail(error); }
+}, true);
 async function pageFavorites(main) {
   const favs = ((ME.ui && ME.ui.favorites) || []).filter(f => canSeeRoute(f.href));
   const recent = readRecent().filter(r => canSeeRoute(r.href) && !favs.some(f => f.href === r.href));
@@ -854,7 +883,7 @@ async function pageFavorites(main) {
     <section class="card"><h2>최근 연 화면</h2>${list(recent, '최근 연 화면이 없습니다.', false)}</section>`;
   $$('[data-fav-del]', main).forEach(b => b.onclick = async () => {
     const target = favs[Number(b.dataset.favDel)];
-    try { ME.ui = await api('PUT', '/api/me/prefs', { favorites: (ME.ui.favorites || []).filter(f => f.href !== target.href) }); pageFavorites(main); } catch (error) { fail(error); }
+    try { ME.ui = await api('PUT', '/api/me/prefs', { favorites: (ME.ui.favorites || []).filter(f => f.href !== target.href) }); refreshFavNav(); pageFavorites(main); } catch (error) { fail(error); }
   });
 }
 function pageNoMenu(main) {
@@ -1283,10 +1312,10 @@ async function pagePO(main) {
     listCount(filterForm, rows.length);
     const t = todayStr();
     $('#poList').innerHTML = rows.length ? `<div class="table-wrap dense-wrap" tabindex="0" role="region" aria-label="발주목록 표 · 좌우로 스크롤"><table class="grid keep-table dense-grid po-grid">
-      <thead><tr><th>구매의뢰번호</th><th>품목명</th><th class="r">수량</th><th class="r">입고</th><th class="r">전표</th><th class="r">잔량</th><th>입고상태</th><th>거래처</th><th>납기일</th><th>분류</th><th>COA 요청</th><th>비고</th><th>입력자</th><th></th></tr></thead>
+      <thead><tr><th>구매의뢰번호</th><th>거래처</th><th>품목명</th><th class="r">수량</th><th class="r">입고</th><th class="r">전표</th><th class="r">잔량</th><th>입고상태</th><th>납기일</th><th>분류</th><th>COA 요청</th><th>비고</th><th>입력자</th><th></th></tr></thead>
       <tbody>${rows.map((p) => `<tr class="${rowClass(p)}">
-        <td>${esc(p.req_no)}</td><td>${esc(p.item)}${lineInfo(p)}${internalNoteChip(p)}</td><td class="r">${fmtNum(p.qty)}</td>${poProgressCells(p)}
-        <td>${recvChip(p)}${p.recv_note ? `<div class="small muted">${esc(p.recv_note)}</div>` : ''}</td><td>${esc(p.vendor)}</td>
+        <td>${esc(p.req_no)}</td><td>${esc(p.vendor)}</td><td>${esc(p.item)}${lineInfo(p)}${internalNoteChip(p)}</td><td class="r">${fmtNum(p.qty)}</td>${poProgressCells(p)}
+        <td>${recvChip(p)}${p.recv_note ? `<div class="small muted">${esc(p.recv_note)}</div>` : ''}</td>
         <td class="${p.recv_status !== 'ok' && p.due_date < t ? 'overdue' : ''}">${esc(p.due_date)}</td><td>${esc(p.item_category || '미분류')}</td><td>${coaChip(p.coa_requested)}</td>
         <td>${esc(p.note)}</td><td class="small muted">${esc(p.created_by)}</td>
         <td class="nowrap">${commentButton("purchase_order", p.id, p.item)} <button class="btn small" data-po-print="${p.id}" title="같은 구매의뢰번호·거래처의 발주를 한 장으로">발주서</button> <button class="btn small" data-edit="${p.id}">수정</button> <button class="btn small danger" data-del="${p.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>`

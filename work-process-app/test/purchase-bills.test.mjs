@@ -602,3 +602,25 @@ test('15.148 Carry a bill over to next month: shipment and stock stay, ledger mo
   const far = m >= 11 ? `${y + 1}-${String((m + 2) % 12 || 12).padStart(2, '0')}-01` : `${y}-${String(m + 2).padStart(2, '0')}-01`;
   assert.match((await admin('PUT', `/api/sales-bills/${sb.id}`, { bill_date: far })).body.error, /다음 달 말일/);
 });
+
+test('15.161 Purchase tax invoice: items from bill lines (freight row), edit items with totals check, history', async () => {
+  const raw = (await admin('POST', '/api/boms', { product: '품목원사', product_code: 'TX-R9', item_category: '원자재', kind: 'finished', base_qty: 1, unit: 'KG', materials: [] })).body;
+  const p = (await buyer('POST', '/api/po', { req_no: 'PR-T9', vendor: '품목상사', bom_id: raw.id, item: '품목원사', qty: 10, due_date: today, item_category: '원자재', unit_price: 1000 })).body;
+  await staff('POST', '/api/receipts', { receipt_date: today, vendor: '품목상사', request_id: rid(), lines: [{ po_id: p.id, lot: 'T9', qty: 10 }] });
+  const open = (await buyer('GET', '/api/purchase-bills/unbilled?vendor=' + encodeURIComponent('품목상사'))).body.rows;
+  const bill = (await buyer('POST', '/api/purchase-bills', { vendor: '품목상사', bill_date: today, freight: 3000, request_id: rid(), lines: [{ source_type: open[0].source_type, source_id: open[0].source_id, unit_price: 1000 }] })).body;
+  const inv = (await buyer('POST', '/api/purchase-tax-invoices', { request_id: rid(), vendor: '품목상사', write_date: today, bill_ids: [bill.id] })).body;
+  const d = (await buyer('GET', `/api/purchase-tax-invoices/${inv.id}`)).body;
+  assert.deepEqual(d.items.map(i => [i.item, i.qty, i.unit_price, i.supply, i.vat]), [['품목원사', 10, 1000, 10000, 1000], ['운송비', null, null, 3000, 300]], 'real items, not bill numbers');
+  assert.equal(d.items_edited, false);
+  const items = [{ date: today, item: '품목원사(받은 계산서 이름)', spec: 'KG', qty: 10, unit_price: 1000, supply: 10000, vat: 1000 }, { date: today, item: '운송비', supply: 3000, vat: 300 }];
+  assert.match((await buyer('PUT', `/api/purchase-tax-invoices/${inv.id}`, { items: [{ ...items[0], supply: 9000 }, items[1]] })).body.error, /합계/);
+  assert.equal((await staff('PUT', `/api/purchase-tax-invoices/${inv.id}`, { items })).status, 403);
+  const u = await buyer('PUT', `/api/purchase-tax-invoices/${inv.id}`, { items: [...items, { item: '' }], approval_no: '20261117-41000012-00000099', note: '받은 그대로' });
+  assert.equal(u.status, 200, JSON.stringify(u.body));
+  assert.deepEqual(u.body.items.map(i => i.item), ['품목원사(받은 계산서 이름)', '운송비'], 'blank rows dropped');
+  assert.equal(u.body.items_edited, true); assert.equal(u.body.approval_no, '20261117-41000012-00000099'); assert.ok(u.body.changes[0].summary.includes('품목 줄 2줄'));
+  assert.deepEqual([u.body.supply_total, u.body.vat_total], [13000, 1300], 'totals stay with bills');
+  const other = await buyer('PUT', `/api/purchase-tax-invoices/${inv.id}`, { items: [{ ...items[0], date: '2020-01-01' }, items[1]] });
+  assert.match(other.body.error, /같은 달/);
+});

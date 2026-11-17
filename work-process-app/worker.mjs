@@ -2320,11 +2320,68 @@ route('POST', '/api/purchase-tax-invoices', async ({ user, body }) => {
   catch (error) { if (isGuardError(error) || /UNIQUE/i.test(String(error?.message))) throw new HttpError(409, '그 사이 다른 계산서에 담긴 전표가 있습니다. 새로 불러오세요.'); throw error; }
   return purchaseInvDetail(await db.prepare('SELECT * FROM purchase_tax_invoices WHERE request_id=?').get(token));
 });
+// 15.161 매입 계산서 품목 줄: 고쳐 저장한 줄(items)이 있으면 그것, 없으면 담긴 매입전표의 품목 줄(품목·규격·수량·단가·공급가액·세액, 운송비는 따로 한 줄).
+// 세액은 전표 세액을 줄마다 나눈다(splitVat, 합이 전표 세액과 같음). 줄이 16개(전자세금계산서 한도)를 넘으면 전표마다 「첫 품목 외 n」 한 줄로 묶는다.
+const PTAX_MAX_ITEMS = 16;
+async function purchaseInvItems(inv, bills) {
+  if (inv.items) { try { const saved = JSON.parse(inv.items); if (Array.isArray(saved) && saved.length) return saved; } catch { /* 아래에서 다시 만듦 */ } }
+  const per = [];
+  for (const b of bills) {
+    const lines = (await db.prepare('SELECT item, spec, unit, qty, unit_price, supply, note FROM purchase_bill_lines WHERE bill_id=? AND active=1 ORDER BY id').all(b.id)).map(l => ({ ...l }));
+    if (b.freight) lines.push({ item: '운송비', spec: '', unit: '', qty: null, unit_price: null, supply: b.freight, note: '' });
+    const vats = splitVat(lines, b.vat_total);
+    per.push({ b, lines: lines.map((l, k) => ({ date: b.bill_date, item: l.item, spec: [l.spec, l.unit].filter(Boolean).join(' '), qty: l.qty, unit_price: l.unit_price, supply: l.supply, vat: vats[k], note: l.note || '' })) });
+  }
+  const all = per.flatMap(p => p.lines);
+  if (all.length <= PTAX_MAX_ITEMS) return all;
+  return per.map(({ b, lines }) => ({ date: b.bill_date, item: itemLabel(lines[0]?.item, lines.length), spec: '', qty: null, unit_price: null, supply: b.supply_total, vat: b.vat_total, note: b.bill_no }));
+}
 async function purchaseInvDetail(inv) {
   const bills = await db.prepare(`SELECT b.id, b.bill_no, b.bill_date, b.statement_no, b.supply_total, b.vat_total, b.total, b.freight FROM purchase_tax_invoice_bills t JOIN purchase_bills b ON b.id=t.bill_id WHERE t.invoice_id=? AND t.active=${inv.status === 'cancelled' ? 0 : 1} ORDER BY b.bill_date, b.id`).all(inv.id);
   const cats = await db.prepare(`SELECT CASE WHEN c='' THEN '미분류' ELSE c END AS category, SUM(amt) AS supply FROM (${PURCHASE_INV_LINES('t.invoice_id=' + Number(inv.id), inv.status === 'cancelled' ? 0 : 1)}) GROUP BY 1`).all();
-  return { ...inv, bills, categories: cats.sort((a, b) => TAX_CATS.indexOf(a.category) - TAX_CATS.indexOf(b.category)) };
+  const changes = await db.prepare("SELECT summary, changed_by, changed_at FROM doc_changes WHERE doc_type='purchase_tax' AND doc_id=? ORDER BY id DESC LIMIT 20").all(inv.id);
+  return { ...inv, bills, items: await purchaseInvItems(inv, bills), items_edited: !!inv.items, changes, categories: cats.sort((a, b) => TAX_CATS.indexOf(a.category) - TAX_CATS.indexOf(b.category)) };
 }
+// 15.161 받은 매입 계산서 고치기: 작성일자·승인번호·비고·품목 줄(월일·품목·규격·수량·단가·공급가액·세액·비고, 1~16줄).
+// 품목 줄의 공급가액·세액 합은 담긴 매입전표 합계와 같아야 한다(장부 금액은 전표가 기준). 마감된 달로/에서 옮길 수 없다. 고친 내용은 이력으로 남긴다.
+route('PUT', '/api/purchase-tax-invoices/:id', async ({ user, params, body }) => {
+  requirePurchase(user);
+  const inv = await mustGet('purchase_tax_invoices', params.id);
+  if (inv.status !== 'received') throw bad('취소된 계산서는 고칠 수 없습니다.');
+  const date = body.write_date === undefined ? inv.write_date : dateStr(body.write_date, '작성일자');
+  for (const d of new Set([inv.write_date, date])) if (await closedPeriod(inv.vendor, d)) throw bad(`${inv.vendor}의 ${d.slice(0, 7)} 매입은 마감되었습니다. 마감 취소(관리자) 뒤에 고치세요.`);
+  const appr = body.approval_no === undefined ? inv.approval_no : approvalNo(body.approval_no);
+  if (appr && appr !== inv.approval_no && await db.prepare("SELECT 1 FROM purchase_tax_invoices WHERE approval_no=? AND status='received' AND id<>?").get(appr, inv.id)) throw new HttpError(409, `승인번호 ${appr}는 이미 등록되어 있습니다.`);
+  const note = body.note === undefined ? inv.note : str(body.note, 500);
+  let items = null;
+  if (body.items !== undefined) {
+    if (!Array.isArray(body.items)) throw bad('품목 줄을 확인하세요.');
+    const raw = body.items.filter(e => e && typeof e === 'object' && String(e.item ?? '').trim());
+    if (!raw.length || raw.length > PTAX_MAX_ITEMS) throw bad(`품목 줄은 1~${PTAX_MAX_ITEMS}줄로 넣으세요(품목명이 빈 줄은 빠집니다).`);
+    const month = date.slice(0, 7), optNum = (v, label) => v === null || v === undefined || v === '' ? null : num(v, label);
+    items = raw.map((e, k) => {
+      const d = e.date ? dateStr(e.date, `${k + 1}번째 품목 월일`) : date;
+      if (d.slice(0, 7) !== month) throw bad(`${k + 1}번째 품목 월일(${d})은 작성일자와 같은 달이어야 합니다.`);
+      const supply = Number(e.supply), vat = Number(e.vat ?? 0);
+      if (!Number.isInteger(supply) || !Number.isInteger(vat)) throw bad(`${k + 1}번째 품목: 공급가액·세액은 원 단위 정수로 넣으세요.`);
+      return { date: d, item: reqStr(e.item, `${k + 1}번째 품목`, 200), spec: str(e.spec, 100), qty: optNum(e.qty, `${k + 1}번째 수량`), unit_price: optNum(e.unit_price, `${k + 1}번째 단가`), supply, vat, note: str(e.note, 200) };
+    });
+    const s = items.reduce((t, i) => t + i.supply, 0), v = items.reduce((t, i) => t + i.vat, 0);
+    if (s !== Number(inv.supply_total) || v !== Number(inv.vat_total)) throw bad(`품목 줄 합계(공급가액 ${won0(s)} · 세액 ${won0(v)})가 담긴 매입전표 합계(공급가액 ${won0(inv.supply_total)} · 세액 ${won0(inv.vat_total)})와 다릅니다. 금액을 맞추거나, 전표 금액이 다르면 매입전표를 먼저 고치세요.`);
+  }
+  const diff = [];
+  if (date !== inv.write_date) diff.push(`작성일자 ${inv.write_date} → ${date}`);
+  if ((appr || '') !== (inv.approval_no || '')) diff.push(`승인번호 ${inv.approval_no || '없음'} → ${appr || '없음'}`);
+  if (note !== inv.note) diff.push('비고');
+  const itemsJson = items ? JSON.stringify(items) : inv.items && date !== inv.write_date ? JSON.stringify(JSON.parse(inv.items).map(i => ({ ...i, date: String(i.date).slice(0, 7) === date.slice(0, 7) ? i.date : date }))) : inv.items;
+  if (items && itemsJson !== inv.items) diff.push(`품목 줄 ${items.length}줄`);
+  if (!diff.length) return purchaseInvDetail(inv);
+  const r = await db.batch([
+    { sql: "UPDATE purchase_tax_invoices SET write_date=?, approval_no=?, note=?, items=? WHERE id=? AND status='received'", args: [date, appr, note, itemsJson || '', inv.id] }, RC_GUARD,
+    docChange('purchase_tax', inv.id, diff.join(' · '), user),
+  ]).catch(error => { if (isGuardError(error)) throw new HttpError(409, '그 사이 계산서가 취소되었습니다. 새로 불러오세요.'); throw error; });
+  return { ...await purchaseInvDetail(await mustGet('purchase_tax_invoices', inv.id)), company: await companyInfo(), supplier: await vendorByName(inv.vendor) || null };
+});
 route('GET', '/api/purchase-tax-invoices', async ({ user, query }) => {
   requirePurchase(user);
   const where = [], args = [];
