@@ -664,3 +664,13 @@ test('15.165 Bill notes: register, duplicate no, edit with history, collect/reop
   const h = (await buyer('GET', `/api/notes/${n.body.id}/history`)).body.map(x => x.summary);
   assert.ok(h.includes('삭제') && h.some(x => x.startsWith('만기회수')) && h.some(x => x.includes('발행은행')), h.join(' / '));
 });
+
+test('15.166 Sales calendar: per-day confirmed bill counts and sums for a month', async () => {
+  assert.equal((await staff('GET', `/api/sales-calendar?month=${today.slice(0, 7)}`)).status, 403);
+  assert.equal((await admin('GET', '/api/sales-calendar?month=2026-13')).status, 400);
+  const c = (await admin('GET', `/api/sales-calendar?month=${today.slice(0, 7)}`)).body;
+  const d = c.days.find(x => x.date === today); assert.ok(d && d.n > 0, JSON.stringify(c.days));
+  const bills = (await admin('GET', `/api/sales-bills?from=${today}&to=${today}&status=confirmed`)).body.rows;
+  assert.equal(d.n, bills.length); assert.equal(d.total, bills.reduce((t, b) => t + b.total, 0));
+  assert.equal(c.totals.total, c.days.reduce((t, x) => t + x.total, 0));
+});

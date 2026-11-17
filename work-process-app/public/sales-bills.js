@@ -724,3 +724,81 @@ async function pageNotes(main) {
   });
   await load();
 }
+
+// ── 15.166 매출 달력(영업 › 매출전표) ── 달력(날짜마다 매출전표 건수) · 일별 납품현황(매출·세액·합계, 월 합계) · 고른 날 전표 목록 · 고른 전표 품목.
+async function pageSalesCalendar(main) {
+  let month = todayStr().slice(0, 7), day = todayStr(), billId = null, cal = null;
+  try { const s = JSON.parse(sessionStorage.getItem('wpa:sales-cal') || 'null'); if (s?.month) { month = s.month; day = s.day || day; } } catch { /* 편의 */ }
+  main.innerHTML = `<h1>매출 달력</h1>
+  <p class="muted small">날짜를 누르면 그날 매출전표가, 전표를 누르면 품목이 나옵니다. 금액은 확정 매출전표 기준(반입 감액 전표 포함)이고 V.A.T 별도 매출·세액·합계로 봅니다.</p>
+  <form class="list-filters toolbar lf-oneline sc-bar" data-read-only id="scForm"><div class="sc-month"><button type="button" class="btn" data-sc-move="-1" aria-label="이전 달">◀</button><input type="month" name="month" value="${month}" aria-label="연·월"><button type="button" class="btn" data-sc-move="1" aria-label="다음 달">▶</button><button type="button" class="btn" data-sc-today>오늘</button></div>
+    <label class="lf-partner">거래처<input name="customer" maxlength="100"></label><button class="btn primary">조회</button></form>
+  <div class="sc-grid">
+    <div class="sc-left"><section class="sc-card"><div id="scCal"></div></section><section class="sc-card"><h2 class="sc-h">일별 납품현황 <span class="small muted" id="scDays"></span></h2><div id="scDaily"></div></section></div>
+    <div class="sc-right"><section class="sc-card"><h2 class="sc-h">납품전표 목록 <span class="small muted" id="scDayLabel"></span></h2><div id="scBills"></div></section><section class="sc-card"><h2 class="sc-h">세부품목내역 <span class="small muted" id="scBillLabel"></span></h2><div id="scItems"></div></section></div>
+  </div>`;
+  const form = $('#scForm', main);
+  bindPartnerPicker(form.elements.customer, null, { type: 'sales' }).catch(() => {});
+  const save = () => { try { sessionStorage.setItem('wpa:sales-cal', JSON.stringify({ month, day })); } catch { /* 편의 */ } };
+  const W = ['일', '월', '화', '수', '목', '금', '토'];
+  const drawCal = () => {
+    const [y, m] = month.split('-').map(Number), first = new Date(y, m - 1, 1).getDay(), days = new Date(y, m, 0).getDate(), by = new Map(cal.days.map(d => [d.date, d])), t = todayStr();
+    const cells = []; for (let i = 0; i < first; i++) cells.push('<td class="sc-off"></td>');
+    for (let d = 1; d <= days; d++) {
+      const ds = `${month}-${String(d).padStart(2, '0')}`, x = by.get(ds), wd = (first + d - 1) % 7;
+      cells.push(`<td class="sc-day${ds === day ? ' on' : ''}${ds === t ? ' today' : ''}${wd === 0 ? ' sun' : wd === 6 ? ' sat' : ''}${x ? ' has' : ''}" data-sc-day="${ds}" tabindex="0" role="button" aria-pressed="${ds === day}" aria-label="${esc(`${ds}${x ? ` 매출전표 ${x.n}건` : ''}`)}"><span class="sc-d">${d}</span>${x ? `<span class="sc-n">(${fmtNum(x.n)})</span>` : ''}</td>`);
+    }
+    while (cells.length % 7) cells.push('<td class="sc-off"></td>');
+    const rows = []; for (let i = 0; i < cells.length; i += 7) rows.push(`<tr>${cells.slice(i, i + 7).join('')}</tr>`);
+    $('#scCal', main).innerHTML = `<table class="sc-cal"><thead><tr>${W.map((w, i) => `<th class="${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}">${w}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
+  };
+  const drawDaily = () => {
+    $('#scDays', main).textContent = cal.days.length ? `${cal.days.length}일` : '';
+    $('#scDaily', main).innerHTML = cal.days.length ? `<div class="table-wrap"><table class="grid keep-table sc-table" data-no-sort data-keep-cols><thead><tr><th>일자</th><th class="r">건수</th><th class="r">매출</th><th class="r">세액</th><th class="r">합계금액</th></tr></thead>
+      <tbody>${cal.days.map(d => `<tr class="sc-row${d.date === day ? ' on' : ''}" data-sc-day="${d.date}" tabindex="0"><td>${esc(d.date.slice(5))}</td><td class="r">${fmtNum(d.n)}</td><td class="r">${won(d.supply)}</td><td class="r">${won(d.vat)}</td><td class="r"><b>${won(d.total)}</b></td></tr>`).join('')}</tbody>
+      <tfoot><tr><th>합계</th><td class="r">${fmtNum(cal.totals.n)}</td><td class="r">${won(cal.totals.supply)}</td><td class="r">${won(cal.totals.vat)}</td><td class="r"><b>${won(cal.totals.total)}</b></td></tr></tfoot></table></div>`
+      : '<div class="empty">이 달에 매출전표가 없습니다.</div>';
+  };
+  const drawItems = async () => {
+    if (!billId) { $('#scBillLabel', main).textContent = ''; $('#scItems', main).innerHTML = '<div class="empty">전표를 고르세요.</div>'; return; }
+    const b = await api('GET', '/api/sales-bills/' + billId); if (!main.isConnected) return;
+    $('#scBillLabel', main).textContent = `${b.bill_no} · ${b.customer}`;
+    const lines = b.lines.filter(l => l.active !== 0), qty = new Set(lines.map(l => l.unit)).size === 1 ? lines.reduce((t, l) => t + (Number(l.qty) || 0), 0) : null;
+    $('#scItems', main).innerHTML = `<div class="table-wrap"><table class="grid keep-table sc-table" data-no-sort data-keep-cols><thead><tr><th>제품코드</th><th>제품명</th><th>규격</th><th>단위</th><th class="r">수량</th><th class="r">단가</th><th class="r">금액</th></tr></thead>
+      <tbody>${lines.map(l => `<tr><td class="nowrap">${esc(l.product_code || '')}</td><td>${esc(l.item)}</td><td>${esc(l.spec || '')}</td><td>${esc(l.unit || '')}</td><td class="r">${fmtNum(l.qty)}</td><td class="r">${won(l.unit_price)}</td><td class="r">${won(l.supply)}</td></tr>`).join('')}</tbody></table></div>
+      <table class="sc-sum"><tbody><tr><th>납품가액</th><td class="r">${qty == null ? '' : fmtNum(qty)}</td><td class="r">${won(b.supply_total)}</td></tr><tr><th>부 가 세</th><td></td><td class="r">${won(b.vat_total)}</td></tr><tr><th>합계금액</th><td></td><td class="r"><b>${won(b.total)}</b></td></tr></tbody></table>
+      <div class="actions" style="justify-content:flex-end"><button type="button" class="btn" data-sc-open="${b.id}">전표 열기</button></div>`;
+  };
+  const drawBills = async () => {
+    $('#scDayLabel', main).textContent = `${day} (${W[new Date(day).getDay()]})`;
+    const q = new URLSearchParams({ from: day, to: day, status: 'confirmed', customer: form.elements.customer.value.trim() });
+    const data = await api('GET', '/api/sales-bills?' + q); if (!main.isConnected) return;
+    const rows = data.rows; if (!rows.some(r => r.id === billId)) billId = rows[0]?.id ?? null;
+    const sum = k => rows.reduce((t, r) => t + (Number(r[k]) || 0), 0);
+    $('#scBills', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid keep-table sc-table" data-no-sort data-keep-cols><thead><tr><th class="r">No</th><th>전표번호</th><th>거래처</th><th class="r">매출</th><th class="r">세액</th><th class="r">합계금액</th></tr></thead>
+      <tbody>${rows.map((r, i) => `<tr class="sc-row${r.id === billId ? ' on' : ''}" data-sc-bill="${r.id}" tabindex="0"><td class="r">${i + 1}</td><td class="nowrap">${esc(r.bill_no)}</td><td>${esc(r.customer)}</td><td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b></td></tr>`).join('')}</tbody>
+      <tfoot><tr><th colspan="3">합계 · ${fmtNum(rows.length)}건${data.more ? ' (앞 200건)' : ''}</th><td class="r">${won(sum('supply_total'))}</td><td class="r">${won(sum('vat_total'))}</td><td class="r"><b>${won(sum('total'))}</b></td></tr></tfoot></table></div>`
+      : '<div class="empty">이 날 매출전표가 없습니다.</div>';
+    await drawItems();
+  };
+  const load = async () => {
+    form.elements.month.value = month;
+    cal = await api('GET', '/api/sales-calendar?' + new URLSearchParams({ month, customer: form.elements.customer.value.trim() })); if (!main.isConnected) return;
+    if (day.slice(0, 7) !== month) day = cal.days.at(-1)?.date || `${month}-01`;
+    save(); drawCal(); drawDaily(); await drawBills();
+  };
+  const pick = async ds => { day = ds; billId = null; save(); drawCal(); drawDaily(); await drawBills(); };
+  const shift = n => { const [y, m] = month.split('-').map(Number), d = new Date(y, m - 1 + n, 1); month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; day = ''; return load(); };
+  form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
+  form.elements.month.addEventListener('change', () => { if (form.elements.month.value) { month = form.elements.month.value; day = ''; load().catch(fail); } });
+  $$('[data-sc-move]', form).forEach(b => { b.onclick = () => shift(Number(b.dataset.scMove)).catch(fail); });
+  $('[data-sc-today]', form).onclick = () => { month = todayStr().slice(0, 7); day = todayStr(); load().catch(fail); };
+  main.addEventListener('click', e => {
+    const d = e.target.closest('[data-sc-day]'), b = e.target.closest('[data-sc-bill]'), o = e.target.closest('[data-sc-open]');
+    if (o) { api('GET', '/api/sales-bills/' + o.dataset.scOpen).then(x => salesBillSheet(x, () => load())).catch(fail); return; }
+    if (d) { pick(d.dataset.scDay).catch(fail); return; }
+    if (b) { billId = Number(b.dataset.scBill); $$('[data-sc-bill]', main).forEach(x => x.classList.toggle('on', x === b)); drawItems().catch(fail); }
+  });
+  main.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-sc-day], [data-sc-bill]')) { e.preventDefault(); e.target.click(); } });
+  await load();
+}
