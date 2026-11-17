@@ -1965,6 +1965,55 @@ route('POST', '/api/purchase-tax-invoices/:id/cancel', async ({ user, params, bo
   void r; return purchaseInvDetail(await mustGet('purchase_tax_invoices', inv.id));
 });
 
+// ── 15.129 세금계산서 발행 체크 ──
+// (1) 직접 발행 기록: 트러스빌 연동 전·홈택스에서 직접 발행한 계산서를 승인번호와 함께 「발행 완료」로 표시(되돌리기 가능).
+const MANUAL_ISSUED = '직접 발행 기록';
+route('POST', '/api/tax-invoices/:id/mark-issued', async ({ user, params, body }) => {
+  requireSales(user);
+  const inv = await mustGet('tax_invoices', params.id);
+  if (!['draft', 'failed'].includes(inv.status)) throw bad(`${inv.invoice_no}: 발행 전 계산서만 직접 발행으로 기록할 수 있습니다.`);
+  const appr = approvalNo(body.approval_no); if (!appr) throw bad('국세청 승인번호를 넣으세요.');
+  const date = dateStr(body.issued_date || today(), '발행일'); if (date > today()) throw bad('발행일은 오늘 이전으로 넣으세요.');
+  if (await db.prepare("SELECT 1 FROM tax_invoices WHERE approval_no=? AND status IN ('issued','sent') AND id<>?").get(appr, inv.id)) throw new HttpError(409, `승인번호 ${appr}는 다른 계산서에 이미 있습니다.`);
+  const r = await db.prepare("UPDATE tax_invoices SET status='issued',approval_no=?,issued_at=?,status_message=?,updated_by=?,updated_at=? WHERE id=? AND status IN ('draft','failed')").run(appr, date, `${MANUAL_ISSUED} · ${user.name}`, user.name, now(), inv.id);
+  if (!r.changes) throw new HttpError(409, '그 사이 이 계산서의 상태가 바뀌었습니다. 새로 불러오세요.');
+  return mustGet('tax_invoices', inv.id);
+});
+route('POST', '/api/tax-invoices/:id/unmark-issued', async ({ user, params }) => {
+  requireSales(user);
+  const inv = await mustGet('tax_invoices', params.id);
+  if (inv.status !== 'issued' || !String(inv.status_message || '').startsWith(MANUAL_ISSUED)) throw bad('직접 발행으로 기록한 계산서만 되돌릴 수 있습니다(트러스빌 발행은 수정 계산서로).');
+  await db.prepare("UPDATE tax_invoices SET status='draft',approval_no='',issued_at=NULL,status_message='',updated_by=?,updated_at=? WHERE id=? AND status='issued'").run(user.name, now(), inv.id);
+  return mustGet('tax_invoices', inv.id);
+});
+// (2) 발행 현황 체크: 달(전표 일자 기준)마다 거래처별로 전표 합계 · 발행 완료 · 담았지만 발행 전 · 안 담음.
+// 매입은 매입전표 합계 · 받은 계산서 · 안 받음.
+route('GET', '/api/tax-check', async ({ user, query }) => {
+  const side = query.side === 'purchase' ? 'purchase' : 'sales';
+  if (side === 'sales') requireSales(user); else requirePurchase(user);
+  const period = billPeriod(query.period), from = period + '-01', to = monthEnd(period);
+  let rows;
+  if (side === 'sales') {
+    rows = await db.prepare(`SELECT MIN(b.customer) AS name, COUNT(*) AS bills, SUM(b.total) AS total,
+        SUM(CASE WHEN i.status IN ('issued','sent') THEN b.total ELSE 0 END) AS done, SUM(CASE WHEN i.status IN ('issued','sent') THEN 1 ELSE 0 END) AS done_n,
+        SUM(CASE WHEN i.status IN ('draft','queued','failed') THEN b.total ELSE 0 END) AS pending, SUM(CASE WHEN i.status IN ('draft','queued','failed') THEN 1 ELSE 0 END) AS pending_n,
+        SUM(CASE WHEN i.id IS NULL THEN b.total ELSE 0 END) AS missing, SUM(CASE WHEN i.id IS NULL THEN 1 ELSE 0 END) AS missing_n,
+        MAX(v.biz_no) AS biz_no
+      FROM sales_bills b LEFT JOIN tax_invoice_bills t ON t.bill_id=b.id AND t.active=1 LEFT JOIN tax_invoices i ON i.id=t.invoice_id AND i.status<>'cancelled'
+        LEFT JOIN vendors v ON v.name_key=${customerKey('b.customer')}
+      WHERE b.status='confirmed' AND b.bill_date BETWEEN ? AND ? GROUP BY ${customerKey('b.customer')} ORDER BY missing DESC, pending DESC, name`).all(from, to);
+  } else {
+    rows = await db.prepare(`SELECT MIN(b.vendor) AS name, COUNT(*) AS bills, SUM(b.total) AS total,
+        SUM(CASE WHEN i.id IS NOT NULL THEN b.total ELSE 0 END) AS done, SUM(CASE WHEN i.id IS NOT NULL THEN 1 ELSE 0 END) AS done_n,
+        0 AS pending, 0 AS pending_n,
+        SUM(CASE WHEN i.id IS NULL THEN b.total ELSE 0 END) AS missing, SUM(CASE WHEN i.id IS NULL THEN 1 ELSE 0 END) AS missing_n, MAX(v.biz_no) AS biz_no
+      FROM purchase_bills b LEFT JOIN purchase_tax_invoice_bills t ON t.bill_id=b.id AND t.active=1 LEFT JOIN purchase_tax_invoices i ON i.id=t.invoice_id AND i.status='received'
+        LEFT JOIN vendors v ON v.name_key=${billVendorKey('b.vendor')}
+      WHERE b.status='confirmed' AND b.bill_date BETWEEN ? AND ? GROUP BY ${billVendorKey('b.vendor')} ORDER BY missing DESC, name`).all(from, to);
+  }
+  const sum = k => rows.reduce((t, r) => t + (r[k] || 0), 0);
+  return { side, period, from, to, rows, totals: { bills: sum('bills'), total: sum('total'), done: sum('done'), pending: sum('pending'), missing: sum('missing') } };
+});
 route('GET', '/api/tax-invoices', async ({ user, query }) => {
   requireSales(user);
   const where = [], args = [];

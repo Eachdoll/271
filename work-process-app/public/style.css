@@ -1628,3 +1628,6 @@ input.auto-filled { background: var(--green-bg); }
 .so-pick > * { min-width: 0; }
 .tax-side { margin: 4px 0 10px; } .tax-side a { text-decoration: none; color: inherit; padding: 8px 14px; } .tax-side a.on { background: var(--panel); font-weight: 700; }
 .so-list-note { min-width: 220px; max-width: 360px; font-size: 12.5px; white-space: normal; word-break: break-all; display: table-cell; }
+.tax-check-side { margin: 0 0 10px; } .tax-check-side a { text-decoration: none; color: inherit; padding: 6px 12px; } .tax-check-side a.on { background: var(--panel); font-weight: 700; }
+tr.tc-missing td { background: var(--red-bg); } tr.tc-pending td { background: var(--yellow-bg); }
+.yellow-text { color: var(--yellow); }

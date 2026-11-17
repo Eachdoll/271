@@ -900,3 +900,7 @@ INVITE_CODE=local-test-code npm start
 - 분류 필터(매출·매입 목록 ?category): 원자재·부자재·반제품·제품·상품·임가공·운송비(매입전표 운송비)·미분류. 계산서마다 cats 「분류:공급가액|…」, by_category = 분류별 공급가액(취소 제외). 줄 분류는 LINE_CAT(15.117).
 - 등록 창: 「받은 계산서 합계」를 넣으면 전표 합계와 같은지/차이를 바로 표시(다르면 확인 후 등록).
 - 15.128 수주 목록에 「비고」 칸(전체 문구, 줄바꿈) · 수주번호 아래 PO는 poOf(칸 또는 비고 10자리).
+
+## 세금계산서 발행 · 수취 체크 (15.129)
+- GET /api/tax-check?side=sales|purchase&period=YYYY-MM: 그 달(전표 일자) 확정 전표를 거래처별로 — 매출: 전표 합계·발행 완료(issued/sent)·담음·발행 전(draft/queued/failed)·안 담음, 매입: 받음(등록)·안 받음. 화면 #/sales/tax-check · #/purchase/tax-check(탭 「발행 · 수취 체크」), 「남은 일만」·전달/다음 달·엑셀, 빨강=미발행/미수취, 노랑=발행 전.
+- 직접 발행 기록: POST /api/tax-invoices/:id/mark-issued {approval_no, issued_date}(발행 전·실패만, 승인번호 필수·중복 409) → issued + status_message 「직접 발행 기록 · 이름」. POST /:id/unmark-issued로 발행 전으로(직접 기록한 것만). 관리 화면 버튼 「직접 발행 기록」(한 장)·「직접 발행 되돌리기」, 직접 기록한 행도 체크 가능(발행·담기 취소는 발행 전 것만 보냄).
