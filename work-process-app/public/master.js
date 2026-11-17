@@ -164,7 +164,7 @@ async function pagePrices(main) {
     box.addEventListener('input', e => { const k = e.target.dataset.pe; if (k) lines[Number(e.target.dataset.i)][k] = e.target.value; });
     box.addEventListener('click', e => { const d = e.target.closest('[data-pe-del]'); if (d) { lines.splice(Number(d.dataset.peDel), 1); draw(); } });
     $('[data-pe-add]', m.el).onclick = async () => {
-      const picked = await openItemPicker(catalog, { title: '단가 넣을 품목', filter: b => b.active !== 0 && !b.is_temp, multi: true });
+      const picked = await openItemPicker(catalog, { title: '단가 넣을 품목', filter: b => b.active !== 0 && !b.is_temp, multi: true, lots: false });
       const list = picked?.items ? picked.items.map(x => x.bom) : picked ? [picked] : [];
       for (const b of list) if (!lines.some(l => l.bom_id === b.id)) lines.push({ bom_id: b.id, item: b.product, product_code: b.product_code, unit: b.unit, price: '', note: '' });
       draw(); $$('[data-pe="price"]', box).find(i => !i.value)?.focus();

@@ -32,7 +32,7 @@ async function pageSalesBillEntry(main) {
     let data, open; try { [data, open] = await Promise.all([api('GET', '/api/sales-bills/unbilled?' + new URLSearchParams({ customer, from: form.elements.from.value, to: form.elements.to.value })), api('GET', '/api/sales-orders/open-lines?' + new URLSearchParams({ customer }))]); } catch (error) { box.innerHTML = orderBox.innerHTML = `<p class="field-error">${esc(error.message)}</p>`; return; }
     if ((input.dataset.partnerPrev ?? input.value).trim() !== customer || [form.elements.from.value, form.elements.to.value].join('|') !== key.split('|').slice(1).join('|')) return;
     rows = data.rows.map(r => ({ ...r, picked: false, price: r.table_price ?? r.last_price ?? r.order_price ?? '', note: '' }));
-    orders = open.rows.map(r => ({ ...r, picked: orderPreset === r.order_id, take: String(r.remaining), price: r.unit_price ?? '', note: '' })); orderPreset = null;
+    orders = open.rows.map(r => ({ ...r, picked: orderPreset === r.order_id, take: String(r.remaining), price: r.unit_price ?? '', note: '' })); orderSel = orderPreset || null; orderQ = ''; orderPreset = null;
     // 15.102 수주 줄을 고르면 전표의 과세 구분을 그 수주에 맞춘다(서버는 다르면 막음). 수주마다 다르면 고른 뒤에 맞춘다.
     const presetOrder = orders.find(o => o.picked); if (presetOrder && presetOrder.tax_type) { form.elements.tax_type.value = presetOrder.tax_type; }
     drawOrders(); draw();
@@ -57,21 +57,40 @@ async function pageSalesBillEntry(main) {
   };
   // 수주 잔량(15.92): 이번에 보낼 수량(남은 수량까지)과 단가(수주 단가가 미리 들어감)
   const orderSupply = o => o.take === '' || o.price === '' ? null : billTruncC(Number(o.take) * Number(o.price));
-  const drawOrders = () => {
-    orderBox.innerHTML = orders.length ? `<div class="table-wrap"><table data-keep-cols class="grid bill-grid"><caption class="sr-only">수주 잔량</caption><thead><tr><th scope="col"><input type="checkbox" data-order-all aria-label="전체 선택"></th><th scope="col">수주</th><th scope="col">품목</th><th scope="col">규격</th><th scope="col" class="r">수주</th><th scope="col" class="r">잔량</th><th scope="col" class="r">이번 수량</th><th scope="col">단위</th><th scope="col" class="r">단가</th><th scope="col" class="r">공급가액</th><th scope="col">비고</th></tr></thead>
-      <tbody>${orders.map((o, i) => `<tr data-order-row="${i}" class="${o.picked ? 'bill-picked' : ''}">
+  // 15.126 수주 불러오기: 왼쪽 = 수주 목록(수주번호·PO·비고, 검색), 오른쪽 = 고른 수주의 품목(체크·이번 수량·단가). 고른 줄은 수주를 바꿔도 유지.
+  let orderQ = '', orderSel = null;
+  const orderGroups = () => { const m = new Map(); orders.forEach((o, i) => { if (!m.has(o.order_id)) m.set(o.order_id, { id: o.order_id, order_no: o.order_no, order_date: o.order_date, po: poOf(o.customer_po, o.order_note), note: o.order_note || '', tax_type: o.tax_type, idx: [] }); m.get(o.order_id).idx.push(i); }); return [...m.values()]; };
+  const hit = (g, words) => { const text = searchKey([g.order_no, g.po, g.note, ...g.idx.map(i => `${orders[i].item} ${orders[i].product_code || ''}`)].join(' ')); return words.every(w => text.includes(w)); };
+  const mark = (text, words) => { const ws = words.filter(Boolean).map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')); return ws.length ? esc(text).replace(new RegExp(`(${ws.join('|')})`, 'gi'), '<mark>$1</mark>') : esc(text); };
+  const drawOrderParts = () => {
+    const words = orderQ.trim().split(/\s+/).filter(Boolean).map(searchKey), groups = orderGroups().filter(g => hit(g, words));
+    if (orderSel === null || (orderSel !== 'all' && !groups.some(g => g.id === orderSel))) orderSel = groups.find(g => g.idx.some(i => orders[i].picked))?.id ?? groups[0]?.id ?? null;
+    $('[data-so-list]', orderBox).innerHTML = (groups.length ? groups.map(g => { const picked = g.idx.filter(i => orders[i].picked).length;
+      return `<button type="button" class="so-order${g.id === orderSel ? ' on' : ''}" data-order-sel="${g.id}"><span>${esc(g.order_no)} <span class="muted">${esc(g.order_date.slice(5))}</span>${g.tax_type === 'zero' ? ' <span class="chip">영세</span>' : ''}${picked ? ` <span class="chip green">${picked}줄 고름</span>` : ''}</span>${g.po ? `<span class="so-po"> · PO ${mark(g.po, words)}</span>` : ''}<span class="so-note" title="${esc(g.note)}">${g.note ? mark(g.note, words) : '<span class="muted">비고 없음</span>'}</span><span class="so-meta">남은 품목 ${g.idx.length}줄 · ${esc(orders[g.idx[0]].item)}${g.idx.length > 1 ? ` 외 ${g.idx.length - 1}` : ''}</span></button>`; }).join('') : `<p class="muted small" style="padding:8px">「${esc(orderQ)}」에 맞는 수주가 없습니다.</p>`)
+      + (groups.length > 1 ? `<button type="button" class="so-order${orderSel === 'all' ? ' on' : ''}" data-order-sel="all"><b>검색된 수주 전체 줄 보기</b> <span class="muted small">(${groups.length}건)</span></button>` : '');
+    const g = groups.find(x => x.id === orderSel), idx = orderSel === 'all' ? groups.flatMap(x => x.idx) : g ? g.idx : [];
+    $('[data-so-right]', orderBox).innerHTML = !idx.length ? '<p class="muted">왼쪽에서 수주를 고르세요.</p>' : `${g ? `<div class="so-head"><b>${esc(g.order_no)}</b> · ${esc(g.order_date)}${g.po ? ` · PO <b>${esc(g.po)}</b>` : ''}${g.note ? `<div class="so-note-full">${esc(g.note)}</div>` : ''}</div>` : ''}<div class="table-wrap"><table data-keep-cols class="grid bill-grid"><caption class="sr-only">수주 잔량</caption><thead><tr><th scope="col"><input type="checkbox" data-order-all aria-label="전체 선택"></th><th scope="col">수주</th><th scope="col">품목</th><th scope="col">규격</th><th scope="col" class="r">수주</th><th scope="col" class="r">남음</th><th scope="col" class="r">이번 수량</th><th scope="col">단위</th><th scope="col" class="r">단가</th><th scope="col" class="r">공급가액</th><th scope="col">비고</th></tr></thead>
+      <tbody>${idx.map(i => { const o = orders[i]; return `<tr data-order-row="${i}" class="${o.picked ? 'bill-picked' : ''}">
         <td><input type="checkbox" data-order-pick="${i}"${o.picked ? ' checked' : ''} aria-label="${esc(o.order_no)} ${esc(o.item)} 선택"></td>
-        <td class="nowrap">${esc(o.order_no)}${o.tax_type === 'zero' ? ' <span class="chip">영세</span>' : ''}<div class="small muted">${esc(o.order_date)}${o.customer_po ? ' · ' + esc(o.customer_po) : ''}</div></td>
+        <td class="nowrap">${esc(o.order_no)}${o.tax_type === 'zero' ? ' <span class="chip">영세</span>' : ''}<div class="small muted">${esc(o.order_date)}${poOf(o.customer_po, o.order_note) ? ' · PO ' + esc(poOf(o.customer_po, o.order_note)) : ''}</div></td>
         <td data-card-primary><b>${esc(o.item)}</b>${o.product_code ? `<div class="small muted">${esc(o.product_code)}</div>` : ''}</td><td>${esc(o.spec || '')}</td>
         <td class="r">${fmtNum(o.qty)}</td><td class="r"><b>${fmtNum(o.remaining)}</b></td>
         <td class="r"><input type="number" min="0" max="${esc(o.remaining)}" step="any" inputmode="decimal" data-order-qty="${i}" value="${esc(o.take)}" aria-label="${esc(o.item)} 이번 수량"></td><td>${esc(o.unit || '')}</td>
         <td class="r"><input type="number" min="0" step="any" inputmode="decimal" data-order-price="${i}" value="${esc(o.price)}" aria-label="${esc(o.item)} 단가"${o.unit_price == null ? ' placeholder="단가 없음"' : ''}></td>
         <td class="r nowrap" data-order-supply="${i}">${orderSupply(o) == null ? '' : won(orderSupply(o))}</td>
-        <td><input data-order-note="${i}" maxlength="200" value="${esc(o.note)}" aria-label="${esc(o.item)} 비고"></td></tr>`).join('')}</tbody></table></div>`
-      : '<p class="muted">이 거래처의 남은 수주가 없습니다. <a href="#/sales/orders/new">수주 입력</a></p>';
-    const all = $('[data-order-all]', orderBox); if (all) all.onchange = () => { orders.forEach(o => { o.picked = all.checked; }); drawOrders(); };
-    labelRows(orderBox); totals();
+        <td><input data-order-note="${i}" maxlength="200" value="${esc(o.note)}" aria-label="${esc(o.item)} 비고"></td></tr>`; }).join('')}</tbody></table></div>`;
+    const all = $('[data-order-all]', orderBox); if (all) all.onchange = () => { idx.forEach(i => setOrderPick(i, all.checked)); drawOrderParts(); totals(); };
+    labelRows($('[data-so-right]', orderBox)); totals();
   };
+  const drawOrders = () => {
+    if (!orders.length) { orderBox.innerHTML = '<p class="muted">이 거래처의 남은 수주가 없습니다. <a href="#/sales/orders/new">수주 입력</a></p>'; totals(); return; }
+    orderBox.innerHTML = `<div class="so-pick"><div class="so-left"><input type="search" data-order-q value="${esc(orderQ)}" placeholder="PO·비고·품목 검색 (예: 8315425)" title="PO 일부, 담당자(mj1938), 라인(P1DD), 수주번호, 품목으로 찾습니다" aria-label="수주 검색" autocomplete="off"><div class="so-list" data-so-list></div></div><div data-so-right></div></div>`;
+    const q = $('[data-order-q]', orderBox);
+    q.oninput = () => { orderQ = q.value; orderSel = null; drawOrderParts(); };
+    q.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('[data-so-right] [data-order-qty]', orderBox)?.focus(); } };
+    drawOrderParts();
+  };
+  orderBox.addEventListener('click', e => { const b = e.target.closest('[data-order-sel]'); if (!b) return; orderSel = b.dataset.orderSel === 'all' ? 'all' : Number(b.dataset.orderSel); drawOrderParts(); });
   const setOrderPick = (i, on) => { orders[i].picked = on; const c = $(`[data-order-pick="${i}"]`, orderBox); if (c) { c.checked = on; c.closest('tr').classList.toggle('bill-picked', on); }
     if (on && orders[i].tax_type && form.elements.tax_type.value !== orders[i].tax_type) { form.elements.tax_type.value = orders[i].tax_type; toast(`과세 구분을 수주 ${orders[i].order_no}에 맞춰 ${orders[i].tax_type === 'zero' ? '영세·면세' : '과세'}로 바꿨습니다.`); } };
   orderBox.addEventListener('change', e => { if (e.target.dataset.orderPick !== undefined) setOrderPick(Number(e.target.dataset.orderPick), e.target.checked); totals(); });
@@ -156,7 +175,7 @@ function salesBillSheet(bill, after = null, { onClose = null } = {}) {
         <tr><th>공급자</th><td>${COMPANY_NAME}</td><th>작성</th><td>${esc(bill.created_by)} · ${esc(String(bill.created_at).slice(0, 16))}</td></tr>
       </tbody></table>
       <table class="po-items"><thead><tr><th>No</th><th>출하일</th><th>품목</th><th>규격</th><th>LOT</th><th class="r">수량</th><th>단위</th><th class="r">단가</th><th class="r">공급가액</th><th class="r">세액</th><th>비고</th></tr></thead>
-      <tbody>${bill.lines.map((l, i) => `<tr><td class="c">${i + 1}</td><td class="c">${esc(l.ship_date || '')}</td><td>${esc(l.item)} ${catChip(l.category)}${l.product_code ? `<div class="po-code">${esc(l.product_code)}</div>` : ''}</td><td>${esc(l.spec)}</td><td>${esc(l.lot)}</td><td class="r">${fmtNum(l.qty)}</td><td>${esc(l.unit)}</td><td class="r">${fmtNum(l.unit_price)}</td><td class="r">${won(l.supply)}</td><td class="r">${won(l.vat)}</td><td>${esc(l.note)}${l.source_missing ? ' <b>(출하 삭제됨)</b>' : ''}${l.order_no ? `<div class="po-code">${esc(l.order_no)}${l.ship_status === 'pending' ? ' · 출하 대기' : l.ship_status === 'cancelled' ? ' · 지시 취소' : ''}</div>` : ''}</td></tr>`).join('')}</tbody>
+      <tbody>${bill.lines.map((l, i) => `<tr><td class="c">${i + 1}</td><td class="c">${esc(l.ship_date || '')}</td><td>${esc(l.item)} ${catChip(l.category)}${l.product_code ? `<div class="po-code">${esc(l.product_code)}</div>` : ''}</td><td>${esc(l.spec)}</td><td>${esc(l.lot)}</td><td class="r">${fmtNum(l.qty)}</td><td>${esc(l.unit)}</td><td class="r">${fmtNum(l.unit_price)}</td><td class="r">${won(l.supply)}</td><td class="r">${won(l.vat)}</td><td>${esc(l.note)}${l.source_missing ? ' <b>(출하 삭제됨)</b>' : ''}${l.order_no ? `<div class="po-code">${esc(l.order_no)}${poOf(l.customer_po, l.order_note) ? ` · PO ${esc(poOf(l.customer_po, l.order_note))}` : ''}${l.ship_status === 'pending' ? ' · 출하 대기' : l.ship_status === 'cancelled' ? ' · 지시 취소' : ''}</div>` : ''}</td></tr>`).join('')}</tbody>
       <tfoot><tr><th colspan="8" class="r">합계</th><td class="r">${won(bill.supply_total)}</td><td class="r">${won(bill.vat_total)}</td><td class="nowrap"><b>${esc(`총액 ${won(bill.total)}원`)}</b></td></tr></tfoot></table>
       ${catSummary(billCatTotals(bill.lines))}
       ${bill.note ? `<div class="po-memo"><b>비고</b><div class="po-memo-body">${esc(bill.note)}</div></div>` : ''}
@@ -211,29 +230,45 @@ async function statementSheet(bills) {
   const lines = bills.flatMap(b => b.lines.filter(l => l.active !== 0).map(l => ({ ...l, date: l.ship_date || b.bill_date, bill_no: b.bill_no })));
   const supply = bills.reduce((t, b) => t + b.supply_total, 0), vat = bills.reduce((t, b) => t + b.vat_total, 0), total = supply + vat;
   const md = d => String(d || '').slice(5).replace('-', '/');
-  const party = (title, p) => `<table class="po-info stmt-party"><caption>${title}</caption><colgroup><col style="width:17%"><col style="width:43%"><col style="width:13%"><col style="width:27%"></colgroup><tbody>
-    <tr><th>등록번호</th><td colspan="3"><b>${esc(p.biz_no || '')}</b></td></tr>
-    <tr><th>상호</th><td>${esc(p.biz_name || p.name || '')}</td><th>대표</th><td>${esc(p.ceo || '')}</td></tr>
-    <tr><th>주소</th><td colspan="3">${esc(p.address || '')}</td></tr>
-    <tr><th>업태</th><td>${esc(p.biz_type || '')}</td><th>종목</th><td>${esc(p.biz_item || '')}</td></tr></tbody></table>`;
-  const m = modal(`<h3 class="po-print-title">거래명세서 <span class="small muted">${esc(customer)} · ${esc(from === to ? from : `${from} ~ ${to}`)} · 전표 ${bills.length}장</span></h3>
-    <section class="cert po-doc bill-doc stmt-doc">
-      <div class="po-doc-head"><img src="/assets/seoulsemi-logo-blue.png" alt="SEOUL SEMITECH"><h2>거 래 명 세 서</h2></div>
-      <p class="small stmt-sub">${esc(from === to ? `거래일 ${from}` : `거래기간 ${from} ~ ${to}`)} · 공급받는자 보관용</p>
-      <div class="stmt-parties">${party('공급자', { ...company, name: company.biz_name || COMPANY_NAME })}${party('공급받는자', buyer)}</div>
-      <p class="stmt-sum">합계금액 <b>일금 ${esc(koreanWon(total))}원정</b> <span>(₩${won(total)})</span> <span class="small muted">공급가액 ${won(supply)} + 세액 ${won(vat)}</span></p>
-      <table class="po-items"><thead><tr><th>월/일</th><th>품목</th><th>규격</th><th class="r">수량</th><th>단위</th><th class="r">단가</th><th class="r">공급가액</th><th class="r">세액</th><th>비고</th></tr></thead>
-      <tbody>${lines.map(l => `<tr><td class="c">${esc(md(l.date))}</td><td>${esc(l.item)}${l.product_code ? `<div class="po-code">${esc(l.product_code)}</div>` : ''}</td><td>${esc(l.spec || '')}</td><td class="r">${fmtNum(l.qty)}</td><td>${esc(l.unit || '')}</td><td class="r">${fmtNum(l.unit_price)}</td><td class="r">${won(l.supply)}</td><td class="r">${won(l.vat)}</td><td>${esc(l.lot ? `LOT ${l.lot}` : '')}${l.note ? `${l.lot ? ' · ' : ''}${esc(l.note)}` : ''}</td></tr>`).join('')}</tbody>
-      <tfoot><tr><th colspan="3" class="r">합계</th><td class="r">${esc(unitTotals(lines, l => l.qty, l => l.unit))}</td><td></td><td></td><td class="r">${won(supply)}</td><td class="r">${won(vat)}</td><td class="nowrap"><b>${esc(`${won(total)}원`)}</b></td></tr></tfoot></table>
-      ${ledger ? `<table class="po-info stmt-balance"><tbody><tr><th>전잔액</th><td class="r">${won(ledger.totals.balance - total + ledger.totals.paid)}</td><th>금회 거래</th><td class="r">${won(total)}</td><th>입금</th><td class="r">${won(ledger.totals.paid)}</td><th>잔액(미수)</th><td class="r"><b>${won(ledger.totals.balance)}</b></td></tr></tbody></table>` : ''}
-      ${company.bank ? `<p class="stmt-bank"><b>입금 계좌</b> ${esc(company.bank)}</p>` : ''}
-      <p class="small muted">${esc(company.phone ? `문의 ${company.phone}${company.email ? ' · ' + company.email : ''}` : '')}</p>
-      <div class="stmt-sign"><span>인수자</span><span class="stmt-sign-line"></span><span>(인)</span></div>
-    </section>
+  const stmtNote = l => [poOf(l.customer_po, l.order_note) ? `PO ${poOf(l.customer_po, l.order_note)}` : '', l.note || ''].filter(Boolean).join(' · '); // 15.126 줄 비고 앞에 고객 PO
+  const manyDays = new Set(lines.map(l => l.date)).size > 1;
+  // 15.124 기존 종이 양식(거래명세표 2장 1조): 위 = 공급받는자용(파랑), 아래 = 공급자용(빨강).
+  // 줄이 10줄 이하면 A4 한 장에 두 장이 위아래로, 넘으면 장마다 한 쪽씩.
+  const ROWS = 10, compact = lines.length <= ROWS, rows = compact ? ROWS : lines.length;
+  const [y, mo, d] = to.split('-');
+  const docNo = bills.length === 1 ? bills[0].bill_no : `${bills[0].bill_no} 외 ${bills.length - 1}장`;
+  const prev = ledger ? ledger.totals.balance - total + ledger.totals.paid : null, paid = ledger ? ledger.totals.paid : null, last = ledger ? ledger.totals.balance : null;
+  // 15.125 전표 비고(전표마다 적은 비고)를 아래 비고 칸 맨 앞에 · 줄 비고는 표의 비고 칸에
+  const billNotes = [...new Set(bills.map(b => String(b.note || '').trim()).filter(Boolean))];
+  const note = [...billNotes, manyDays ? `거래기간 ${from} ~ ${to}` : '', company.bank ? `입금 계좌 ${company.bank}` : ''].filter(Boolean).join(' · ');
+  const w = n => n == null ? '' : won(n);
+  const copy = (kind, tone) => `<section class="stmt2 stmt2-${tone}${compact ? ' stmt2-half' : ''}">
+    <div class="s2-top"><span class="s2-no">전표NO: <b>${esc(docNo)}</b></span><h2>거 래 명 세 표</h2><span class="s2-date"><b>${y}</b> 년 <b>${Number(mo)}</b> 월 <b>${Number(d)}</b> 일</span></div>
+    <div class="s2-kind">(${kind})</div>
+    <div class="s2-head">
+      <div class="s2-to"><div class="s2-name"><b>${esc(buyer.biz_name || buyer.name || customer)}</b><span>귀하</span></div><div class="s2-tel">☎ ${esc(buyer.phone || '')}</div><div class="s2-calc">아래와 같이 계산합니다.</div></div>
+      <table class="s2-sup"><colgroup><col style="width:7%"><col style="width:17%"><col style="width:38%"><col style="width:12%"><col style="width:26%"></colgroup><tbody>
+        <tr><th rowspan="3" class="s2-v">공<br>급<br>자</th><th>상 호</th><td colspan="3">${esc(company.biz_name || COMPANY_NAME)}</td></tr>
+        <tr><th>등록번호</th><td>${esc(company.biz_no || '')}</td><th>성명</th><td class="s2-seal">${esc(company.ceo || '')}<span>(인)</span></td></tr>
+        <tr><th>주 소</th><td colspan="3">${esc(company.address || '')}</td></tr></tbody></table>
+    </div>
+    <table class="s2-items"><colgroup><col style="width:29%"><col style="width:17%"><col style="width:9%"><col style="width:11%"><col style="width:14%"><col style="width:20%"></colgroup>
+      <thead><tr><th>품 명</th><th>규 격</th><th>수 량</th><th>단 가</th><th>금 액</th><th>비 고</th></tr></thead>
+      <tbody>${Array.from({ length: rows }, (_, i) => { const l = lines[i]; return l ? `<tr><td>${manyDays ? `<span class="s2-md">${esc(md(l.date))}</span> ` : ''}${esc(l.item)}</td><td>${esc(l.spec || '')}</td><td class="r">${fmtNum(l.qty)}${l.unit ? ` <span class="s2-u">${esc(l.unit)}</span>` : ''}</td><td class="r">${fmtNum(l.unit_price)}</td><td class="r">${won(l.supply)}</td><td class="s2-lnote" title="${esc(stmtNote(l))}">${esc(stmtNote(l))}</td></tr>` : '<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td></tr>'; }).join('')}</tbody></table>
+    <table class="s2-foot"><colgroup><col style="width:12%"><col style="width:21%"><col style="width:10%"><col style="width:20%"><col style="width:10%"><col style="width:27%"></colgroup><tbody>
+      <tr><th>합계금액</th><td class="r">${won(supply)}</td><th>부가세</th><td class="r">${won(vat)}</td><th>계</th><td class="r"><b>${won(total)}</b></td></tr>
+      <tr><th>비 고</th><td colspan="3" class="s2-note">${esc(note)}</td><th>인 수 자</th><td class="s2-seal"><span>(인)</span></td></tr>
+</tbody></table>
+    <table class="s2-foot s2-bal"><colgroup><col style="width:12%"><col style="width:13%"><col style="width:12%"><col style="width:13%"><col style="width:10%"><col style="width:13%"><col style="width:12%"><col style="width:15%"></colgroup><tbody>
+      <tr><th>이전미수</th><td class="r">${w(prev)}</td><th>당일매출</th><td class="r">${won(total)}</td><th>입 금</th><td class="r">${w(paid)}</td><th>최종잔액</th><td class="r"><b>${w(last)}</b></td></tr></tbody></table>
+  </section>`;
+  const m = modal(`<h3 class="po-print-title">거래명세표 <span class="small muted">${esc(customer)} · ${esc(from === to ? from : `${from} ~ ${to}`)} · 전표 ${bills.length}장 · ${compact ? 'A4 한 장(위 공급받는자용 · 아래 공급자용)' : `줄 ${lines.length}개 · 두 장`}</span></h3>
+    <div class="cert stmt2-doc">${copy('공급받는자용', 'blue')}${copy('공급자용', 'red')}</div>
     <div class="actions">${!company.biz_no ? '<span class="small red-text">우리 회사 사업자 정보가 비어 있습니다(세금계산서 관리 › 우리 회사 정보).</span>' : ''}<button class="btn" data-close>닫기</button><button class="btn primary" data-print>인쇄 · PDF 저장</button></div>`, { wide: true });
   m.el.parentElement.classList.add('lr-cert-wrap');
+  m.el.classList.add('lr-modal');
   $('[data-close]', m.el).onclick = m.close;
-  $('[data-print]', m.el).onclick = () => rcPrint(`거래명세서_${customer}_${from === to ? from : from + '_' + to}`);
+  $('[data-print]', m.el).onclick = () => rcPrint(`거래명세표_${customer}_${from === to ? from : from + '_' + to}`);
 }
 
 // 전표 줄 엑셀(매입·매출 공통): 기간·거래처로 거른 확정 전표의 줄을 한 줄 한 행으로

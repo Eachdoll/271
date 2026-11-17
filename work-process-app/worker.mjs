@@ -1479,7 +1479,7 @@ async function unbilledShipments({ customer = '', from = '', to = '', limit = 50
   return db.prepare(`${SHIP_SOURCE}${where.length ? ' AND ' + where.join(' AND ') : ''} ORDER BY s.ship_date, s.id LIMIT ${limit + 1}`).all(...args);
 }
 async function salesBillDetail(bill) {
-  const lines = await db.prepare(`SELECT l.*, ${LINE_CAT('l')} AS category, i.status AS ship_status, o.order_no FROM sales_bill_lines l LEFT JOIN ship_instructions i ON i.bill_line_id=l.id
+  const lines = await db.prepare(`SELECT l.*, ${LINE_CAT('l')} AS category, i.status AS ship_status, o.order_no, o.customer_po, o.note AS order_note FROM sales_bill_lines l LEFT JOIN ship_instructions i ON i.bill_line_id=l.id
     LEFT JOIN sales_order_lines ol ON ol.id=l.order_line_id LEFT JOIN sales_orders o ON o.id=ol.order_id WHERE l.bill_id=? ORDER BY l.id`).all(bill.id);
   for (const l of lines) if (l.source_type === 'ship') l.source_missing = !(await db.prepare('SELECT 1 FROM shipments WHERE id=?').get(l.source_id));
   const invoice = await db.prepare('SELECT i.id, i.invoice_no, i.status FROM tax_invoice_bills t JOIN tax_invoices i ON i.id=t.invoice_id WHERE t.bill_id=? AND t.active=1').get(bill.id);
@@ -1497,7 +1497,7 @@ route('GET', '/api/sales-bills', async ({ user, query }) => {
   applyListDates(where, args, query, 'bill_date');
   if (query.customer) { where.push(`${customerKey('customer')}=?`); args.push(nameKey(str(query.customer, 100))); }
   if (query.status) { if (!['confirmed', 'cancelled'].includes(query.status)) throw bad('상태를 확인하세요.'); where.push('status=?'); args.push(query.status); }
-  applyListKeyword(where, args, query.q, ['bill_no', 'customer', 'note', 'created_by']);
+  applyListKeyword(where, args, query.q, ['bill_no', 'customer', 'note', 'created_by', "(SELECT group_concat(o.customer_po || ' ' || o.note || ' ' || o.order_no, ' ') FROM sales_bill_lines l JOIN sales_order_lines ol ON ol.id=l.order_line_id JOIN sales_orders o ON o.id=ol.order_id WHERE l.bill_id=sales_bills.id)"]);
   if (query.category) { const c = query.category === '미분류' ? '' : itemCategory(query.category); where.push(BILL_CATEGORY_FILTER('sales_bill_lines', 'sales_bills')); args.push(c); }
   const page = Math.max(0, Math.min(1000, Number(query.page) || 0));
   const by_category = await billCategoryTotals('sales_bill_lines', 'sales_bills', where, args);
@@ -4435,7 +4435,7 @@ route('GET', '/api/sales-orders', async ({ user, query }) => {
 route('GET', '/api/sales-orders/open-lines', async ({ user, query }) => {
   requireSales(user);
   const customer = reqStr(query.customer, '거래처', 100);
-  const rows = await db.prepare(`SELECT ol.*, o.order_no, o.order_date, o.customer_po, o.due_date AS order_due, o.tax_type, ${ORDER_TAKEN} AS billed_qty FROM sales_order_lines ol JOIN sales_orders o ON o.id=ol.order_id
+  const rows = await db.prepare(`SELECT ol.*, o.order_no, o.order_date, o.customer_po, o.note AS order_note, o.due_date AS order_due, o.tax_type, ${ORDER_TAKEN} AS billed_qty FROM sales_order_lines ol JOIN sales_orders o ON o.id=ol.order_id
     WHERE o.status='open' AND ${customerKey('o.customer')}=? AND ${ORDER_TAKEN} < ol.qty - 0.000001 ORDER BY o.order_date, o.id, ol.id LIMIT 501`).all(nameKey(customer));
   return { rows: rows.slice(0, 500).map(r => ({ ...r, remaining: stockRound(r.qty - r.billed_qty) })), more: rows.length > 500 };
 });
@@ -4498,7 +4498,7 @@ route('GET', '/api/ship-instructions', async ({ query }) => {
   else if (status) { if (!['pending', 'shipped', 'cancelled'].includes(status)) throw bad('상태를 확인하세요.'); where.push('i.status=?'); args.push(status); if (status === 'pending') where.push('i.held=0'); }
   applyListDates(where, args, query, 'i.ship_date');
   if (query.customer) { where.push(`${customerKey('i.customer')}=?`); args.push(nameKey(str(query.customer, 100))); }
-  applyListKeyword(where, args, query.q, ['i.item', 'i.product_code', 'i.customer', 'i.note']);
+  applyListKeyword(where, args, query.q, ['i.item', 'i.product_code', 'i.customer', 'i.note', 'o.customer_po', 'o.note', 'o.order_no']);
   const rows = await db.prepare(`SELECT i.*, b.bill_no, o.order_no, o.customer_po, s.lot AS shipped_lot FROM ship_instructions i JOIN sales_bills b ON b.id=i.bill_id
     LEFT JOIN sales_order_lines ol ON ol.id=i.order_line_id LEFT JOIN sales_orders o ON o.id=ol.order_id LEFT JOIN shipments s ON s.id=i.shipment_id
     ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY i.ship_date, i.id LIMIT 1001`).all(...args);

@@ -871,3 +871,24 @@ INVITE_CODE=local-test-code npm start
 - 규칙: 제품등록에 규격(boms.spec)이 있으면 그 값으로 고정(입력값 무시) · 사이즈가 등록된 품목은 등록 사이즈 중 하나만 · 둘 다 없으면 입력값(줄마다 사이즈를 적는 품목).
 - 서버: catalogSpec(bom, typed, keep)(발주·출하·기타입고·완제품 생산계획 묶음 저장, 수주, 입고, 기록 고치기 PUT /api/items/:entity/:id — 지금 값은 그대로 둘 수 있음), lockedSpec(생산의뢰·구매의뢰: 고치는 의뢰의 기존 줄 값은 유지).
 - 화면: 줄 표(발주·출하·기타입고)·입고·수주는 .spec-fixed 표시(입력칸 없음), 카드(생산계획 포함)는 규격 칸 숨기고 「규격(고정)」 요약, 생산의뢰·구매의뢰 줄(itemLockApply)은 읽기 전용.
+
+## 품목 찾기 창 (15.122)
+- .ip-modal: 창은 고정 높이(flex column, overflow hidden), 품목 표(.ip-wrap)만 스크롤 → 이중 스크롤 없음. 표 모서리 0(첫 칸이 잘리지 않게), 머리글 sticky.
+- openItemPicker 옵션 lots(기본 true): false면 LOT 수 칸·LOT 자동 번호 숨김(단가표).
+
+## 각진 스타일 · 조회 줄 정렬 (15.123)
+- style.css 끝: 모든 요소 border-radius 0(!important). 원이어야 하는 것만 예외(.flow 번호, .thumb 삭제, 로딩, .org-rank, .st-dot, 라디오). 새 스타일에 둥근 모서리를 넣어도 이 규칙이 이김.
+- .toolbar align-items flex-end + 큰 버튼 min-height 44px(입력칸과 같은 높이) → 라벨 달린 입력칸 옆 「조회」 버튼이 같은 줄에 맞음.
+- 부족분 발주 창 lr-modal(넓게) · 품목 칸 최소 폭.
+
+## 거래명세표 종이 양식 (15.124)
+- statementSheet(sales-bills.js)를 기존 종이 양식(2장 1조)으로: .stmt2 두 장 — 위 공급받는자용(파랑) · 아래 공급자용(빨강). 전표NO·년월일, ○○ 귀하·☎·「아래와 같이 계산합니다」, 공급자(상호·등록번호·성명(인)·주소), 품명·규격·수량·단가·금액 줄무늬 표, 합계금액·부가세·계 / 비고(거래기간·입금 계좌)·인수자(인) / 이전미수·당일매출·입금·최종잔액.
+- 10줄 이하면 A4 한 장에 두 장(각 136mm, 빈 줄 채움), 넘으면 장마다 한 쪽(줄 수만큼). 여러 날짜면 품명 앞에 월/일.
+- 감사 v124가 대신함(v112·v119의 거래명세서 확인은 예전 양식 기준이라 더 쓰지 않음).
+- 15.125 비고: 표에 「비고」 칸(줄 비고 l.note), 아래 비고 칸 맨 앞에 전표 비고(bill.note, 여러 전표면 겹치지 않게) → 거래기간 → 입금 계좌.
+
+## 고객 PO로 수주 찾기 (15.126)
+- poOf(customer_po, note)(app.js): 고객 발주번호 칸, 비면 비고의 10자리 숫자(삼성 PO). parseCustomerNote: 「0C0827-27 (P1DD) OLED Asan mj1938,seon 2008315425」 → 요청·라인·사업장·담당자·PO(형식이 다르면 null).
+- 수주 입력: 비고에 붙여넣으면 읽은 내용 표시 + 고객 발주번호가 비었으면 PO 자동(초록 표시).
+- 매출전표 입력의 수주 잔량 = 두 칸(.so-pick): 왼쪽 수주 목록(수주번호·PO·비고·고른 줄 수, 검색은 PO·비고·수주번호·품목·코드, 단어 여러 개 AND, 강조), 오른쪽 고른 수주의 품목 표(기존 data-order-* 처리 그대로, 「검색된 수주 전체 줄 보기」). /api/sales-orders/open-lines에 order_note.
+- PO 표시·검색: 전표 보기(수주번호 옆), 거래명세표 줄 비고 앞 「PO …」, 매출전표 목록 검색(수주 PO·비고·수주번호), 출하지시 검색(o.customer_po·o.note·o.order_no). salesBillDetail 줄에 customer_po·order_note.

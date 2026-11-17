@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.121';
+const APP_VERSION = '15.126';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -54,6 +54,16 @@ const catChip = c => `<span class="cat-chip cat-${CAT_TONE[c] || 'none'}">${esc(
 const catChips = list => list == null ? '' : String(list).split(',').map(c => catChip(c)).join(' ');
 const catSummary = (by, label = '분류별 공급가액') => by?.length ? `<div class="small cat-sum">${esc(label)}: ${by.map(c => `${catChip(c.category)} ${won(c.supply)}원`).join(' · ')}</div>` : '';
 const catOptions = order => '<option value="">전체</option>' + order.map(c => `<option>${c}</option>`).join('');
+// 15.126 고객 PO: 「고객 발주번호」 칸, 비어 있으면 비고에서 10자리 숫자(삼성 PO 예: 2008315425)
+const poOf = (po, note) => String(po || '').trim() || (String(note || '').match(/(?:^|\D)(\d{10})(?!\d)/) || [])[1] || '';
+// 삼성 등 고객 비고 「0C0827-27 (P1DD) OLED Asan mj1938,seon 2008315425」 → 요청번호·라인·사업장·담당자·PO(형식이 다르면 null)
+function parseCustomerNote(text) {
+  const m = String(text || '').trim().match(/^([0-9A-Z]{2}\d{4}-\d{2,3})\s*\(([A-Z0-9]{2,6})\)\s*(.*?)\s*(\d{10})$/i); if (!m) return null;
+  const mid = m[3].trim().split(/\s+/).filter(Boolean), last = mid.at(-1) || '';
+  const person = /,|^[가-힣]{2,4}$/.test(last) ? mid.pop() : '';
+  return { req: m[1], line: m[2], site: mid.join(' '), person, po: m[4] };
+}
+const searchKey = s => String(s ?? '').normalize('NFC').toLowerCase().replace(/\s+/g, '');
 const sumLine = parts => `<div class="list-sum" role="status">${parts.filter(p => p && p[1] !== '' && p[1] != null).map(([k, v]) => `<span><span>${esc(k)}</span> <b>${v}</b></span>`).join('')}</div>`;
 
 // 표 머리글용 짧은 이름(15.63): 긴 이름은 머리글 title·체크박스 aria-label로 그대로 보여 준다.
