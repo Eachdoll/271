@@ -337,6 +337,13 @@
       "when": 1796036013000,
       "tag": "0047_lot_tracking",
       "breakpoints": false
+    },
+    {
+      "idx": 48,
+      "version": "6",
+      "when": 1796122413000,
+      "tag": "0048_tax_invoice_states",
+      "breakpoints": false
     }
   ]
 }

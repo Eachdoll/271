@@ -447,3 +447,29 @@ test('15.137 Partner book: per-bill rows with tax invoice, payments, running bal
   assert.equal((await staff('GET', `/api/partner-book?side=sales&from=${today}&to=${today}`)).status, 403);
   assert.equal((await buyer('GET', `/api/partner-book?side=purchase&from=${today}&to=${today}`)).status, 200);
 });
+
+test('15.138 Tax invoice states: reverse-issue customers, recipient confirmation, NTS sent, filters and summary', async () => {
+  const g = (await admin('POST', '/api/boms', { product: '역발행상품', product_code: 'RV-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  const sell = async c => { const s = (await admin('POST', '/api/shipments', { ship_date: today, bom_id: g.id, item: g.product, qty: 1, customer: c, unit: 'EA' })).body; return (await admin('POST', '/api/sales-bills', { customer: c, bill_date: today, request_id: rid(), lines: [{ source_type: 'ship', source_id: s.id, unit_price: 1000 }] })).body; };
+  const rb = await sell('삼성역발행'), nb = await sell('정발행상사');
+  const sv = (await admin('GET', '/api/vendors?q=' + encodeURIComponent('삼성역발행'))).body[0];
+  await admin('PUT', `/api/vendors/${sv.id}/tax-info`, { biz_no: '1248100998', tax_email: 'sdc@hometax.go.kr', tax_reverse: true });
+  const [ri] = (await admin('POST', '/api/tax-invoices', { request_id: rid(), kind: 'single', bill_ids: [rb.id] })).body.rows;
+  const [ni] = (await admin('POST', '/api/tax-invoices', { request_id: rid(), kind: 'single', bill_ids: [nb.id] })).body.rows;
+  assert.equal(ri.issue_type, 'reverse'); assert.equal(ni.issue_type, 'normal');
+  assert.match((await admin('POST', '/api/tax-invoices/issue', { ids: [ri.id] })).body.error, /역발행/);
+  assert.match((await admin('POST', '/api/tax-invoices/state', { ids: [ri.id], action: 'recv_confirm' })).body.error, /발행된 계산서만/);
+  const m = (await admin('POST', `/api/tax-invoices/${ri.id}/mark-issued`, { approval_no: '20261117-41000012-77777777', issued_date: today })).body;
+  assert.equal(m.status, 'issued'); assert.match(m.status_message, /역발행 승인/);
+  let list = (await admin('GET', `/api/tax-invoices?from=${today}&to=${today}&state=unconfirmed`)).body;
+  assert.ok(list.rows.some(r => r.id === ri.id) && list.rows.every(r => !r.recv_status));
+  assert.equal((await admin('POST', '/api/tax-invoices/state', { ids: [ri.id], action: 'recv_confirm' })).status, 200);
+  assert.equal((await admin('POST', '/api/tax-invoices/state', { ids: [ri.id], action: 'nts_sent' })).status, 200);
+  const one = (await admin('GET', `/api/tax-invoices?from=${today}&to=${today}&issue_type=reverse`)).body;
+  const r1 = one.rows.find(r => r.id === ri.id); assert.equal(r1.recv_status, 'confirmed'); assert.equal(r1.status, 'sent');
+  assert.ok(one.rows.every(r => r.issue_type === 'reverse'));
+  list = (await admin('GET', `/api/tax-invoices?from=${today}&to=${today}`)).body;
+  assert.ok(list.summary.nts_sent.n >= 1 && list.summary.confirmed.n >= 1 && list.summary.reverse.n >= 1);
+  assert.equal((await admin('POST', '/api/tax-invoices/state', { ids: [ni.id], action: 'nonsense' })).status, 400);
+  assert.equal((await admin('GET', `/api/tax-invoices?state=bogus`)).status, 400);
+});
