@@ -415,34 +415,43 @@ const RET_SIDE = {
   out: { label: '반출', title: '반출전표', party: '매입처', type: 'purchase', src: '매입목록', offset: '미지급 삭감', route: '#/purchase/returns', role: 'purchase', billOpen: id => api('GET', '/api/purchase-bills/' + id).then(b => billSheet(b)) },
 };
 const RET_PROCESS_LABEL = { stock_amount: '재고+금액', amount: '금액만', stock: '재고만', none: '처리 안 함' };
+// 15.144 처리구분은 기존 ERP 이름 그대로(재고만은 예전 전표 보기용)
+const RET_PROCESS = { in: { stock_amount: '재납품+금액삭감', amount: '금액삭감만', none: '처리안함' }, out: { stock_amount: '재입고+금액삭감', amount: '금액삭감만', none: '미처리' } };
+const retProcessLabel = (side, p) => RET_PROCESS[side]?.[p] || RET_PROCESS_LABEL[p] || p;
 const RET_REASONS = ['불량', '오배송·오발주', '수량 초과', '변심·취소', '기타'];
 const retTabs = (side, list) => `<div class="seg class-tabs tax-side" role="tablist" aria-label="반입·반출">${(ME.is_admin || ME.roles.includes('sales')) ? `<a role="tab" href="#/sales/returns${list ? '' : '/new'}" class="${side === 'in' ? 'on' : ''}">반입 <span class="small muted">(거래처 → 우리)</span></a>` : ''}${(ME.is_admin || ME.roles.includes('purchase')) ? `<a role="tab" href="#/purchase/returns${list ? '' : '/new'}" class="${side === 'out' ? 'on' : ''}">반출 <span class="small muted">(우리 → 매입처)</span></a>` : ''}</div>`;
 async function pageReturnEntry(main, side = 'in') {
   const S = RET_SIDE[side];
   main.innerHTML = `<h1>${S.title} 입력</h1>${retTabs(side, false)}
   <p class="muted">${side === 'in' ? '거래처에서 돌아온 제품을 넣습니다. 「재고」를 처리하면 재고로 다시 들어오고, 「금액」을 처리하면 음수 매출전표가 생겨 미수금이 줄어듭니다(세금계산서 관리에서 수정 계산서로 담을 수 있음).' : '매입처로 돌려보내는 자재를 넣습니다. 「재고」를 처리하면 재고에서 빠지고, 「금액」을 처리하면 음수 매입전표가 생겨 미지급금이 줄어듭니다.'} 「${S.src}(F5)」에서 원래 전표 줄을 고르면 남은 수량까지만 넣을 수 있습니다.</p>
-  <form class="stack bill-form" id="retForm" data-no-author novalidate>
-    <div class="form-grid">
-      <label>${S.label}일자 *<input name="return_date" type="date" required value="${todayStr()}" max="${todayStr()}"></label>
-      <label>처리구분<select name="process">${Object.entries(RET_PROCESS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
-      <label>${S.party} *<input name="party" required maxlength="100" autocomplete="off" placeholder="${S.party} 이름 또는 코드"></label><span class="partner-hint small muted" data-partner-hint></span>
-      <label>부가세<select name="tax_type"><option value="taxable">별도 (10%)</option><option value="zero">영세·면세</option></select></label>
-      <fieldset class="ret-settle"><legend>금액 처리 방법</legend><label class="inline"><input type="radio" name="settle" value="offset" checked> ${S.offset}</label><label class="inline"><input type="radio" name="settle" value="refund"> 현금 환불</label></fieldset>
-      <label class="span2">비고<input name="note" maxlength="500"></label>
+  <form class="stack bill-form ret-form" id="retForm" data-no-author novalidate>
+    <div class="ret-head">
+      <table class="erp-grid ret-head-main"><tbody>
+        <tr><th>${S.label}일자 <b class="req">*</b></th><td><input name="return_date" type="date" required value="${todayStr()}" max="${todayStr()}" aria-label="${S.label}일자"></td>
+          <th>처리구분</th><td><select name="process" aria-label="처리구분">${Object.entries(RET_PROCESS[side]).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></td>
+          <th>입력자</th><td class="ret-who">${esc(ME.name)}</td></tr>
+        <tr><th>${S.party} <b class="req">*</b></th><td colspan="3"><input name="party" required maxlength="100" autocomplete="off" placeholder="${S.party} 이름 또는 코드" aria-label="${S.party}"><span class="partner-hint small muted" data-partner-hint></span></td>
+          <th>${side === 'in' ? '납품시' : '매입시'} 부가세</th><td><select name="tax_type" aria-label="부가세"><option value="taxable">별도 (10%)</option><option value="zero">영세·면세</option></select></td></tr>
+        <tr><th>비 고</th><td colspan="5"><input name="note" maxlength="500" aria-label="비고"></td></tr>
+      </tbody></table>
+      <table class="erp-grid ret-settle-box"><tbody>
+        <tr><th rowspan="2" class="ret-settle-title">금액<br>처리<br>방법</th><th>${S.label}총액</th><th><label class="inline"><input type="radio" name="settle" value="refund"> 현금환불</label></th><th><label class="inline"><input type="radio" name="settle" value="offset" checked> ${S.offset.replace(' ', '')}</label></th></tr>
+        <tr><td class="r" data-ret-sum="total">0</td><td class="r" data-ret-sum="refund"></td><td class="r" data-ret-sum="offset">0</td></tr>
+      </tbody></table>
     </div>
-    <div class="actions" style="justify-content:flex-start"><button type="button" class="btn" data-ret-src>${S.src} (F5)</button><button type="button" class="btn" data-ret-all>전체 품목 (F6)</button></div>
-    <div data-ret-lines></div><div data-ret-total></div>
+    <div class="ret-bar"><b class="ret-bar-title">${S.title} 입력</b><span class="small muted">${S.label}할 ${side === 'in' ? '제품' : '상품'} 고르기 ☞</span><button type="button" class="btn" data-ret-src>${S.src} (F5)</button><button type="button" class="btn" data-ret-all>전체 품목 (F6)</button><span class="ret-bar-count small muted" data-ret-count></span></div>
+    <div data-ret-lines></div><div data-ret-total hidden></div>
     <div class="actions"><button class="btn primary" data-ret-save>${S.label} 저장</button></div>
   </form>`;
   const form = $('#retForm', main), box = $('[data-ret-lines]', form), partyIn = form.elements.party;
   let lines = [], requestId = crypto.randomUUID(), busy = false, catalog = null;
   bindPartnerPicker(partyIn, $('[data-partner-hint]', form), { type: S.type }).catch(() => {});
   const amountOn = () => ['stock_amount', 'amount'].includes(form.elements.process.value);
-  const syncSettle = () => { $('.ret-settle', form).disabled = !amountOn(); };
-  form.elements.process.onchange = syncSettle; syncSettle();
+  const syncSettle = () => { $$('[name=settle]', form).forEach(x => { x.disabled = !amountOn(); }); $('.ret-settle-box', form).classList.toggle('off', !amountOn()); totals(); };
   const amt = l => Number(l.qty) > 0 && l.unit_price !== '' ? billTruncC(Number(l.qty) * Number(l.unit_price)) : 0;
   const draw = () => {
-    box.innerHTML = lines.length ? `<div class="table-wrap"><table class="grid bill-grid ret-grid" data-keep-cols data-no-sort><thead><tr><th>품목코드</th><th>품명</th><th>규격</th><th>단위</th><th class="r">수량</th><th class="r">단가</th><th class="r">금액</th><th>${S.label}유형</th><th>LOT</th><th>원래 전표</th><th></th></tr></thead><tbody>${lines.map((l, i) => `<tr>
+    const supply = lines.reduce((t, l) => t + amt(l), 0), vat = form.elements.tax_type.value === 'zero' ? 0 : billTruncC(supply * 0.1), qtySum = lines.reduce((t, l) => t + (Number(l.qty) || 0), 0);
+    box.innerHTML = `<div class="table-wrap ret-lines-wrap"><table class="erp-grid ret-grid" data-keep-cols data-no-sort><thead><tr><th class="c">No</th><th>품목코드</th><th>품명</th><th>규격</th><th>단위</th><th class="r">수량</th><th class="r">단가</th><th class="r">금액</th><th>${S.label}유형</th><th>LOT</th><th>원래 전표</th><th></th></tr></thead><tbody>${lines.map((l, i) => `<tr><td class="c muted">${i + 1}</td>
       <td class="small">${esc(l.product_code || '')}</td><td data-card-primary><b>${esc(l.item)}</b></td><td>${esc(l.spec || '')}</td><td>${esc(l.unit || '')}</td>
       <td class="r"><input type="number" min="0" step="any" inputmode="decimal" data-r="qty" data-i="${i}" value="${esc(l.qty)}" aria-label="${esc(l.item)} 수량"${l.left != null ? ` max="${l.left}"` : ''}>${l.left != null ? `<div class="small muted">남은 ${fmtNum(l.left)}</div>` : ''}</td>
       <td class="r"><input type="number" min="0" step="any" inputmode="decimal" data-r="unit_price" data-i="${i}" value="${esc(l.unit_price)}" aria-label="${esc(l.item)} 단가"></td>
@@ -450,15 +459,22 @@ async function pageReturnEntry(main, side = 'in') {
       <td><select data-r="reason" data-i="${i}" aria-label="${esc(l.item)} ${S.label}유형"><option value="">선택</option>${RET_REASONS.map(x => `<option${x === l.reason ? ' selected' : ''}>${x}</option>`).join('')}</select></td>
       <td><input data-r="lot" data-i="${i}" maxlength="100" value="${esc(l.lot || '')}" aria-label="${esc(l.item)} LOT"></td>
       <td class="small">${l.source_bill_no ? `${esc(l.source_bill_no)}<div class="muted">${esc(l.source_date || '')}</div>` : '<span class="muted">직접</span>'}</td>
-      <td><button type="button" class="btn small danger" data-ret-del="${i}" aria-label="줄 삭제">×</button></td></tr>`).join('')}</tbody></table></div>`
-      : `<p class="muted small">「${S.src}(F5)」 또는 「전체 품목(F6)」으로 ${S.label}할 품목을 고르세요.</p>`;
+      <td><button type="button" class="btn small danger" data-ret-del="${i}" aria-label="줄 삭제">×</button></td></tr>`).join('')}${Array.from({ length: Math.max(0, 6 - lines.length) }, (_, k) => `<tr class="ret-empty"><td class="c muted">${lines.length + k + 1}</td>${'<td></td>'.repeat(11)}</tr>`).join('')}</tbody>
+      <tfoot><tr><th colspan="5" class="ret-foot">공급가액</th><td class="r" data-ret-foot="qty">${fmtNum(qtySum)}</td><td></td><td class="r" data-ret-foot="supply">${won(supply)}</td><td colspan="4" rowspan="3" class="small muted ret-foot-hint">${lines.length ? '' : `「${S.src}(F5)」 또는 「전체 품목(F6)」으로 ${S.label}할 품목을 고르세요.`}</td></tr>
+        <tr><th colspan="5" class="ret-foot">부 가 세</th><td></td><td></td><td class="r" data-ret-foot="vat">${won(vat)}</td></tr>
+        <tr><th colspan="5" class="ret-foot">합계금액</th><td></td><td></td><td class="r" data-ret-foot="total"><b>${won(supply + vat)}</b></td></tr></tfoot></table></div>`;
     totals();
   };
   const totals = () => {
-    const supply = lines.reduce((t, l) => t + amt(l), 0), vat = form.elements.tax_type.value === 'zero' ? 0 : billTruncC(supply * 0.1);
+    const supply = lines.reduce((t, l) => t + amt(l), 0), vat = form.elements.tax_type.value === 'zero' ? 0 : billTruncC(supply * 0.1), total = supply + vat, refund = $('[name=settle]:checked', form)?.value === 'refund';
+    const put = (sel, v) => { const el = $(sel, form); if (el) el.innerHTML = v; };
+    put('[data-ret-foot="qty"]', fmtNum(lines.reduce((t, l) => t + (Number(l.qty) || 0), 0))); put('[data-ret-foot="supply"]', won(supply)); put('[data-ret-foot="vat"]', won(vat)); put('[data-ret-foot="total"]', `<b>${won(total)}</b>`);
+    put('[data-ret-sum="total"]', `<b>${won(total)}</b>`); put('[data-ret-sum="refund"]', amountOn() && refund ? won(total) : ''); put('[data-ret-sum="offset"]', amountOn() && !refund ? won(total) : '');
+    put('[data-ret-count]', lines.length ? `${lines.length}줄` : '');
     $('[data-ret-total]', form).innerHTML = lines.length ? `<div class="bill-sum"><span>${esc(`${lines.length}줄`)}</span><span>${esc(`공급가액 ${won(supply)}원`)}</span><span>${esc(`부가세 ${won(vat)}원`)}</span><span class="bill-grand">${esc(`${S.label} 합계 ${won(supply + vat)}원`)}</span></div>` : '';
   };
   form.elements.tax_type.onchange = totals;
+  form.elements.process.onchange = syncSettle; $$('[name=settle]', form).forEach(x => { x.onchange = totals; });
   box.addEventListener('input', e => { const k = e.target.dataset.r; if (!k) return; const i = Number(e.target.dataset.i); lines[i][k] = e.target.value; if (k === 'qty' || k === 'unit_price') { $(`[data-r-amt="${i}"]`, box).textContent = won(amt(lines[i])); totals(); } });
   box.addEventListener('change', e => { const k = e.target.dataset.r; if (k) lines[Number(e.target.dataset.i)][k] = e.target.value; });
   box.addEventListener('click', e => { const d = e.target.closest('[data-ret-del]'); if (d) { lines.splice(Number(d.dataset.retDel), 1); draw(); } });
@@ -510,7 +526,7 @@ async function pageReturnEntry(main, side = 'in') {
       returnSheet(r);
     } catch (error) { fail(error); } finally { busy = false; btn.disabled = false; }
   };
-  draw();
+  draw(); syncSettle();
 }
 function returnSheet(r, after = null) {
   const S = RET_SIDE[r.side];
@@ -519,7 +535,7 @@ function returnSheet(r, after = null) {
       <div class="po-doc-head"><img src="/assets/seoulsemi-logo-blue.png" alt="SEOUL SEMITECH"><h2>${r.side === 'in' ? '반 입 전 표' : '반 출 전 표'}</h2></div>
       <table class="po-info"><tbody>
         <tr><th>전표번호</th><td><b>${esc(r.return_no)}</b>${r.status === 'cancelled' ? ' (취소)' : ''}</td><th>${S.label}일자</th><td>${esc(r.return_date)}</td></tr>
-        <tr><th>${S.party}</th><td><b>${esc(r.party)}</b></td><th>처리구분</th><td>${RET_PROCESS_LABEL[r.process]}${['stock_amount', 'amount'].includes(r.process) ? ` · ${r.settle === 'refund' ? '현금 환불' : S.offset}` : ''}</td></tr>
+        <tr><th>${S.party}</th><td><b>${esc(r.party)}</b></td><th>처리구분</th><td>${retProcessLabel(r.side, r.process)}${['stock_amount', 'amount'].includes(r.process) ? ` · ${r.settle === 'refund' ? '현금 환불' : S.offset}` : ''}</td></tr>
         <tr><th>금액 전표</th><td>${r.bill ? `<button type="button" class="link-btn" data-ret-bill="${r.bill.id}">${esc(r.bill.bill_no)}</button>` : '—'}</td><th>작성</th><td>${esc(r.created_by)} · ${esc(String(r.created_at).slice(0, 16))}</td></tr>
         ${r.note ? `<tr><th>비고</th><td colspan="3">${esc(r.note)}</td></tr>` : ''}
         ${r.status === 'cancelled' ? `<tr><th>취소</th><td colspan="3">${esc(r.cancelled_by || '')} · ${esc(String(r.cancelled_at || '').slice(0, 16))} · ${esc(r.cancel_reason)}</td></tr>` : ''}
@@ -550,7 +566,7 @@ async function pageReturnList(main, side = 'in') {
     rows = (await api('GET', '/api/returns?' + new URLSearchParams({ side, ...formObj(form) }))).rows; if (!main.isConnected) return;
     const live = rows.filter(r => r.status === 'confirmed');
     $('#retSum', main).innerHTML = sumLine([['합계', `${fmtNum(live.length)}건`], ['공급가액', `${won(live.reduce((t, r) => t + r.supply_total, 0))}원`], ['부가세', `${won(live.reduce((t, r) => t + r.vat_total, 0))}원`], [`${S.label} 합계`, `<b>${won(live.reduce((t, r) => t + r.total, 0))}원</b>`]]);
-    $('#retList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>전표번호</th><th>${S.label}일자</th><th>${S.party}</th><th>품목</th><th>처리구분</th><th>금액 처리</th><th class="r">공급가액</th><th class="r">부가세</th><th class="r">합계</th><th>금액 전표</th><th>상태</th><th></th></tr></thead><tbody>${rows.map(r => `<tr class="${r.status === 'cancelled' ? 'row-off' : ''}"><td data-card-primary><button type="button" class="link-btn" data-ret-open="${r.id}">${esc(r.return_no)}</button></td><td>${esc(r.return_date)}</td><td>${esc(r.party)}</td><td>${esc(r.first_item || '')}${r.line_count > 1 ? ` 외 ${r.line_count - 1}` : ''}</td><td>${RET_PROCESS_LABEL[r.process]}</td><td>${['stock_amount', 'amount'].includes(r.process) ? (r.settle === 'refund' ? '현금 환불' : S.offset) : ''}</td><td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b></td><td class="small">${esc(r.bill_no || '')}</td><td>${r.status === 'confirmed' ? '<span class="chip green">확정</span>' : '<span class="chip">취소</span>'}</td><td><button class="btn small" data-ret-open="${r.id}">보기</button></td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">조건에 맞는 ${S.label}이 없습니다.</div>`;
+    $('#retList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>전표번호</th><th>${S.label}일자</th><th>${S.party}</th><th>품목</th><th>처리구분</th><th>금액 처리</th><th class="r">공급가액</th><th class="r">부가세</th><th class="r">합계</th><th>금액 전표</th><th>상태</th><th></th></tr></thead><tbody>${rows.map(r => `<tr class="${r.status === 'cancelled' ? 'row-off' : ''}"><td data-card-primary><button type="button" class="link-btn" data-ret-open="${r.id}">${esc(r.return_no)}</button></td><td>${esc(r.return_date)}</td><td>${esc(r.party)}</td><td>${esc(r.first_item || '')}${r.line_count > 1 ? ` 외 ${r.line_count - 1}` : ''}</td><td>${retProcessLabel(side, r.process)}</td><td>${['stock_amount', 'amount'].includes(r.process) ? (r.settle === 'refund' ? '현금 환불' : S.offset) : ''}</td><td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b></td><td class="small">${esc(r.bill_no || '')}</td><td>${r.status === 'confirmed' ? '<span class="chip green">확정</span>' : '<span class="chip">취소</span>'}</td><td><button class="btn small" data-ret-open="${r.id}">보기</button></td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">조건에 맞는 ${S.label}이 없습니다.</div>`;
   };
   rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
   form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
