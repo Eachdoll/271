@@ -1067,17 +1067,34 @@ const PO_OPEN = "(p.recv_qty - (SELECT COALESCE(SUM(x.qty),0) FROM purchase_bill
 function billedOf(type, key) { return `(SELECT COALESCE(SUM(b.qty),0) FROM purchase_bill_lines b WHERE b.source_type='${type}' AND b.source_id=${key} AND b.active=1)`; }
 // 이 거래처에서 같은 품목(코드, 없으면 이름)을 마지막으로 산 단가
 function lastBought(a) { return `(SELECT x.unit_price FROM purchase_bill_lines x JOIN purchase_bills pb ON pb.id=x.bill_id WHERE x.active=1 AND REPLACE(LOWER(pb.vendor),' ','')=REPLACE(LOWER(${a}.vendor),' ','') AND (CASE WHEN COALESCE(${a === 'o' ? "json_extract(o.bom_snapshot,'$.product_code')" : 'p.product_code'},'')<>'' THEN x.product_code=${a === 'o' ? "json_extract(o.bom_snapshot,'$.product_code')" : 'p.product_code'} ELSE x.item=${a}.item END) ORDER BY pb.bill_date DESC, x.id DESC LIMIT 1)`; }
+// 15.117 전표 줄 분류: 저장 때 item_category에 고정. 빈 예전 줄은 제품코드로 품목 분류를 읽는다(LINE_CAT).
+const CODE_CAT = c => `(SELECT bm.item_category FROM boms bm WHERE ${c}<>'' AND UPPER(bm.product_code)=UPPER(${c}) ORDER BY bm.is_temp, bm.id DESC LIMIT 1)`;
+const LINE_CAT = a => `COALESCE(NULLIF(${a}.item_category,''), ${CODE_CAT(a + '.product_code')}, '')`;
+async function lineCategory({ given = '', bom_id = null, product_code = '', item = '' }) {
+  if (ITEM_CATEGORIES.includes(given)) return given;
+  const byId = bom_id ? await db.prepare('SELECT item_category FROM boms WHERE id=?').get(bom_id) : null; if (byId?.item_category) return byId.item_category;
+  const code = String(product_code || '').trim();
+  const byCode = code ? await db.prepare("SELECT item_category FROM boms WHERE product_code<>'' AND UPPER(product_code)=UPPER(?) ORDER BY is_temp, id DESC LIMIT 1").get(code) : null; if (byCode?.item_category) return byCode.item_category;
+  const byName = item ? await db.prepare("SELECT item_category FROM boms WHERE REPLACE(LOWER(product),' ','')=? ORDER BY is_temp, id DESC LIMIT 1").get(nameKey(item)) : null;
+  return byName?.item_category || '';
+}
+const BILL_CATEGORY_FILTER = (lines, bills) => `EXISTS(SELECT 1 FROM ${lines} l WHERE l.bill_id=${bills}.id AND ${LINE_CAT('l')}=?)`;
+async function billCategoryTotals(lines, bills, where, args) {
+  const rows = await db.prepare(`SELECT ${LINE_CAT('l')} AS category, COUNT(*) AS lines, SUM(l.supply) AS supply FROM ${lines} l WHERE l.active=1 AND l.bill_id IN (SELECT id FROM ${bills} WHERE status='confirmed'${where.length ? ' AND ' + where.join(' AND ') : ''}) GROUP BY 1`).all(...args);
+  const order = [...ITEM_CATEGORIES, ''];
+  return rows.map(r => ({ category: r.category || '', lines: r.lines, supply: r.supply || 0 })).sort((a, b) => order.indexOf(a.category) - order.indexOf(b.category));
+}
 const BILL_SOURCES = {
-  po_lot: `SELECT 'po_lot' AS source_type, l.id AS source_id, p.id AS po_id, p.req_no, p.vendor, p.item, p.spec, p.unit, p.product_code, l.lot, l.received_date, l.qty, p.unit_price, p.internal_note, l.note AS lot_note, CASE WHEN ${PREV_LOT} THEN 1 ELSE 0 END AS is_prev, ${PO_OPEN} AS po_open,
+  po_lot: `SELECT 'po_lot' AS source_type, l.id AS source_id, p.id AS po_id, p.req_no, p.vendor, p.item, p.spec, p.unit, p.product_code, l.lot, l.received_date, l.qty, p.unit_price, COALESCE(NULLIF(p.item_category,''), ${CODE_CAT('p.product_code')}, '') AS item_category, p.internal_note, l.note AS lot_note, CASE WHEN ${PREV_LOT} THEN 1 ELSE 0 END AS is_prev, ${PO_OPEN} AS po_open,
       p.qty AS po_qty, p.recv_qty AS po_recv_qty, substr(p.created_at,1,10) AS po_date, p.note AS po_note, p.batch_id AS po_batch, ${lotBilled()} AS billed_qty, ${lastBought('p')} AS last_price
     FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id
     WHERE l.voided_at IS NULL AND l.qty > 0 AND p.recv_status IN ('ok','mismatch')`,
-  po: `SELECT 'po' AS source_type, p.id AS source_id, p.id AS po_id, p.req_no, p.vendor, p.item, p.spec, p.unit, p.product_code, p.lot, COALESCE(substr(p.recv_at,1,10), p.due_date) AS received_date, p.recv_qty AS qty, p.unit_price, p.internal_note, '' AS lot_note, 0 AS is_prev, ${PO_OPEN} AS po_open,
+  po: `SELECT 'po' AS source_type, p.id AS source_id, p.id AS po_id, p.req_no, p.vendor, p.item, p.spec, p.unit, p.product_code, p.lot, COALESCE(substr(p.recv_at,1,10), p.due_date) AS received_date, p.recv_qty AS qty, p.unit_price, COALESCE(NULLIF(p.item_category,''), ${CODE_CAT('p.product_code')}, '') AS item_category, p.internal_note, '' AS lot_note, 0 AS is_prev, ${PO_OPEN} AS po_open,
       p.qty AS po_qty, p.recv_qty AS po_recv_qty, substr(p.created_at,1,10) AS po_date, p.note AS po_note, p.batch_id AS po_batch, ${billedOf('po', 'p.id')} AS billed_qty, ${lastBought('p')} AS last_price
     FROM purchase_orders p WHERE p.recv_status IN ('ok','mismatch') AND p.recv_qty IS NOT NULL
       AND NOT EXISTS(SELECT 1 FROM po_receipt_lots l WHERE l.po_id=p.id AND l.voided_at IS NULL)`,
   other: `SELECT 'other' AS source_type, o.id AS source_id, NULL AS po_id, '' AS req_no, o.vendor, o.item, o.spec, COALESCE(NULLIF(o.unit,''), json_extract(o.bom_snapshot,'$.unit'), '') AS unit, COALESCE(json_extract(o.bom_snapshot,'$.product_code'), '') AS product_code, o.lot, o.received_date, o.qty, NULL AS unit_price, '' AS internal_note, '' AS lot_note, 0 AS is_prev, NULL AS po_open,
-      NULL AS po_qty, NULL AS po_recv_qty, NULL AS po_date, o.note AS po_note, '' AS po_batch, ${billedOf('other', 'o.id')} AS billed_qty, ${lastBought('o')} AS last_price
+      COALESCE(NULLIF(o.item_category,''), json_extract(o.bom_snapshot,'$.item_category'), '') AS item_category, NULL AS po_qty, NULL AS po_recv_qty, NULL AS po_date, o.note AS po_note, '' AS po_batch, ${billedOf('other', 'o.id')} AS billed_qty, ${lastBought('o')} AS last_price
     FROM other_receipts o WHERE 1=1`,
 };
 const BILL_SOURCE_KEY = { po_lot: 'l.id', po: 'p.id', other: 'o.id' };
@@ -1105,7 +1122,7 @@ async function unbilledLines({ vendor = '', from = '', to = '', limit = 500 } = 
   return out;
 }
 async function billDetail(bill) {
-  const lines = await db.prepare('SELECT * FROM purchase_bill_lines WHERE bill_id=? ORDER BY id').all(bill.id);
+  const lines = await db.prepare(`SELECT l.*, ${LINE_CAT('l')} AS category FROM purchase_bill_lines l WHERE l.bill_id=? ORDER BY l.id`).all(bill.id);
   // 전표 뒤에 입고가 취소된 줄은 표시만(전표는 그대로 — 전표를 취소하고 다시 만든다)
   for (const l of lines) if (l.source_type === 'po_lot') l.source_voided = !!(await db.prepare('SELECT 1 FROM po_receipt_lots WHERE id=? AND voided_at IS NOT NULL').get(l.source_id));
   return { ...bill, lines, closed: !!(await closedPeriod(bill.vendor, bill.bill_date)) };
@@ -1132,9 +1149,11 @@ route('GET', '/api/purchase-bills', async ({ user, query }) => {
   if (query.vendor) { where.push(`${billVendorKey('vendor')}=?`); args.push(nameKey(str(query.vendor, 100))); }
   if (query.status) { if (!['confirmed', 'cancelled'].includes(query.status)) throw bad('상태를 확인하세요.'); where.push('status=?'); args.push(query.status); }
   applyListKeyword(where, args, query.q, ['bill_no', 'vendor', 'statement_no', 'note', 'created_by']);
+  if (query.category) { const c = query.category === '미분류' ? '' : itemCategory(query.category); where.push(BILL_CATEGORY_FILTER('purchase_bill_lines', 'purchase_bills')); args.push(c); }
   const page = Math.max(0, Math.min(1000, Number(query.page) || 0));
-  const rows = await db.prepare(`SELECT purchase_bills.*, (SELECT COUNT(*) FROM purchase_bill_lines l WHERE l.bill_id=purchase_bills.id) AS line_count FROM purchase_bills ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY bill_date DESC, id DESC LIMIT 201 OFFSET ?`).all(...args, page * 200);
-  return { rows: rows.slice(0, 200), page, more: rows.length > 200 };
+  const by_category = await billCategoryTotals('purchase_bill_lines', 'purchase_bills', where, args);
+  const rows = await db.prepare(`SELECT purchase_bills.*, (SELECT COUNT(*) FROM purchase_bill_lines l WHERE l.bill_id=purchase_bills.id) AS line_count, (SELECT group_concat(DISTINCT c) FROM (SELECT ${LINE_CAT('l')} AS c FROM purchase_bill_lines l WHERE l.bill_id=purchase_bills.id AND l.active=1)) AS categories FROM purchase_bills ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY bill_date DESC, id DESC LIMIT 201 OFFSET ?`).all(...args, page * 200);
+  return { rows: rows.slice(0, 200), page, more: rows.length > 200, by_category };
 });
 route('GET', '/api/purchase-bills/:id', async ({ user, params }) => { requirePurchase(user); return billDetail(await mustGet('purchase_bills', params.id)); });
 route('POST', '/api/purchase-bills', async ({ user, body }) => {
@@ -1171,7 +1190,7 @@ route('POST', '/api/purchase-bills', async ({ user, body }) => {
     if (!(qty > 0)) throw bad(`${no}(${src.item}): 수량은 0보다 커야 합니다.`);
     if (qty > remaining + 0.000001) throw bad(`${no}(${src.item}): 남은 입고 수량 ${remaining}보다 많이 잡을 수 없습니다. 명세서가 더 많으면 물류에서 입고 수량을 먼저 고치세요.`);
     if (src.po_id && await db.prepare("SELECT 1 FROM receipt_qty_changes WHERE po_id=? AND status='pending'").get(src.po_id)) throw new HttpError(409, `${no}(${src.item}): 입고 수정·취소 요청이 처리 중입니다. 승인·반려된 뒤에 전표를 잡으세요.`);
-    lines.push({ ...src, source_qty: src.qty, billed_before: src.billed_qty, qty, unit_price: price, supply: billTrunc(qty * price), note: str(l.note, 200) });
+    lines.push({ ...src, item_category: await lineCategory({ given: src.item_category, product_code: src.product_code, item: src.item }), source_qty: src.qty, billed_before: src.billed_qty, qty, unit_price: price, supply: billTrunc(qty * price), note: str(l.note, 200) });
   }
   const supply = lines.reduce((t, l) => t + l.supply, 0) + billTrunc(freight);
   const vat = taxType === 'zero' ? 0 : billTrunc(supply * 0.1), total = supply + vat;
@@ -1179,8 +1198,8 @@ route('POST', '/api/purchase-bills', async ({ user, body }) => {
   const cmds = [{ sql: `INSERT INTO purchase_bills(bill_no,bill_date,vendor,statement_no,statement_total,tax_type,freight,supply_total,vat_total,total,note,created_by,created_by_id,request_id) VALUES(${nextDocNo('purchase_bills', 'bill_no')},?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     args: [prefix, prefix, prefix, date, vendor, str(body.statement_no, 50), statementTotal, taxType, billTrunc(freight), supply, vat, total, str(body.note, 500), user.name, user.id, token] }];
   // 저장 순간 그 입고 줄의 「이미 잡은 수량」이 읽은 값과 같을 때만 넣는다(동시에 다른 전표가 잡으면 batch 전체 되돌림).
-  for (const l of lines) cmds.push({ sql: `INSERT INTO purchase_bill_lines(bill_id,source_type,source_id,po_id,req_no,item,spec,unit,product_code,lot,received_date,qty,unit_price,supply,note,source_qty) SELECT ${BID},?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE ROUND((SELECT COALESCE(SUM(qty),0) FROM purchase_bill_lines WHERE active=1 AND ((source_type=? AND source_id=?) OR (source_type='po' AND source_id=? AND ?=1))),6)=ROUND(?,6) AND (? IS NULL OR (SELECT COALESCE(SUM(qty),0) FROM purchase_bill_lines WHERE active=1 AND po_id=?) + ? <= (SELECT recv_qty FROM purchase_orders WHERE id=?) + 0.000001)`,
-    args: [token, l.source_type, l.source_id, l.po_id, l.req_no || '', l.item, l.spec || '', l.unit || '', l.product_code || '', l.lot || '', l.received_date || '', l.qty, l.unit_price, l.supply, l.note, l.source_qty, l.source_type, l.source_id, l.po_id, l.is_prev ? 1 : 0, l.billed_before, l.po_id, l.po_id, l.qty, l.po_id] }, RC_GUARD);
+  for (const l of lines) cmds.push({ sql: `INSERT INTO purchase_bill_lines(bill_id,item_category,source_type,source_id,po_id,req_no,item,spec,unit,product_code,lot,received_date,qty,unit_price,supply,note,source_qty) SELECT ${BID},?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE ROUND((SELECT COALESCE(SUM(qty),0) FROM purchase_bill_lines WHERE active=1 AND ((source_type=? AND source_id=?) OR (source_type='po' AND source_id=? AND ?=1))),6)=ROUND(?,6) AND (? IS NULL OR (SELECT COALESCE(SUM(qty),0) FROM purchase_bill_lines WHERE active=1 AND po_id=?) + ? <= (SELECT recv_qty FROM purchase_orders WHERE id=?) + 0.000001)`,
+    args: [token, l.item_category || '', l.source_type, l.source_id, l.po_id, l.req_no || '', l.item, l.spec || '', l.unit || '', l.product_code || '', l.lot || '', l.received_date || '', l.qty, l.unit_price, l.supply, l.note, l.source_qty, l.source_type, l.source_id, l.po_id, l.is_prev ? 1 : 0, l.billed_before, l.po_id, l.po_id, l.qty, l.po_id] }, RC_GUARD);
   try { await db.batch(cmds); }
   catch (error) {
     const saved = await db.prepare('SELECT * FROM purchase_bills WHERE request_id=?').get(token);
@@ -1357,12 +1376,12 @@ route('GET', '/api/purchase-ledger', async ({ user, query }) => {
     return { from, to, vendor: '', rows };
   }
   const key = nameKey(vendor), opening = [...before.values()][0]?.opening || 0;
-  const bills = await db.prepare(`SELECT id, bill_no, bill_date AS date, statement_no, freight, supply_total, vat_total, total, note, (SELECT COUNT(*) FROM purchase_bill_lines l WHERE l.bill_id=purchase_bills.id) AS line_count, (SELECT item FROM purchase_bill_lines l WHERE l.bill_id=purchase_bills.id ORDER BY id LIMIT 1) AS first_item FROM purchase_bills WHERE status='confirmed' AND bill_date>=? AND bill_date<=? AND ${vk}=? ORDER BY bill_date, id LIMIT 5001`).all(from, to, key);
+  const bills = await db.prepare(`SELECT id, bill_no, bill_date AS date, statement_no, freight, supply_total, vat_total, total, note, (SELECT group_concat(DISTINCT c) FROM (SELECT ${LINE_CAT('l')} AS c FROM purchase_bill_lines l WHERE l.bill_id=purchase_bills.id AND l.active=1)) AS categories, (SELECT COUNT(*) FROM purchase_bill_lines l WHERE l.bill_id=purchase_bills.id) AS line_count, (SELECT item FROM purchase_bill_lines l WHERE l.bill_id=purchase_bills.id ORDER BY id LIMIT 1) AS first_item FROM purchase_bills WHERE status='confirmed' AND bill_date>=? AND bill_date<=? AND ${vk}=? ORDER BY bill_date, id LIMIT 5001`).all(from, to, key);
   const pays = await db.prepare(`SELECT id, pay_date AS date, kind, amount, method, note FROM purchase_payments WHERE status='confirmed' AND pay_date>=? AND pay_date<=? AND ${vk}=? ORDER BY pay_date, id LIMIT 5001`).all(from, to, key);
   if (bills.length > 5000 || pays.length > 5000) throw bad('줄이 너무 많습니다. 기간을 좁히세요.');
   const rows = [
     ...pays.map(p => ({ kind: p.kind, date: p.date, order: 0, id: p.id, item: p.kind === 'opening' ? '기초 미지급' : `${vendor}-지급`, method: p.method, note: p.note, purchase: p.kind === 'opening' ? p.amount : 0, paid: p.kind === 'payment' ? p.amount : 0 })),
-    ...bills.map(b => ({ kind: 'purchase', date: b.date, order: 1, id: b.id, bill_id: b.id, bill_no: b.bill_no, statement_no: b.statement_no, item: b.first_item ? `${b.first_item}${b.line_count > 1 ? ` 외 ${b.line_count - 1}` : ''}` : '', supply: b.supply_total, vat: b.vat_total, freight: b.freight, purchase: b.total, paid: 0, note: b.note })),
+    ...bills.map(b => ({ kind: 'purchase', date: b.date, order: 1, id: b.id, bill_id: b.id, bill_no: b.bill_no, categories: b.categories, statement_no: b.statement_no, item: b.first_item ? `${b.first_item}${b.line_count > 1 ? ` 외 ${b.line_count - 1}` : ''}` : '', supply: b.supply_total, vat: b.vat_total, freight: b.freight, purchase: b.total, paid: 0, note: b.note })),
   ].sort((a, b) => stockCompare(a.date, b.date) || a.order - b.order || a.id - b.id);
   let balance = opening;
   for (const r of rows) { balance += r.purchase - r.paid; r.balance = balance; delete r.order; }
@@ -1437,7 +1456,7 @@ route('GET', '/api/purchase-receipt-status', async ({ user, query }) => {
 // 물류가 잡은 출하 줄(전표 없는 것)이나 직접 입력 줄로 매출전표(SB-…)를 만든다. 금액은 원 미만 절사,
 // 부가세는 공급가액 합계의 10%(영세·면세 0)이고 줄마다 나눠 적는다(끝 줄이 나머지를 받아 합이 맞음).
 // 입금(payment)은 잔액에서 빼고 기초 미수금(opening)은 더한다. 고객사·월 마감 뒤에는 그 달 전표·입금을 만들거나 취소할 수 없다.
-const SHIP_SOURCE = `SELECT 'ship' AS source_type, s.id AS source_id, s.ship_date, s.customer, s.item, s.spec, s.unit, s.product_code, s.lot, s.qty, s.note AS ship_note,
+const SHIP_SOURCE = `SELECT 'ship' AS source_type, s.id AS source_id, s.ship_date, s.customer, s.item, s.spec, s.unit, s.product_code, s.lot, s.qty, s.note AS ship_note, COALESCE(${CODE_CAT('s.product_code')}, '') AS item_category,
   (SELECT x.unit_price FROM sales_bill_lines x JOIN sales_bills b ON b.id=x.bill_id WHERE x.active=1 AND REPLACE(LOWER(b.customer),' ','')=REPLACE(LOWER(s.customer),' ','')
      AND (CASE WHEN s.product_code<>'' THEN x.product_code=s.product_code ELSE x.item=s.item END) ORDER BY b.bill_date DESC, x.id DESC LIMIT 1) AS last_price,
   (SELECT ol.unit_price FROM sales_order_lines ol JOIN sales_orders o ON o.id=ol.order_id WHERE o.status='open' AND ol.unit_price IS NOT NULL AND REPLACE(LOWER(o.customer),' ','')=REPLACE(LOWER(s.customer),' ','')
@@ -1460,7 +1479,7 @@ async function unbilledShipments({ customer = '', from = '', to = '', limit = 50
   return db.prepare(`${SHIP_SOURCE}${where.length ? ' AND ' + where.join(' AND ') : ''} ORDER BY s.ship_date, s.id LIMIT ${limit + 1}`).all(...args);
 }
 async function salesBillDetail(bill) {
-  const lines = await db.prepare(`SELECT l.*, i.status AS ship_status, o.order_no FROM sales_bill_lines l LEFT JOIN ship_instructions i ON i.bill_line_id=l.id
+  const lines = await db.prepare(`SELECT l.*, ${LINE_CAT('l')} AS category, i.status AS ship_status, o.order_no FROM sales_bill_lines l LEFT JOIN ship_instructions i ON i.bill_line_id=l.id
     LEFT JOIN sales_order_lines ol ON ol.id=l.order_line_id LEFT JOIN sales_orders o ON o.id=ol.order_id WHERE l.bill_id=? ORDER BY l.id`).all(bill.id);
   for (const l of lines) if (l.source_type === 'ship') l.source_missing = !(await db.prepare('SELECT 1 FROM shipments WHERE id=?').get(l.source_id));
   const invoice = await db.prepare('SELECT i.id, i.invoice_no, i.status FROM tax_invoice_bills t JOIN tax_invoices i ON i.id=t.invoice_id WHERE t.bill_id=? AND t.active=1').get(bill.id);
@@ -1479,9 +1498,11 @@ route('GET', '/api/sales-bills', async ({ user, query }) => {
   if (query.customer) { where.push(`${customerKey('customer')}=?`); args.push(nameKey(str(query.customer, 100))); }
   if (query.status) { if (!['confirmed', 'cancelled'].includes(query.status)) throw bad('상태를 확인하세요.'); where.push('status=?'); args.push(query.status); }
   applyListKeyword(where, args, query.q, ['bill_no', 'customer', 'note', 'created_by']);
+  if (query.category) { const c = query.category === '미분류' ? '' : itemCategory(query.category); where.push(BILL_CATEGORY_FILTER('sales_bill_lines', 'sales_bills')); args.push(c); }
   const page = Math.max(0, Math.min(1000, Number(query.page) || 0));
-  const rows = await db.prepare(`SELECT sales_bills.*, (SELECT COUNT(*) FROM sales_bill_lines l WHERE l.bill_id=sales_bills.id) AS line_count, (SELECT i.invoice_no || '|' || i.status || '|' || i.id FROM tax_invoice_bills t JOIN tax_invoices i ON i.id=t.invoice_id WHERE t.bill_id=sales_bills.id AND t.active=1) AS invoice FROM sales_bills ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY bill_date DESC, id DESC LIMIT 201 OFFSET ?`).all(...args, page * 200);
-  return { rows: rows.slice(0, 200), page, more: rows.length > 200 };
+  const by_category = await billCategoryTotals('sales_bill_lines', 'sales_bills', where, args);
+  const rows = await db.prepare(`SELECT sales_bills.*, (SELECT COUNT(*) FROM sales_bill_lines l WHERE l.bill_id=sales_bills.id) AS line_count, (SELECT group_concat(DISTINCT c) FROM (SELECT ${LINE_CAT('l')} AS c FROM sales_bill_lines l WHERE l.bill_id=sales_bills.id AND l.active=1)) AS categories, (SELECT i.invoice_no || '|' || i.status || '|' || i.id FROM tax_invoice_bills t JOIN tax_invoices i ON i.id=t.invoice_id WHERE t.bill_id=sales_bills.id AND t.active=1) AS invoice FROM sales_bills ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY bill_date DESC, id DESC LIMIT 201 OFFSET ?`).all(...args, page * 200);
+  return { rows: rows.slice(0, 200), page, more: rows.length > 200, by_category };
 });
 route('GET', '/api/sales-bills/:id', async ({ user, params }) => { requireSales(user); return salesBillDetail(await mustGet('sales_bills', params.id)); });
 // 부가세를 줄마다 나눈다: 줄 공급가액의 10% 절사, 합이 전표 부가세와 다르면 금액이 가장 큰 줄이 차이를 받는다.
@@ -1540,6 +1561,7 @@ route('POST', '/api/sales-bills', async ({ user, body }) => {
       lines.push({ source_type: 'manual', source_id: null, item, spec: str(l.spec, 100), unit: str(l.unit, 20), product_code: str(l.product_code, 100), lot: str(l.lot, 100), ship_date: '', qty, unit_price: price, supply: billTrunc(qty * price), note: str(l.note, 200) });
     } else throw bad(`${no}: 줄 구분을 확인하세요.`);
   }
+  for (const l of lines) l.item_category = await lineCategory({ given: l.item_category, bom_id: l.bom_id, product_code: l.product_code, item: l.item });
   const supply = lines.reduce((t, l) => t + l.supply, 0);
   const vat = taxType === 'zero' ? 0 : billTrunc(supply * 0.1), total = supply + vat, vats = splitVat(lines, vat);
   const prefix = `SB-${today().slice(2).replace(/-/g, '')}-`, BID = '(SELECT id FROM sales_bills WHERE request_id=?)';
@@ -1547,19 +1569,19 @@ route('POST', '/api/sales-bills', async ({ user, body }) => {
     args: [prefix, prefix, prefix, date, customer, taxType, supply, vat, total, str(body.note, 500), user.name, user.id, token] }];
   lines.forEach((l, i) => {
     if (!l.order_line_id && l.source_type === 'ship') {
-      cmds.push({ sql: `INSERT INTO sales_bill_lines(bill_id,source_type,source_id,item,spec,unit,product_code,lot,ship_date,qty,unit_price,supply,vat,note,order_line_id) SELECT ${BID},?,?,?,?,?,?,?,?,?,?,?,?,?,
+      cmds.push({ sql: `INSERT INTO sales_bill_lines(bill_id,item_category,source_type,source_id,item,spec,unit,product_code,lot,ship_date,qty,unit_price,supply,vat,note,order_line_id) SELECT ${BID},?,?,?,?,?,?,?,?,?,?,?,?,?,?,
         (SELECT i.order_line_id FROM ship_instructions i WHERE i.shipment_id=? AND i.status='shipped' LIMIT 1)
         WHERE EXISTS(SELECT 1 FROM shipments WHERE id=?)
           AND NOT EXISTS(SELECT 1 FROM ship_instructions i JOIN sales_order_lines ol ON ol.id=i.order_line_id JOIN sales_orders o ON o.id=ol.order_id WHERE i.shipment_id=? AND i.status='shipped' AND (${customerKey('o.customer')}<>? OR o.status='cancelled'))`,
-        args: [token, l.source_type, l.source_id, l.item, l.spec, l.unit, l.product_code, l.lot, l.ship_date, l.qty, l.unit_price, l.supply, vats[i], l.note, l.source_id, l.source_id, l.source_id, nameKey(customer)] }, RC_GUARD); return; }
-    if (!l.order_line_id) { cmds.push({ sql: `INSERT INTO sales_bill_lines(bill_id,source_type,source_id,item,spec,unit,product_code,lot,ship_date,qty,unit_price,supply,vat,note) VALUES(${BID},?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      args: [token, l.source_type, l.source_id, l.item, l.spec, l.unit, l.product_code, l.lot, l.ship_date, l.qty, l.unit_price, l.supply, vats[i], l.note] }); return; }
+        args: [token, l.item_category, l.source_type, l.source_id, l.item, l.spec, l.unit, l.product_code, l.lot, l.ship_date, l.qty, l.unit_price, l.supply, vats[i], l.note, l.source_id, l.source_id, l.source_id, nameKey(customer)] }, RC_GUARD); return; }
+    if (!l.order_line_id) { cmds.push({ sql: `INSERT INTO sales_bill_lines(bill_id,item_category,source_type,source_id,item,spec,unit,product_code,lot,ship_date,qty,unit_price,supply,vat,note) VALUES(${BID},?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      args: [token, l.item_category, l.source_type, l.source_id, l.item, l.spec, l.unit, l.product_code, l.lot, l.ship_date, l.qty, l.unit_price, l.supply, vats[i], l.note] }); return; }
     // 그 사이 다른 전표가 잔량을 가져갔거나 수주가 마감되면 넣지 않고(RC_GUARD) 전체를 되돌린다.
-    cmds.push({ sql: `INSERT INTO sales_bill_lines(bill_id,source_type,source_id,item,spec,unit,product_code,lot,ship_date,qty,unit_price,supply,vat,note,order_line_id) SELECT ${BID},'manual',NULL,?,?,?,?,'','',?,?,?,?,?,?
+    cmds.push({ sql: `INSERT INTO sales_bill_lines(bill_id,item_category,source_type,source_id,item,spec,unit,product_code,lot,ship_date,qty,unit_price,supply,vat,note,order_line_id) SELECT ${BID},?,'manual',NULL,?,?,?,?,'','',?,?,?,?,?,?
       WHERE EXISTS(SELECT 1 FROM sales_order_lines ol JOIN sales_orders o ON o.id=ol.order_id WHERE ol.id=? AND o.status='open')
         AND (SELECT COALESCE(SUM(b.qty),0) FROM sales_bill_lines b WHERE b.order_line_id=? AND b.active=1)
           + (SELECT COALESCE(SUM(i.qty),0) FROM ship_instructions i WHERE i.order_line_id=? AND i.status='shipped' AND NOT EXISTS(SELECT 1 FROM sales_bill_lines x WHERE x.source_type='ship' AND x.source_id=i.shipment_id AND x.active=1)) + ? <= ? + 0.000001`,
-      args: [token, l.item, l.spec, l.unit, l.product_code, l.qty, l.unit_price, l.supply, vats[i], l.note, l.order_line_id, l.order_line_id, l.order_line_id, l.order_line_id, l.qty, l.order_qty] }, RC_GUARD,
+      args: [token, l.item_category, l.item, l.spec, l.unit, l.product_code, l.qty, l.unit_price, l.supply, vats[i], l.note, l.order_line_id, l.order_line_id, l.order_line_id, l.order_line_id, l.qty, l.order_qty] }, RC_GUARD,
     { sql: `INSERT INTO ship_instructions(bill_id,bill_line_id,order_line_id,customer,bom_id,product_code,item,spec,unit,qty,ship_date,note,created_by)
       SELECT b.id, l.id, ?, b.customer, ?, l.product_code, l.item, l.spec, l.unit, l.qty, b.bill_date, l.note, ? FROM sales_bills b JOIN sales_bill_lines l ON l.bill_id=b.id WHERE b.request_id=? AND l.order_line_id=?`,
       args: [l.order_line_id, l.bom_id, user.name, token, l.order_line_id] });
@@ -1688,12 +1710,12 @@ route('GET', '/api/sales-ledger', async ({ user, query }) => {
     return { from, to, customer: '', rows };
   }
   const key = nameKey(customer), opening = [...before.values()][0]?.opening || 0;
-  const lines = await db.prepare(`SELECT b.id AS bill_id, b.bill_no, b.bill_date AS date, l.id, l.item, l.spec, l.unit, l.product_code, l.lot, l.qty, l.unit_price, l.supply, l.vat, l.note FROM sales_bill_lines l JOIN sales_bills b ON b.id=l.bill_id WHERE b.status='confirmed' AND b.bill_date>=? AND b.bill_date<=? AND ${customerKey('b.customer')}=? ORDER BY b.bill_date, b.id, l.id LIMIT 5001`).all(from, to, key);
+  const lines = await db.prepare(`SELECT b.id AS bill_id, b.bill_no, b.bill_date AS date, l.id, l.item, ${LINE_CAT('l')} AS category, l.spec, l.unit, l.product_code, l.lot, l.qty, l.unit_price, l.supply, l.vat, l.note FROM sales_bill_lines l JOIN sales_bills b ON b.id=l.bill_id WHERE b.status='confirmed' AND b.bill_date>=? AND b.bill_date<=? AND ${customerKey('b.customer')}=? ORDER BY b.bill_date, b.id, l.id LIMIT 5001`).all(from, to, key);
   const pays = await db.prepare(`SELECT id, pay_date AS date, kind, amount, method, note FROM sales_payments WHERE status='confirmed' AND pay_date>=? AND pay_date<=? AND ${customerKey('customer')}=? ORDER BY pay_date, id LIMIT 5001`).all(from, to, key);
   if (lines.length > 5000 || pays.length > 5000) throw bad('줄이 너무 많습니다. 기간을 좁히세요.');
   const rows = [
     ...pays.map(p => ({ kind: p.kind, date: p.date, order: 0, id: p.id, item: p.kind === 'opening' ? '기초 미수금' : `${customer}-입금`, method: p.method, note: p.note, sale: p.kind === 'opening' ? p.amount : 0, paid: p.kind === 'payment' ? p.amount : 0 })),
-    ...lines.map(l => ({ kind: 'sale', date: l.date, order: 1, id: l.id, bill_id: l.bill_id, bill_no: l.bill_no, item: l.item, spec: l.spec, unit: l.unit, product_code: l.product_code, lot: l.lot, qty: l.qty, unit_price: l.unit_price, supply: l.supply, vat: l.vat, sale: l.supply + l.vat, paid: 0, note: l.note })),
+    ...lines.map(l => ({ kind: 'sale', date: l.date, order: 1, id: l.id, bill_id: l.bill_id, bill_no: l.bill_no, item: l.item, category: l.category, spec: l.spec, unit: l.unit, product_code: l.product_code, lot: l.lot, qty: l.qty, unit_price: l.unit_price, supply: l.supply, vat: l.vat, sale: l.supply + l.vat, paid: 0, note: l.note })),
   ].sort((a, b) => stockCompare(a.date, b.date) || a.order - b.order || a.id - b.id);
   let balance = opening;
   for (const r of rows) { balance += r.sale - r.paid; r.balance = balance; delete r.order; }
@@ -1743,7 +1765,7 @@ route('GET', '/api/bill-lines', async ({ user, query }) => {
   const T = side === 'sales' ? { b: 'sales_bills', l: 'sales_bill_lines', p: 'customer', d: 'l.ship_date', extra: 'l.vat' } : { b: 'purchase_bills', l: 'purchase_bill_lines', p: 'vendor', d: 'l.received_date', extra: 'NULL' };
   const where = ["b.status='confirmed'", 'b.bill_date>=?', 'b.bill_date<=?'], args = [from, to];
   if (party) { where.push(`${customerKey('b.' + T.p)}=?`); args.push(nameKey(party)); }
-  const rows = await db.prepare(`SELECT b.bill_no, b.bill_date, b.${T.p} AS party, b.tax_type, ${T.d} AS source_date, l.item, l.spec, l.unit, l.product_code, l.lot, l.qty, l.unit_price, l.supply, ${T.extra} AS vat, l.note FROM ${T.l} l JOIN ${T.b} b ON b.id=l.bill_id WHERE ${where.join(' AND ')} ORDER BY b.bill_date, b.id, l.id LIMIT 10001`).all(...args);
+  const rows = await db.prepare(`SELECT b.bill_no, b.bill_date, b.${T.p} AS party, b.tax_type, ${T.d} AS source_date, ${LINE_CAT('l')} AS category, l.item, l.spec, l.unit, l.product_code, l.lot, l.qty, l.unit_price, l.supply, ${T.extra} AS vat, l.note FROM ${T.l} l JOIN ${T.b} b ON b.id=l.bill_id WHERE ${where.join(' AND ')} ORDER BY b.bill_date, b.id, l.id LIMIT 10001`).all(...args);
   if (rows.length > 10000) throw bad('줄이 너무 많습니다. 기간을 좁히세요.');
   if (side === 'purchase') {
     // 매입 운송비는 전표 머리에 있으므로 그 전표 끝에 「운송비」 줄로 붙인다.

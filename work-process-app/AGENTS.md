@@ -844,3 +844,14 @@ INVITE_CODE=local-test-code npm start
 - GET /api/aging?side=sales|purchase&asof: 기준일까지 확정 전표 + 기초 잔액(opening)을 날짜별 차변, 입금·지급(payment) 합계를 오래된 것부터 갚은 것으로(선입선출) 보고 남은 금액을 0~30·31~60·61~90·91~180·180일 초과로. 잔액 음수면 advance(선수·선급금). 권한: 매출=영업, 매입=구매.
 - 화면 #/sales/aging(채권 연령표), #/purchase/aging(채무 연령표). 거래처를 누르면 sessionStorage 'wpa:ledger-pick'으로 원장(기간별 거래보고·매입처 원장)을 그 거래처·가장 오래된 미결 일자부터 연다(ledgerPrefill).
 - #/logistics/scan QR 스캔: LOT 라벨 QR(「LOT|코드|수량 단위|입고번호」) 또는 LOT 글자. 카메라는 BarcodeDetector(안드로이드 크롬), 없으면 USB 스캐너(키 입력 + Enter)·직접 입력. 찾은 LOT의 잔량·위치 → 출하 기록(POST /api/shipments, lot·bom_id) · 위치 · 이동(lotMoveWindow). 서버 변경 없음.
+
+## 전표 줄 분류 (15.117, 마이그레이션 0044)
+- sales_bill_lines·purchase_bill_lines.item_category: 저장 시점 분류로 고정(lineCategory: 원천 값 → bom_id → 제품코드(대소문자 무시) → 품목명 → ''). 매입 원천은 발주·기타입고의 item_category, 매출은 출하·수주 줄의 품목 분류.
+- 읽기는 LINE_CAT(l): 저장값, 비어 있으면(0044 이전 줄) 제품코드로 지금 품목 분류, 그것도 없으면 ''(미분류). 예전 데이터는 바꾸지 않음.
+- 목록 /api/sales-bills·/api/purchase-bills: ?category=(분류|미분류) 필터, 행마다 categories(group_concat), by_category(확정 전표 줄 분류별 공급가액). 전표 보기 줄 category, 원장(매출 줄 category, 매입 전표 categories), /api/bill-lines category(엑셀 「분류」 칸).
+- 화면: catChip/catChips/catSummary(app.js) — 입력 후보 줄·전표 보기·목록 거래처 칸·원장·엑셀.
+
+## 생산계획표 (15.118)
+- 완제품·반제품 생산일정의 주간·월간 기본 보기 = 계획표(scheduleGrid, app.js): 행 = 제품(+규격, 일간 일정 기준), 열 = 날짜(주간 월~일 7열, 일요일 늘) 또는 주차(월간 기본 「주차 합계」, 「일별」로 바꿈). 칸 = 계획 합 / 실적 합, 색: 달성(초록)·일부(노랑)·지난 날 미달(빨강)·미입력(회색).
+- 주간·월간 계획은 위쪽 띠(기간 전체, 실적·달성률). 행 끝 제품 합계·달성률, 아래 줄 열 합계. 칸 클릭 → 그 칸 일정 카드 창(실적 입력·코멘트·완료·삭제 그대로, bindItems), 날짜 빈 칸 → 그 제품으로 일간 일정 추가. 「엑셀」 = 제품별 계획/실적 두 줄.
+- 「달력」 보기는 칸마다 「N건 · 수량」 요약 → 누르면 그날 일정 창. 일간 보기는 기존 카드 목록. 보기 방식·월간 열은 화면별로 기억(uxWrite calendar). 서버 변경 없음.

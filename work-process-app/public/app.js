@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.116';
+const APP_VERSION = '15.118';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -48,6 +48,12 @@ function enterMovesInTable(root) {
   });
 }
 // 표 바로 아래 ERP식 합계 줄. parts: [[이름, 값(HTML)], …] (값이 빈 것은 뺀다)
+// 15.117 품목 분류 칩(전표 줄). 빈 값 = 미분류(코드 없는 직접 입력 줄)
+const CAT_TONE = { 제품: 'blue', 상품: 'green', 원자재: 'gray', 부자재: 'gray', 반제품: 'gray', 임가공: 'orange' };
+const catChip = c => `<span class="cat-chip cat-${CAT_TONE[c] || 'none'}">${esc(c || '미분류')}</span>`;
+const catChips = list => list == null ? '' : String(list).split(',').map(c => catChip(c)).join(' ');
+const catSummary = (by, label = '분류별 공급가액') => by?.length ? `<div class="small cat-sum">${esc(label)}: ${by.map(c => `${catChip(c.category)} ${won(c.supply)}원`).join(' · ')}</div>` : '';
+const catOptions = order => '<option value="">전체</option>' + order.map(c => `<option>${c}</option>`).join('');
 const sumLine = parts => `<div class="list-sum" role="status">${parts.filter(p => p && p[1] !== '' && p[1] != null).map(([k, v]) => `<span><span>${esc(k)}</span> <b>${v}</b></span>`).join('')}</div>`;
 
 // 표 머리글용 짧은 이름(15.63): 긴 이름은 머리글 title·체크박스 aria-label로 그대로 보여 준다.
@@ -1867,12 +1873,52 @@ function planProgress(s) {
   const rate = s.qty ? Math.round((s.actual_qty || 0) / s.qty * 1000) / 10 : 0;
   return `<span class="plan-progress" title="달성률 ${rate}%"><span class="plan-bar"><i style="width:${Math.min(100, rate)}%"></i></span><span class="small">실적 ${s.actual_count ? fmtNum(s.actual_qty || 0) : '미입력'} / 계획 ${fmtNum(s.qty)} · ${rate}%</span></span>`;
 }
+// ── 15.118 생산계획표: 행 = 제품(·규격), 열 = 날짜(주간·월간 일별) 또는 주차(월간 기본). 칸 = 계획 합 / 실적 합, 색으로 달성 상태.
+// 주간·월간 계획은 위쪽 띠(그 기간 전체). 행 끝 = 제품 합계·달성률, 아래 줄 = 열 합계. 일요일 열은 늘 보인다.
+function scheduleGrid({ rows, from, to, view, monthCols, today }) {
+  const cols = [];
+  if (view === 'week' || monthCols === 'day') for (let d = from; d <= to; d = addDays(d, 1)) cols.push({ from: d, to: d, label: view === 'week' ? `${d.slice(5)} ${dow(d)}` : `${Number(d.slice(8))}`, sub: view === 'week' ? '' : dow(d), day: true });
+  else { let n = 1; for (let m = mondayOf(from); m <= to; m = addDays(m, 7), n++) { const a = m < from ? from : m, b = addDays(m, 6) > to ? to : addDays(m, 6); cols.push({ from: a, to: b, label: `${n}주`, sub: a === b ? a.slice(5) : `${a.slice(5)}~${b.slice(5)}` }); } }
+  const days = rows.filter(r => r.period === 'day'), periods = rows.filter(r => r.period !== 'day');
+  const key = r => `${r.product}\u0000${r.spec || ''}`;
+  const groups = new Map();
+  for (const r of days) { if (!groups.has(key(r))) groups.set(key(r), { product: r.product, spec: r.spec || '', bom_id: r.bom_id || null, list: [] }); groups.get(key(r)).list.push(r); }
+  const products = [...groups.values()].sort((a, b) => a.product.localeCompare(b.product, 'ko') || a.spec.localeCompare(b.spec, 'ko'));
+  const sum = (list, k) => list.reduce((t, r) => t + (Number(k === 'qty' ? r.qty : r.actual_qty) || 0), 0);
+  const tone = (list, end) => { if (!list.length) return ''; const plan = sum(list, 'qty'), act = sum(list, 'act'); if (plan && act >= plan) return 'g-done'; if (end < today && act < plan) return 'g-late'; if (act > 0) return 'g-part'; return 'g-none'; };
+  const pct = (a, p) => p ? `${Math.round(a / p * 1000) / 10}%` : '';
+  const num = n => fmtNum(Math.round(n * 1000) / 1000);
+  const inCol = (list, c) => list.filter(r => r.start_date >= c.from && r.start_date <= c.to);
+  const cells = [];
+  const cell = (row, c) => {
+    const list = inCol(row.list, c), plan = sum(list, 'qty'), act = sum(list, 'act'), isToday = c.from <= today && today <= c.to;
+    const id = cells.push({ row, list, from: c.from, to: c.to, addable: !!c.day, title: `${row.product}${row.spec ? ' · ' + row.spec : ''} · ${c.from === c.to ? `${c.from} (${dow(c.from)})` : `${c.from} ~ ${c.to}`}` }) - 1;
+    return `<td class="g-cell ${tone(list, c.to)}${isToday ? ' g-today' : ''}" data-grid-cell="${id}" tabindex="0" title="${list.length ? `계획 ${num(plan)} · 실적 ${num(act)}${list.length > 1 ? ` · ${list.length}건` : ''}` : c.day ? '눌러서 일정 추가' : ''}">${list.length ? `<b>${num(plan)}</b><span>${list.some(r => r.actual_count) ? num(act) : '—'}</span>` : c.day ? '<i>+</i>' : ''}</td>`;
+  };
+  const head = `<tr><th class="g-prod">제품</th>${cols.map(c => `<th class="g-col${c.from <= today && today <= c.to ? ' g-today' : ''}${c.day && parseD(c.from).getDay() === 0 ? ' g-sun' : ''}">${esc(c.label)}${c.sub ? `<div class="small">${esc(c.sub)}</div>` : ''}</th>`).join('')}<th class="g-tot">합계 · 달성</th></tr>`;
+  const bands = periods.map(p => { const a = Number(p.actual_qty) || 0, end = p.period === 'week' ? addDays(p.start_date, 6) : monthEnd(p.start_date);
+    return `<tr class="g-band"><th class="g-prod"><span class="tag">${PERIOD[p.period]}</span> ${esc(p.product)}${p.spec ? ` <span class="small muted">${esc(p.spec)}</span>` : ''}</th><td colspan="${cols.length}"><button type="button" class="g-bar ${tone([p], end)}" data-grid-plan="${p.id}"><span class="g-fill" style="width:${Math.min(100, p.qty ? a / p.qty * 100 : 0)}%"></span><b>${p.period === 'week' ? `${p.start_date.slice(5)}~${end.slice(5)}` : p.start_date.slice(0, 7)} · 계획 ${num(p.qty)} · 실적 ${num(a)} (${pct(a, p.qty) || '0%'})</b></button></td><td class="g-tot">${num(p.qty)}<div class="small">${pct(a, p.qty) || '0%'}</div></td></tr>`; }).join('');
+  const body = products.map(row => { const plan = sum(row.list, 'qty'), act = sum(row.list, 'act');
+    return `<tr><th class="g-prod">${esc(row.product)}${row.spec ? `<div class="small muted">${esc(row.spec)}</div>` : ''}</th>${cols.map(c => cell(row, c)).join('')}<td class="g-tot"><b>${num(plan)}</b><div class="small">${num(act)} · ${pct(act, plan) || '0%'}</div></td></tr>`; }).join('');
+  const colTot = cols.map(c => { const list = inCol(days, c); return { plan: sum(list, 'qty'), act: sum(list, 'act') }; });
+  const allPlan = sum(days, 'qty'), allAct = sum(days, 'act');
+  const foot = `<tr class="g-foot"><th class="g-prod">${cols[0]?.day ? '일 합계' : '주 합계'}</th>${colTot.map(t => `<td>${t.plan ? `<b>${num(t.plan)}</b><span>${num(t.act)}</span>` : ''}</td>`).join('')}<td class="g-tot"><b>${num(allPlan)}</b><div class="small">${num(allAct)} · ${pct(allAct, allPlan) || '0%'}</div></td></tr>`;
+  const legend = `<p class="small muted g-legend">칸 = <b>계획</b> / 실적 · <span class="g-key g-done"></span>달성 <span class="g-key g-part"></span>일부 <span class="g-key g-late"></span>지난 날 미달 <span class="g-key g-none"></span>실적 미입력 · ${cols[0]?.day ? '빈 칸을 누르면 그 날짜에 일정 추가' : '칸을 누르면 그 주 일정'} · 합계는 일간 일정 기준</p>`;
+  const html = (products.length || periods.length) ? `${legend}<div class="table-wrap g-wrap"><table class="g-table${cols.length > 10 ? ' g-wide' : ''}" data-no-sort data-keep-cols><thead>${head}</thead><tbody>${bands}${body}</tbody><tfoot>${foot}</tfoot></table></div>` : '<div class="empty">이 기간에 일정이 없습니다.</div>';
+  const xlsx = { columns: [{ label: '제품', type: 'text', width: 24 }, { label: '규격', type: 'text' }, { label: '구분', type: 'text', width: 6 }, ...cols.map(c => ({ label: c.day ? c.from.slice(5) : `${c.label} (${c.sub})`, type: 'number' })), { label: '합계', type: 'number' }],
+    rows: products.flatMap(row => [[row.product, row.spec, '계획', ...cols.map(c => sum(inCol(row.list, c), 'qty') || ''), sum(row.list, 'qty')], [row.product, row.spec, '실적', ...cols.map(c => sum(inCol(row.list, c), 'act') || ''), sum(row.list, 'act')]]),
+    totals: ['합계(계획)', '', '', ...colTot.map(t => t.plan), allPlan] };
+  return { html, cell: i => cells[Number(i)], from, to, xlsx };
+}
 async function pageSchedule(kind) {
   const main = $('#main'); const label = kind === 'finished' ? '완제품' : '반제품';
   const boms = await api('GET', '/api/boms?kind=' + kind);
   const calendarKey = uxKey('calendar', location.hash || '#/'), calendar = uxRead(calendarKey);
   let view = ['day', 'week', 'month'].includes(calendar?.view) ? calendar.view : 'week';
   let base = /^\d{4}-\d{2}-\d{2}$/.test(calendar?.base || '') ? calendar.base : scheduleFocusDate();
+  // 15.118 주간·월간 보기: 계획표(제품 × 날짜/주차, 기본) | 달력(요약). 월간 계획표 열: 주차 합계(기본) | 일별
+  let lastGridValue = null; const lastGrid = () => lastGridValue;
+  let mode = calendar?.mode === 'cal' ? 'cal' : 'grid', monthCols = calendar?.monthCols === 'day' ? 'day' : 'week';
   main.innerHTML = `
   <h1>${label} 생산일정 <span class="dept">생산</span></h1>
   <div id="actualChanges"></div>
@@ -1888,6 +1934,9 @@ async function pageSchedule(kind) {
   <div class="toolbar">
     <div class="seg" id="vSeg">${Object.entries(PERIOD).map(([k, v]) => `<button data-v="${k}" class="${k === view ? 'on' : ''}">${v}</button>`).join('')}</div>
     <div class="nav-date"><button class="btn small" id="prev">◀</button><b id="rangeLabel"></b><button class="btn small" id="next">▶</button><button class="btn small" id="today">오늘</button></div>
+    <div class="seg" id="mSeg" role="group" aria-label="보기 방식"><button data-m="grid">계획표</button><button data-m="cal">달력</button></div>
+    <div class="seg" id="cSeg" role="group" aria-label="월간 열"><button data-c="week">주차 합계</button><button data-c="day">일별</button></div>
+    <button type="button" class="btn small" id="scXlsx">엑셀</button>
   </div>
   <div id="scBody"></div>`;
   const filterForm = $('#scFilters', main); let queryVersion = 0;
@@ -1907,7 +1956,10 @@ async function pageSchedule(kind) {
   const item = (s) => `<div class="sc-item ${s.done ? 'done' : ''}" data-id="${s.id}"><input type="checkbox" ${s.done ? 'checked' : ''} data-done="${s.id}" title="완료 체크" aria-label="완료"> <span class="p">${esc(s.product)}${lineInfo(s)}</span> <b>${fmtNum(s.qty)}</b>${s.order_ref ? ` <a class="sc-order" href="#/prod/orders" data-open-mr="${s.order_id}">생산의뢰 ${esc(s.order_ref)}</a>` : ''}${scheduleNote(s) ? ` <span class="small muted">${esc(scheduleNote(s))}</span>` : ''}<span class="small muted">입력자: ${esc(s.created_by || '기존 기록: 미기록')}</span>${s.bom_id ? `<button class="btn small" data-bom-view="${s.id}">BOM·소요량</button>` : ''}${planProgress(s)}<button class="btn small" data-actual-open="${s.id}">${s.kind === 'semi' ? '실적 조회 (커팅/융착 자동 집계)' : '생산실적 입력·조회'}</button>${commentButton("schedule", s.id, s.product)}<button class="x" data-del="${s.id}" title="삭제" aria-label="삭제">×</button></div>`;
   const totals = (list) => { const m = {}; list.forEach((s) => (m[s.product] = (m[s.product] || 0) + s.qty)); return Object.entries(m).map(([p, q]) => `<span class="chip">${esc(p)} <b>${fmtNum(q)}</b></span>`).join(' ') || '<span class="muted small">없음</span>'; };
   const load = async () => {
-    uxWrite(calendarKey, { view, base });
+    uxWrite(calendarKey, { view, base, mode, monthCols });
+    const show = (sel, on) => { $(sel, main).style.display = on ? '' : 'none'; };
+    show('#mSeg', view !== 'day'); show('#cSeg', view === 'month' && mode === 'grid'); show('#scXlsx', view !== 'day' && mode === 'grid');
+    $$('#mSeg button', main).forEach(b => b.classList.toggle('on', b.dataset.m === mode)); $$('#cSeg button', main).forEach(b => b.classList.toggle('on', b.dataset.c === monthCols));
     if (!main.isConnected) return;
     const version = ++queryVersion; listLoading(filterForm);
     const [from, to] = range();
@@ -1918,29 +1970,59 @@ async function pageSchedule(kind) {
     const days = rows.filter((s) => s.period === 'day'); const weeks = rows.filter((s) => s.period === 'week'); const months = rows.filter((s) => s.period === 'month');
     const plans = (title, list, fmt) => list.length ? `<div class="card"><h4>${title}</h4>${list.map((s) => `<div class="plan-row"><span class="small muted">${fmt(s)}</span>${item(s)}</div>`).join('')}</div>` : '';
     let body = '';
-    body += plans('월간 계획', months, (s) => s.start_date.slice(0, 7));
-    body += plans('주간 계획', weeks, (s) => `${s.start_date.slice(5)}~${addDays(s.start_date, 6).slice(5)}`);
-    if (view === 'day') {
-      body += `<div class="card"><h4>일간 계획</h4>${days.map(item).join('') || '<div class="muted small">일정이 없습니다.</div>'}</div>`;
-    } else if (view === 'week') {
-      body += `<div class="week">${[0, 1, 2, 3, 4, 5, 6].map((i) => { const d = addDays(from, i); return `<div class="day ${d === todayStr() ? 'today' : ''}"><div class="dh">${d.slice(5)} (${dow(d)})</div>${days.filter((s) => s.start_date === d).map(item).join('')}</div>`; }).join('')}</div>`;
+    let grid = null;
+    if (view !== 'day' && mode === 'grid') {
+      grid = scheduleGrid({ rows, from, to, view, monthCols, today: todayStr() }); lastGridValue = grid;
+      body = grid.html;
     } else {
-      const start = mondayOf(from); const cells = [];
-      for (let d = start; d <= to || parseD(d).getDay() !== 1; d = addDays(d, 1)) cells.push(d);
-      body += `<div class="month"><div class="mh">${['월', '화', '수', '목', '금', '토', '일'].map((w) => `<div>${w}</div>`).join('')}</div><div class="mg">${cells.map((d) => `<div class="day ${d.slice(0, 7) !== from.slice(0, 7) ? 'out' : ''} ${d === todayStr() ? 'today' : ''}"><div class="dh">${Number(d.slice(8))}</div>${days.filter((s) => s.start_date === d).map(item).join('')}</div>`).join('')}</div></div>`;
+      grid = null;
+      body += plans('월간 계획', months, (s) => s.start_date.slice(0, 7));
+      body += plans('주간 계획', weeks, (s) => `${s.start_date.slice(5)}~${addDays(s.start_date, 6).slice(5)}`);
+      // 달력: 칸에는 「N건 · 수량」 요약, 누르면 그날 일정 카드가 창으로 열린다(15.118)
+      const dayCell = d => { const list = days.filter((s) => s.start_date === d); return list.length ? `<button type="button" class="sc-day-sum" data-sc-day="${d}"><b>${fmtNum(list.length)}건</b> · ${fmtNum(list.reduce((t, s) => t + s.qty, 0))}<span class="small muted">${list.filter(s => s.done).length ? ` · 완료 ${list.filter(s => s.done).length}` : ''}</span></button>` : ''; };
+      if (view === 'day') {
+        body += `<div class="card"><h4>일간 계획</h4>${days.map(item).join('') || '<div class="muted small">일정이 없습니다.</div>'}</div>`;
+      } else if (view === 'week') {
+        body += `<div class="week">${[0, 1, 2, 3, 4, 5, 6].map((i) => { const d = addDays(from, i); return `<div class="day ${d === todayStr() ? 'today' : ''}"><div class="dh">${d.slice(5)} (${dow(d)})</div>${dayCell(d)}</div>`; }).join('')}</div>`;
+      } else {
+        const start = mondayOf(from); const cells = [];
+        for (let d = start; d <= to || parseD(d).getDay() !== 1; d = addDays(d, 1)) cells.push(d);
+        body += `<div class="month"><div class="mh">${['월', '화', '수', '목', '금', '토', '일'].map((w) => `<div>${w}</div>`).join('')}</div><div class="mg">${cells.map((d) => `<div class="day ${d.slice(0, 7) !== from.slice(0, 7) ? 'out' : ''} ${d === todayStr() ? 'today' : ''}"><div class="dh">${Number(d.slice(8))}</div>${dayCell(d)}</div>`).join('')}</div></div>`;
+      }
+      body += `<div class="card"><h4>조회 조건 기준 일간 합계 (제품별)</h4>${totals(days)}</div>`;
     }
-    body += `<div class="card"><h4>조회 조건 기준 일간 합계 (제품별)</h4>${totals(days)}</div>`;
     $('#scBody').innerHTML = body;
-    $$('[data-bom-view]', main).forEach(button => button.onclick = () => {
+    bindItems($('#scBody'));
+    // 계획표 칸 → 그 칸의 일정 카드(실적·코멘트·완료·삭제는 카드 그대로). 빈 날짜 칸 → 그 제품으로 일정 추가
+    const cellWindow = (title, list) => { const m = modal(`<h3>${esc(title)}</h3><div class="sc-pop">${list.map(item).join('') || '<p class="muted">일정이 없습니다.</p>'}</div><div class="actions"><button class="btn" data-close>닫기</button></div>`, { wide: true }); $('[data-close]', m.el).onclick = m.close; bindItems(m.el, m.close); };
+    $$('#scBody [data-sc-day]').forEach(b => b.onclick = () => cellWindow(`${b.dataset.scDay} (${dow(b.dataset.scDay)}) 일정`, days.filter(s => s.start_date === b.dataset.scDay)));
+    if (grid) {
+      $$('#scBody [data-grid-cell]').forEach(td => td.onclick = async () => {
+        const c = grid.cell(td.dataset.gridCell);
+        if (c.list.length) return cellWindow(c.title, c.list);
+        if (!c.addable) return;
+        const v = await promptBox(`${c.row.product} · ${c.from} (${dow(c.from)}) 일정 추가`, `<label>수량 *<input name="qty" type="number" min="0" step="any" required autofocus></label><label>비고<input name="note" maxlength="200"></label>`);
+        if (!v) return;
+        try { await api('POST', '/api/schedules', { kind, period: 'day', start_date: c.from, product: c.row.product, ...(c.row.bom_id ? { bom_id: c.row.bom_id } : {}), qty: v.qty, note: v.note }); toast('일정을 추가했습니다.'); load(); } catch (error) { fail(error); }
+      });
+      $$('#scBody [data-grid-plan]').forEach(b => b.onclick = () => { const p = rows.find(r => r.id === Number(b.dataset.gridPlan)); cellWindow(`${PERIOD[p.period]} 계획 · ${p.product}`, [p]); });
+    }
+    // 일정 카드 버튼(완료·삭제·BOM): 목록·계획표 칸 창 공통
+    function bindItems(root, close = null) {
+    $$('[data-bom-view]', root).forEach(button => button.onclick = () => {
       const row = rows.find(row => row.id === Number(button.dataset.bomView)); const snapshot = row.bom_snapshot;
       modal(`<h3>${esc(row.product)} · 생산 ${fmtNum(row.qty)} ${esc(snapshot.unit)}</h3><p class="muted small">입력자: ${esc(row.created_by || '기존 기록: 미기록')} · 일정 등록 당시 BOM 기준입니다. 기준 생산수량: ${fmtNum(snapshot.base_qty)} ${esc(snapshot.unit)}</p>${materialTable(snapshot.requirements || [])}`, { wide: true });
     });
-    $$('#scBody [data-done]').forEach((c) => (c.onchange = async () => { try { await api('PUT', '/api/schedules/' + c.dataset.done, { toggle_done: true }); load(); } catch (e) { fail(e); } }));
-    $$('#scBody [data-del]').forEach((b) => (b.onclick = async () => { if (await confirmBox('이 일정을 삭제할까요?')) { try { await api('DELETE', '/api/schedules/' + b.dataset.del); load(); } catch (e) { fail(e); } } }));
+    $$('[data-done]', root).forEach((c) => (c.onchange = async () => { try { await api('PUT', '/api/schedules/' + c.dataset.done, { toggle_done: true }); close?.(); load(); } catch (e) { fail(e); } }));
+    $$('[data-del]', root).forEach((b) => (b.onclick = async () => { if (await confirmBox('이 일정을 삭제할까요?')) { try { await api('DELETE', '/api/schedules/' + b.dataset.del); close?.(); load(); } catch (e) { fail(e); } } }));
+    }
   };
   bindListControls(filterForm, load);
   renderActualChanges($('#actualChanges', main), kind).catch(fail);
   $$('#vSeg button').forEach((b) => (b.onclick = () => { view = b.dataset.v; $$('#vSeg button').forEach((x) => x.classList.toggle('on', x === b)); filterForm.requestSubmit(); }));
+  $$('#mSeg button', main).forEach(b => b.onclick = () => { mode = b.dataset.m; load().catch(fail); });
+  $$('#cSeg button', main).forEach(b => b.onclick = () => { monthCols = b.dataset.c; load().catch(fail); });
+  $('#scXlsx', main).onclick = () => { const g = lastGrid(); if (g) xlsxDownload(`${label}_생산계획표_${g.from}_${g.to}.xlsx`, { sheet: '생산계획표', titles: [`${label} 생산계획표`, `${g.from} ~ ${g.to} · 계획 / 실적`], columns: g.xlsx.columns, rows: g.xlsx.rows, totals: g.xlsx.totals }); };
   const step = (n) => { base = view === 'day' ? addDays(base, n) : view === 'week' ? addDays(base, 7 * n) : addMonths(base, n); load(); };
   $('#prev').onclick = () => step(-1); $('#next').onclick = () => step(1); $('#today').onclick = () => { base = todayStr(); load(); };
   $('#scNew').onsubmit = async (e) => {
