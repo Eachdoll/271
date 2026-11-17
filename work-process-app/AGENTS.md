@@ -871,3 +871,7 @@ INVITE_CODE=local-test-code npm start
 - 규칙: 제품등록에 규격(boms.spec)이 있으면 그 값으로 고정(입력값 무시) · 사이즈가 등록된 품목은 등록 사이즈 중 하나만 · 둘 다 없으면 입력값(줄마다 사이즈를 적는 품목).
 - 서버: catalogSpec(bom, typed, keep)(발주·출하·기타입고·완제품 생산계획 묶음 저장, 수주, 입고, 기록 고치기 PUT /api/items/:entity/:id — 지금 값은 그대로 둘 수 있음), lockedSpec(생산의뢰·구매의뢰: 고치는 의뢰의 기존 줄 값은 유지).
 - 화면: 줄 표(발주·출하·기타입고)·입고·수주는 .spec-fixed 표시(입력칸 없음), 카드(생산계획 포함)는 규격 칸 숨기고 「규격(고정)」 요약, 생산의뢰·구매의뢰 줄(itemLockApply)은 읽기 전용.
+
+## 품목 찾기 창 (15.122)
+- .ip-modal: 창은 고정 높이(flex column, overflow hidden), 품목 표(.ip-wrap)만 스크롤 → 이중 스크롤 없음. 표 모서리 0(첫 칸이 잘리지 않게), 머리글 sticky.
+- openItemPicker 옵션 lots(기본 true): false면 LOT 수 칸·LOT 자동 번호 숨김(단가표).

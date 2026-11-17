@@ -1548,3 +1548,11 @@ table.grid.po-grid td:nth-child(1) { white-space: nowrap; }
 .dept-detail-title { font-size: 18px; margin: 24px 0 8px; padding-top: 12px; border-top: 1px solid var(--line); }
 #deptMine { padding-top: 12px; border-top: 1px solid var(--line); }
 .spec-fixed { display: inline-block; padding: 2px 8px; border-radius: 4px; background: var(--bg); border: 1px dashed var(--line); }
+/* 15.122 품목 찾기 창: 창 전체 스크롤 대신 품목 표만 스크롤(이중 스크롤 없음), 표 모서리는 각지게 */
+.modal.ip-modal { display: flex; flex-direction: column; overflow: hidden; height: min(860px, calc(100vh - 32px)); }
+.modal.ip-modal > * { flex: 0 0 auto; }
+.modal.ip-modal .ip-wrap { flex: 1 1 auto; min-height: 140px; max-height: none; overflow: auto; border-radius: 0; }
+.modal.ip-modal .ip-wrap .ip-table { border-radius: 0; }
+.modal.ip-modal .ip-wrap thead th { position: sticky; top: 0; z-index: 1; }
+.modal.ip-modal .ip-wrap table th:first-child, .modal.ip-modal .ip-wrap table td:first-child { border-radius: 0 !important; }
+@media (max-width: 700px) { .modal.ip-modal { height: calc(100vh - 16px); } }
