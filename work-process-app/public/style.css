@@ -1705,3 +1705,7 @@ tr.book-pay td { background: var(--green-bg, #eefaf1); } tr.book-open td { backg
 .ret-grid tfoot th.ret-foot { text-align: right; color: #8a1c1c; background: var(--panel); } .ret-grid tfoot td { font-weight: 600; background: var(--panel); }
 @media (max-width: 900px) { .ret-head { grid-template-columns: 1fr; } .ret-head-main th { width: 76px; } }
 @media (max-width: 700px) { .ret-head-main, .ret-head-main tbody { display: block; } .ret-head-main tr { display: grid; grid-template-columns: 88px minmax(0, 1fr); } .ret-head-main th, .ret-head-main td { display: block; border-top: 0; } .ret-head-main th { display: flex; align-items: center; justify-content: center; } .ret-head-main tr:first-child > *:nth-child(-n+2) { border-top: 1px solid var(--line-strong, #9aa6b8); } .ret-bar { flex-wrap: wrap; } .ret-lines-wrap { overflow-x: auto; } }
+/* 15.145 장부 입금·지급 입력 */
+.book-pay { margin: 8px 0 10px; } .book-pay .erp-grid th { width: auto; } .book-pay .erp-grid td input, .book-pay .erp-grid td select { min-width: 90px; } .book-pay .erp-grid td:nth-child(8) input { min-width: 120px; } .book-pay p { margin: 4px 0 0; }
+@media (max-width: 900px) { .book-pay .erp-grid, .book-pay .erp-grid tbody, .book-pay .erp-grid tr { display: block; } .book-pay .erp-grid tr { display: grid; grid-template-columns: 90px minmax(0, 1fr); } .book-pay .erp-grid th, .book-pay .erp-grid td { display: block; } .book-pay .erp-grid td:last-child { grid-column: 1 / -1; } }
+.book-pay .erp-grid td:nth-child(2) { white-space: nowrap; min-width: 90px; }
