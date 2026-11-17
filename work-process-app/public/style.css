@@ -1633,3 +1633,6 @@ tr.tc-missing td { background: var(--red-bg); } tr.tc-pending td { background: v
 .yellow-text { color: var(--yellow); }
 .bulk-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 6px 0 8px; } .bulk-bar [data-bulk-info] { font-weight: 700; }
 .pick-cell { width: 36px; text-align: center; } .pick-cell input { width: 18px; height: 18px; }
+.sb-doc .sb-check { width: 44px; } .sb-doc .sb-lot { width: 120px; } .sb-doc .sb-lot input { width: 110px; min-height: 36px; } .sb-doc .po-items td:nth-child(2) { min-width: 130px; } .sb-doc .po-items { table-layout: auto; width: 100%; } .modal .actions label.inline { white-space: nowrap; } .sb-doc tr.sb-cust th { text-align: left; background: var(--panel); }
+.sb-doc .sb-sign { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 12px; } .sb-doc .sb-sign div { border: 1px solid var(--line); padding: 6px 8px; min-height: 56px; } .sb-doc .sb-sign b { display: block; font-size: 12px; }
+body.printing-cert .sb-doc .sb-lot input { border: 0; padding: 0; } body.printing-cert .sb-doc [data-sb-remove] { display: none; }
