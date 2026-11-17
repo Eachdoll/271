@@ -624,3 +624,53 @@ test('15.161 Purchase tax invoice: items from bill lines (freight row), edit ite
   const other = await buyer('PUT', `/api/purchase-tax-invoices/${inv.id}`, { items: [{ ...items[0], date: '2020-01-01' }, items[1]] });
   assert.match(other.body.error, /같은 달/);
 });
+
+test('15.164 Reverse-issued sales tax invoice stays editable after the issue record; normal issued is locked', async () => {
+  const g = (await admin('POST', '/api/boms', { product: '역발행상품', product_code: 'RV-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  const mk = async c => { const s = (await admin('POST', '/api/shipments', { ship_date: today, ...(g.id ? { bom_id: g.id } : {}), item: '역발행상품', qty: 10, customer: c, unit: 'EA' })).body;
+    const b = (await admin('POST', '/api/sales-bills', { customer: c, bill_date: today, request_id: rid(), lines: [{ source_type: 'ship', source_id: s.id, unit_price: 100 }] })).body;
+    const t = (await admin('POST', '/api/tax-invoices', { request_id: rid(), kind: 'single', bill_ids: [b.id] })).body; return t.rows[0]; };
+  const rv = await mk('역발행고객'), nm = await mk('정발행고객');
+  // 발행 전: 고치기 창에서 발행구분을 역발행으로
+  assert.equal((await admin('PUT', `/api/tax-invoices/${rv.id}`, { issue_type: 'reverse' })).body.issue_type, 'reverse');
+  for (const [i, n] of [[rv, '01'], [nm, '02']]) assert.equal((await admin('POST', `/api/tax-invoices/${i.id}/mark-issued`, { approval_no: `20261117-41000012-000002${n}` })).status, 200);
+  const items = [{ item: '역발행상품', qty: 6, unit_price: 100, supply: 600, vat: 60 }, { item: '역발행상품(추가)', qty: 4, unit_price: 100, supply: 400, vat: 40 }];
+  const u = await admin('PUT', `/api/tax-invoices/${rv.id}`, { items, approval_no: '20261117-41000012-00000299', note: '거래처 발행분' });
+  assert.equal(u.status, 200, JSON.stringify(u.body)); assert.equal(u.body.status, 'issued'); assert.deepEqual(u.body.items.map(i => i.qty), [6, 4]); assert.equal(u.body.approval_no, '20261117-41000012-00000299');
+  assert.match((await admin('PUT', `/api/tax-invoices/${rv.id}`, { approval_no: '20261117-41000012-00000202' })).body.error, /이미 다른/);
+  assert.match((await admin('PUT', `/api/tax-invoices/${nm.id}`, { items })).body.error, /발행을 요청한/);
+});
+
+test('15.165 Bill notes: register, duplicate no, edit with history, collect/reopen, cancel, totals', async () => {
+  const base = { request_id: rid(), kind: 'receivable', issue_date: '2026-08-28', note_no: '260828 서브원7', partner: '(주)서브원', amount: 16304475, due_date: '2026-11-26', bank: '하나은행' };
+  assert.equal((await staff('POST', '/api/notes', base)).status, 403);
+  const n = await buyer('POST', '/api/notes', base); assert.equal(n.status, 200, JSON.stringify(n.body)); assert.equal(n.body.status, 'open');
+  assert.equal((await buyer('POST', '/api/notes', base)).body.duplicate, true);
+  assert.equal((await buyer('POST', '/api/notes', { ...base, request_id: rid() })).status, 409, 'same note no');
+  assert.match((await buyer('POST', '/api/notes', { ...base, request_id: rid(), note_no: 'X1', due_date: '2026-01-01' })).body.error, /만기일자/);
+  await buyer('POST', '/api/notes', { ...base, request_id: rid(), note_no: '260911 IMK8-3', partner: '(주)아이마켓코리아', amount: 49668769, issue_date: '2026-09-11', due_date: '2026-12-09', bank: '기업은행' });
+  await buyer('POST', '/api/notes', { ...base, request_id: rid(), kind: 'payable', note_no: 'P-1', amount: 1000 });
+  const list = (await buyer('GET', '/api/notes?kind=receivable&from=2026-01-01&to=2026-12-31')).body;
+  assert.equal(list.rows.length, 2); assert.equal(list.totals.all, 65973244);
+  const u = await buyer('PUT', `/api/notes/${n.body.id}`, { bank: '우리은행', due_date: '2026-11-30' }); assert.equal(u.body.bank, '우리은행');
+  const c = (await buyer('POST', `/api/notes/${n.body.id}/collect`, { date: '2026-11-30' })).body; assert.deepEqual([c.status, c.processed_date], ['collected', '2026-11-30']);
+  assert.equal((await buyer('GET', '/api/notes?kind=receivable&status=open&from=2026-01-01&to=2026-12-31')).body.rows.length, 1);
+  // 날짜 기준: 처리일자로 11월 → 회수한 1건, 만기일자로 12월 → IMK8-3(12-09) 1건
+  assert.deepEqual((await buyer('GET', '/api/notes?kind=receivable&status=collected&basis=processed&from=2026-11-01&to=2026-11-30')).body.rows.map(r => r.note_no), ['260828 서브원7']);
+  assert.deepEqual((await buyer('GET', '/api/notes?kind=receivable&status=&basis=due&from=2026-12-01&to=2026-12-31')).body.rows.map(r => r.note_no), ['260911 IMK8-3']);
+  assert.equal((await buyer('POST', `/api/notes/${n.body.id}/reopen`, {})).body.status, 'open');
+  assert.equal((await buyer('POST', `/api/notes/${n.body.id}/cancel`, {})).body.status, 'cancelled');
+  assert.equal((await buyer('GET', '/api/notes?kind=receivable&from=2026-01-01&to=2026-12-31')).body.rows.length, 1, 'cancelled hidden');
+  const h = (await buyer('GET', `/api/notes/${n.body.id}/history`)).body.map(x => x.summary);
+  assert.ok(h.includes('삭제') && h.some(x => x.startsWith('만기회수')) && h.some(x => x.includes('발행은행')), h.join(' / '));
+});
+
+test('15.166 Sales calendar: per-day confirmed bill counts and sums for a month', async () => {
+  assert.equal((await staff('GET', `/api/sales-calendar?month=${today.slice(0, 7)}`)).status, 403);
+  assert.equal((await admin('GET', '/api/sales-calendar?month=2026-13')).status, 400);
+  const c = (await admin('GET', `/api/sales-calendar?month=${today.slice(0, 7)}`)).body;
+  const d = c.days.find(x => x.date === today); assert.ok(d && d.n > 0, JSON.stringify(c.days));
+  const bills = (await admin('GET', `/api/sales-bills?from=${today}&to=${today}&status=confirmed`)).body.rows;
+  assert.equal(d.n, bills.length); assert.equal(d.total, bills.reduce((t, b) => t + b.total, 0));
+  assert.equal(c.totals.total, c.days.reduce((t, x) => t + x.total, 0));
+});

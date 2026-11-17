@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.163';
+const APP_VERSION = '15.168';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -152,12 +152,20 @@ function bindListControls(form, load, reset = () => {}) {
 function listLoading(form) { $('[data-list-count]', form).textContent = '조회 중…'; }
 function listCount(form, count) { $('[data-list-count]', form).textContent = `${count}건 조회`; }
 
+// 15.167 팝업이 떠 있으면 키보드·마우스는 맨 위 팝업에만: 뒤 화면(#app)과 아래 팝업은 inert(포커스·클릭·Enter가 안 감).
+// 팝업이 어떤 경로로 사라지든(닫기·화면 이동·코드에서 remove) 지켜보다가 맞춘다 — 뒤 화면이 잠긴 채 남지 않게.
+function syncModalInert() {
+  const wraps = [...document.querySelectorAll('.modal-wrap')], app = document.getElementById('app');
+  if (app) app.inert = wraps.length > 0;
+  wraps.forEach((w, i) => { w.inert = i < wraps.length - 1; });
+}
+if (typeof MutationObserver !== 'undefined' && document.body) new MutationObserver(() => syncModalInert()).observe(document.body, { childList: true });
 function modal(html, { wide = false, onClose = () => {} } = {}) {
   const wrap = document.createElement('div');
   wrap.className = 'modal-wrap';
   wrap.innerHTML = `<div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true"><button class="modal-x" aria-label="닫기">×</button>${html}</div>`;
   const opener = document.activeElement;
-  const close = () => { if (!wrap.isConnected) return; wrap.remove(); document.removeEventListener('keydown', onKey); onClose(); if (opener?.isConnected && !$('.modal-wrap')) opener.focus?.(); };
+  const close = () => { if (!wrap.isConnected) return; wrap.remove(); syncModalInert(); document.removeEventListener('keydown', onKey); onClose(); const top = $$('.modal-wrap').at(-1); if (top) { if (!top.contains(document.activeElement)) ($('.modal', top)?.focus?.()); } else if (opener?.isConnected) opener.focus?.(); };
   const onKey = (e) => {
     if (wrap !== $$('.modal-wrap').at(-1)) return; // only the top dialog reacts
     if (e.key === 'Escape') close();
@@ -173,9 +181,12 @@ function modal(html, { wide = false, onClose = () => {} } = {}) {
   wrap.addEventListener('mousedown', (e) => { if (e.target === wrap) close(); });
   $('.modal-x', wrap).onclick = close;
   document.addEventListener('keydown', onKey);
-  document.body.appendChild(wrap);
-  const first = $('input:not([type=hidden]),textarea,select', wrap); if (first) first.focus();
-  return { el: $('.modal', wrap), close };
+  document.body.appendChild(wrap); syncModalInert();
+  // 포커스를 팝업 안으로: [autofocus] → 첫 입력칸 → 확인 단추(확인 창) → 팝업 자체. 뒤 화면 단추에 포커스가 남아 Enter가 뒤로 가지 않게.
+  const dialog = $('.modal', wrap); dialog.tabIndex = -1;
+  const first = $('[autofocus]', wrap) || $$('input:not([type=hidden]):not([disabled]),textarea:not([disabled]),select:not([disabled])', wrap).find(el => el.offsetParent !== null) || $('[data-yes]', wrap);
+  (first || dialog).focus({ preventScroll: !first });
+  return { el: dialog, close };
 }
 function confirmBox(msg) {
   return new Promise((resolve) => {
@@ -334,13 +345,18 @@ async function saveNewAttachments(entity, row, draft, form) {
 // 메뉴: 업무 → 하위 메뉴 → 화면. 입력과 목록(조회·검색)은 서로 다른 화면입니다(VIEW_SPLIT).
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
-  { group: '영업', items: [{ sub: '견적', items: [['#/sales/quotes/new', '견적서 작성'], ['#/sales/quotes', '견적서 목록']] }, { sub: '수주', items: [['#/sales/orders/new', '수주 입력'], ['#/sales/orders', '수주 목록']] }, { sub: '매출전표', items: [['#/sales/bills/new', '매출전표 입력'], ['#/sales/bills', '매출전표 목록'], ['#/sales/book', '거래처별 장부'], ['#/sales/returns/new', '반입(반품) 입력'], ['#/sales/returns', '반입 목록'], ['#/sales/delivery-status', '납품현황'], ['#/sales/ledger', '기간별 거래보고'], ['#/sales/aging', '채권 연령표'], ['#/sales/closing', '매출 마감']] }, { sub: '세금계산서', items: [['#/sales/tax/new', '세금계산서 만들기'], ['#/sales/tax', '세금계산서 관리'], ['#/sales/tax-check', '발행 체크']] }, { sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
+  { group: '영업', items: [{ sub: '견적', items: [['#/sales/quotes/new', '견적서 작성'], ['#/sales/quotes', '견적서 목록']] }, { sub: '수주', items: [['#/sales/orders/new', '수주 입력'], ['#/sales/orders', '수주 목록']] }, { sub: '매출전표', items: [['#/sales/bills/new', '매출전표 입력'], ['#/sales/bills', '매출전표 목록'], ['#/sales/calendar', '매출 달력'], ['#/sales/returns/new', '반입(반품) 입력'], ['#/sales/returns', '반입 목록'], ['#/sales/delivery-status', '납품현황'], ['#/sales/ledger', '기간별 거래보고'], ['#/sales/closing', '매출 마감']] }, { sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
   { group: '구매', items: [
     { sub: '발주', items: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
-    { sub: '매입전표', items: [['#/purchase/bills/new', '매입전표 입력'], ['#/purchase/bills', '매입전표 목록'], ['#/purchase/book', '거래처별 장부'], ['#/purchase/returns/new', '반출(반품) 입력'], ['#/purchase/returns', '반출 목록'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/tax', '매입 세금계산서'], ['#/purchase/closing', '매입 마감']] },
-    { sub: '대금', items: [['#/purchase/payments', '입금확인'], ['#/purchase/disbursements', '지급확인'], ['#/purchase/ledger', '매입처 원장'], ['#/purchase/aging', '채무 연령표']] },
+    { sub: '매입전표', items: [['#/purchase/bills/new', '매입전표 입력'], ['#/purchase/bills', '매입전표 목록'], ['#/purchase/returns/new', '반출(반품) 입력'], ['#/purchase/returns', '반출 목록'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/closing', '매입 마감']] },
     { sub: '샘플(상품)', items: [['#/purchase/sample/request', '샘플의뢰'], ['#/purchase/sample/list', '샘플리스트']] },
     { sub: '세탁', items: [['#/purchase/laundry/new', '불량·폐기 입력'], ['#/purchase/laundry', '불량·폐기 목록'], ['#/purchase/laundry-reports', '세탁 검수·성적서']] },
+  ] },
+  // 15.164 경리: 매입·매출 세금계산서, 매입·매출 거래처별 장부, 대금(입금·지급·원장·연령표)을 한곳에. 화면 주소는 그대로라 볼 수 있는 사람(영업·구매 메뉴 권한)도 그대로이고, 권한 없는 화면은 메뉴에서 빠진다.
+  { group: '경리', items: [
+    { sub: '세금계산서', items: [['#/sales/tax/new', '매출 세금계산서 만들기'], ['#/sales/tax', '매출 세금계산서 관리'], ['#/sales/tax-check', '매출 발행 체크'], ['#/purchase/tax', '매입 세금계산서'], ['#/purchase/tax-check', '매입 발행 체크']] },
+    { sub: '거래처별 장부', items: [['#/sales/book', '매출 거래처별 장부'], ['#/purchase/book', '매입 거래처별 장부']] },
+    { sub: '대금', items: [['#/purchase/payments', '입금확인'], ['#/purchase/disbursements', '지급확인'], ['#/purchase/notes', '어음 관리'], ['#/purchase/ledger', '매입처 원장'], ['#/sales/aging', '채권 연령표'], ['#/purchase/aging', '채무 연령표']] },
   ] },
   { group: '품질', items: [
     ['#/quality/inspections', '수입·출하 검사 이력'],
@@ -366,7 +382,7 @@ const NAV = [
 // ── 메뉴 열람 권한(15.59) ── ME.menus가 null이면 전체, 배열이면 그 업무 묶음만 메뉴에 보이고 주소로 들어와도 막는다.
 // 홈·리포트·내 정보·관리자 화면은 묶음에 속하지 않아 항상 열린다(관리자 화면은 관리자만).
 const MENU_GROUP_LABELS = [['sales', '영업'], ['purchase', '구매'], ['quality', '품질'], ['dev', '개발'], ['production', '생산'], ['logistics', '물류'], ['master', '기준 정보 (거래처·검사규격)']];
-const NAV_GROUP_KEY = { 영업: 'sales', 구매: 'purchase', 품질: 'quality', 개발: 'dev', 생산: 'production', 물류: 'logistics' };
+const NAV_GROUP_KEY = { 영업: 'sales', 구매: 'purchase', 경리: 'accounting', 품질: 'quality', 개발: 'dev', 생산: 'production', 물류: 'logistics' };
 function routeMenu(route) {
   const path = String(route || '#/').split('?')[0];
   // 구매의뢰 목록은 결재선에 지정된 누구나 들어와 결재해야 하므로 막지 않는다(서버가 본인 관련 의뢰만 보여 준다).
@@ -534,7 +550,9 @@ const PAGES = {
   '#/purchase/receipt-status': main => pageReceiptStatus(main),
   '#/sales/delivery-status': main => pageReceiptStatus(main, 'sales'),
   '#/sales/quotes/new': main => pageQuoteEntry(main), // 15.163 견적서
-  '#/sales/quotes': main => pageQuoteList(main), // 15.157 납품현황(입고현황의 매출 쪽)
+  '#/sales/quotes': main => pageQuoteList(main),
+  '#/purchase/notes': main => pageNotes(main), // 15.165 어음 관리
+  '#/sales/calendar': main => pageSalesCalendar(main), // 15.166 매출 달력 // 15.157 납품현황(입고현황의 매출 쪽)
   '#/sales/orders/new': main => pageSalesOrderEntry(main),
   '#/sales/orders/edit': main => { let id = null; try { id = sessionStorage.getItem('wpa:so-edit'); } catch { id = null; } if (!id) { location.hash = '#/sales/orders'; return; } return pageSalesOrderEntry(main, id); },
   '#/sales/orders': main => pageSalesOrderList(main),
@@ -612,7 +630,8 @@ function shell() {
   let navShut = new Set(); try { navShut = new Set(JSON.parse(localStorage.getItem('wpa:nav-shut') || '[]')); } catch { /* 편의 */ }
   const hasCur = items => items.some(i => Array.isArray(i) ? i[0] === cur : i.items.some(([h]) => h === cur));
   const group = (dept, title, items, body) => { const shut = navShut.has(dept) && !hasCur(items); return `<div class="nav-group${shut ? ' shut' : ''}" data-dept="${dept}"><button type="button" class="nav-title" data-nav-toggle="${dept}" aria-expanded="${!shut}">${title}</button><div class="nav-body">${body}</div></div>`; };
-  const nav = favNavHtml(cur) + NAV.filter(g => canSeeMenu(NAV_GROUP_KEY[g.group])).map((g) => group(NAV_GROUP_KEY[g.group] || 'home', g.group, g.items, g.items.map(entry).join(''))).join('')
+  const seeItems = items => items.map(i => Array.isArray(i) ? (canSeeRoute(i[0]) ? i : null) : (s => s.items.length ? s : null)({ ...i, items: i.items.filter(([h]) => canSeeRoute(h)) })).filter(Boolean); // 15.164 경리처럼 여러 부서 화면이 섞인 묶음
+  const nav = favNavHtml(cur) + NAV.filter(g => g.group === '경리' || canSeeMenu(NAV_GROUP_KEY[g.group])).map(g => g.group === '경리' ? { ...g, items: seeItems(g.items) } : g).filter(g => g.items.length).map((g) => group(NAV_GROUP_KEY[g.group] || 'home', g.group, g.items, g.items.map(entry).join(''))).join('')
     // 관리: 기준 정보 화면(메뉴 권한 「기준 정보」, 권한은 각 화면과 서버가 그대로 판단) + 관리자 전용 화면
     + ((manage => manage.length ? group('manage', '관리', manage, manage.map(link).join('')) : '')([...(canSeeMenu('master') ? NAV_MANAGE : []), ...(ME.is_admin ? NAV_ADMIN : [])]));
   const roles = ME.roles.map((r) => ROLE_LABEL[r]).join(', ');
