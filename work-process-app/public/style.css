@@ -2089,3 +2089,31 @@ table input:not([type=checkbox]):not([type=radio]), table select { border-color:
 .manage-tabs a { padding: 8px 18px; font-weight: 600; font-size: 14px; color: var(--text); text-decoration: none; border-right: 1px solid var(--ns-head-line, var(--line)); }
 .manage-tabs a:last-child { border-right: 0; } .manage-tabs a:hover { background: var(--accent-soft); }
 .manage-tabs a.on { background: var(--ns-pill, var(--accent)); color: #fff; }
+
+/* ── 15.171 가독성: 77개 화면 측정 결과로 단추 높이·글자 크기·표 줄 간격·대비·단추 간격을 한 기준으로 ── */
+/* 단추: 보통 42px·14px, 작은 단추 32px·13px. 조회 줄 안 단추는 입력칸(44px)과 같은 높이로 맞춤(◀ 기간 ▶·거래처 찾기 포함) */
+.btn:not(.small) { min-height: 42px; font-size: 14px; }
+.btn.small { min-height: 32px; padding: 5px 12px; font-size: 13px; }
+.list-filters .btn, .toolbar > .btn, .list-filters .range-presets .btn { min-height: 44px; }
+.range-presets { gap: 6px; } .range-presets .rp-arrow { font-size: 13px; min-width: 40px; }
+/* 붙어 있는 단추 사이 여백(표 칸·한 줄에 나란히 놓인 단추) */
+td > .btn + .btn, td > .btn ~ .btn, td > a.btn + .btn, h1 > .btn + .btn { margin-left: 6px; }
+/* 표: 글자 14px, 제목 13.5px 진하게, 줄 간격 넉넉히, 줄 구분선 보이게, 숫자 자리 맞춤 */
+table.grid { font-size: 14px; }
+table.grid td { padding: 10px 12px; line-height: 1.45; border-bottom: 1px solid var(--line); }
+table.grid th { padding: 10px 12px; font-size: 13.5px; color: var(--text-2, var(--text)); }
+table.grid td.r, table.grid th.r, .r { font-variant-numeric: tabular-nums; }
+table.grid tbody tr:hover > td { background: var(--accent-soft); }
+/* 작은 글자 최소 13px(설명·선택 표시·상태 칩·부서 표시) */
+.hint, label > span.opt, legend > span.opt, summary span.opt, .form-legend span.opt, p.small, span.small, .input-author, .rs-page .rs-f-l { font-size: 13px; }
+.chip, .dept, .tag { font-size: 12.5px; padding: 3px 8px; }
+/* 대비: 화면 탭 글자·닫기, 관리 전환 단추, 흐린 글씨를 한 단계 진하게 */
+.pt-tab { color: var(--text-2, var(--text)); }
+.pt-x { display: inline-grid; place-items: center; min-width: 26px; min-height: 26px; opacity: .8; }
+.manage-tabs a.on { background: var(--ns-navy, var(--accent)); }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --muted: #566070; } }
+:root[data-theme="light"] { --muted: #566070; }
+/* 표 제목 필터 단추(▼)를 조금 크게 */
+.xf-btn { width: 24px; height: 24px; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .pt-tab.on { color: var(--ns-navy-2, #16307d); } }
+:root[data-theme="light"] .pt-tab.on { color: var(--ns-navy-2, #16307d); }
