@@ -58,14 +58,18 @@ async function pageSalesOrderEntry(main, editId = null) {
   const pick = async (index = -1) => {
     if (!catalog) catalog = await api('GET', '/api/boms').catch(error => { fail(error); return null; });
     if (!catalog) return;
-    const bom = await openItemPicker(catalog, { title: '수주 품목 찾기', filter: b => b.active !== 0 && !b.is_temp, emptyText: '찾는 품목이 없습니다. 분류 탭을 「전체」로 바꾸거나 검색어를 줄이세요. 새 품목은 제품등록에서 먼저 등록합니다.' });
-    if (!bom) return;
-    const row = { bom_id: bom.id, item: bom.product, product_code: bom.product_code || '', unit: bom.unit || '', spec: bom.spec || '', fixedSpec: !!bom.spec && !(bom.sizes || []).length, sizes: bom.sizes || [] };
-    const tp = (await tablePrices('sales', input.value, form.elements.order_date.value || todayStr()))[bom.id];
-    if (tp) row.price = tp.unit_price; // 15.111 매출 단가표 단가를 미리 채움
-    if (index >= 0) Object.assign(lines[index], row); else lines.push({ qty: '', price: '', due_date: form.elements.due_date.value, note: '', ...row });
+    const pickOpts = { title: '수주 품목 찾기', filter: b => b.active !== 0 && !b.is_temp, emptyText: '찾는 품목이 없습니다. 분류 탭을 「전체」로 바꾸거나 검색어를 줄이세요. 새 품목은 제품등록에서 먼저 등록합니다.' };
+    // 15.137 새 줄은 체크해 여러 품목을 한 번에, 「바꾸기」는 한 품목
+    const boms = index >= 0 ? [await openItemPicker(catalog, pickOpts)].filter(Boolean) : ((await openItemPicker(catalog, { ...pickOpts, multi: true, lots: false }))?.items || []).map(x => x.bom);
+    if (!boms.length) return;
+    for (const bom of boms) {
+      const row = { bom_id: bom.id, item: bom.product, product_code: bom.product_code || '', unit: bom.unit || '', spec: bom.spec || '', fixedSpec: !!bom.spec && !(bom.sizes || []).length, sizes: bom.sizes || [] };
+      const tp = (await tablePrices('sales', input.value, form.elements.order_date.value || todayStr()))[bom.id];
+      if (tp) row.price = tp.unit_price; // 15.111 매출 단가표 단가를 미리 채움
+      if (index >= 0) Object.assign(lines[index], row); else lines.push({ qty: '', price: '', due_date: form.elements.due_date.value, note: '', ...row });
+    }
     draw();
-    $$('[data-l="qty"]', box)[index >= 0 ? index : lines.length - 1]?.focus();
+    $$('[data-l="qty"]', box)[index >= 0 ? index : lines.length - boms.length]?.focus();
   };
   enterMovesInTable(box);
   $('[data-so-add]', form).onclick = () => pick().catch(fail);
@@ -161,7 +165,7 @@ async function pageSalesOrderList(main) {
     rows = next ? rows.concat(data.rows) : data.rows; page = data.page; $('#soMore', main).hidden = !data.more;
     $('#soSummary', main).innerHTML = `<b>${esc(`${rows.length}건 · 수주 금액 ${won(rows.reduce((t, r) => t + r.amount, 0))}원`)}</b>${data.more ? ' <span>(더 있음)</span>' : ''}`;
     $('#soList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>수주번호</th><th>수주일</th><th>거래처</th><th>비고</th><th>품목</th><th class="r">수주</th><th class="r">전표</th><th class="r">잔량</th><th class="r">금액</th><th>납기</th><th>상태</th><th>입력</th><th></th></tr></thead><tbody>${rows.map((r, i) => `<tr class="${['closed', 'cancelled'].includes(r.state) ? 'row-off' : ''}">
-      <td data-card-primary><b>${esc(r.order_no)}</b>${poOf(r.customer_po, r.note) ? `<div class="small muted">PO ${esc(poOf(r.customer_po, r.note))}</div>` : ''}</td><td>${esc(r.order_date)}</td><td>${esc(r.customer)}${r.customer_code ? `<div class="small muted">${esc(r.customer_code)}</div>` : ''}</td><td class="so-list-note" title="${esc(r.note || '')}">${r.note ? esc(r.note) : '<span class="muted">—</span>'}</td>
+      <td data-card-primary><b>${esc(r.order_no)}</b>${soPoInfo(r)}</td><td>${esc(r.order_date)}</td><td>${esc(r.customer)}${r.customer_code ? `<div class="small muted">${esc(r.customer_code)}</div>` : ''}</td><td class="so-list-note" title="${esc(r.note || '')}">${r.note ? esc(r.note) : '<span class="muted">—</span>'}</td>
       <td>${esc(r.first_item || '')}${r.line_count > 1 ? ` <span class="small muted">${esc(`외 ${r.line_count - 1}`)}</span>` : ''}</td><td class="r">${fmtNum(r.ordered_qty)}</td><td class="r">${fmtNum(r.billed_qty)}</td>
       <td class="r"><b>${r.status === 'open' ? fmtNum(Math.max(0, r.ordered_qty - r.billed_qty)) : ''}</b></td><td class="r">${won(r.amount)}</td><td>${esc(r.due_date || '')}</td><td>${soChip(r.state)}</td><td class="small muted">${esc(r.created_by)}</td>
       <td data-card-primary><button class="btn small" data-so-open="${r.id}">보기</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">조건에 맞는 수주가 없습니다.</div>';
@@ -179,36 +183,53 @@ async function pageSalesOrderList(main) {
 // 물류 · 출하지시: 영업이 수주에서 매출전표를 잡으면 줄마다 지시가 내려온다. LOT을 넣고 「출하 처리」하면 출하(재고 차감)가 생긴다.
 async function pageShipInstructions(main) {
   main.innerHTML = `<h1>출하지시</h1>
-  <p class="muted">영업이 수주로 매출전표를 잡으면 여기에 출하지시가 내려옵니다. 출고할 줄을 체크하고 LOT을 넣어 「출하 처리」하면 출하 목록에 기록되고 재고가 빠집니다. 전표가 취소되면 대기 중인 지시도 함께 취소됩니다.</p>
+  <p class="muted">영업이 수주로 매출전표를 잡으면 여기에 출하지시가 내려옵니다. 출고할 줄을 체크하고 LOT을 넣어 「출하 처리」하면 출하 목록에 기록되고 재고가 빠집니다. 전표가 취소되면 대기 중인 지시도 함께 취소됩니다. 여러 줄을 체크해 「출고지시서 묶기」하면 한 장(DO-…)의 피킹·출고 지시서로 인쇄하고 한 번에 출하 처리할 수 있습니다.</p>
   <div class="seg class-tabs" id="siTabs" role="group" aria-label="지시 상태"></div>
-  <form class="list-filters toolbar" data-read-only id="siFilters"><label>지시일<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>거래처<input name="customer" maxlength="100"></label><label class="grow">검색<input type="search" name="q" placeholder="품목·제품코드·거래처"></label><button class="btn primary">조회</button></form>
+  <form class="list-filters toolbar" data-read-only id="siFilters"><label>지시일<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>거래처<input name="customer" maxlength="100"></label><label class="grow">검색<input type="search" name="q" placeholder="품목·제품코드·거래처·출고지시서 번호"></label><label class="inline" data-si-nobatch><input type="checkbox" name="nobatch"> 묶음 안 된 것만</label><button class="btn primary">조회</button></form>
   <div id="siList"></div>
-  <div class="actionbar" id="siBar"><span class="small" id="siCount"></span><label class="inline">출고일 <input type="date" id="siDate" value="${todayStr()}" max="${todayStr()}"></label><button type="button" class="btn primary" id="siShip">출하 처리</button></div>`;
-  const form = $('#siFilters', main); let rows = [], status = 'pending', version = 0, busy = false;
+  <div class="actionbar" id="siBar"><span class="small" id="siCount"></span><label class="inline">출고일 <input type="date" id="siDate" value="${todayStr()}" max="${todayStr()}"></label><button type="button" class="btn" id="siBatch" title="체크한 지시를 출고지시서 한 장으로 묶어 인쇄">출고지시서 묶기</button><button type="button" class="btn primary" id="siShip">출하 처리</button></div>`;
+  const form = $('#siFilters', main); let rows = [], status = 'pending', version = 0, busy = false, lotPickers = new Map();
   const canShip = hasRole('logistics');
-  const tabs = [['pending', '출하 대기'], ['held', '보류'], ['shipped', '출하 완료'], ['cancelled', '지시 취소']];
+  const tabs = [['pending', '출하 대기'], ['batches', '출고지시서(묶음)'], ['held', '보류'], ['shipped', '출하 완료'], ['cancelled', '지시 취소']];
   const canHold = hasRole('logistics') || hasRole('sales');
   const drawTabs = () => { $('#siTabs', main).innerHTML = tabs.map(([k, label]) => `<button type="button" data-si-tab="${k}" class="${k === status ? 'on' : ''}" aria-pressed="${k === status}">${label}</button>`).join(''); };
   const picked = () => $$('[data-si-pick]:checked', main).map(c => Number(c.value));
-  const sync = () => { const n = picked().length; $('#siCount', main).textContent = `${n}건 선택`; $('#siShip', main).disabled = !n || busy; };
+  const sync = () => { const n = picked().length; $('#siCount', main).textContent = `${n}건 선택`; $('#siShip', main).disabled = !n || busy; $('#siBatch', main).disabled = !n || busy; };
   const load = async () => {
     const mine = ++version;
-    const data = await api('GET', '/api/ship-instructions?' + new URLSearchParams({ ...formObj(form), status }));
+    $('[data-si-nobatch]', form).hidden = status !== 'pending';
+    if (status === 'batches') { $('#siBar', main).hidden = true; const data = await api('GET', '/api/ship-batches?' + new URLSearchParams({ from: form.elements.from.value, to: form.elements.to.value, q: form.elements.q.value, status: 'all' })); if (mine !== version || !main.isConnected) return; rows = []; $('#siList', main).innerHTML = shipBatchList(data.rows); return; }
+    const { nobatch, ...flt } = formObj(form);
+    const data = await api('GET', '/api/ship-instructions?' + new URLSearchParams({ ...flt, status, batch: status === 'pending' && form.elements.nobatch.checked ? 'none' : '' }));
     if (mine !== version || !main.isConnected) return;
     rows = data.rows; const pending = status === 'pending', held = status === 'held';
-    $('#siBar', main).hidden = !pending || !canShip;
-    $('#siList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr>${pending && canShip ? '<th><input type="checkbox" id="siAll" aria-label="전체 선택"></th>' : ''}<th>지시일</th><th>거래처</th><th>품목</th><th>규격</th><th class="r">수량</th><th>단위</th><th>${pending ? 'LOT' : 'LOT · 처리'}</th><th>수주 · 전표</th><th>상태</th>${(pending || held) && canHold ? '<th></th>' : ''}</tr></thead><tbody>${rows.map(r => `<tr>
-      ${pending && canShip ? `<td><input type="checkbox" data-si-pick value="${r.id}" aria-label="${esc(r.item)} 선택"></td>` : ''}<td class="nowrap">${esc(r.ship_date)}</td><td>${esc(r.customer)}</td>
+    $('#siBar', main).hidden = !pending || !(canShip || canHold); $('#siShip', main).hidden = !canShip; $('#siDate', main).closest('label').hidden = !canShip;
+    $('#siList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr>${pending && (canShip || canHold) ? '<th><input type="checkbox" id="siAll" aria-label="전체 선택"></th>' : ''}<th>지시일</th><th>거래처</th><th>품목</th><th>규격</th><th class="r">수량</th><th>단위</th><th>${pending ? 'LOT' : 'LOT · 처리'}</th><th>수주 · 전표</th><th>상태</th>${(pending || held) && canHold ? '<th></th>' : ''}</tr></thead><tbody>${rows.map(r => `<tr>
+      ${pending && (canShip || canHold) ? `<td><input type="checkbox" data-si-pick value="${r.id}" aria-label="${esc(r.item)} 선택"></td>` : ''}<td class="nowrap">${esc(r.ship_date)}</td><td>${esc(r.customer)}</td>
       <td data-card-primary><b>${esc(r.item)}</b>${r.product_code ? `<div class="small muted">${esc(r.product_code)}</div>` : ''}${r.note ? `<div class="small muted">${esc(r.note)}</div>` : ''}</td><td>${esc(r.spec || '')}</td>
       <td class="r"><b>${fmtNum(r.qty)}</b></td><td>${esc(r.unit || '')}</td>
       <td>${pending ? (canShip ? `<input data-si-lot="${r.id}" maxlength="100" aria-label="${esc(r.item)} LOT" placeholder="LOT">` : '') : `${esc(r.shipped_lot || '')}<div class="small muted">${esc(r.processed_by || '')} ${esc(String(r.processed_at || '').slice(5, 16))}</div>`}</td>
-      <td class="small">${esc(r.order_no || '')}${r.customer_po ? ` · ${esc(r.customer_po)}` : ''}<div class="muted">${esc(r.bill_no)}</div></td><td>${shipChip(held ? 'held' : r.status)}${held && r.hold_note ? `<div class="small muted">${esc(r.hold_note)}</div>` : ''}${held ? `<div class="small muted">${esc(r.held_by || '')} ${esc(String(r.held_at || '').slice(5, 16))}</div>` : ''}</td>${(pending || held) && canHold ? `<td class="nowrap"><button type="button" class="btn small" data-si-hold="${r.id}">${held ? '보류 해제' : '보류'}</button></td>` : ''}</tr>`).join('')}</tbody></table></div>`
+      <td class="small">${esc(r.order_no || '')}${r.customer_po ? ` · ${esc(r.customer_po)}` : ''}<div class="muted">${esc(r.bill_no)}</div></td><td>${shipChip(held ? 'held' : r.status)}${r.batch_no ? `<div><button type="button" class="link-btn small" data-si-batch="${r.open_batch_id}" title="출고지시서 보기">${esc(r.batch_no)}</button></div>` : ''}${held && r.hold_note ? `<div class="small muted">${esc(r.hold_note)}</div>` : ''}${held ? `<div class="small muted">${esc(r.held_by || '')} ${esc(String(r.held_at || '').slice(5, 16))}</div>` : ''}</td>${(pending || held) && canHold ? `<td class="nowrap"><button type="button" class="btn small" data-si-hold="${r.id}">${held ? '보류 해제' : '보류'}</button></td>` : ''}</tr>`).join('')}</tbody></table></div>`
       : `<div class="empty">${pending ? '내려온 출하지시가 없습니다.' : held ? '보류 중인 출하지시가 없습니다.' : '해당하는 출하지시가 없습니다.'}</div>`;
     if (rows.length) $('#siList', main).insertAdjacentHTML('beforeend', sumLine([['합계', esc(`${rows.length}건`)], ['수량', esc(unitTotals(rows, r => r.qty, r => r.unit))]]));
     const all = $('#siAll', main); if (all) all.onchange = () => { $$('[data-si-pick]', main).forEach(c => { c.checked = all.checked; }); sync(); };
+    lotPickers = new Map($$('[data-si-lot]', main).map(inp => { const r = rows.find(x => x.id === Number(inp.dataset.siLot)); return [r.id, bindLotPicker(inp, () => r.item, () => r.qty)]; }));
     sync();
   };
   $('#siList', main).addEventListener('change', e => { if (e.target.matches('[data-si-pick]')) sync(); });
+  // 15.132 출고지시서(묶음): 묶기 · 보기
+  $('#siList', main).addEventListener('click', async e => { const b = e.target.closest('[data-si-batch]'); if (!b) return; try { shipBatchSheet(await api('GET', '/api/ship-batches/' + b.dataset.siBatch), () => load()); } catch (error) { fail(error); } });
+  $('#siBatch', main).onclick = async () => {
+    const ids = picked(); if (!ids.length || busy) return;
+    const sel = rows.filter(r => ids.includes(r.id)), dup = sel.find(r => r.batch_no);
+    if (dup) return toast(`${dup.item}(${dup.customer})은 이미 ${dup.batch_no}에 묶여 있습니다. 체크를 풀거나 그 지시서에서 빼세요.`, 'err');
+    const custs = [...new Set(sel.map(r => r.customer))];
+    const v = await promptBox(`출고지시서 묶기 · ${ids.length}줄`, `<p class="small muted">${esc(custs.join(', '))} · ${esc(unitTotals(sel, r => r.qty, r => r.unit))}</p>
+      <label>출고 예정일 *<input type="date" name="plan_date" required value="${esc($('#siDate', main).value || todayStr())}"></label><label>비고 <span class="hint">(차량·기사·배송지 등)</span><input name="note" maxlength="300"></label>`);
+    if (!v) return;
+    try { const r = await api('POST', '/api/ship-batches', { ...v, ids, request_id: crypto.randomUUID() }); toast(`출고지시서 ${r.batch_no}을(를) 만들었습니다.`); await load(); shipBatchSheet(r, () => load()); }
+    catch (error) { fail(error); await load().catch(() => {}); }
+  };
   // 15.104 보류: 출하만 미룰 때(전표·수주 잔량은 그대로). 해제하면 다시 출하 대기로.
   $('#siList', main).addEventListener('click', async e => {
     const b = e.target.closest('[data-si-hold]'); if (!b) return;
@@ -223,8 +244,9 @@ async function pageShipInstructions(main) {
   $('#siShip', main).onclick = async () => {
     const ids = picked(); if (!ids.length || busy) return;
     const lots = Object.fromEntries(ids.map(id => [id, $(`[data-si-lot="${id}"]`, main)?.value.trim() || '']));
-    const noLot = ids.filter(id => !lots[id]).length;
-    if (!(await confirmBox(`${ids.length}건을 ${$('#siDate', main).value}에 출하 처리할까요?${noLot ? ` (LOT 없는 줄 ${noLot}건)` : ''} 출하 목록에 기록되고 재고가 빠집니다.`))) return;
+    const noLot = ids.filter(id => !lots[id]).length, lotWarn = ids.map(id => lotPickers.get(id)?.check()).filter(Boolean);
+    if (!(await confirmBox(`${ids.length}건을 ${$('#siDate', main).value}에 출하 처리할까요?${noLot ? ` (LOT 없는 줄 ${noLot}건)` : ''}${lotWarn.length ? ` ⚠ ${lotWarn.join(' / ')}` : ''} 출하 목록에 기록되고 재고가 빠집니다.`))) return;
+    LOT_CACHE.clear();
     busy = true; sync();
     try { const r = await api('POST', '/api/ship-instructions/ship', { ids, ship_date: $('#siDate', main).value, lots }); toast(`${r.shipped}건을 출하 처리했습니다.`); await load(); }
     catch (error) { fail(error); await load().catch(() => {}); } finally { busy = false; sync(); }
@@ -235,4 +257,72 @@ async function pageShipInstructions(main) {
   form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
   bindPartnerPicker(form.elements.customer, null, { type: 'sales' }).catch(() => {});
   await load();
+}
+
+// ── 15.132 출고지시서(묶음) ──
+const BATCH_STATE = { open: ['출고 대기', 'yellow'], partial: ['일부 출고', 'blue'], done: ['출고 완료', 'green'], cancelled: ['묶음 풀림', ''] };
+const batchChip = s => { const [label, cls] = BATCH_STATE[s] || [s, '']; return `<span class="chip ${cls}">${esc(label)}</span>`; };
+function shipBatchList(rows) {
+  if (!rows.length) return '<div class="empty">출고지시서가 없습니다. 「출하 대기」에서 지시를 체크해 「출고지시서 묶기」를 누르세요.</div>';
+  return `<div class="table-wrap"><table class="grid"><thead><tr><th>출고지시서</th><th>출고 예정일</th><th>거래처</th><th class="r">줄</th><th class="r">대기</th><th class="r">출고</th><th>상태</th><th>비고</th><th>작성</th><th></th></tr></thead><tbody>${rows.map(b => `<tr class="${b.status === 'cancelled' ? 'row-off' : ''}">
+    <td data-card-primary><button type="button" class="link-btn" data-si-batch="${b.id}">${esc(b.batch_no)}</button></td><td>${esc(b.plan_date)}</td><td>${esc(String(b.customers || '').split(',').join(', '))}</td>
+    <td class="r">${fmtNum(b.lines)}</td><td class="r">${b.pending ? `<b>${fmtNum(b.pending)}</b>` : ''}</td><td class="r">${fmtNum(b.shipped)}</td><td>${batchChip(b.state)}</td><td class="small">${esc(b.note || '')}</td>
+    <td class="small muted">${esc(b.created_by)} ${esc(String(b.created_at).slice(5, 16))}</td><td><button class="btn small" data-si-batch="${b.id}">보기</button></td></tr>`).join('')}</tbody></table></div>`;
+}
+// 출고지시서 한 장: 거래처별로 모은 피킹표(LOT·확인 칸) + 인쇄 + 남은 줄 한 번에 출하 처리 + 줄 빼기·묶음 풀기
+function shipBatchSheet(b, after = null) {
+  const canShip = hasRole('logistics'), canEdit = (hasRole('logistics') || hasRole('sales')) && b.status === 'open';
+  const pend = b.lines.filter(l => l.status === 'pending');
+  const groups = []; for (const l of b.lines) { let g = groups.find(x => x.customer === l.customer); if (!g) groups.push(g = { customer: l.customer, lines: [] }); g.lines.push(l); }
+  let no = 0;
+  const m = modal(`<h3 class="po-print-title">출고지시서 <span class="small muted">${esc(b.batch_no)}</span> ${batchChip(b.state)}</h3>
+    <section class="cert po-doc sb-doc">
+      <div class="po-doc-head"><img src="/assets/seoulsemi-logo-blue.png" alt="SEOUL SEMITECH"><h2>출 고 지 시 서</h2></div>
+      <table class="po-info"><tbody>
+        <tr><th>지시서 번호</th><td><b>${esc(b.batch_no)}</b></td><th>출고 예정일</th><td><b>${esc(b.plan_date)}</b></td></tr>
+        <tr><th>거래처</th><td>${esc(groups.map(g => g.customer).join(', '))}</td><th>작성</th><td>${esc(b.created_by)} · ${esc(String(b.created_at).slice(0, 16))}</td></tr>
+        ${b.note ? `<tr><th>비고</th><td colspan="3">${esc(b.note)}</td></tr>` : ''}
+        ${b.status === 'cancelled' ? `<tr><th>묶음 풀림</th><td colspan="3">${esc(b.cancelled_by || '')} · ${esc(String(b.cancelled_at || '').slice(0, 16))}</td></tr>` : ''}
+      </tbody></table>
+      <table class="po-items"><thead><tr><th>No</th><th>품목</th><th>규격</th><th class="r">수량</th><th>단위</th><th>수주 · PO · 전표</th><th>LOT</th><th>상태</th><th class="sb-check">확인</th></tr></thead>
+      <tbody>${groups.map(g => `<tr class="sb-cust"><th colspan="9">${esc(g.customer)} <span class="small muted">${esc(`${g.lines.length}줄 · ${unitTotals(g.lines, l => l.qty, l => l.unit)}`)}</span></th></tr>${g.lines.map(l => `<tr class="${l.status === 'cancelled' ? 'row-off' : ''}">
+        <td class="c">${++no}</td><td><b>${esc(l.item)}</b>${l.product_code ? `<div class="po-code">${esc(l.product_code)}</div>` : ''}${l.note ? `<div class="po-code">${esc(l.note)}</div>` : ''}</td><td>${esc(l.spec || '')}</td>
+        <td class="r"><b>${fmtNum(l.qty)}</b></td><td>${esc(l.unit || '')}</td><td class="small">${esc(l.order_no || '')}${l.customer_po ? ` · PO ${esc(l.customer_po)}` : ''}<div class="muted">${esc(l.bill_no)}</div></td>
+        <td class="sb-lot">${l.status === 'pending' && canShip && b.status === 'open' ? `<input data-sb-lot="${l.id}" maxlength="100" placeholder="LOT" aria-label="${esc(l.item)} LOT">` : esc(l.shipped_lot || '')}</td>
+        <td>${shipChip(l.status === 'pending' && l.held ? 'held' : l.status)}${l.status === 'pending' && canEdit ? ` <button type="button" class="btn small" data-sb-remove="${l.id}">빼기</button>` : ''}</td><td class="sb-check"></td></tr>`).join('')}`).join('')}</tbody>
+      <tfoot><tr><th colspan="3" class="r">합계</th><td class="r" colspan="2"><b>${esc(unitTotals(b.lines.filter(l => l.status !== 'cancelled'), l => l.qty, l => l.unit))}</b></td><td colspan="4">${esc(`${b.lines.length}줄 · 대기 ${b.pending} · 출고 ${b.shipped}`)}</td></tr></tfoot></table>
+      <div class="sb-sign"><div><b>지시</b>${esc(b.created_by)}</div><div><b>피킹·포장</b></div><div><b>출고 확인</b></div></div>
+    </section>
+    <div class="actions"><button class="btn" data-close>닫기</button>${canEdit ? '<button class="btn danger" data-sb-cancel>묶음 풀기</button>' : ''}<button class="btn" data-print>인쇄 · PDF 저장</button>
+      ${canShip && b.status === 'open' && pend.length ? `<label class="inline">출고일 <input type="date" data-sb-date value="${esc(b.plan_date <= todayStr() ? b.plan_date : todayStr())}" max="${todayStr()}"></label><button class="btn primary" data-sb-ship>남은 ${pend.length}줄 출하 처리</button>` : ''}</div>`, { wide: true });
+  m.el.parentElement.classList.add('lr-cert-wrap');
+  const sbPick = new Map($$('[data-sb-lot]', m.el).map(inp => { const l = b.lines.find(x => x.id === Number(inp.dataset.sbLot)); return [l.id, bindLotPicker(inp, () => l.item, () => l.qty)]; }));
+  const reopen = async next => { m.close(); shipBatchSheet(next, after); await after?.(); };
+  $('[data-close]', m.el).onclick = m.close;
+  $('[data-print]', m.el).onclick = () => rcPrint(`출고지시서_${b.batch_no}`);
+  $('[data-sb-cancel]', m.el)?.addEventListener('click', async () => {
+    if (!await confirmBox(`${b.batch_no} 묶음을 풀까요? 남은 대기 지시는 「출하 대기」로 돌아갑니다(지시·전표는 그대로).`)) return;
+    try { await reopen(await api('POST', `/api/ship-batches/${b.id}/cancel`, {})); toast('묶음을 풀었습니다.'); } catch (error) { fail(error); }
+  });
+  m.el.addEventListener('click', async e => {
+    const r = e.target.closest('[data-sb-remove]'); if (!r) return;
+    try { await reopen(await api('POST', `/api/ship-batches/${b.id}/remove`, { ids: [Number(r.dataset.sbRemove)] })); toast('지시서에서 뺐습니다(출하 대기로 돌아감).'); } catch (error) { fail(error); }
+  });
+  $('[data-sb-ship]', m.el)?.addEventListener('click', async e => {
+    const ready = pend.filter(l => !l.held), held = pend.length - ready.length;
+    if (!ready.length) return toast('보류 중인 줄만 남았습니다. 보류를 풀고 출하 처리하세요.', 'err');
+    const date = $('[data-sb-date]', m.el).value, lots = Object.fromEntries(ready.map(l => [l.id, $(`[data-sb-lot="${l.id}"]`, m.el)?.value.trim() || '']));
+    const noLot = ready.filter(l => !lots[l.id]).length, lotWarn = ready.map(l => sbPick.get(l.id)?.check()).filter(Boolean);
+    if (!await confirmBox(`${b.batch_no}의 ${ready.length}줄을 ${date}에 출하 처리할까요?${noLot ? ` (LOT 없는 줄 ${noLot}건)` : ''}${lotWarn.length ? ` ⚠ ${lotWarn.join(' / ')}` : ''}${held ? ` 보류 ${held}줄은 제외합니다.` : ''} 출하 목록에 기록되고 재고가 빠집니다.`)) return;
+    e.target.disabled = true;
+    try { const r = await api('POST', '/api/ship-instructions/ship', { ids: ready.map(l => l.id), ship_date: date, lots }); toast(`${r.shipped}줄을 출하 처리했습니다.`); await reopen(await api('GET', '/api/ship-batches/' + b.id)); refreshNavBadges?.(); }
+    catch (error) { fail(error); e.target.disabled = false; }
+  });
+}
+
+// 15.137 수주목록 PO 칸: 고객 비고(예: 0C0827-27 (P1DD) OLED Asan mj1938,seon 2008315425)에서 주문번호·주문자명도 읽어 함께 보여 준다.
+function soPoInfo(r) {
+  const p = parseCustomerNote(r.note), po = poOf(r.customer_po, r.note);
+  if (!po && !p) return '';
+  return `<div class="small so-po">${po ? `<span>PO <b>${esc(po)}</b></span>` : ''}${p?.req ? `<span>주문번호 <b>${esc(p.req)}</b></span>` : ''}${p?.person ? `<span>주문자 <b>${esc(p.person)}</b></span>` : ''}${p?.line ? `<span class="muted">${esc([p.line, p.site].filter(Boolean).join(' · '))}</span>` : ''}</div>`;
 }

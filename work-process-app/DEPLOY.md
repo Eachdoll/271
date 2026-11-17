@@ -525,3 +525,22 @@ Sites가 새 마이그레이션을 적용한 뒤 Worker를 배포합니다. 환�
 - 15.130 일부 출고된 수주 고치기: PUT /api/sales-orders/:id는 줄 id로 기존 줄 유지(삭제·재삽입 안 함). 수량 ≥ 잡은 수량(ORDER_TAKEN), 전표·출하가 있던 줄(ORDER_LINE_USED)은 품목·규격 고정·삭제 불가, 그런 수주는 거래처 변경 불가. 새 줄 추가 자유. 상세 응답 줄에 used.
 
 - 15.131 전표 목록 체크 → 세금계산서 일괄 담기: 매출전표 목록(체크 → 건별 kind single / 거래처별 합산 kind merge, merge는 monthly 형식으로 저장·기간=전표 일자 처음~끝·전표마다 linkBill), 매입전표 목록(세금계산서 열 + 한 매입처씩 체크 → POST /api/purchase-tax-invoices). 이미 담긴·취소 전표는 체크칸 잠금, 서버는 UNINVOICED 확인 + 활성 고유 인덱스로 중복 거절(409). GET /api/purchase-bills 줄에 invoice(번호|승인번호|id). 마이그레이션 없음.
+
+- 15.132 출고지시서(묶음): 마이그레이션 0046(ship_batches 표 + ship_instructions.batch_id). 출하지시 화면에서 체크 → 「출고지시서 묶기」(물류·영업, 1~50줄, 진행 중인 묶음 하나에만) → DO-YYMMDD-NN 지시서(거래처별 피킹표·LOT·확인·서명칸, 인쇄) → 남은 줄 한 번에 출하 처리(기존 /api/ship-instructions/ship). 줄 빼기·묶음 풀기(cancelled, 대기 줄만 놓아 줌). 상태(출고 대기·일부·완료)는 지시 상태로 계산. API: POST/GET /api/ship-batches, GET /:id, POST /:id/remove, POST /:id/cancel. 출하지시 목록에 batch_no, ?batch=none.
+
+- 15.133~15.136 LOT 추적(테스트 피드백 시트 반영, 마이그레이션 0047: po_receipt_lots·other_receipts.sub_lot, production_actuals.lot, production_lot_inputs 표).
+  - 15.133 LOT 체계: 자동 LOT = [식별문자][입고일]_[NNN], 식별문자는 품목 분류(원자재 R·제품/반제품 P·상품 G·부자재 S·소모품 C, 그 밖 M; 입력 칸에 적으면 그 글자). 자동 번호는 품목마다 LOT 1개, 같은 LOT 여러 줄(포장)은 저장 때 서브 LOT 001~(그 LOT에 이미 쓴 번호 다음부터). LOT 나누기는 같은 LOT 유지. 라벨에 서브/수량, QR 끝에 서브 LOT(스캔 호환). /api/lots/next?category=. LOT별 재고는 LOT 단위(서브 합산).
+  - 15.134 입고목록 › 기타입고: 같은 입고번호의 여러 줄을 머리줄(입고번호·품목·하위 N줄·LOT·합계)로 접고 누르면 하위 자재가 펼쳐짐, 「입고증」 버튼. /api/other-receipts에 receipt_no.
+  - 15.135 생산실적: BOM 자재마다 필요량(생산량×비율)을 먼저 들어온 LOT부터 채워 제안(LOT·수량 수정·+LOT), 저장 시 LOT 잔량 검사(초과 400). 완제품 LOT 자동 P/G+생산일_NNN(직접 입력 가능). LOT별 재고에 생산 LOT 입고·투입 LOT 출고 반영(취소된 실적 제외). 총량 재고 계산은 기존 BOM 차감 그대로. API: GET /api/schedules/:id/lot-materials, GET /api/lots/available?item=, POST actuals에 inputs·lot.
+  - 15.136 출하 LOT 연결: 출하 입력(여러 품목 표·단일 양식)·출하지시·출고지시서의 LOT 칸에서 그 품목 재고 LOT(남은 수량·위치) 고르기, 재고에 없는 LOT·잔량 초과는 빨간 안내 + 저장 전 확인.
+  - 예전 감사 v72/v75/v79는 「줄마다 다른 M LOT」을 기대하므로 새 규칙(품목당 LOT 1개·서브)과 다름(의도된 변경).
+
+- 15.137 (1) 세금계산서 만들기 기본 기간 = 지난 달 1일~오늘(예전엔 지난 달만이라 이번 달 전표가 「조회 안 됨」), 관리 화면 기본 = 지난 달~이번 달 말. 매출전표 목록·전표 보기의 계산서 번호 → 계산서 창. (2) 수주목록 PO 칸에 비고에서 읽은 주문번호·주문자·라인/사이트(soPoInfo). (3) 거래처별 장부 #/sales/book·#/purchase/book, GET /api/partner-book?side&from&to&party: 전표별 공급가액·부가세·합계·세금계산서(번호·상태·승인번호)·입금/지급·잔액(같은 날은 전표 → 입금 순), 비우면 거래처별 요약(계산서 발행/미발행 금액), 엑셀. (4) 표 정렬: 모든 .grid 표(체크칸·월 소계·창 안 포함) 머리글 → 오름/내림/원래 순서, 정렬 중 소계 줄 숨김·마지막 합계 줄 유지. 입력 표·rowspan·묶음 표·data-no-sort는 제외. 전표 목록의 data-no-sort 제거. (5) 품목 찾기 체크 여러 개: 수주·출하/발주 여러 품목 표·의뢰 줄(새 줄일 때, 「바꾸기」는 한 개), 줄을 두 번 누르면 바로 선택.
+
+- 15.138 세금계산서 문서상태(기존 ERP 참고, 마이그레이션 0048: tax_invoices.issue_type·recv_status·recv_at·recv_by, vendors.tax_reverse, purchase_tax_invoices.issue_type). 발행구분 정발행/역발행: 거래처 사업자 정보에서 「역발행 거래처」(예: 삼성)를 켜면 담을 때 역발행, 역발행은 트러스빌 발행에서 빠지고 「역발행 승인 기록」(승인번호)으로 발행 완료. 상대방 수신(미확인·확인·거부)·국세청 전송/미전송은 POST /api/tax-invoices/state {ids, action: recv_confirm|recv_reject|recv_reset|nts_sent|nts_unsent|reverse|normal}로 손으로 표시(연동 뒤 자동 예정). 목록 필터 issue_type·doc(tax/free)·state(unconfirmed|confirmed|rejected|nts_pending|nts_sent), 응답 summary(매출 합계·수신자 미확인·수신 확인·국세청 전송·미전송·역발행·발행 전 건수·공급가액·세액) → 화면 아래 요약표. 문서상태 칸 = 역발행 표시 + 발행 상태 + 수신 상태. 매입 계산서 등록에 발행구분(정발행 받음/역발행).
+
+- 15.139 거래명세표 아래 비고 칸에 수주 비고(고객 비고 원문, 줄의 order_note 중복 없이)를 전표 비고 다음에 넣음. 예전에는 줄 비고 칸에 PO만 나오고 수주 비고 원문은 어디에도 안 나와 「비고가 안 보인다」였음.
+
+- 15.140 반입(매출 반품 RI-)·반출(매입 반품 RO-), 마이그레이션 0049(stock_returns·stock_return_lines). 처리구분 재고+금액/금액만/재고만/처리 안 함, 금액 처리 미수(미지급) 삭감/현금 환불. 재고 처리 → STOCK_MOVEMENTS에 return_in(+)·return_out(−) 원천(원천 수 9→10, inventory 테스트 갱신)·LOT별 재고 반영. 금액 처리 → 음수 매출전표(manual 줄)·음수 매입전표(source_type other, 겹치지 않는 음수 source_id)를 bill_id로 만들어 장부·미수/미지급·마감·세금계산서(수정 계산서)에 그대로 반영, 현금 환불은 같은 금액의 음수 입금/지급(method 현금환불)을 payment_id로 남겨 잔액 그대로. 원래 전표 줄에서 고르면 남은 수량(원래 − 확정 반품)까지만. 금액 전표는 일반 전표 취소에서 막고 반품 전표 취소로만(전표·환불 함께 취소, 계산서에 담겼으면 거절). API: GET /api/returns/sources?side=in|out&party&months, POST /api/returns, GET /api/returns(?side…), GET /:id, POST /:id/cancel. 화면 #/sales/returns(/new)·#/purchase/returns(/new): 납품/매입목록(F5)·전체 품목(F6, 체크 여러 개)·반품유형·LOT·인쇄.
+
+- 15.141 점검 수정: (1) 채권·채무 연령표에서 반입·반출(음수 전표)을 입금·지급처럼 크레딧으로 보고 오래된 전표부터 갚음(예전엔 늦은 날짜 반품이 새 전표에 붙거나 같은 날 전표와 상계되어 연령 칸이 틀어짐). (2) 반품의 현금 환불 입금·지급은 입금확인·지급확인에서 따로 취소 못 하게(반품 전표에서 취소). (3) 금액 0 이하 계산서 발행 안내 문구.

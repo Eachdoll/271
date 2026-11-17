@@ -132,7 +132,7 @@ test('Dashboard source-by-source stock aggregation matches inventory and survive
   let sources = 0;
   env.DB = { ...original, prepare(sql) { if (sql.includes('WITH movements')) { assert.ok(!sql.includes('UNION ALL')); sources++; } return original.prepare(sql); } };
   try {
-    const dashboard = await staff('GET', '/api/dashboard'); assert.equal(dashboard.status, 200); assert.deepEqual(dashboard.body.stock, expected); assert.equal(sources,9); // 15.72 발주입고 LOT 줄 원천 추가
+    const dashboard = await staff('GET', '/api/dashboard'); assert.equal(dashboard.status, 200); assert.deepEqual(dashboard.body.stock, expected); assert.equal(sources,10); // 15.72 발주입고 LOT 줄 원천 추가 · 15.140 반입·반출
     env.DB = { ...original, prepare(sql) { if (sql.includes('WITH movements')) throw Error('simulated D1 failure'); return original.prepare(sql); } };
     const dashboardWithoutStock = await staff('GET', '/api/dashboard'); assert.equal(dashboardWithoutStock.status,200); assert.equal(dashboardWithoutStock.body.stock,null); assert.ok(dashboardWithoutStock.body.requests.analysis); assert.ok(dashboardWithoutStock.body.po);
   } finally { env.DB = original; }
@@ -143,7 +143,7 @@ test('Inventory, movements and stock counts work when D1 rejects compound UNION 
   const expected=await stock(query);
   const expectedMoves=(await staff('GET','/api/inventory/movements?'+new URLSearchParams({item:'원단',unit:'kg'}))).body;
   const original=env.DB;let batches=0;
-  env.DB={...original,prepare(sql){assert.ok(!sql.includes('UNION ALL'),'no compound source reads');return original.prepare(sql);},async batch(statements){batches++;assert.equal(statements.length,9);return original.batch(statements);}};
+  env.DB={...original,prepare(sql){assert.ok(!sql.includes('UNION ALL'),'no compound source reads');return original.prepare(sql);},async batch(statements){batches++;assert.equal(statements.length,10);return original.batch(statements);}};
   try {
     const result=await staff('GET','/api/inventory'+query);assert.equal(result.status,200);assert.deepEqual(result.body,expected);
     const moves=await staff('GET','/api/inventory/movements?'+new URLSearchParams({item:'원단',unit:'kg'}));assert.equal(moves.status,200);assert.deepEqual(moves.body,expectedMoves);

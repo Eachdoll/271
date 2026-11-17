@@ -7,7 +7,7 @@ function lineInfo(row) {
   const snapshot = typeof row.bom_snapshot === 'string' ? JSON.parse(row.bom_snapshot || '{}') : row.bom_snapshot || {};
   const unit = row.unit || data.unit || snapshot.unit || '';
   const code = row.product_code ? (/^TMP-/.test(row.product_code) ? '임시코드 ' : '') + row.product_code : '';
-  const parts = [code, row.spec || data.spec, unit, row.lot || data.lot_etc || (row.type === 'voc' ? data.lot : '')].filter(Boolean);
+  const parts = [code, row.spec || data.spec, unit, (row.lot ? row.lot + (row.sub_lot ? ' / ' + row.sub_lot : '') : '') || data.lot_etc || (row.type === 'voc' ? data.lot : '')].filter(Boolean);
   if (row.type && row.type !== 'voc' && (row.qty ?? data.qty) != null) parts.push('수량 ' + fmtNum(row.qty ?? data.qty));
   // 15.42: 내부 묶음 번호는 화면 글자에서 빼고 마우스를 올렸을 때(title)만 보인다.
   const batchTitle = row.batch_id ? ` title="묶음 ${esc(row.batch_id.slice(-8))}"` : '';
@@ -123,8 +123,12 @@ async function installMultiItems(legacy, entity, type = '') {
       };
       // 15.70 품목 찾기 창(분류 탭·세부 분류·검색·표)으로 고른다. 선택칸은 그대로 두어 고른 값을 담는다.
       $('[data-bom-find]',row).onclick = async () => {
-        const bom = await openItemPicker(boms, { filter: b => entity !== 'schedule' || (b.kind === kind && !b.is_temp) });
-        if (bom) { select.value = String(bom.id); select.onchange(); ($('[data-line-key=qty]',row) || select).focus(); } else select.focus();
+        // 15.137 체크해 여러 품목: 첫 품목은 이 줄, 나머지는 새 줄로
+        const got = ((await openItemPicker(boms, { filter: b => entity !== 'schedule' || (b.kind === kind && !b.is_temp), multi: true, lots: false }))?.items || []).map(x => x.bom);
+        if (!got.length) return select.focus();
+        select.value = String(got[0].id); select.onchange();
+        for (const bom of got.slice(1)) { const r = add(); if (!r) { toast('품목은 30개까지 등록할 수 있습니다.', 'err'); break; } const sel = $('[data-line-key=bom_id]', r); if (sel) { sel.value = String(bom.id); sel.onchange(); } }
+        ($('[data-line-key=qty]',row) || select).focus();
       };
     }
     updateCount(); return row;
@@ -256,7 +260,8 @@ async function renderActualChanges(root, kind) {
 
 async function openProductionActuals(id) {
   const box = modal('<h3>생산실적 · 실제 생산량</h3><div data-actual-content>불러오는 중…</div>',{wide:true});
-  let requestId = crypto.randomUUID(), history = [], next = null, busy = false;
+  let requestId = crypto.randomUUID(), history = [], next = null, busy = false, lotInfo = null;
+  lotInfo = await api('GET', `/api/schedules/${id}/lot-materials`).catch(() => null);
   const load = async (previous = false) => {
     const result = await api('GET',`/api/schedules/${id}/actuals` + (previous ? '?before=' + next : ''));
     if (!box.el.isConnected) return;
@@ -264,13 +269,15 @@ async function openProductionActuals(id) {
     const s = result.schedule; const unit = s.unit || s.bom_snapshot?.unit || '단위 미지정';
     const last = s.period === 'day' ? s.start_date : s.period === 'week' ? addDays(s.start_date,6) : monthEnd(s.start_date);
     const date = todayStr() < s.start_date || todayStr() > last ? s.start_date : todayStr();
-    $('[data-actual-content]',box.el).innerHTML = `<h4>${esc(s.product)} ${esc(s.spec)} · ${esc(unit)}</h4><p>계획 ${fmtNum(s.qty)} / 실제 누적 <b>${fmtNum(result.actual_qty)}</b> / 차이 ${fmtNum(result.variance_qty)} / 달성률 ${result.achievement_rate ?? '—'}%</p><p class="small muted">${esc(s.start_date)} ~ ${esc(last)} · ${result.auto ? '반제품 실적은 <a href="#/prod/semi/cut">반제품 · 커팅/융착</a> 기록에서 자동으로 집계됩니다(같은 품목명, 계획에 사이즈가 있으면 같은 사이즈, 계획 기간 안의 작업일). 여기에는 입력하지 않습니다.' : '완료 체크와 별도로 실제 생산한 수량만 입력하세요. 같은 생산실적을 여러 일정에 중복 입력하지 마세요.'}</p>${result.auto ? `<div class="table-wrap"><table class="grid"><thead><tr><th>작업일</th><th>라인</th><th>사이즈·규격</th><th class="r">양품</th><th class="r">불량</th><th>입력자</th></tr></thead><tbody>${result.cut_rows.map(c => `<tr><td>${esc(c.work_date)}</td><td>${esc(c.unit_name)}</td><td>${esc(c.spec)}</td><td class="r"><b>${fmtNum(c.qty)}</b> ${esc(c.unit)}</td><td class="r">${fmtNum(c.defect_qty)}</td><td class="small muted">${esc(c.created_by)}</td></tr>`).join('') || '<tr><td colspan="6">이 계획에 해당하는 커팅/융착 기록이 아직 없습니다.</td></tr>'}</tbody></table></div>${history.length ? '<h4>이전에 직접 입력한 실적</h4>' : ''}` : ''}${result.auto && !history.length ? '' : result.can_write ? `<form class="stack" data-actual-form><div class="form-grid">${multiInput('production_date','생산일','date',date)}<label>실제 생산량 *<input name="qty" type="number" min="0" step="any" required></label>${multiInput('note','작업·변동 메모','text','',false)}</div><p role="status" data-actual-status class="small muted"></p><div class="actions"><button class="btn primary">생산실적 추가</button></div></form>` : result.auto ? '' : '<p class="muted">생산 담당자 또는 일정 등록자가 실적을 입력할 수 있습니다.</p>'}${result.auto && !history.length ? '' : `<div class="table-wrap"><table class="grid"><thead><tr><th>생산일</th><th>실제 수량</th><th>입력자 / 입력시각</th><th>메모</th><th></th></tr></thead><tbody>${history.map(a => `<tr><td>${esc(a.production_date)}</td><td>${fmtNum(a.qty)}${a.voided_at ? ' (취소)' : ''}${a.corrected_at ? `<div class="small muted">수정됨 · 승인 ${esc(a.corrected_by)}</div>` : ''}</td><td>${esc(a.author_name)}<br>${esc(a.created_at)}</td><td>${esc(a.note)}${a.voided_at ? `<br>취소: ${esc(a.voided_by)} · ${esc(a.void_reason)}` : ''}</td><td>${a.voided_at ? '' : a.pending_change ? `<span class="chip yellow">승인 대기</span><div class="small">${changeSummary(a.pending_change)}<br>사유: ${esc(a.pending_change.reason)} · ${esc(a.pending_change.requested_by)}</div>${changeActions(a.pending_change, result.can_approve)}` : result.can_write ? `<button class="btn small" data-actual-edit="${a.id}">수정 요청</button> <button class="btn small danger" data-actual-void="${a.id}">취소 요청</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5">아직 입력한 생산실적이 없습니다.</td></tr>'}</tbody></table></div>`}${next ? '<button class="btn small" data-actual-more>이전 실적 더 보기</button>' : ''}<p class="small muted">입력된 실적의 수정·취소는 요청 후 <b>생산팀장 승인</b> 시 반영됩니다. 지난 기간의 실적도 요청할 수 있습니다.</p>${changeHistory(result.changes)}`;
+    $('[data-actual-content]',box.el).innerHTML = `<h4>${esc(s.product)} ${esc(s.spec)} · ${esc(unit)}</h4><p>계획 ${fmtNum(s.qty)} / 실제 누적 <b>${fmtNum(result.actual_qty)}</b> / 차이 ${fmtNum(result.variance_qty)} / 달성률 ${result.achievement_rate ?? '—'}%</p><p class="small muted">${esc(s.start_date)} ~ ${esc(last)} · ${result.auto ? '반제품 실적은 <a href="#/prod/semi/cut">반제품 · 커팅/융착</a> 기록에서 자동으로 집계됩니다(같은 품목명, 계획에 사이즈가 있으면 같은 사이즈, 계획 기간 안의 작업일). 여기에는 입력하지 않습니다.' : '완료 체크와 별도로 실제 생산한 수량만 입력하세요. 같은 생산실적을 여러 일정에 중복 입력하지 마세요.'}</p>${result.auto ? `<div class="table-wrap"><table class="grid"><thead><tr><th>작업일</th><th>라인</th><th>사이즈·규격</th><th class="r">양품</th><th class="r">불량</th><th>입력자</th></tr></thead><tbody>${result.cut_rows.map(c => `<tr><td>${esc(c.work_date)}</td><td>${esc(c.unit_name)}</td><td>${esc(c.spec)}</td><td class="r"><b>${fmtNum(c.qty)}</b> ${esc(c.unit)}</td><td class="r">${fmtNum(c.defect_qty)}</td><td class="small muted">${esc(c.created_by)}</td></tr>`).join('') || '<tr><td colspan="6">이 계획에 해당하는 커팅/융착 기록이 아직 없습니다.</td></tr>'}</tbody></table></div>${history.length ? '<h4>이전에 직접 입력한 실적</h4>' : ''}` : ''}${result.auto && !history.length ? '' : result.can_write ? `<form class="stack" data-actual-form><div class="form-grid">${multiInput('production_date','생산일','date',date)}<label>실제 생산량 *<input name="qty" type="number" min="0" step="any" required></label>${multiInput('note','작업·변동 메모','text','',false)}<label>완제품 LOT <span class="hint">(비우면 자동 ${esc(lotInfo?.product_lot_prefix || 'P')}+생산일_순번)</span><input name="lot" maxlength="100" placeholder="자동"></label></div><div data-actual-lots></div><p role="status" data-actual-status class="small muted"></p><div class="actions"><button class="btn primary">생산실적 추가</button></div></form>` : result.auto ? '' : '<p class="muted">생산 담당자 또는 일정 등록자가 실적을 입력할 수 있습니다.</p>'}${result.auto && !history.length ? '' : `<div class="table-wrap"><table class="grid"><thead><tr><th>생산일</th><th>실제 수량</th><th>입력자 / 입력시각</th><th>메모</th><th></th></tr></thead><tbody>${history.map(a => `<tr><td>${esc(a.production_date)}</td><td>${fmtNum(a.qty)}${a.voided_at ? ' (취소)' : ''}${a.lot ? `<div class="small">LOT <b>${esc(a.lot)}</b></div>` : ''}${(a.inputs || []).length ? `<div class="small muted">투입 ${a.inputs.map(x => `${esc(x.item)} ${esc(x.lot)} ${fmtNum(x.qty)}`).join(' · ')}</div>` : ''}${a.corrected_at ? `<div class="small muted">수정됨 · 승인 ${esc(a.corrected_by)}</div>` : ''}</td><td>${esc(a.author_name)}<br>${esc(a.created_at)}</td><td>${esc(a.note)}${a.voided_at ? `<br>취소: ${esc(a.voided_by)} · ${esc(a.void_reason)}` : ''}</td><td>${a.voided_at ? '' : a.pending_change ? `<span class="chip yellow">승인 대기</span><div class="small">${changeSummary(a.pending_change)}<br>사유: ${esc(a.pending_change.reason)} · ${esc(a.pending_change.requested_by)}</div>${changeActions(a.pending_change, result.can_approve)}` : result.can_write ? `<button class="btn small" data-actual-edit="${a.id}">수정 요청</button> <button class="btn small danger" data-actual-void="${a.id}">취소 요청</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5">아직 입력한 생산실적이 없습니다.</td></tr>'}</tbody></table></div>`}${next ? '<button class="btn small" data-actual-more>이전 실적 더 보기</button>' : ''}<p class="small muted">입력된 실적의 수정·취소는 요청 후 <b>생산팀장 승인</b> 시 반영됩니다. 지난 기간의 실적도 요청할 수 있습니다.</p>${changeHistory(result.changes)}`;
     const form = $('[data-actual-form]',box.el);
+    const lotBox = form && lotInfo?.materials?.length ? actualLotInputs($('[data-actual-lots]', form), lotInfo.materials, () => Number(form.elements.qty.value) || 0) : null;
+    if (lotBox) form.elements.qty.addEventListener('input', () => lotBox.autofill());
     if (form) { form.elements.production_date.min = s.start_date; form.elements.production_date.max = last < todayStr() ? last : todayStr(); }
     if (form) form.onsubmit = async event => {
       event.preventDefault(); if (busy) return; busy = true; const button = $('button',form); button.disabled = true;
       let stored = false;
-      try { await api('POST',`/api/schedules/${id}/actuals`,{ ...formObj(form),request_id:requestId }); stored = true; form.reset(); requestId = crypto.randomUUID(); await load(); render(); toast('생산실적을 기록했습니다.'); }
+      try { const short = lotBox?.short(); if (short && !await confirmBox(`투입 LOT 수량이 필요량보다 적습니다: ${short}. 이대로 저장할까요?`)) return; const { lotq, ...fv } = formObj(form); await api('POST',`/api/schedules/${id}/actuals`,{ ...fv, inputs: lotBox ? lotBox.value() : [], request_id:requestId }); stored = true; form.reset(); lotInfo = await api('GET', `/api/schedules/${id}/lot-materials`).catch(() => lotInfo); requestId = crypto.randomUUID(); await load(); render(); toast('생산실적을 기록했습니다.'); }
       catch(error) { $('[data-actual-status]',form).textContent = stored ? '실적은 저장되었습니다. 조회에 실패했으니 다시 열어 확인하세요.' : error.message; fail(error); }
       finally { busy = false; button.disabled = false; }
     };
@@ -309,3 +316,43 @@ document.addEventListener('click',async event => {
   if (!value) return;
   try { await api('PUT',`/api/items/${button.dataset.lineMeta}/${button.dataset.lineId}`,value); render(); toast('품목 규격을 저장했습니다.'); } catch(error) { fail(error); }
 },true);
+
+// 15.135 생산실적 투입 자재 LOT: BOM 자재마다 필요량(생산량 × BOM 비율)을 먼저 들어온 LOT부터 채워 제안하고, 줄마다 LOT·수량을 고칠 수 있다.
+function actualLotInputs(box, materials, getQty) {
+  let rows = [], edited = false;
+  const lotsOf = item => materials.find(m => m.item === item)?.lots || [];
+  const autofill = (force = false) => {
+    if (edited && !force) return draw();
+    const q = getQty(); rows = [];
+    for (const m of materials) {
+      let need = Math.round(q * m.per * 1000) / 1000; const lots = m.lots.filter(l => l.balance > 0);
+      if (!lots.length || !(need > 0)) { rows.push({ item: m.item, unit: m.unit, lot: '', qty: '' }); continue; }
+      for (const l of lots) { if (need <= 0) break; const take = Math.min(need, l.balance); rows.push({ item: m.item, unit: m.unit, lot: l.lot, qty: Math.round(take * 1000) / 1000 }); need = Math.round((need - take) * 1000) / 1000; }
+    }
+    draw();
+  };
+  const used = (item, lot, except) => rows.filter((r, k) => k !== except && r.item === item && r.lot === lot).reduce((t, r) => t + (Number(r.qty) || 0), 0);
+  const draw = () => {
+    const q = getQty();
+    box.innerHTML = `<h4>투입 자재 LOT <span class="small muted">생산량을 넣으면 먼저 들어온 LOT부터 필요량만큼 채웁니다. LOT·수량은 고칠 수 있습니다.</span></h4>
+      <div class="table-wrap"><table class="grid lot-in-grid"><thead><tr><th>자재</th><th class="r">필요량</th><th>LOT (남은 수량)</th><th class="r">투입 수량</th><th></th></tr></thead><tbody>${rows.map((r, k) => { const m = materials.find(x => x.item === r.item), first = rows.findIndex(x => x.item === r.item) === k, got = rows.filter(x => x.item === r.item).reduce((t, x) => t + (Number(x.qty) || 0), 0), need = Math.round(q * (m?.per || 0) * 1000) / 1000;
+        return `<tr><td>${first ? `<b>${esc(r.item)}</b>` : '<span class="small muted">〃</span>'}</td><td class="r">${first ? `${fmtNum(need)} ${esc(r.unit)}${got + 0.0005 < need ? ` <div class="small red-text">부족 ${fmtNum(Math.round((need - got) * 1000) / 1000)}</div>` : ''}` : ''}</td>
+        <td>${lotsOf(r.item).length ? `<select data-li="lot" data-k="${k}" aria-label="${esc(r.item)} LOT"><option value="">LOT 고르기</option>${lotsOf(r.item).map(l => `<option value="${esc(l.lot)}"${l.lot === r.lot ? ' selected' : ''}>${esc(l.lot)} · 남은 ${fmtNum(l.balance)}${l.places ? ' · ' + esc(l.places) : ''}</option>`).join('')}</select>` : '<span class="small muted">재고 LOT 없음</span>'}</td>
+        <td class="r"><input type="number" name="lotq" min="0" step="any" inputmode="decimal" data-li="qty" data-k="${k}" value="${esc(r.qty)}" aria-label="${esc(r.item)} 투입 수량"${lotsOf(r.item).length ? '' : ' disabled'}></td>
+        <td class="nowrap">${lotsOf(r.item).length > 1 ? `<button type="button" class="btn small" data-li-add="${k}">+ LOT</button>` : ''}${!first ? ` <button type="button" class="btn small" data-li-del="${k}">빼기</button>` : ''}</td></tr>`; }).join('')}</tbody></table></div>`;
+  };
+  box.addEventListener('change', e => { const k = Number(e.target.dataset.k); if (e.target.dataset.li === 'lot') { rows[k].lot = e.target.value; edited = true; draw(); } });
+  box.addEventListener('input', e => { const k = Number(e.target.dataset.k); if (e.target.dataset.li === 'qty') { rows[k].qty = e.target.value; edited = true; } });
+  box.addEventListener('focusout', e => { if (e.target.dataset.li === 'qty') draw(); });
+  box.addEventListener('click', e => {
+    const a = e.target.closest('[data-li-add]'), d = e.target.closest('[data-li-del]');
+    if (a) { const r = rows[Number(a.dataset.liAdd)]; rows.splice(rows.map(x => x.item).lastIndexOf(r.item) + 1, 0, { item: r.item, unit: r.unit, lot: '', qty: '' }); edited = true; draw(); }
+    if (d) { rows.splice(Number(d.dataset.liDel), 1); edited = true; draw(); }
+  });
+  autofill(true);
+  return {
+    autofill: () => autofill(false),
+    value: () => rows.filter(r => r.lot && Number(r.qty) > 0).map(r => ({ item: r.item, unit: r.unit, lot: r.lot, qty: Number(r.qty) })),
+    short: () => { const q = getQty(); const out = materials.filter(m => { const need = Math.round(q * m.per * 1000) / 1000, got = rows.filter(r => r.item === m.item && r.lot).reduce((t, r) => t + (Number(r.qty) || 0), 0); return m.lots.length && got + 0.0005 < need; }); return out.map(m => m.item).join(', '); },
+  };
+}

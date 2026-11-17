@@ -181,8 +181,9 @@ function salesBillSheet(bill, after = null, { onClose = null } = {}) {
       ${bill.note ? `<div class="po-memo"><b>비고</b><div class="po-memo-body">${esc(bill.note)}</div></div>` : ''}
       ${bill.status === 'cancelled' ? `<p><b>취소</b> ${esc(bill.cancelled_by || '')} · ${esc(String(bill.cancelled_at || '').slice(0, 16))} · ${esc(bill.cancel_reason)}</p>` : ''}
     </section>
-    <div class="actions">${bill.invoice ? `<span class="small">세금계산서 ${taxChip(bill.invoice.status)} ${esc(bill.invoice.invoice_no)}</span>` : ''}<button class="btn" data-close>닫기</button>${bill.status === 'confirmed' ? '<button class="btn" data-bill-stmt>거래명세서</button>' : ''}${bill.status === 'confirmed' && !bill.invoice ? '<button class="btn" data-bill-tax>세금계산서 담기</button>' : ''}${bill.status === 'confirmed' && !bill.closed && !bill.invoice ? '<button class="btn danger" data-bill-cancel>전표 취소</button>' : ''}<button class="btn primary" data-print>인쇄 · PDF 저장</button></div>`, { wide: true, onClose: () => onClose?.() });
+    <div class="actions">${bill.invoice ? `<span class="small">세금계산서 ${taxChip(bill.invoice.status)} <button type="button" class="link-btn" data-inv-view="${bill.invoice.id}">${esc(bill.invoice.invoice_no)}</button></span>` : ''}<button class="btn" data-close>닫기</button>${bill.status === 'confirmed' ? '<button class="btn" data-bill-stmt>거래명세서</button>' : ''}${bill.status === 'confirmed' && !bill.invoice ? '<button class="btn" data-bill-tax>세금계산서 담기</button>' : ''}${bill.status === 'confirmed' && !bill.closed && !bill.invoice ? '<button class="btn danger" data-bill-cancel>전표 취소</button>' : ''}<button class="btn primary" data-print>인쇄 · PDF 저장</button></div>`, { wide: true, onClose: () => onClose?.() });
   m.el.parentElement.classList.add('lr-cert-wrap');
+  $('[data-inv-view]', m.el)?.addEventListener('click', async e => { try { taxInvoiceView(await api('GET', '/api/tax-invoices/' + e.currentTarget.dataset.invView)); } catch (error) { fail(error); } }); // 15.137
   $('[data-close]', m.el).onclick = m.close;
   $('[data-print]', m.el).onclick = () => rcPrint(`매출전표_${bill.bill_no}`);
   $('[data-bill-stmt]', m.el)?.addEventListener('click', () => statementSheet([bill]).catch(fail));
@@ -240,7 +241,9 @@ async function statementSheet(bills) {
   const prev = ledger ? ledger.totals.balance - total + ledger.totals.paid : null, paid = ledger ? ledger.totals.paid : null, last = ledger ? ledger.totals.balance : null;
   // 15.125 전표 비고(전표마다 적은 비고)를 아래 비고 칸 맨 앞에 · 줄 비고는 표의 비고 칸에
   const billNotes = [...new Set(bills.map(b => String(b.note || '').trim()).filter(Boolean))];
-  const note = [...billNotes, manyDays ? `거래기간 ${from} ~ ${to}` : '', company.bank ? `입금 계좌 ${company.bank}` : ''].filter(Boolean).join(' · ');
+  // 15.139 수주 비고(고객 비고 원문)도 아래 비고 칸에 — 예전에는 줄 비고 칸에 PO만 나와 비고가 안 보였음
+  const orderNotes = [...new Set(lines.map(l => String(l.order_note || '').trim()).filter(Boolean))].filter(t => !billNotes.includes(t));
+  const note = [...billNotes, ...orderNotes, manyDays ? `거래기간 ${from} ~ ${to}` : '', company.bank ? `입금 계좌 ${company.bank}` : ''].filter(Boolean).join(' · ');
   const w = n => n == null ? '' : won(n);
   const copy = (kind, tone) => `<section class="stmt2 stmt2-${tone}${compact ? ' stmt2-half' : ''}">
     <div class="s2-top"><span class="s2-no">전표NO: <b>${esc(docNo)}</b></span><h2>거 래 명 세 표</h2><span class="s2-date"><b>${y}</b> 년 <b>${Number(mo)}</b> 월 <b>${Number(d)}</b> 일</span></div>
@@ -305,13 +308,14 @@ async function pageSalesBillList(main) {
     rows = next ? rows.concat(data.rows) : data.rows; page = data.page; $('#billMore', main).hidden = !data.more;
     const live = rows.filter(r => r.status === 'confirmed');
     $('#billSummary', main).innerHTML = `<b>${esc(`${rows.length}건 · 확정 합계 ${won(live.reduce((t, r) => t + r.total, 0))}원 (공급가액 ${won(live.reduce((t, r) => t + r.supply_total, 0))} · 부가세 ${won(live.reduce((t, r) => t + r.vat_total, 0))})`)}</b>${data.more ? ' <span>(더 있음)</span>' : ''}${catSummary(data.by_category, '확정 전표 분류별 공급가액')}`;
-    $('#billList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid bill-list" data-no-sort><thead><tr><th class="pick-cell"><input type="checkbox" data-bulk-all aria-label="담을 수 있는 전표 모두 고르기"></th><th>전표번호</th><th>전표 일자</th><th>거래처</th><th class="r">줄</th><th class="r">공급가액</th><th class="r">부가세</th><th class="r">합계</th><th>상태</th><th>세금계산서</th><th>입력</th><th></th></tr></thead>${billMonthBody(rows, 5, 4, r => { const inv = r.invoice ? r.invoice.split('|') : null; return `<tr class="${r.status === 'cancelled' ? 'row-off' : ''}"><td class="pick-cell">${r.status === 'confirmed' && !r.invoice ? `<input type="checkbox" data-bulk-pick="${r.id}" aria-label="${esc(r.bill_no)} 고르기">` : `<input type="checkbox" disabled title="${r.invoice ? '이미 세금계산서에 담김' : '취소된 전표'}" aria-label="${esc(r.bill_no)} 고를 수 없음">`}</td><td data-card-primary><button type="button" class="link-btn" data-bill-open="${r.id}">${esc(r.bill_no)}</button></td><td>${esc(r.bill_date)}</td><td>${esc(r.customer)}<div>${catChips(r.categories)}</div></td><td class="r">${fmtNum(r.line_count)}</td><td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b></td><td>${r.status === 'confirmed' ? '<span class="chip green">확정</span>' : '<span class="chip">취소</span>'}</td><td>${inv ? `${taxChip(inv[1])}<div class="small muted">${esc(inv[0])}</div>` : r.status === 'confirmed' ? '<span class="small muted">안 담음</span>' : ''}</td><td class="small muted">${esc(r.created_by)}</td><td data-card-primary><button class="btn small" data-bill-open="${r.id}">보기</button></td></tr>`; })}</table></div>` : '<div class="empty">조건에 맞는 매출전표가 없습니다.</div>';
+    $('#billList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid bill-list"><thead><tr><th class="pick-cell"><input type="checkbox" data-bulk-all aria-label="담을 수 있는 전표 모두 고르기"></th><th>전표번호</th><th>전표 일자</th><th>거래처</th><th class="r">줄</th><th class="r">공급가액</th><th class="r">부가세</th><th class="r">합계</th><th>상태</th><th>세금계산서</th><th>입력</th><th></th></tr></thead>${billMonthBody(rows, 5, 4, r => { const inv = r.invoice ? r.invoice.split('|') : null; return `<tr class="${r.status === 'cancelled' ? 'row-off' : ''}"><td class="pick-cell">${r.status === 'confirmed' && !r.invoice ? `<input type="checkbox" data-bulk-pick="${r.id}" aria-label="${esc(r.bill_no)} 고르기">` : `<input type="checkbox" disabled title="${r.invoice ? '이미 세금계산서에 담김' : '취소된 전표'}" aria-label="${esc(r.bill_no)} 고를 수 없음">`}</td><td data-card-primary><button type="button" class="link-btn" data-bill-open="${r.id}">${esc(r.bill_no)}</button></td><td>${esc(r.bill_date)}</td><td>${esc(r.customer)}<div>${catChips(r.categories)}</div></td><td class="r">${fmtNum(r.line_count)}</td><td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b></td><td>${r.status === 'confirmed' ? '<span class="chip green">확정</span>' : '<span class="chip">취소</span>'}</td><td>${inv ? `${taxChip(inv[1])}<div><button type="button" class="link-btn small" data-inv-open="${esc(inv[2])}" title="세금계산서 보기">${esc(inv[0])}</button></div>` : r.status === 'confirmed' ? '<span class="small muted">안 담음</span>' : ''}</td><td class="small muted">${esc(r.created_by)}</td><td data-card-primary><button class="btn small" data-bill-open="${r.id}">보기</button></td></tr>`; })}</table></div>` : '<div class="empty">조건에 맞는 매출전표가 없습니다.</div>';
   };
   rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
   form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
   $('[data-xlsx]', form).onclick = () => billLinesExcel('sales', { from: form.elements.from.value, to: form.elements.to.value, party: form.elements.customer.value.trim() }).catch(fail);
   $('#billMore', main).onclick = () => load(true).catch(fail);
   bulkPicks(main, () => rows, 'sales', () => load());
+  $('#billList', main).addEventListener('click', async e => { const v = e.target.closest('[data-inv-open]'); if (v) { try { taxInvoiceView(await api('GET', '/api/tax-invoices/' + v.dataset.invOpen), () => load()); } catch (error) { fail(error); } return; } }); // 15.137 세금계산서 번호 → 계산서 보기
   $('#billList', main).addEventListener('click', async e => { const b = e.target.closest('[data-bill-open]'); if (!b) return; try { salesBillSheet(await api('GET', '/api/sales-bills/' + b.dataset.billOpen), () => load()); } catch (error) { fail(error); } });
   let preset = null; try { preset = JSON.parse(sessionStorage.getItem('wpa:sbill-filter') || 'null'); sessionStorage.removeItem('wpa:sbill-filter'); } catch { preset = null; }
   if (preset) for (const [k, v] of Object.entries(preset)) if (form.elements[k]) form.elements[k].value = v;
@@ -558,4 +562,56 @@ async function pageAging(main, side) {
 function billCatTotals(lines) {
   const map = new Map(); for (const l of lines || []) { if (l.active === 0) continue; const c = l.category || ''; map.set(c, (map.get(c) || 0) + (Number(l.supply) || 0)); }
   return map.size > 1 ? [...map].map(([category, supply]) => ({ category, supply })) : [];
+}
+
+// ── 15.137 거래처별 장부(매출·매입): 거래처 하나의 기간 전표·입금/지급·잔액·세금계산서. 비우면 거래처별 요약. 머리글을 누르면 정렬.
+async function pagePartnerBook(main, side = 'sales') {
+  const S = side === 'sales' ? { title: '매출 거래처별 장부', who: '매출처', pay: '입금', type: 'sales', other: '#/purchase/book', bill: id => api('GET', '/api/sales-bills/' + id).then(b => salesBillSheet(b)), inv: id => api('GET', '/api/tax-invoices/' + id).then(r => taxInvoiceView(r)) }
+    : { title: '매입 거래처별 장부', who: '매입처', pay: '지급', type: 'purchase', other: '#/sales/book', bill: id => api('GET', '/api/purchase-bills/' + id).then(b => billSheet(b)), inv: id => purchaseTaxView(id) };
+  const r0 = rpRange('year');
+  const tabs = `<div class="seg class-tabs tax-side" role="tablist" aria-label="매출·매입">${(ME.is_admin || ME.roles.includes('sales')) ? `<a role="tab" href="#/sales/book" class="${side === 'sales' ? 'on' : ''}" aria-selected="${side === 'sales'}">매출 장부</a>` : ''}${(ME.is_admin || ME.roles.includes('purchase')) ? `<a role="tab" href="#/purchase/book" class="${side === 'purchase' ? 'on' : ''}" aria-selected="${side === 'purchase'}">매입 장부</a>` : ''}</div>`;
+  main.innerHTML = `<h1>${S.title}</h1>${tabs}
+  <p class="muted">${S.who}를 고르면 그 기간의 전표(전표번호·일자·공급가액·부가세·합계·세금계산서)와 ${S.pay}, 줄마다 잔액을 봅니다. 비우면 ${S.who}별 요약입니다. 표 머리글을 누르면 정렬됩니다(세 번째 누르면 원래 순서).</p>
+  <form class="list-filters toolbar" data-read-only id="bookForm"><label>${S.who}<input name="party" maxlength="100" autocomplete="off" placeholder="비우면 전체 요약"></label><label>시작일<input type="date" name="from" value="${r0.from}" required></label><label>종료일<input type="date" name="to" value="${r0.to}" required></label><button class="btn primary">조회</button><button type="button" class="btn" data-book-all hidden>← 전체 요약</button><button type="button" class="btn" data-xlsx>엑셀</button></form>
+  <div id="bookHead" class="counts"></div><div id="bookBody"></div>`;
+  const form = $('#bookForm', main); let data = null;
+  try { const p = sessionStorage.getItem('wpa:book-' + side); if (p) form.elements.party.value = p; } catch { /* 편의 기능 */ }
+  bindPartnerPicker(form.elements.party, null, { type: S.type }).catch(() => {});
+  rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
+  const invCell = r => r.invoice_no ? `${taxChip(r.invoice_status)}<div><button type="button" class="link-btn small" data-book-inv="${r.invoice_id}">${esc(r.invoice_no)}</button></div>${r.approval_no ? `<div class="small muted">${esc(r.approval_no)}</div>` : ''}` : r.kind === 'bill' ? `<span class="chip ${side === 'sales' ? 'red' : 'yellow'}">${side === 'sales' ? '미발행' : '미수취'}</span>` : '';
+  const load = async () => {
+    const v = formObj(form); if (!v.from || !v.to) return toast('기간을 고르세요.', 'err');
+    try { sessionStorage.setItem('wpa:book-' + side, v.party || ''); } catch { /* 편의 기능 */ }
+    data = await api('GET', '/api/partner-book?' + new URLSearchParams({ side, ...v })); if (!main.isConnected) return;
+    $('[data-book-all]', form).hidden = !data.party;
+    const t = data.totals, head = $('#bookHead', main), box = $('#bookBody', main);
+    if (!data.party) {
+      head.innerHTML = sumLine([[S.who, `${fmtNum(data.rows.length)}곳`], ['기초 잔액', `${won(t.opening)}원`], ['전표 합계', `${won(t.total)}원`], [S.pay, `${won(t.paid)}원`], ['기말 잔액', `<b>${won(t.balance)}원</b>`], ['계산서 미발행', `<span class="${t.uninvoiced ? 'red-text' : ''}">${won(t.uninvoiced)}원</span>`]]);
+      box.innerHTML = data.rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>${S.who}</th><th class="r">기초 잔액</th><th class="r">전표</th><th class="r">공급가액</th><th class="r">부가세</th><th class="r">합계</th><th class="r">${S.pay}</th><th class="r">잔액</th><th class="r">계산서 ${side === 'sales' ? '발행' : '수취'}</th><th class="r">${side === 'sales' ? '미발행' : '미수취'}</th></tr></thead>
+        <tbody>${data.rows.map(r => `<tr><td data-card-primary><button type="button" class="link-btn" data-book-party="${esc(r.name)}">${esc(r.name)}</button></td><td class="r">${won(r.opening)}</td><td class="r">${fmtNum(r.bills)}</td><td class="r">${won(r.supply)}</td><td class="r">${won(r.vat)}</td><td class="r">${won(r.total)}</td><td class="r">${won(r.paid)}</td><td class="r"><b>${won(r.balance)}</b></td><td class="r">${won(r.invoiced)}</td><td class="r">${r.uninvoiced ? `<span class="red-text">${won(r.uninvoiced)}</span>` : '0'}</td></tr>`).join('')}</tbody>
+        <tfoot><tr><th>합계</th><td class="r">${won(t.opening)}</td><td class="r">${fmtNum(t.bills)}</td><td class="r">${won(t.supply)}</td><td class="r">${won(t.vat)}</td><td class="r">${won(t.total)}</td><td class="r">${won(t.paid)}</td><td class="r"><b>${won(t.balance)}</b></td><td class="r">${won(t.invoiced)}</td><td class="r">${won(t.uninvoiced)}</td></tr></tfoot></table></div>`
+        : '<div class="empty">그 기간에 거래가 없습니다.</div>';
+      return;
+    }
+    head.innerHTML = sumLine([[S.who, `<b>${esc(data.party)}</b>`], ['기간', `${esc(data.from)} ~ ${esc(data.to)}`], ['기초 잔액', `${won(data.opening)}원`], ['전표 합계', `${won(t.total - data.rows.filter(r => r.kind === 'opening').reduce((s, r) => s + r.total, 0))}원`], [S.pay, `${won(t.paid)}원`], ['기말 잔액', `<b>${won(t.balance)}원</b>`], ['계산서 미발행', `<span class="${t.uninvoiced ? 'red-text' : ''}">${won(t.uninvoiced)}원</span>`]]);
+    box.innerHTML = `<div class="table-wrap"><table class="grid book-grid"><thead><tr><th>전표 일자</th><th>전표번호</th><th>내용</th><th class="r">공급가액</th><th class="r">부가세</th><th class="r">합계</th><th class="r">${S.pay}</th><th class="r">잔액</th><th>세금계산서</th><th>비고</th></tr></thead>
+      <tbody><tr class="book-open"><td colspan="7">기초 잔액 (${esc(data.from)} 이전)</td><td class="r"><b>${won(data.opening)}</b></td><td colspan="2"></td></tr>${data.rows.map(r => `<tr class="${r.kind === 'bill' ? '' : 'book-pay'}"><td class="nowrap">${esc(r.date)}</td><td>${r.kind === 'bill' ? `<button type="button" class="link-btn" data-book-bill="${r.id}">${esc(r.bill_no)}</button>` : ''}</td><td>${esc(r.label)}</td>
+        <td class="r">${r.kind === 'bill' ? won(r.supply) : ''}</td><td class="r">${r.kind === 'bill' ? won(r.vat) : ''}</td><td class="r">${r.total ? won(r.total) : ''}</td><td class="r">${r.paid ? won(r.paid) : ''}</td><td class="r"><b>${won(r.balance)}</b></td><td>${invCell(r)}</td><td class="small">${esc(r.note || '')}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><th colspan="3">합계</th><td class="r">${won(t.supply)}</td><td class="r">${won(t.vat)}</td><td class="r">${won(t.total)}</td><td class="r">${won(t.paid)}</td><td class="r"><b>${won(t.balance)}</b></td><td colspan="2"></td></tr></tfoot></table></div>`;
+  };
+  form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
+  $('[data-book-all]', form).onclick = () => { form.elements.party.value = ''; load().catch(fail); };
+  $('#bookBody', main).addEventListener('click', e => {
+    const p = e.target.closest('[data-book-party]'); if (p) { form.elements.party.value = p.dataset.bookParty; return load().catch(fail); }
+    const b = e.target.closest('[data-book-bill]'); if (b) return S.bill(b.dataset.bookBill).catch(fail);
+    const i = e.target.closest('[data-book-inv]'); if (i) return S.inv(i.dataset.bookInv).catch(fail);
+  });
+  $('[data-xlsx]', form).onclick = () => {
+    if (!data) return; const t = data.totals, name = `${S.title}_${data.party || '전체'}_${data.from}_${data.to}.xlsx`;
+    if (!data.party) return xlsxDownload(name, { sheet: '요약', titles: [S.title, `${COMPANY_NAME} · ${data.from} ~ ${data.to}`], columns: [{ label: S.who, type: 'text', width: 24 }, ...['기초 잔액', '전표', '공급가액', '부가세', '합계', S.pay, '잔액', '계산서 발행', '미발행'].map((label, k) => ({ label, type: k === 1 ? 'number' : 'money' }))],
+      rows: data.rows.map(r => [r.name, r.opening, r.bills, r.supply, r.vat, r.total, r.paid, r.balance, r.invoiced, r.uninvoiced]), totals: ['합계', t.opening, t.bills, t.supply, t.vat, t.total, t.paid, t.balance, t.invoiced, t.uninvoiced] });
+    xlsxDownload(name, { sheet: '장부', titles: [S.title, `${data.party} · ${data.from} ~ ${data.to} · 기초 잔액 ${won(data.opening)}원`], columns: [{ label: '전표 일자', type: 'text', width: 12 }, { label: '전표번호', type: 'text', width: 16 }, { label: '내용', type: 'text', width: 28 }, { label: '공급가액', type: 'money' }, { label: '부가세', type: 'money' }, { label: '합계', type: 'money' }, { label: S.pay, type: 'money' }, { label: '잔액', type: 'money' }, { label: '세금계산서', type: 'text', width: 18 }, { label: '승인번호', type: 'text', width: 26 }, { label: '비고', type: 'text', width: 24 }],
+      rows: data.rows.map(r => [r.date, r.bill_no || '', r.label, r.kind === 'bill' ? r.supply : '', r.kind === 'bill' ? r.vat : '', r.total || '', r.paid || '', r.balance, r.invoice_no || (r.kind === 'bill' ? '미발행' : ''), r.approval_no || '', r.note || '']), totals: ['합계', '', '', t.supply, t.vat, t.total, t.paid, t.balance, '', '', ''] });
+  };
+  await load().catch(fail);
 }

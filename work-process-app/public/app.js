@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.131';
+const APP_VERSION = '15.141';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -334,10 +334,10 @@ async function saveNewAttachments(entity, row, draft, form) {
 // 메뉴: 업무 → 하위 메뉴 → 화면. 입력과 목록(조회·검색)은 서로 다른 화면입니다(VIEW_SPLIT).
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
-  { group: '영업', items: [{ sub: '수주', items: [['#/sales/orders/new', '수주 입력'], ['#/sales/orders', '수주 목록']] }, { sub: '매출전표', items: [['#/sales/bills/new', '매출전표 입력'], ['#/sales/bills', '매출전표 목록'], ['#/sales/ledger', '기간별 거래보고'], ['#/sales/aging', '채권 연령표'], ['#/sales/closing', '매출 마감']] }, { sub: '세금계산서', items: [['#/sales/tax/new', '세금계산서 만들기'], ['#/sales/tax', '세금계산서 관리'], ['#/sales/tax-check', '발행 체크']] }, { sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
+  { group: '영업', items: [{ sub: '수주', items: [['#/sales/orders/new', '수주 입력'], ['#/sales/orders', '수주 목록']] }, { sub: '매출전표', items: [['#/sales/bills/new', '매출전표 입력'], ['#/sales/bills', '매출전표 목록'], ['#/sales/book', '거래처별 장부'], ['#/sales/returns/new', '반입(반품) 입력'], ['#/sales/returns', '반입 목록'], ['#/sales/ledger', '기간별 거래보고'], ['#/sales/aging', '채권 연령표'], ['#/sales/closing', '매출 마감']] }, { sub: '세금계산서', items: [['#/sales/tax/new', '세금계산서 만들기'], ['#/sales/tax', '세금계산서 관리'], ['#/sales/tax-check', '발행 체크']] }, { sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
   { group: '구매', items: [
     { sub: '발주', items: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
-    { sub: '매입전표', items: [['#/purchase/bills/new', '매입전표 입력'], ['#/purchase/bills', '매입전표 목록'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/tax', '매입 세금계산서'], ['#/purchase/closing', '매입 마감']] },
+    { sub: '매입전표', items: [['#/purchase/bills/new', '매입전표 입력'], ['#/purchase/bills', '매입전표 목록'], ['#/purchase/book', '거래처별 장부'], ['#/purchase/returns/new', '반출(반품) 입력'], ['#/purchase/returns', '반출 목록'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/tax', '매입 세금계산서'], ['#/purchase/closing', '매입 마감']] },
     { sub: '대금', items: [['#/purchase/payments', '입금확인'], ['#/purchase/disbursements', '지급확인'], ['#/purchase/ledger', '매입처 원장'], ['#/purchase/aging', '채무 연령표']] },
     { sub: '샘플(상품)', items: [['#/purchase/sample/request', '샘플의뢰'], ['#/purchase/sample/list', '샘플리스트']] },
     { sub: '세탁', items: [['#/purchase/laundry/new', '불량·폐기 입력'], ['#/purchase/laundry', '불량·폐기 목록'], ['#/purchase/laundry-reports', '세탁 검수·성적서']] },
@@ -542,6 +542,12 @@ const PAGES = {
   '#/purchase/ledger': main => pagePurchaseLedger(main),
   '#/sales/payments': () => { location.replace('#/purchase/payments'); }, // 15.109 구매로 옮김
   '#/sales/ledger': main => pageSalesLedger(main),
+  '#/sales/book': main => pagePartnerBook(main, 'sales'),
+  '#/sales/returns/new': main => pageReturnEntry(main, 'in'),
+  '#/sales/returns': main => pageReturnList(main, 'in'),
+  '#/purchase/returns/new': main => pageReturnEntry(main, 'out'),
+  '#/purchase/returns': main => pageReturnList(main, 'out'),
+  '#/purchase/book': main => pagePartnerBook(main, 'purchase'),
   '#/sales/aging': main => pageAging(main, 'sales'),
   '#/purchase/aging': main => pageAging(main, 'purchase'),
   '#/sales/closing': main => pageSalesClosing(main),
@@ -631,31 +637,47 @@ async function render() {
 window.addEventListener('hashchange', render);
 
 // ── 15.97 ERP식 표·입력 화면 ──
-// 1) 목록 표 머리글을 누르면 그 칸으로 정렬(다시 누르면 반대로). 입력칸이 있는 표, 칸을 합친 줄(소계 등)이 있는 표, data-no-sort 표는 정렬하지 않는다.
+// 1) 표 머리글을 누르면 그 칸으로 정렬: 오름차순 → 내림차순 → 원래 순서(15.137부터 모든 목록 표).
+// 체크칸이 있는 표·월 소계/합계 줄이 있는 표·창 안의 표도 정렬한다. 정렬하는 동안 소계 줄은 숨기고 맨 끝 「합계」 줄은 아래에 남긴다.
+// 값을 입력하는 표(글·숫자 칸·선택 상자), 칸을 세로로 합친 표, 묶음(펼침) 표, data-no-sort 표는 정렬하지 않는다.
+const TOTAL_ROW = /^(합계|총계|소계|계|total)(\s|$)/i;
+const auxRow = tr => [...tr.cells].some(c => c.colSpan > 1) || TOTAL_ROW.test((tr.cells[0]?.textContent || '').trim()) || /(^|\s)(sum|total|month-sum|rc-group)(\s|$)/.test(tr.className);
 function sortableTable(table) {
-  if (!table || table.hasAttribute('data-no-sort') || table.closest('.modal')) return false;
-  const rows = [...(table.tBodies[0]?.rows || [])], n = table.tHead?.rows[0]?.cells.length;
-  const totalRow = tr => /^(합계|총계|소계|계|total)$/i.test((tr.cells[0]?.textContent || '').trim()) || /sum|total/.test(tr.className);
-  return rows.length > 1 && !!n && !table.tBodies[0].querySelector('input, select, textarea, [colspan], [rowspan]') && rows.every(tr => tr.cells.length === n) && !rows.some(totalRow);
+  const body = table?.tBodies?.[0];
+  if (!body || table.hasAttribute('data-no-sort') || !table.tHead?.rows[0]) return false;
+  if (body.querySelector('input:not([type=checkbox]):not([type=radio]), select, textarea, [rowspan], tr[data-rc-of]')) return false;
+  return [...body.rows].filter(tr => !auxRow(tr)).length > 1;
 }
 function sortKey(td) {
-  const t = (td?.textContent || '').trim(), num = t.replace(/[,원%\s]/g, '');
-  return /^-?\d+(\.\d+)?$/.test(num) ? { n: Number(num) } : { s: t };
+  const t = (td?.textContent || '').replace(/\s+/g, ' ').trim();
+  const m = t.match(/^(-?[\d,]+(?:\.\d+)?)\s*(?:원|%|[A-Za-z]{1,6}|[가-힣]{1,3})?$/);
+  return m ? { n: Number(m[1].replace(/,/g, '')) } : { s: t };
 }
 document.addEventListener('click', event => {
   const th = event.target.closest('table.grid > thead > tr > th');
   if (!th || event.target.closest('input, button, a, select') || !th.textContent.trim()) return;
   const table = th.closest('table'); if (!sortableTable(table)) return;
-  const index = [...th.parentElement.cells].indexOf(th), asc = th.getAttribute('aria-sort') !== 'ascending';
-  [...th.parentElement.cells].forEach(c => c.removeAttribute('aria-sort')); th.setAttribute('aria-sort', asc ? 'ascending' : 'descending');
-  const body = table.tBodies[0], rows = [...body.rows];
-  rows.sort((a, b) => {
+  const body = table.tBodies[0], all = [...body.rows];
+  all.forEach((tr, k) => { if (tr.dataset.orig === undefined) tr.dataset.orig = String(k); });
+  const index = [...th.parentElement.cells].indexOf(th), now = th.getAttribute('aria-sort');
+  const next = now === 'ascending' ? 'descending' : now === 'descending' ? '' : 'ascending';
+  [...th.parentElement.cells].forEach(c => c.removeAttribute('aria-sort'));
+  if (!next) { // 세 번째 누름: 원래 순서·소계 줄 되돌림
+    all.sort((a, b) => Number(a.dataset.orig) - Number(b.dataset.orig)).forEach(tr => { tr.classList.remove('sort-aux-hidden'); body.append(tr); });
+    return;
+  }
+  th.setAttribute('aria-sort', next);
+  const data = all.filter(tr => !auxRow(tr)), aux = all.filter(auxRow), grand = aux.filter(tr => TOTAL_ROW.test((tr.cells[0]?.textContent || '').trim())).at(-1);
+  const asc = next === 'ascending';
+  data.sort((a, b) => {
     const x = sortKey(a.cells[index]), y = sortKey(b.cells[index]);
     const empty = v => v.s === '' ? 1 : 0; if (empty(x) !== empty(y)) return empty(x) - empty(y); // 빈 칸은 늘 아래
     const c = x.n !== undefined && y.n !== undefined ? x.n - y.n : String(x.s ?? x.n).localeCompare(String(y.s ?? y.n), 'ko', { numeric: true });
-    return asc ? c : -c;
+    return (asc ? c : -c) || Number(a.dataset.orig) - Number(b.dataset.orig);
   });
-  rows.forEach(tr => body.append(tr));
+  data.forEach(tr => body.append(tr));
+  aux.forEach(tr => { tr.classList.toggle('sort-aux-hidden', tr !== grand); body.append(tr); });
+  if (grand) body.append(grand);
 });
 // 2) 입력 화면 아래 저장 줄 왼쪽에 「리스트」(같은 하위 메뉴의 목록 화면)와 「다시 작성」(입력과 보관 초안을 지우고 새로)
 function listRouteFor(route) {
@@ -1358,8 +1380,11 @@ async function pageOtherReceipts(main, { entry = true } = {}) {
     const rows = await api('GET', '/api/other-receipts?' + params);
     if (version !== queryVersion || !main.isConnected) return;
     listCount(filterForm, rows.length);
+    const otherRow = (row, of = null) => `<tr${of ? ` class="rc-child" data-rc-of="${of}" hidden` : ''}><td>${esc(row.received_date)}</td><td>${esc(row.item_category)}</td><td>${esc(row.item)}${lineInfo(row)}${qcChip(row)}${receiptBomSnapshot(row).product_code ? `<div class="small muted">${esc(receiptBomSnapshot(row).product_code)}</div>` : ''}</td><td class="r">${fmtNum(row.qty)} ${esc(receiptBomSnapshot(row).unit || '')}</td><td>${esc(row.vendor)}</td><td>${esc(row.note)}</td><td>${esc(row.created_by)}</td><td class="nowrap">${commentButton("other_receipt", row.id, row.item)} <button class="btn small" data-other-photo="${row.id}">사진·이상 여부</button>${inspectionBadge(row)} <button class="btn small" data-other-edit="${row.id}">수정</button> <button class="btn small danger" data-other-del="${row.id}">삭제</button></td></tr>`;
     $('#otherList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>입고일</th><th>분류</th><th>품목명</th><th class="r">입고수량</th><th>입고처</th><th>비고</th><th>입력자</th><th></th></tr></thead>
-      <tbody>${rows.map(row => `<tr><td>${esc(row.received_date)}</td><td>${esc(row.item_category)}</td><td>${esc(row.item)}${lineInfo(row)}${qcChip(row)}${receiptBomSnapshot(row).product_code ? `<div class="small muted">${esc(receiptBomSnapshot(row).product_code)}</div>` : ''}</td><td class="r">${fmtNum(row.qty)} ${esc(receiptBomSnapshot(row).unit || '')}</td><td>${esc(row.vendor)}</td><td>${esc(row.note)}</td><td>${esc(row.created_by)}</td><td class="nowrap">${commentButton("other_receipt", row.id, row.item)} <button class="btn small" data-other-photo="${row.id}">사진·이상 여부</button>${inspectionBadge(row)} <button class="btn small" data-other-edit="${row.id}">수정</button> <button class="btn small danger" data-other-del="${row.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">해당하는 기타입고가 없습니다.</div>';
+      <tbody>${otherGroups(rows).map(g => g.rows.length > 1 ? otherGroupHead(g) + g.rows.map(row => otherRow(row, g.id)).join('') : otherRow(g.rows[0])).join('')}</tbody></table></div>` : '<div class="empty">해당하는 기타입고가 없습니다.</div>';
+    $$('[data-rc-toggle]', main).forEach(b => b.onclick = () => { const open = b.getAttribute('aria-expanded') !== 'true'; b.setAttribute('aria-expanded', String(open)); b.querySelector('[data-rc-arrow]').textContent = open ? '▾' : '▸'; $$(`[data-rc-of="${b.dataset.rcToggle}"]`, main).forEach(tr => { tr.hidden = !open; }); });
+    $$('[data-rc-sheet]', main).forEach(b => b.onclick = async () => { try { receiptSlip(await api('GET', '/api/receipts/' + b.dataset.rcSheet)); } catch (error) { fail(error); } });
     if (rows.length) $('#otherList').insertAdjacentHTML('beforeend', sumLine([['합계', esc(`${rows.length}건`)], ['입고수량', esc(unitTotals(rows, r => r.qty, r => r.unit || receiptBomSnapshot(r).unit))]]));
     $$('[data-other-photo]', main).forEach(button => button.onclick = () => { const row = rows.find(row => row.id === Number(button.dataset.otherPhoto)); openAttachments('other_receipt', row.id, row.item, { editable: ME.is_admin || hasRole('logistics') || row.created_by === ME.name }); });
     $$('[data-other-edit]', main).forEach(button => button.onclick = () => {
@@ -2055,7 +2080,7 @@ async function pageShip(main) {
     <label>품목명 *<input name="item" required></label>
     <label>수량 *<input name="qty" type="number" min="0" step="any" required></label>
     <label>거래처 *<input name="customer" required></label>
-    <label>LOT<input name="lot" maxlength="100" placeholder="LOT 번호 (선택)"></label>
+    <label>LOT<input name="lot" maxlength="100" placeholder="재고 LOT 고르기 (선택)"></label>
     <label class="span2">비고<input name="note"></label>${photoPicker()}${inspectionFields()}</div>
     <div class="actions"><button class="btn primary">등록</button></div></form>
   ${listControls('sh', { dateLabel: '출고', from: todayStr(), to: todayStr(), requiredDates: true, placeholder: '품목·거래처·LOT·메모·입력자', extra: listInspectionSelect() + '<button type="button" class="btn" id="shToday">오늘</button>' })}<p id="shSum" class="muted small"></p>
@@ -2086,8 +2111,9 @@ async function pageShip(main) {
     }));
   };
   const shipDraft = bindPhotoDraft($('#shNew'));
+  const shLot = bindLotPicker($('#shNew').elements.lot, () => $('#shNew').elements.item.value, () => $('#shNew').elements.qty.value);
   $('#shNew').onsubmit = async (e) => {
-    e.preventDefault(); if (shipDraft.busy) return; const v = formObj(e.target); const button = $('button.primary', e.target); button.disabled = true;
+    e.preventDefault(); if (shipDraft.busy) return; const lotWarn = shLot?.check(); if (lotWarn && !await confirmBox(`${lotWarn}. 그래도 등록할까요?`)) return; LOT_CACHE.clear(); const v = formObj(e.target); const button = $('button.primary', e.target); button.disabled = true;
     try { const saved = await api('POST', '/api/shipments', v); const photoSaved = await saveNewAttachments('shipment', saved, shipDraft, e.target); shipDraft.reset(); e.target.inspection_status.value = 'unchecked'; e.target.inspection_note.value = ''; ['item', 'qty', 'customer', 'note', 'lot'].forEach((k) => (e.target[k].value = '')); if (photoSaved) toast('출하를 등록했습니다.'); if (v.ship_date < $('#shFrom').value || v.ship_date > $('#shTo').value) { $('#shFrom').value = $('#shTo').value = v.ship_date; } load(); } catch (err) { fail(err); } finally { button.disabled = false; }
   };
   bindListControls(filterForm, load);
@@ -2238,3 +2264,44 @@ document.addEventListener('click', event => {
   const box = cell.querySelector(':scope > input[type=checkbox]:only-child'); if (!box || box.disabled) return;
   box.click();
 });
+
+// 15.134 기타입고 목록: 같은 입고번호로 받은 여러 줄을 한 묶음(머리줄)으로 접고, 누르면 하위 자재(LOT·서브 LOT) 줄이 펼쳐진다.
+function otherGroups(rows) {
+  const out = [];
+  for (const row of rows) { const last = out.at(-1); if (row.receipt_id && last && last.id === row.receipt_id) last.rows.push(row); else out.push({ id: row.receipt_id || null, no: row.receipt_no || '', rows: [row] }); }
+  return out;
+}
+function otherGroupHead(g) {
+  const r0 = g.rows[0], unitOf = r => r.unit || receiptBomSnapshot(r).unit || '', items = [...new Set(g.rows.map(r => r.item))], cats = [...new Set(g.rows.map(r => r.item_category))], lots = [...new Set(g.rows.map(r => r.lot).filter(Boolean))];
+  return `<tr class="rc-group"><td>${esc(r0.received_date)}</td><td>${esc(cats.join(', '))}</td>
+    <td><button type="button" class="link-btn" data-rc-toggle="${g.id}" aria-expanded="false"><span data-rc-arrow>▸</span> <b>${esc(g.no || '입고')}</b> · ${esc(items[0])}${items.length > 1 ? ` 외 ${items.length - 1}품목` : ''}</button>
+      <div class="small muted">하위 ${g.rows.length}줄${lots.length ? ` · LOT ${esc(lots.length > 2 ? `${lots[0]} 외 ${lots.length - 1}` : lots.join(', '))}` : ''}</div></td>
+    <td class="r"><b>${esc(unitTotals(g.rows, r => r.qty, unitOf))}</b></td><td>${esc(r0.vendor)}</td><td></td><td>${esc(r0.created_by || '')}</td><td><button class="btn small" data-rc-sheet="${g.id}">입고증</button></td></tr>`;
+}
+
+// ── 15.136 출하 LOT 연결: LOT 칸을 누르면 그 품목의 재고 LOT(먼저 들어온 순 · 남은 수량)을 고를 수 있고, 재고에 없는 LOT·남은 수량 초과를 바로 알려 준다.
+const LOT_CACHE = new Map();
+async function lotsForItem(item, fresh = false) {
+  const key = String(item || '').trim(); if (!key) return [];
+  if (!fresh && LOT_CACHE.has(key) && Date.now() - LOT_CACHE.get(key).at < 30000) return LOT_CACHE.get(key).rows;
+  const rows = (await api('GET', '/api/lots/available?item=' + encodeURIComponent(key)).catch(() => ({ rows: [] }))).rows;
+  LOT_CACHE.set(key, { at: Date.now(), rows }); return rows;
+}
+let lotListSeq = 0;
+function bindLotPicker(input, itemOf, qtyOf = () => 0) {
+  if (!input || input.dataset.lotBound) return null; input.dataset.lotBound = '1';
+  const list = document.createElement('datalist'); list.id = 'lotList' + (++lotListSeq); input.after(list); input.setAttribute('list', list.id); input.autocomplete = 'off';
+  const hint = document.createElement('div'); hint.className = 'small lot-hint'; list.after(hint);
+  let rows = [];
+  const fill = async () => { rows = await lotsForItem(itemOf()); list.innerHTML = rows.map(l => `<option value="${esc(l.lot)}">남은 ${fmtNum(l.balance)} ${esc(l.unit || '')}${l.places ? ' · ' + esc(l.places) : ''} · ${esc(l.first_date || '')}</option>`).join(''); };
+  const warn = () => {
+    const lot = input.value.trim(), qty = Number(qtyOf()) || 0; if (!lot) return rows.length ? `재고 LOT ${rows.length}개 · 비어 있으면 LOT 미연결` : '';
+    const hit = rows.find(l => l.lot === lot);
+    if (!hit) return rows.length ? `「${lot}」은 이 품목의 재고 LOT이 아닙니다` : '';
+    return qty > hit.balance + 0.000001 ? `LOT ${lot} 남은 수량 ${fmtNum(hit.balance)}보다 많습니다` : '';
+  };
+  const show = () => { const lot = input.value.trim(), hit = rows.find(l => l.lot === lot), w = warn(); hint.innerHTML = w && (lot || !rows.length) ? `<span class="red-text">${esc(w)}</span>` : hit ? `<span class="muted">남은 ${fmtNum(hit.balance)} ${esc(hit.unit || '')}</span>` : rows.length ? `<span class="muted">${esc(w)}</span>` : ''; };
+  input.addEventListener('focus', () => fill().then(show).catch(() => {}));
+  input.addEventListener('input', show); input.addEventListener('change', show);
+  return { check: () => (input.value.trim() ? warn() : ''), refresh: () => fill().then(show) };
+}

@@ -238,3 +238,29 @@ test('15.111 Price table: lookup by date, history rows, same-day edit, roles, fi
   // 단가표에 있는 품목은 완전 삭제 안 됨
   assert.ok(JSON.stringify((await admin('GET', `/api/boms/${mask.id}/usage`)).body).includes('단가표'));
 });
+
+test('15.132 Ship batches: bundle pending instructions, no double bundle, remove line, ship all, release', async () => {
+  const so = (await seller('POST', '/api/sales-orders', { customer: '세흥상사', order_date: today, request_id: rid(), lines: [{ bom_id: glove.id, qty: 30, unit_price: 100 }, { bom_id: mask.id, qty: 30, unit_price: 50 }] })).body;
+  const b = (await seller('POST', '/api/sales-bills', { customer: '세흥상사', bill_date: today, request_id: rid(), lines: so.lines.map(l => ({ source_type: 'order', order_line_id: l.id, qty: 10 })) })).body;
+  const mine = (await staff('GET', '/api/ship-instructions?batch=none')).body.rows.filter(r => r.bill_no === b.bill_no);
+  assert.equal(mine.length, 2);
+  const ids = mine.map(r => r.id);
+  assert.equal((await client()('POST', '/api/ship-batches', { ids })).status, 401);
+  const token = rid();
+  const bt = await seller('POST', '/api/ship-batches', { ids, plan_date: today, note: '1호차', request_id: token });
+  assert.equal(bt.status, 200, JSON.stringify(bt.body)); assert.match(bt.body.batch_no, /^DO-\d{6}-01$/);
+  assert.equal(bt.body.lines.length, 2); assert.equal(bt.body.state, 'open'); assert.equal(bt.body.customers, '세흥상사');
+  assert.equal((await seller('POST', '/api/ship-batches', { ids, request_id: token })).body.duplicate, true);
+  assert.match((await staff('POST', '/api/ship-batches', { ids: [ids[0]], request_id: rid() })).body.error, /이미 출고지시서/);
+  const listed = (await staff('GET', '/api/ship-instructions')).body.rows.find(r => r.id === ids[0]); assert.equal(listed.batch_no, bt.body.batch_no);
+  assert.equal((await staff('GET', '/api/ship-instructions?batch=none')).body.rows.some(r => ids.includes(r.id)), false);
+  const rm = (await staff('POST', `/api/ship-batches/${bt.body.id}/remove`, { ids: [ids[1]] })).body; assert.equal(rm.lines.length, 1);
+  await staff('POST', '/api/ship-instructions/ship', { ids: [ids[0]], ship_date: today, lots: { [ids[0]]: 'L-9' } });
+  const done = (await staff('GET', `/api/ship-batches/${bt.body.id}`)).body; assert.equal(done.state, 'done'); assert.equal(done.lines[0].shipped_lot, 'L-9');
+  assert.match((await staff('POST', `/api/ship-batches/${bt.body.id}/remove`, { ids: [ids[0]] })).body.error, /출하된 줄/);
+  const b2 = (await staff('POST', '/api/ship-batches', { ids: [ids[1]], request_id: rid() })).body; assert.match(b2.batch_no, /-02$/);
+  const c = (await seller('POST', `/api/ship-batches/${b2.id}/cancel`, {})).body; assert.equal(c.status, 'cancelled');
+  assert.equal((await staff('GET', '/api/ship-instructions?batch=none')).body.rows.some(r => r.id === ids[1]), true, 'released');
+  assert.equal((await staff('POST', '/api/ship-batches', { ids: [ids[1]], request_id: rid() })).status, 200, 'can be bundled again');
+  assert.deepEqual((await staff('GET', '/api/ship-batches?state=done')).body.rows.map(x => x.batch_no), [bt.body.batch_no]);
+});

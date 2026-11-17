@@ -104,6 +104,8 @@ function openItemPicker(catalog, { query = '', title = '품목 찾기', filter =
         else if (e.target.dataset.ipN !== undefined) { const i = Number(e.target.dataset.ipN), n = Math.max(1, Math.min(50, Math.floor(Number(e.target.value) || 1))); e.target.value = n; if (shown[i]) { picked.set(shown[i].id, n); toggle(i, true); } }
       });
       $('[data-ip-ok]', el).onclick = finishMulti;
+      // 15.137 두 번 누르면 그 품목(이미 체크한 것 포함)으로 바로 끝냄
+      el.addEventListener('dblclick', e => { const tr = e.target.closest('[data-ip-row]'); if (!tr || e.target.closest('input')) return; toggle(Number(tr.dataset.ipRow), true); finishMulti(); });
     }
     el.addEventListener('click', e => {
       if (multi && e.target.closest('input')) return; // 체크·LOT 수 칸은 change에서 처리
