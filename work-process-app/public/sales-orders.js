@@ -345,7 +345,7 @@ function soPoInfo(r) {
 // 거래처는 「거래처 찾기」(거래처코드), 품목은 품목 찾기(품목코드, 여러 개), 단가는 직접 입력(그 거래처 단가표가 있으면 미리 채움).
 const QT_CUR = { KRW: { label: '원화(₩)', sym: '₩', digits: 0 }, USD: { label: '달러($)', sym: '$', digits: 2 } };
 const qtMoney = (v, cur) => { const c = QT_CUR[cur] || QT_CUR.KRW; return `${c.sym} ${Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: c.digits, maximumFractionDigits: c.digits })}`; };
-const qtCalc = (qty, price, cur) => { const v = (Number(qty) || 0) * (Number(price) || 0); return cur === 'USD' ? Math.round(v * 100) / 100 : Math.trunc(v); };
+const qtCalc = (qty, price, cur) => { const v = (Number(qty) || 0) * (Number(price) || 0); return cur === 'USD' ? Number(Math.round(Number(v.toFixed(8) + 'e2')) + 'e-2') : Math.trunc(v); }; // 15.169 서버와 같은 반올림
 const qtKoDate = d => { const [y, m, dd] = String(d || '').split('-').map(Number); return y ? `${y}년 ${m}월 ${dd}일` : ''; };
 
 function quoteSheet(q, after = null) {
@@ -455,7 +455,7 @@ async function pageQuoteEntry(main) {
     const bad = lines.findIndex(l => !String(l.item || '').trim() || !(Number(l.qty) > 0) || l.unit_price === '' || l.unit_price == null || Number(l.unit_price) < 0);
     if (!lines.length) return toast('품목을 한 줄 이상 넣으세요.', 'err');
     if (bad >= 0) { $(`[data-ql="${!String(lines[bad].item || '').trim() ? 'item' : !(Number(lines[bad].qty) > 0) ? 'qty' : 'unit_price'}"][data-i="${bad}"]`, form)?.focus(); return toast(`${bad + 1}번째 줄: 품명·수량·단가를 넣으세요.`, 'err'); }
-    const body = { ...v, lines: lines.map(l => ({ ...l, qty: Number(l.qty), unit_price: Number(l.unit_price) })), request_id: requestId };
+    const body = { ...v, lines: lines.map(l => ({ ...l, qty: Number(l.qty), unit_price: Number(l.unit_price) })), request_id: requestId, ...(editId ? { version: src.updated_at || src.created_at } : {}) };
     try { const r = await api(editId ? 'PUT' : 'POST', editId ? `/api/quotes/${editId}` : '/api/quotes', body); toast(editId ? '견적서를 고쳤습니다.' : `견적서 ${r.quote_no}를 저장했습니다.`); try { sessionStorage.setItem('wpa:quote-month', r.quote_date.slice(0, 7)); } catch { /* 편의 */ } location.hash = '#/sales/quotes'; setTimeout(() => quoteSheet(r), 300); }
     catch (error) { fail(error); }
   };

@@ -674,3 +674,34 @@ test('15.166 Sales calendar: per-day confirmed bill counts and sums for a month'
   assert.equal(d.n, bills.length); assert.equal(d.total, bills.reduce((t, b) => t + b.total, 0));
   assert.equal(c.totals.total, c.days.reduce((t, x) => t + x.total, 0));
 });
+
+test('15.169 Integrity: stale tax edit rejected, reverse edit history, quote version/cancel once, USD rounding, note no race', async () => {
+  const mk = async c => { const s = (await admin('POST', '/api/shipments', { ship_date: today, item: '무결성상품', qty: 3, customer: c, unit: 'EA' })).body;
+    const b = (await admin('POST', '/api/sales-bills', { customer: c, bill_date: today, request_id: rid(), lines: [{ source_type: 'ship', source_id: s.id, unit_price: 100 }] })).body;
+    return (await admin('POST', '/api/tax-invoices', { request_id: rid(), kind: 'single', bill_ids: [b.id] })).body.rows[0]; };
+  const inv = await mk('무결성고객');
+  const v0 = (await admin('GET', `/api/tax-invoices/${inv.id}`)).body.updated_at ?? null;
+  await admin('PUT', `/api/tax-invoices/${inv.id}`, { issue_type: 'reverse', version: v0 });
+  assert.equal((await admin('PUT', `/api/tax-invoices/${inv.id}`, { note: 'stale', version: v0 })).status, 409, 'stale version rejected');
+  await admin('POST', `/api/tax-invoices/${inv.id}/mark-issued`, { approval_no: '20261117-41000012-00000777' });
+  const cur = (await admin('GET', `/api/tax-invoices/${inv.id}`)).body;
+  const u = await admin('PUT', `/api/tax-invoices/${inv.id}`, { note: '발행 뒤 고침', version: cur.updated_at });
+  assert.equal(u.status, 200, JSON.stringify(u.body)); assert.equal(u.body.approval_no, '20261117-41000012-00000777', 'approval kept');
+  // 줄 3개 중 가운데를 빼도 뒤 줄이 앞 줄 값을 물려받지 않음
+  const three = [{ item: 'A', qty: 1, unit_price: 100, supply: 100, vat: 10, note: 'a' }, { item: 'B', qty: 1, unit_price: 100, supply: 100, vat: 10, note: 'b' }, { item: 'C', qty: 1, unit_price: 100, supply: 100, vat: 10, note: 'c' }];
+  const t3 = (await admin('PUT', `/api/tax-invoices/${inv.id}`, { items: three })).body;
+  const t2 = (await admin('PUT', `/api/tax-invoices/${inv.id}`, { items: [three[0], { item: '' }, { item: 'C', qty: 2, unit_price: 100, supply: 200, vat: 20 }] })).body;
+  assert.deepEqual(t2.items.map(i => [i.item, i.note]), [['A', 'a'], ['C', '']], JSON.stringify(t3.items?.length));
+  // 견적: 버전 다르면 409, 취소 두 번이면 두 번째 400, USD 1.005 → 1.01
+  const q = (await admin('POST', '/api/quotes', { request_id: rid(), customer: '무결성고객', quote_date: today, currency: 'USD', lines: [{ item: 'X', qty: 1, unit_price: 1.005 }] })).body;
+  assert.equal(q.supply_total, 1.01);
+  assert.equal((await admin('PUT', `/api/quotes/${q.id}`, { customer: '무결성고객', currency: 'USD', version: 'old', lines: [{ item: 'X', qty: 2, unit_price: 1 }] })).status, 409);
+  assert.equal((await admin('PUT', `/api/quotes/${q.id}`, { customer: '무결성고객', currency: 'USD', version: q.updated_at || q.created_at, lines: [{ item: 'X', qty: 2, unit_price: 1 }] })).status, 200);
+  assert.equal((await admin('POST', `/api/quotes/${q.id}/cancel`, {})).status, 200);
+  assert.equal((await admin('POST', `/api/quotes/${q.id}/cancel`, {})).status, 400);
+  assert.equal((await admin('GET', `/api/quotes/${q.id}`)).body.changes.filter(c => c.summary === '취소').length, 1);
+  // 어음번호 동시 등록 → 한 건만
+  const body = { kind: 'receivable', issue_date: today, note_no: 'RACE-1', partner: '무결성고객', amount: 1, due_date: today };
+  const rs = await Promise.all([admin('POST', '/api/notes', { ...body, request_id: rid() }), admin('POST', '/api/notes', { ...body, request_id: rid() })]);
+  assert.deepEqual(rs.map(r => r.status).sort(), [200, 409]);
+});

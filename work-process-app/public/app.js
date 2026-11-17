@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.168';
+const APP_VERSION = '15.169';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -703,7 +703,7 @@ function pageTabs(main, route) {
   bar.addEventListener('click', e => {
     const x = e.target.closest('[data-tab-close]'), all = e.target.closest('[data-tab-clear]'); if (!x && !all) return;
     e.preventDefault();
-    if (all) { writeTabs(readTabs().filter(t => t.href === path)); render(); return; }
+    if (all) { writeTabs(readTabs().filter(t => t.href === path)); bar.querySelectorAll('.pt-tab:not(.on):not(.pt-home)').forEach(t => t.remove()); all.remove(); return; } // 15.169 화면은 그대로(입력 보존)
     const list = readTabs(), k = list.findIndex(t => t.href === x.dataset.tabClose); list.splice(k, 1); writeTabs(list);
     if (x.dataset.tabClose === path) location.hash = (list[k] || list[k - 1])?.href || '#/'; else x.closest('.pt-tab').remove();
   });
@@ -725,7 +725,29 @@ async function render() {
   try { pageTabs($('#main'), route); } catch { /* 탭은 편의 기능 */ }
   uxAfterRender(route);
 }
-window.addEventListener('hashchange', render);
+// 15.169 저장 안 한 입력 지키기: 입력 화면(#main의 저장 폼, 조회 조건·읽기 전용·팝업 제외)에 값을 넣고 저장하지 않은 채
+// 다른 메뉴·탭·주소로 가면 물어본다(「취소」면 주소를 되돌려 화면·입력 그대로). 자동 보관(초안)이 붙은 폼은 이미 보관되므로 묻지 않는다.
+// 저장(submit)하면 표시를 지우고, 새로 고침·창 닫기에는 브라우저 경고.
+const dirtyForms = () => $$('#main form[data-dirty]').filter(f => f.isConnected && !f.querySelector('.draft-state'));
+const markDirty = e => { const f = e.target?.closest?.('#main form'); if (!f || f.matches('.list-filters, [data-read-only]') || f.closest('.modal-wrap') || e.target.closest('.draft-state')) return; f.dataset.dirty = '1'; };
+document.addEventListener('input', markDirty, true); document.addEventListener('change', markDirty, true);
+document.addEventListener('click', e => { if (e.target?.closest?.('#main form button[type=button]:not(.partner-find):not([data-help])')) markDirty(e); }, true); // 품목 찾기·줄 추가/빼기처럼 단추로 바뀌는 입력
+document.addEventListener('submit', e => { if (e.target?.dataset) delete e.target.dataset.dirty; }, true);
+window.addEventListener('beforeunload', e => { if (dirtyForms().length) { e.preventDefault(); e.returnValue = ''; } });
+let shownHash = location.hash || '#/', leaveSkip = false;
+window.addEventListener('hashchange', () => {
+  const to = location.hash || '#/';
+  if (leaveSkip) { leaveSkip = false; return; } // 되돌린 주소 바뀜은 그냥 넘김
+  if (to !== shownHash && dirtyForms().length) {
+    leaveSkip = true; location.hash = shownHash; // 화면은 그대로 두고 먼저 묻는다
+    confirmBox('저장하지 않은 입력이 있습니다. 이 화면을 나가면 입력한 내용이 사라집니다. 나갈까요?').then(go => {
+      if (!go) return;
+      dirtyForms().forEach(f => { delete f.dataset.dirty; }); location.hash = to;
+    });
+    return;
+  }
+  shownHash = to; render();
+});
 
 // ── 15.97 ERP식 표·입력 화면 ──
 // 1) 표 머리글을 누르면 그 칸으로 정렬: 오름차순 → 내림차순 → 원래 순서(15.137부터 모든 목록 표).
