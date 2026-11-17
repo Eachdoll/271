@@ -351,6 +351,13 @@
       "when": 1796208813000,
       "tag": "0049_stock_returns",
       "breakpoints": false
+    },
+    {
+      "idx": 50,
+      "version": "6",
+      "when": 1796295213000,
+      "tag": "0050_invoice_doc_type",
+      "breakpoints": false
     }
   ]
 }

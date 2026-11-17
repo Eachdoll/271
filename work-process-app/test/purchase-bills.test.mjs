@@ -528,3 +528,21 @@ test('15.141 Aging treats later returns as credit against the oldest bill; retur
   assert.ok(r2.payment_id, JSON.stringify(r2));
   assert.match((await admin('POST', `/api/sales-payments/${r2.payment_id}/cancel`, { reason: 'x' })).body.error, /반입 RI-/);
 });
+
+test('15.142~143 Invoice edit in form: write date moves item dates, item/buyer edits, 계산서(면세) document type', async () => {
+  const g = (await admin('POST', '/api/boms', { product: '양식상품', product_code: 'TF-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  const sell = async (c, tax) => { const s = (await admin('POST', '/api/shipments', { ship_date: today, bom_id: g.id, item: g.product, qty: 2, customer: c, unit: 'EA' })).body; return (await admin('POST', '/api/sales-bills', { customer: c, bill_date: today, tax_type: tax, request_id: rid(), lines: [{ source_type: 'ship', source_id: s.id, unit_price: 1000 }] })).body; };
+  const tb = await sell('양식고객', 'taxable'), fb = await sell('면세고객', 'zero');
+  const [ti] = (await admin('POST', '/api/tax-invoices', { request_id: rid(), kind: 'single', bill_ids: [tb.id] })).body.rows;
+  const [fi] = (await admin('POST', '/api/tax-invoices', { request_id: rid(), kind: 'single', bill_ids: [fb.id] })).body.rows;
+  assert.equal(ti.doc_type, 'tax'); assert.equal(fi.doc_type, 'free');
+  const d2 = today.slice(0, 8) + '01';
+  let r = (await admin('PUT', `/api/tax-invoices/${ti.id}`, { write_date: d2 })).body;
+  assert.equal(r.write_date, d2); assert.ok(r.items.every(i => i.date === d2), 'item dates follow write date');
+  r = (await admin('PUT', `/api/tax-invoices/${ti.id}`, { write_date: d2, items: [{ date: d2, item: '양식상품 2BOX', spec: 'L', note: 'PO 1234' }], buyer: { biz_no: '2208816064', biz_name: '(주)양식고객', ceo: '김대표', address: '서울', biz_type: '도매', biz_item: '장갑' } })).body;
+  assert.equal(r.items[0].item, '양식상품 2BOX'); assert.equal(r.items[0].supply, 2000, 'amount locked'); assert.equal(r.biz_no, '220-88-16064'); assert.equal(r.ceo, '김대표');
+  assert.match((await admin('PUT', `/api/tax-invoices/${ti.id}`, { write_date: d2, items: [{ date: '2000-01-01', item: 'x' }] })).body.error, /같은 달/);
+  assert.match((await admin('PUT', `/api/tax-invoices/${ti.id}`, { doc_type: 'free' })).body.error, /세액이 0/);
+  assert.equal((await admin('PUT', `/api/tax-invoices/${fi.id}`, { doc_type: 'tax' })).body.doc_type, 'tax', '영세율 세금계산서로 바꿀 수 있음');
+  const list = (await admin('GET', `/api/tax-invoices?doc=tax&from=${d2}&to=${today}`)).body.rows; assert.ok(list.some(x => x.id === fi.id));
+});

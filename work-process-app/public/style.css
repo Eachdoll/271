@@ -1647,3 +1647,38 @@ tr.book-pay td { background: var(--green-bg, #eefaf1); } tr.book-open td { backg
 .ret-settle { border: 1px solid var(--line); padding: 6px 10px; display: flex; gap: 14px; align-items: center; } .ret-settle legend { font-size: 13px; font-weight: 700; } .ret-settle:disabled { opacity: .5; }
 .ret-grid input[type=number] { width: 96px; } .ret-grid input[data-r=lot] { width: 120px; }
 .ret-grid td.small { white-space: nowrap; }
+
+/* 15.142 세금계산서 양식 */
+.taxf-modal { max-width: 1060px; }
+.taxf { --tf: #d33; border: 2px solid var(--tf); padding: 8px; background: #fff; color: #111; font-size: 13px; }
+.taxf-purchase { --tf: #2457c5; }
+.taxf table { width: 100%; border-collapse: collapse; }
+.taxf th, .taxf td { border: 1px solid var(--tf); padding: 3px 5px; vertical-align: middle; }
+.taxf th { color: var(--tf); font-weight: 600; white-space: nowrap; text-align: center; background: transparent; }
+.taxf-top { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+.taxf-top h2 { color: var(--tf); font-size: 26px; letter-spacing: 6px; margin: 0; }
+.taxf-kind b { font-weight: 400; color: #888; margin: 0 4px; } .taxf-kind b.on { color: #111; font-weight: 700; }
+.taxf-flags { color: #555; }
+.taxf-book { width: 230px !important; margin-left: auto; } .taxf-book td { min-width: 50px; text-align: right; }
+.taxf-parties > tbody > tr > td.taxf-half { padding: 0; border: 1px solid var(--tf); width: 50%; vertical-align: top; }
+.taxf-parties .taxf-half table th, .taxf-parties .taxf-half table td { border-top: 0; border-left: 0; }
+.taxf-side { width: 26px; line-height: 1.25; font-size: 14px; }
+.taxf-narrow { width: 24px; line-height: 1.15; }
+.taxf-bizno { font-size: 16px; font-weight: 700; letter-spacing: 1px; }
+.taxf-seal { color: var(--tf); font-size: 12px; }
+.taxf-amt th { font-size: 12px; padding: 2px; } .taxf-dg { font-size: 15px; font-weight: 700; width: 22px; } .taxf-date { width: 140px; }
+.taxf-items th { font-size: 13px; } .taxf-items td { height: 26px; } .taxf-items tr.taxf-blank td:first-child { text-align: center; color: #999; }
+.taxf-sum td { height: 28px; font-size: 14px; } .taxf-charge { width: 200px; font-weight: 400; color: #111 !important; }
+.taxf-status { margin-top: 6px; } .taxf-status th { width: 90px; } .taxf-status td { font-size: 12.5px; }
+.taxf-in { width: 100%; min-height: 28px; border: 1px dashed #bbb; background: #fffef3; padding: 2px 4px; font: inherit; }
+.taxf-in:focus { border: 1px solid var(--tf); outline: none; background: #fff; }
+.taxf-status .taxf-in[type=email] { width: 48%; }
+.taxf-in.auto-filled { background: #eef6ff; }
+@media print { .taxf-in { border: 0; background: none; } .taxf { border-width: 2px; } }
+@media (max-width: 760px) { .taxf { font-size: 11px; overflow-x: auto; } .taxf-amt { display: block; overflow-x: auto; } .taxf-top h2 { font-size: 20px; letter-spacing: 2px; } }
+.taxf-memo { min-width: 160px; }
+.taxf-items td.r, .taxf-sum td.r, .taxf-items td:first-child { white-space: nowrap; } .taxf-items th:nth-child(4), .taxf-items th:nth-child(5), .taxf-items th:nth-child(6), .taxf-items th:nth-child(7) { min-width: 78px; }
+.taxf-sum th.taxf-charge { white-space: nowrap; } .taxf-charge label { display: inline-flex !important; align-items: center; gap: 4px; margin: 0 6px; font-weight: 700; } .taxf-charge input { width: auto; min-height: 0; }
+.taxf [data-tf="ceo"] { width: calc(100% - 38px); display: inline-block; } .taxf td:has(> [data-tf="ceo"]) { white-space: nowrap; }
+.taxf-status label.inline { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; } .taxf-status input[type=radio] { width: auto; min-height: 0; }
+.taxf-items th:nth-child(1) { width: 128px; } .taxf-items th:nth-child(2) { min-width: 230px; } .taxf-items th:nth-child(3) { min-width: 90px; }
