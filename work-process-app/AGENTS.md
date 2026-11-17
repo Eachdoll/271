@@ -899,3 +899,4 @@ INVITE_CODE=local-test-code npm start
 - API: GET /api/purchase-tax-invoices/candidates?vendor&from&to, POST /api/purchase-tax-invoices, GET 목록(?from&to&vendor&status&q&category), GET /:id, POST /:id/cancel. 권한 구매.
 - 분류 필터(매출·매입 목록 ?category): 원자재·부자재·반제품·제품·상품·임가공·운송비(매입전표 운송비)·미분류. 계산서마다 cats 「분류:공급가액|…」, by_category = 분류별 공급가액(취소 제외). 줄 분류는 LINE_CAT(15.117).
 - 등록 창: 「받은 계산서 합계」를 넣으면 전표 합계와 같은지/차이를 바로 표시(다르면 확인 후 등록).
+- 15.128 수주 목록에 「비고」 칸(전체 문구, 줄바꿈) · 수주번호 아래 PO는 poOf(칸 또는 비고 10자리).
