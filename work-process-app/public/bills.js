@@ -255,7 +255,7 @@ const RS_STATE = { billed: ['전표 완료', 'green'], partial: ['일부 전표'
 async function pageReceiptStatus(main) {
   const r0 = rpRange('month');
   main.innerHTML = `<div class="rs-page"><h1>입고현황</h1>
-  <p class="muted small">기간 안에 입고된 것을 거래처 → 입고일자 → 입고 내역 순서로 펼쳐 봅니다. 매입전표를 잡은 수량은 전표 금액(확정), 아직 안 잡은 수량은 발주 단가로 계산한 금액(미확정, 세액 10% 예상)입니다.</p>
+  <p class="muted small">기간 안에 입고된 것을 거래처(또는 품목) → 입고일자 → 입고 내역 순서로 펼쳐 봅니다. 매입전표를 잡은 수량은 전표 금액(확정), 아직 안 잡은 수량은 발주 단가로 계산한 금액(미확정, 세액 10% 예상)입니다.</p>
   <form class="rs-filter" data-read-only id="rsForm"><div class="rs-f rs-f-date"><span class="rs-f-l">입고일</span><input type="date" name="from" value="${r0.from}" required aria-label="입고일 시작"><span class="muted">~</span><input type="date" name="to" value="${r0.to}" required aria-label="입고일 끝"></div>
     <label class="rs-f"><span class="rs-f-l">구분</span><select id="rsCat" aria-label="구분"></select></label>
     <label class="rs-f rs-f-vendor"><span class="rs-f-l">거래처</span><input name="vendor" maxlength="100" autocomplete="off" placeholder="비우면 전체"></label>
@@ -267,7 +267,6 @@ async function pageReceiptStatus(main) {
   <div id="rsSummary"></div><h2 class="rs-h">거래처별</h2><div id="rsVendors"></div><details class="rs-lines-fold" open><summary><h2 class="rs-h" style="display:inline">입고 줄 <span class="small muted" id="rsCount"></span></h2></summary><div id="rsVendorChip"></div><div id="rsLines"></div></details></div>`;
   const form = $('#rsForm', main);
   let data = null, vendorFilter = '', cat = '', mode = 'vendor', pick1 = null, pick2 = null, q = '', loading = false;
-  const openV = new Set(), closedD = new Set(); // 15.151 펼친 거래처(여러 곳 동시) · 접은 입고일(기본은 펼침)
   try { mode = localStorage.getItem('wpa:rs-view') || 'vendor'; } catch { mode = 'vendor'; }
   if (!['vendor', 'date', 'item', 'sum'].includes(mode)) mode = 'vendor';
   if (matchMedia('(max-width: 820px)').matches) $('.rs-lines-fold', main).open = false; // 휴대폰은 분류·거래처별 표를 먼저, 입고 줄은 접어 둔다
@@ -357,10 +356,10 @@ async function pageReceiptStatus(main) {
     $('#rsDrill', main).hidden = !on;
     for (const el of [$('#rsSummary', main), $('#rsVendors', main), $('.rs-lines-fold', main), ...$$('h2.rs-h', main).filter(h => !h.closest('.rs-lines-fold'))]) if (el) el.hidden = on;
     $$('[name=rs-mode]', main).forEach(x => { x.checked = x.value === mode; });
-    $('#rsDrill', main).classList.toggle('rs-acc-mode', mode === 'vendor');
+    $('#rsDrill', main).classList.toggle('rs-acc-mode', mode === 'vendor' || mode === 'item');
     if (!on) return;
     if (!data) { $('#rsDrill', main).innerHTML = `<div class="rs-state">${loading ? '<span class="rs-spin" aria-hidden="true"></span>불러오는 중…' : '조회 조건을 고르고 「조회」를 누르세요.'}</div>`; return; }
-    if (mode === 'vendor') { drawAcc(); return; }
+    if (mode === 'vendor' || mode === 'item') { drawAcc(); return; }
     const base = data.lines.filter(l => (!cat || l.category === cat) && qm(l));
     const masters = groupBy(base, keyOf[mode]).sort((a, b) => mode === 'date' ? stockCompare(a.key, b.key) : stockCompare(mode === 'item' ? a.first.item : a.key, mode === 'item' ? b.first.item : b.key));
     if (!masters.some(g => g.key === pick1)) { pick1 = masters[0]?.key ?? null; pick2 = null; }
@@ -386,51 +385,63 @@ async function pageReceiptStatus(main) {
       </div></div>
       <p class="small muted">금액: 매입전표를 잡은 입고는 전표 금액, 아직 안 잡은 입고는 발주 단가로 계산한 예상 금액(세액 10%)입니다. 줄을 누르면 오른쪽 내역이 바뀝니다.</p>`;
   };
-  // ── 15.151 거래처별 아코디언: 거래처 → 입고일자별 → 입고 내역. 금액은 위 드릴과 같은 식(공급가액 = 확정+미확정, 세액 = 줄의 vat).
+  // ── 15.151 아코디언: 거래처별 = 거래처 → 입고일자별 → 입고 내역, 15.152 품목별 = 품목 → 입고일자별 → 입고 내역.
+  // 금액은 위 드릴과 같은 식(공급가액 = 확정+미확정, 세액 = 줄의 vat). 펼침 기록은 보기마다 따로(거래처·품목 여러 개 동시에).
   const vkey = v => String(v ?? '').normalize('NFC').toLowerCase().replace(/\s+/g, '');
   const dash = v => v === null || v === undefined || String(v).trim() === '' ? '<span class="rs-dash">-</span>' : esc(v);
   const CAL = '<svg class="rs-cal" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="1.5" y="3" width="13" height="11.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M1.5 6.5h13M5 1.5v3M11 1.5v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
   const CHEV = '<span class="rs-chev" aria-hidden="true"><svg viewBox="0 0 16 16" width="12" height="12"><path d="M6 3.5l4.5 4.5L6 12.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
   const BADGE = { billed: ['확정', 'ok'], partial: ['일부 확정', 'part'], adjust: ['수량 수정', 'part'], open: ['미확정', 'no'] };
   const badge = l => { const [t, c] = BADGE[l.state] || BADGE.open; return `<span class="rs-badge rs-badge-${c}">${t}</span>${l.unpriced ? ' <span class="rs-badge rs-badge-warn">단가 없음</span>' : ''}`; };
-  const accRows = () => {
-    const base = data.lines.filter(l => (!cat || l.category === cat) && qm(l));
+  const ACC = {
+    vendor: { head: '거래처', key: l => vkey(l.vendor), sort: (a, b) => (b.supply + b.vat) - (a.supply + a.vat) || stockCompare(a.first.vendor, b.first.vendor),
+      cell: g => `<b>${esc(g.first.vendor)}</b>`, title: g => g.first.vendor, qty: false, word: '곳',
+      cols: ['입고일', '발주번호', '품목', '규격', 'LOT', '단위'], row: l => `<td>${esc(l.received_date)}</td><td>${dash(l.req_no)}</td><td class="rs-item"><b>${esc(l.item)}</b>${l.product_code ? `<span class="rs-code">${esc(l.product_code)}</span>` : ''}</td><td>${dash(l.spec)}</td><td>${dash(l.lot)}</td><td>${dash(l.unit)}</td>` },
+    item: { head: '품목', key: l => [l.product_code || '', l.item, l.spec || '', l.unit || ''].join('|'), sort: (a, b) => stockCompare(a.first.item, b.first.item) || stockCompare(a.first.product_code, b.first.product_code) || stockCompare(a.first.spec, b.first.spec),
+      cell: g => `<b>${esc(g.first.item)}</b>${g.first.product_code || g.first.spec ? `<span class="rs-sub">${esc([g.first.product_code, g.first.spec].filter(Boolean).join(' · '))}</span>` : ''}`, title: g => g.first.item + (g.first.spec ? ` (${g.first.spec})` : ''), qty: true, word: '개',
+      cols: ['입고일', '거래처', '발주번호', 'LOT', '단위'], row: l => `<td>${esc(l.received_date)}</td><td class="rs-item"><b>${esc(l.vendor)}</b></td><td>${dash(l.req_no)}</td><td>${dash(l.lot)}</td><td>${dash(l.unit)}</td>` },
+  };
+  const accState = { vendor: { open: new Set(), closed: new Set() }, item: { open: new Set(), closed: new Set() } };
+  // 입고일 묶음 키 = 1단계 키 + '|' + 입고일. 1단계 키에 |가 있어도(거래처명 「A|B 상사」, 품목 키) 마지막 | 뒤만 날짜로 본다.
+  const dayKey = (k, d) => `${k}|${d}`, splitDay = k => { const i = k.lastIndexOf('|'); return [k.slice(0, i), k.slice(i + 1)]; };
+  const accRows = cfg => {
     const m = new Map();
-    for (const l of base) {
-      const k = vkey(l.vendor); const g = m.get(k) || { key: k, vendor: l.vendor, lines: 0, supply: 0, vat: 0, days: new Map() };
-      g.lines++; g.supply += amt(l); g.vat += l.vat || 0;
+    for (const l of data.lines) {
+      if ((cat && l.category !== cat) || !qm(l)) continue;
+      const k = cfg.key(l); const g = m.get(k) || { key: k, first: l, lines: 0, qty: 0, supply: 0, vat: 0, days: new Map() };
+      g.lines++; g.qty += Number(l.qty) || 0; g.supply += amt(l); g.vat += l.vat || 0;
       const d = g.days.get(l.received_date) || { date: l.received_date, rows: [], supply: 0, vat: 0 }; d.rows.push(l); d.supply += amt(l); d.vat += l.vat || 0; g.days.set(l.received_date, d);
       m.set(k, g);
     }
-    return [...m.values()].sort((a, b) => (b.supply + b.vat) - (a.supply + a.vat) || stockCompare(a.vendor, b.vendor));
+    return [...m.values()].sort(cfg.sort);
   };
-  const dayTable = d => `<div class="rs-scroll" tabindex="0" role="region" aria-label="${esc(d.date)} 입고 내역 · 좌우로 스크롤"><table class="rs-detail" data-no-sort data-keep-cols><thead><tr><th>입고일</th><th>발주번호</th><th>품목</th><th>규격</th><th>LOT</th><th>단위</th><th class="r">수량</th><th class="r">단가</th><th class="r">공급가액</th><th class="r">세액</th><th class="r">합계금액</th><th class="c">전표상태</th></tr></thead>
-    <tbody>${d.rows.map(l => `<tr><td>${esc(l.received_date)}</td><td>${dash(l.req_no)}</td><td class="rs-item"><b>${esc(l.item)}</b>${l.product_code ? `<span class="rs-code">${esc(l.product_code)}</span>` : ''}</td><td>${dash(l.spec)}</td><td>${dash(l.lot)}</td><td>${dash(l.unit)}</td><td class="r">${fmtNum(l.qty)}</td><td class="r">${l.qty && amt(l) ? won(Math.round(amt(l) / l.qty)) : '<span class="rs-dash">-</span>'}</td><td class="r">${won(amt(l))}</td><td class="r">${won(l.vat || 0)}</td><td class="r"><b>${won(amt(l) + (l.vat || 0))}</b></td><td class="c">${badge(l)}</td></tr>`).join('')}</tbody>
-    ${d.rows.length > 1 ? `<tfoot><tr><th colspan="6">${esc(d.date)} 소계</th><td class="r">${new Set(d.rows.map(l => l.unit)).size === 1 ? fmtNum(d.rows.reduce((t, l) => t + (Number(l.qty) || 0), 0)) : ''}</td><td></td><td class="r">${won(d.supply)}</td><td class="r">${won(d.vat)}</td><td class="r"><b>${won(d.supply + d.vat)}</b></td><td></td></tr></tfoot>` : ''}</table></div>`;
-  const vendorBody = g => {
+  const dayTable = (cfg, d) => { const n = cfg.cols.length; return `<div class="rs-scroll" tabindex="0" role="region" aria-label="${esc(d.date)} 입고 내역 · 좌우로 스크롤"><table class="rs-detail" data-no-sort data-keep-cols><thead><tr>${cfg.cols.map(c => `<th>${c}</th>`).join('')}<th class="r">수량</th><th class="r">단가</th><th class="r">공급가액</th><th class="r">세액</th><th class="r">합계금액</th><th class="c">전표상태</th></tr></thead>
+    <tbody>${d.rows.map(l => `<tr>${cfg.row(l)}<td class="r">${fmtNum(l.qty)}</td><td class="r">${l.qty && amt(l) ? won(Math.round(amt(l) / l.qty)) : '<span class="rs-dash">-</span>'}</td><td class="r">${won(amt(l))}</td><td class="r">${won(l.vat || 0)}</td><td class="r"><b>${won(amt(l) + (l.vat || 0))}</b></td><td class="c">${badge(l)}</td></tr>`).join('')}</tbody>
+    ${d.rows.length > 1 ? `<tfoot><tr><th colspan="${n}">${esc(d.date)} 소계</th><td class="r">${new Set(d.rows.map(l => l.unit)).size === 1 ? fmtNum(d.rows.reduce((t, l) => t + (Number(l.qty) || 0), 0)) : ''}</td><td></td><td class="r">${won(d.supply)}</td><td class="r">${won(d.vat)}</td><td class="r"><b>${won(d.supply + d.vat)}</b></td><td></td></tr></tfoot>` : ''}</table></div>`; };
+  const accBody = (cfg, st, g) => {
     const days = [...g.days.values()].sort((a, b) => stockCompare(b.date, a.date));
-    return `<div class="rs-acc-body"><div class="rs-acc-head"><b>${esc(g.vendor)} 입고 상세</b><span class="muted"> · 입고일자별</span><span class="rs-acc-sum">공급가액 <b>${won(g.supply)}</b><i></i>세액 <b>${won(g.vat)}</b><i></i>합계 <b class="rs-blue">${won(g.supply + g.vat)}</b></span></div>
-      ${days.map(d => { const dk = `${g.key}|${d.date}`, open = !closedD.has(dk); return `<div class="rs-day${open ? ' open' : ''}"><button type="button" class="rs-day-h" data-rs-day="${esc(dk)}" aria-expanded="${open}">${CHEV}${CAL}<b>${esc(d.date)}</b><span class="muted">(${fmtNum(d.rows.length)}건)</span><span class="rs-day-sum">공급가액 ${won(d.supply)}<i></i>합계 <b>${won(d.supply + d.vat)}</b></span></button>${open ? dayTable(d) : ''}</div>`; }).join('')}</div>`;
+    return `<div class="rs-acc-body"><div class="rs-acc-head"><b>${esc(cfg.title(g))} 입고 상세</b><span class="muted"> · 입고일자별</span><span class="rs-acc-sum">공급가액 <b>${won(g.supply)}</b><i></i>세액 <b>${won(g.vat)}</b><i></i>합계 <b class="rs-blue">${won(g.supply + g.vat)}</b></span></div>
+      ${days.map(d => { const dk = dayKey(g.key, d.date), open = !st.closed.has(dk); return `<div class="rs-day${open ? ' open' : ''}"><button type="button" class="rs-day-h" data-rs-day="${esc(dk)}" aria-expanded="${open}">${CHEV}${CAL}<b>${esc(d.date)}</b><span class="muted">(${fmtNum(d.rows.length)}건)</span><span class="rs-day-sum">공급가액 ${won(d.supply)}<i></i>합계 <b>${won(d.supply + d.vat)}</b></span></button>${open ? dayTable(cfg, d) : ''}</div>`; }).join('')}</div>`;
   };
   const drawAcc = () => {
-    const box = $('#rsDrill', main), list = accRows();
-    for (const k of [...openV]) if (!list.some(g => g.key === k)) openV.delete(k); // 조회·필터로 없어진 거래처는 펼침 기록도 지운다
-    for (const k of [...closedD]) { const [v, d] = k.split('|'); const g = list.find(x => x.key === v); if (!g || !g.days.has(d)) closedD.delete(k); }
+    const cfg = ACC[mode], st = accState[mode], box = $('#rsDrill', main), list = accRows(cfg);
+    for (const k of [...st.open]) if (!list.some(g => g.key === k)) st.open.delete(k); // 조회·필터로 없어진 줄은 펼침 기록도 지운다
+    for (const k of [...st.closed]) { const [v, d] = splitDay(k); const g = list.find(x => x.key === v); if (!g || !g.days.has(d)) st.closed.delete(k); }
     if (!list.length) { box.innerHTML = `<div class="rs-state">${esc(q ? `「${q}」에 맞는 입고가 없습니다.` : cat ? `그 기간에 ${cat} 입고가 없습니다.` : '그 기간에 입고가 없습니다.')}</div>`; return; }
-    const tot = k => list.reduce((t, g) => t + g[k], 0);
-    box.innerHTML = `<div class="rs-acc-wrap"><table class="rs-acc" data-no-sort data-keep-cols><caption class="sr-only">${esc(`${data.from} ~ ${data.to} 거래처별 입고 · 줄을 누르거나 Enter로 펼침`)}</caption>
-      <colgroup><col class="rs-c-v"><col class="rs-c-n"><col class="rs-c-m"><col class="rs-c-m"><col class="rs-c-m"></colgroup>
-      <thead><tr><th>거래처</th><th class="r">입고건수</th><th class="r">공급가액</th><th class="r">세액</th><th class="r">합계금액</th></tr></thead>
-      <tbody>${list.map(g => { const open = openV.has(g.key); return `<tr class="rs-v${open ? ' open' : ''}" data-rs-acc="${esc(g.key)}" tabindex="0" role="button" aria-expanded="${open}"><td>${CHEV}<b>${esc(g.vendor)}</b></td><td class="r">${fmtNum(g.lines)}</td><td class="r">${won(g.supply)}</td><td class="r">${won(g.vat)}</td><td class="r"><b>${won(g.supply + g.vat)}</b></td></tr>${open ? `<tr class="rs-v-detail"><td colspan="5">${vendorBody(g)}</td></tr>` : ''}`; }).join('')}</tbody>
-      <tfoot><tr><th>합계 · 거래처 ${fmtNum(list.length)}곳</th><td class="r">${fmtNum(tot('lines'))}</td><td class="r">${won(tot('supply'))}</td><td class="r">${won(tot('vat'))}</td><td class="r"><b>${won(tot('supply') + tot('vat'))}</b></td></tr></tfoot></table></div>
+    const tot = k => list.reduce((t, g) => t + g[k], 0), span = cfg.qty ? 6 : 5;
+    box.innerHTML = `<div class="rs-acc-wrap"><table class="rs-acc rs-acc-${mode}" data-no-sort data-keep-cols><caption class="sr-only">${esc(`${data.from} ~ ${data.to} ${cfg.head}별 입고 · 줄을 누르거나 Enter로 펼침`)}</caption>
+      <colgroup><col class="rs-c-v"><col class="rs-c-n">${cfg.qty ? '<col class="rs-c-q">' : ''}<col class="rs-c-m"><col class="rs-c-m"><col class="rs-c-m"></colgroup>
+      <thead><tr><th>${cfg.head}</th><th class="r">입고건수</th>${cfg.qty ? '<th class="r">수량</th>' : ''}<th class="r">공급가액</th><th class="r">세액</th><th class="r">합계금액</th></tr></thead>
+      <tbody>${list.map(g => { const open = st.open.has(g.key); return `<tr class="rs-v${open ? ' open' : ''}" data-rs-acc="${esc(g.key)}" tabindex="0" role="button" aria-expanded="${open}"><td>${CHEV}${cfg.cell(g)}</td><td class="r">${fmtNum(g.lines)}</td>${cfg.qty ? `<td class="r">${fmtNum(g.qty)} <span class="rs-unit">${esc(g.first.unit || '')}</span></td>` : ''}<td class="r">${won(g.supply)}</td><td class="r">${won(g.vat)}</td><td class="r"><b>${won(g.supply + g.vat)}</b></td></tr>${open ? `<tr class="rs-v-detail"><td colspan="${span}">${accBody(cfg, st, g)}</td></tr>` : ''}`; }).join('')}</tbody>
+      <tfoot><tr><th>합계 · ${cfg.head} ${fmtNum(list.length)}${cfg.word}</th><td class="r">${fmtNum(tot('lines'))}</td>${cfg.qty ? '<td></td>' : ''}<td class="r">${won(tot('supply'))}</td><td class="r">${won(tot('vat'))}</td><td class="r"><b>${won(tot('supply') + tot('vat'))}</b></td></tr></tfoot></table></div>
       ${data.more ? '<p class="small muted">입고 줄이 많아 앞 3000줄만 보입니다. 기간을 좁히세요.</p>' : ''}${!cat && !q && data.freight.total ? `<p class="small muted">${esc(`운송비 ${won(data.freight.total)}원(전표 ${data.freight.bills}건)은 입고 줄이 아니라 위 「전체」 카드에만 더했습니다.`)}</p>` : ''}`;
   };
   const toggleAcc = el => {
     const v = el.closest('[data-rs-acc]'), d = el.closest('[data-rs-day]');
-    if (!v && !d) return false;
-    let sel;
-    if (v) { const k = v.dataset.rsAcc; openV.has(k) ? openV.delete(k) : openV.add(k); sel = `[data-rs-acc="${CSS.escape(k)}"]`; }
-    else { const k = d.dataset.rsDay; closedD.has(k) ? closedD.delete(k) : closedD.add(k); sel = `[data-rs-day="${CSS.escape(k)}"]`; }
+    if ((!v && !d) || !ACC[mode]) return false;
+    const st = accState[mode]; let sel;
+    if (v) { const k = v.dataset.rsAcc; st.open.has(k) ? st.open.delete(k) : st.open.add(k); sel = `[data-rs-acc="${CSS.escape(k)}"]`; }
+    else { const k = d.dataset.rsDay; st.closed.has(k) ? st.closed.delete(k) : st.closed.add(k); sel = `[data-rs-day="${CSS.escape(k)}"]`; }
     drawAcc(); $(sel, main)?.focus({ preventScroll: true });
     return true;
   };
