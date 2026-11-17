@@ -546,3 +546,59 @@ test('15.142~143 Invoice edit in form: write date moves item dates, item/buyer e
   assert.equal((await admin('PUT', `/api/tax-invoices/${fi.id}`, { doc_type: 'tax' })).body.doc_type, 'tax', '영세율 세금계산서로 바꿀 수 있음');
   const list = (await admin('GET', `/api/tax-invoices?doc=tax&from=${d2}&to=${today}`)).body.rows; assert.ok(list.some(x => x.id === fi.id));
 });
+
+test('15.147 Edit returns (lines, process, refund) and bills (date, price, note) with history; invoiced/closed/return bills blocked', async () => {
+  const g = (await admin('POST', '/api/boms', { product: '고침장갑', product_code: 'ED-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  const stockOf = async () => ((await admin('GET', '/api/inventory?q=' + encodeURIComponent('고침장갑'))).body.rows.find(r => r.item === '고침장갑')?.stock) || 0;
+  const s = (await admin('POST', '/api/shipments', { ship_date: today, bom_id: g.id, item: g.product, qty: 10, customer: '고침고객', unit: 'EA' })).body;
+  const sb = (await admin('POST', '/api/sales-bills', { customer: '고침고객', bill_date: today, request_id: rid(), lines: [{ source_type: 'ship', source_id: s.id, unit_price: 1000 }] })).body;
+  const src = (await admin('GET', `/api/returns/sources?side=in&party=${encodeURIComponent('고침고객')}`)).body.rows[0];
+  const r = (await admin('POST', '/api/returns', { side: 'in', return_date: today, party: '고침고객', process: 'amount', request_id: rid(), lines: [{ source_id: src.id, qty: 2 }] })).body;
+  const st0 = await stockOf();
+  // 수량 2 → 5, 재고+금액으로: 같은 번호, 같은 금액 전표 고쳐 씀, 재고 +5
+  const e1 = await admin('PUT', `/api/returns/${r.id}`, { process: 'stock_amount', lines: [{ source_id: src.id, qty: 5, reason: '불량' }] });
+  assert.equal(e1.status, 200, JSON.stringify(e1.body)); assert.equal(e1.body.return_no, r.return_no); assert.equal(e1.body.bill_id, r.bill_id); assert.equal(e1.body.total, 5500);
+  assert.equal(await stockOf(), st0 + 5);
+  assert.equal((await admin('GET', `/api/sales-bills/${r.bill_id}`)).body.total, -5500);
+  assert.match((await admin('PUT', `/api/returns/${r.id}`, { lines: [{ source_id: src.id, qty: 11 }] })).body.error, /10까지/, 'own qty excluded, cap still applies');
+  // 교환(재고만)으로: 금액 전표 취소(숨김), 환불도 없음
+  const e2 = (await admin('PUT', `/api/returns/${r.id}`, { process: 'stock', lines: [{ source_id: src.id, qty: 5 }] })).body;
+  assert.equal(e2.bill_id, null); assert.equal((await admin('GET', `/api/sales-bills/${r.bill_id}`)).body.status, 'cancelled');
+  // 다시 금액+환불: 새 금액 전표·환불
+  const e3 = (await admin('PUT', `/api/returns/${r.id}`, { process: 'amount', settle: 'refund', lines: [{ source_id: src.id, qty: 1 }] })).body;
+  assert.ok(e3.bill_id && e3.payment_id); assert.equal(e3.changes.length, 3);
+  const book = (await admin('GET', `/api/partner-book?side=sales&from=${today}&to=${today}&party=${encodeURIComponent('고침고객')}`)).body;
+  assert.equal(book.totals.balance, 11000, 'refund keeps balance');
+  // 매출전표 고치기
+  const b1 = (await admin('PUT', `/api/sales-bills/${sb.id}`, { lines: [{ id: (await admin('GET', `/api/sales-bills/${sb.id}`)).body.lines[0].id, unit_price: 1200, note: '단가 정정' }], note: '정정' })).body;
+  assert.equal(b1.total, 13200); assert.equal(b1.changes.length, 1); assert.match(b1.changes[0].summary, /단가 1000→1200/);
+  assert.match((await admin('PUT', `/api/sales-bills/${e3.bill_id}`, { note: 'x' })).body.error, /반입 RI-/);
+  await admin('POST', '/api/tax-invoices', { request_id: rid(), kind: 'single', bill_ids: [sb.id] });
+  assert.match((await admin('PUT', `/api/sales-bills/${sb.id}`, { note: 'y' })).body.error, /세금계산서/);
+  assert.match((await admin('PUT', `/api/returns/${r.id}`, { lines: [{ source_id: src.id, qty: 1 }], note: 'x' })).status === 200 ? 'ok' : 'blocked', /ok/, 'return bill not invoiced still editable');
+  // 매입전표 고치기
+  const p = (await buyer('POST', '/api/po', { req_no: 'PR-E', vendor: '고침상사', bom_id: g.id, item: g.product, qty: 10, due_date: today, unit_price: 500 })).body;
+  await staff('POST', '/api/receipts', { receipt_date: today, vendor: '고침상사', request_id: rid(), lines: [{ po_id: p.id, qty: 10 }] });
+  const o = (await buyer('GET', '/api/purchase-bills/unbilled?vendor=' + encodeURIComponent('고침상사'))).body.rows;
+  const pb = (await buyer('POST', '/api/purchase-bills', { vendor: '고침상사', bill_date: today, request_id: rid(), lines: o.map(x => ({ source_type: x.source_type, source_id: x.source_id })) })).body;
+  const pe = (await buyer('PUT', `/api/purchase-bills/${pb.id}`, { freight: 1000, statement_no: 'ST-9', lines: [{ id: pb.lines[0].id, unit_price: 450 }] })).body;
+  assert.equal(pe.total, 6050); assert.equal(pe.statement_no, 'ST-9'); assert.equal(pe.changes.length, 1);
+  assert.equal((await staff('PUT', `/api/purchase-bills/${pb.id}`, { note: 'x' })).status, 403);
+});
+
+test('15.148 Carry a bill over to next month: shipment and stock stay, ledger month moves, limit end of next month', async () => {
+  const g = (await admin('POST', '/api/boms', { product: '이월장갑', product_code: 'CO-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  const s = (await admin('POST', '/api/shipments', { ship_date: today, bom_id: g.id, item: g.product, qty: 5, customer: '이월고객', unit: 'EA' })).body;
+  const sb = (await admin('POST', '/api/sales-bills', { customer: '이월고객', bill_date: today, request_id: rid(), lines: [{ source_type: 'ship', source_id: s.id, unit_price: 1000 }] })).body;
+  const [y, m] = today.split('-').map(Number), next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+  const stockBefore = (await admin('GET', '/api/inventory?q=' + encodeURIComponent('이월장갑'))).body.rows[0].stock;
+  const r = await admin('PUT', `/api/sales-bills/${sb.id}`, { bill_date: next + '-01' });
+  assert.equal(r.status, 200, JSON.stringify(r.body)); assert.equal(r.body.bill_date, next + '-01'); assert.match(r.body.changes[0].summary, /이월/);
+  assert.equal((await admin('GET', '/api/inventory?q=' + encodeURIComponent('이월장갑'))).body.rows[0].stock, stockBefore, 'stock unchanged');
+  const unbilled = (await admin('GET', '/api/sales-bills/unbilled?customer=' + encodeURIComponent('이월고객'))).body;
+  assert.equal((unbilled.rows || unbilled).filter?.(x => x.source_id === s.id).length ?? 0, 0, 'shipment still billed');
+  const book = (await admin('GET', `/api/partner-book?side=sales&from=${today.slice(0, 8)}01&to=${today}&party=${encodeURIComponent('이월고객')}`)).body;
+  assert.equal(book.totals.total, 0, 'not in this month any more');
+  const far = m >= 11 ? `${y + 1}-${String((m + 2) % 12 || 12).padStart(2, '0')}-01` : `${y}-${String(m + 2).padStart(2, '0')}-01`;
+  assert.match((await admin('PUT', `/api/sales-bills/${sb.id}`, { bill_date: far })).body.error, /다음 달 말일/);
+});

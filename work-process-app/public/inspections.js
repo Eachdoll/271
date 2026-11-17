@@ -215,3 +215,29 @@ async function openInspection(id,done=()=>{}) {
   const draft=bindEntryDraft(form,`inspection:${id}:${measurement?.revision||0}`,{read:()=>({rows:read(),reason:form.elements.reason.value}),restore:value=>{root.replaceChildren();value.rows.forEach(add);form.elements.reason.value=value.reason||'';update();}});
   let busy=false;form.onsubmit=async e=>{e.preventDefault();if(busy)return;busy=true;form.inert=true;draft.start();let committed=false;try{const saved=await api('PUT',`/api/requests/${id}/inspection`,{rows:read(),revision:measurement?.revision||0,reason:form.elements.reason.value});committed=true;draft.clear();m.close();toast('저장 완료 · '+INSPECTION_RESULT[saved.result]);Promise.resolve(done()).catch(fail);await openInspection(id,done);}catch(error){if(!committed)draft.failure();fail(committed?new Error('검사 결과는 저장되었습니다. 다시 조회해주세요. '+error.message):error);}finally{busy=false;form.inert=false;}};
 }
+
+// ── 15.150 수입검사 현황: 입고 때 자동 등록된 수입검사를 대기·진행 중·완료로 나눠 보고, 판정(합격·불합격)과 경과일을 본다. ──
+async function pageIncomingQc(main) {
+  const r0 = { from: addDays(todayStr(), -60), to: todayStr() };
+  let state = 'waiting'; try { state = sessionStorage.getItem('wpa:iqc-state') || 'waiting'; } catch { /* 편의 */ }
+  main.innerHTML = `<h1>수입검사 현황</h1>
+  <p class="muted">입고(발주입고·기타입고)하면 자동으로 등록되는 수입검사입니다. 대기 → 진행 중 → 완료 순서로 처리하고, 판정은 「검사규격·측정값」에서 저장합니다. 처리는 <a href="#/quality/list">분석리스트</a>에서 합니다.</p>
+  <form class="list-filters toolbar" data-read-only id="iqcForm"><label>등록일<input type="date" name="from" value="${r0.from}"></label><label>~<input type="date" name="to" value="${r0.to}"></label><label class="grow">검색<input type="search" name="q" placeholder="품목·거래처·LOT·의뢰번호"></label><button class="btn primary">조회</button></form>
+  <div class="iqc-cards" id="iqcCards"></div><div id="iqcList"></div>`;
+  const form = $('#iqcForm', main); let rows = [];
+  const qcOf = r => r.inspection_result === 'pass' ? 'pass' : r.inspection_result === 'fail' ? 'fail' : '';
+  const dataOf = r => { try { return typeof r.data === 'string' ? JSON.parse(r.data || '{}') : r.data || {}; } catch { return {}; } };
+  const days = r => Math.max(0, Math.round((Date.parse(todayStr()) - Date.parse(String(dataOf(r).received_date || r.created_at || '').slice(0, 10))) / 864e5)) || 0;
+  const draw = () => {
+    const by = s => rows.filter(r => r.status === s);
+    const cards = [['waiting', '대기', 'yellow'], ['progress', '진행 중', 'blue'], ['done', '완료', 'green']];
+    $('#iqcCards', main).innerHTML = cards.map(([k, l, c]) => `<button type="button" class="iqc-card ${k === state ? 'on' : ''} iqc-${c}" data-iqc="${k}"><span>${l}</span><b>${fmtNum(by(k).length)}</b>${k === 'done' ? `<small>합격 ${by('done').filter(r => qcOf(r) === 'pass').length} · 불합격 ${by('done').filter(r => qcOf(r) === 'fail').length}</small>` : `<small>${by(k).filter(r => days(r) > 3).length ? `3일 넘음 ${by(k).filter(r => days(r) > 3).length}` : ''}</small>`}</button>`).join('') + `<button type="button" class="iqc-card ${state === '' ? 'on' : ''}" data-iqc=""><span>전체</span><b>${fmtNum(rows.length)}</b><small></small></button>`;
+    const list = state ? by(state) : rows;
+    $('#iqcList', main).innerHTML = list.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>의뢰번호</th><th>입고일</th><th>구분</th><th>거래처</th><th>품목</th><th>LOT</th><th class="r">수량</th><th>상태</th><th>판정</th><th class="r">경과일</th></tr></thead><tbody>${list.map(r => { const d = dataOf(r); return `<tr class="${r.status !== 'done' && days(r) > 3 ? 'row-yellow' : ''}"><td class="small">${esc(r.req_no || '')}</td><td class="nowrap">${esc(d.received_date || String(r.created_at || '').slice(0, 10))}</td><td class="small">${esc(d.source_label || '')}</td><td>${esc(r.customer || '')}</td><td data-card-primary><b>${esc(r.title || '')}</b>${d.product_code ? `<div class="small muted">${esc(d.product_code)}</div>` : ''}</td><td>${r.lot || d.lot ? `<span class="lot-tag">${esc(r.lot || d.lot)}</span>` : ''}</td><td class="r">${fmtNum(r.qty ?? d.qty ?? '')} <span class="small muted">${esc(r.unit || d.unit || '')}</span></td><td>${{ waiting: '<span class="chip yellow">대기</span>', progress: '<span class="chip blue">진행 중</span>', done: '<span class="chip green">완료</span>' }[r.status] || esc(r.status)}</td><td>${qcOf(r) === 'pass' ? '<span class="chip green">합격</span>' : qcOf(r) === 'fail' ? '<span class="chip red">불합격</span>' : '<span class="muted small">판정 전</span>'}</td><td class="r">${r.status === 'done' ? '' : `${days(r)}일`}</td></tr>`; }).join('')}</tbody></table></div>` : `<div class="empty">${state ? `${{ waiting: '대기', progress: '진행 중', done: '완료' }[state]}인 수입검사가 없습니다.` : '수입검사가 없습니다.'}</div>`;
+  };
+  const load = async () => { const all = await api('GET', '/api/requests?' + new URLSearchParams({ ...formObj(form), type: 'analysis', scope: 'list', category: '수입검사' })); if (!main.isConnected) return; rows = (Array.isArray(all) ? all : all.rows || []).filter(r => r.category === '수입검사' && ['waiting', 'progress', 'done'].includes(r.status)); draw(); };
+  rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
+  form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
+  $('#iqcCards', main).addEventListener('click', e => { const b = e.target.closest('[data-iqc]'); if (!b) return; state = b.dataset.iqc; try { sessionStorage.setItem('wpa:iqc-state', state); } catch { /* 편의 */ } draw(); });
+  await load().catch(fail);
+}
