@@ -252,7 +252,17 @@ async function pageBillClosing(main) {
 // 구매 › 입고현황(15.87): 매입 마감용. 입고일 기준 기간의 입고를 분류별·거래처별 금액으로 본다.
 // 확정 = 매입전표 공급가액, 미확정 = 아직 전표 안 잡은 수량 × 발주 단가. 단가가 없는 줄(기타입고 등)은 「단가 없음」.
 const RS_STATE = { billed: ['전표 완료', 'green'], partial: ['일부 전표', 'yellow'], open: ['전표 없음', ''], adjust: ['수량 수정', ''] };
-async function pageReceiptStatus(main) {
+async function pageReceiptStatus(main, side = 'purchase') {
+  // 15.157 납품현황: 같은 화면을 매출 쪽(출하 기준)으로. 화면 글자만 바꿔 쓴다(입고→출하, 매입전표→매출전표, 발주번호→수주번호).
+  const SALES = side === 'sales';
+  const WORDS = [['입고현황', '납품현황'], ['구매의뢰번호', '수주번호'], ['발주번호', '수주번호'], ['발주 단가', '수주·단가표 단가'], ['매입전표', '매출전표'], ['입고일자', '출고일자'], ['입고일', '출고일'], ['입고', '출하']];
+  const TR = s => SALES ? WORDS.reduce((t, [a, b]) => t.split(a).join(b), String(s)) : s;
+  const relabel = root => {
+    if (!SALES || !root) return;
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); for (let n = w.nextNode(); n; n = w.nextNode()) if (/입고|매입전표|발주|구매의뢰/.test(n.nodeValue)) n.nodeValue = TR(n.nodeValue);
+    for (const el of root.querySelectorAll('[placeholder],[aria-label],[title]')) for (const a of ['placeholder', 'aria-label', 'title']) { const v = el.getAttribute(a); if (v && /입고|매입전표|발주/.test(v)) el.setAttribute(a, TR(v)); }
+  };
+  const VIEW_KEY = SALES ? 'wpa:ds-view' : 'wpa:rs-view', CAT_KEY = SALES ? 'wpa:ds-cat' : 'wpa:rs-cat';
   const r0 = rpRange('month');
   main.innerHTML = `<div class="rs-page"><h1>입고현황</h1>
   <p class="muted small">기간 안에 입고된 것을 거래처·품목·입고일 중 하나로 묶어 펼쳐 봅니다(거래처·품목 → 입고일자별, 입고일 → 거래처별 → 입고 내역). 매입전표를 잡은 수량은 전표 금액(확정), 아직 안 잡은 수량은 발주 단가로 계산한 금액(미확정, 세액 10% 예상)입니다.</p>
@@ -267,11 +277,12 @@ async function pageReceiptStatus(main) {
   <div id="rsSummary"></div><h2 class="rs-h">거래처별</h2><div id="rsVendors"></div><details class="rs-lines-fold" open><summary><h2 class="rs-h" style="display:inline">입고 줄 <span class="small muted" id="rsCount"></span></h2></summary><div id="rsVendorChip"></div><div id="rsLines"></div></details></div>`;
   const form = $('#rsForm', main);
   let data = null, vendorFilter = '', cat = '', mode = 'vendor', q = '', loading = false;
-  try { mode = localStorage.getItem('wpa:rs-view') || 'vendor'; } catch { mode = 'vendor'; }
+  if (SALES) { relabel($('.rs-page', main)); new MutationObserver(() => relabel($('.rs-page', main))).observe($('.rs-page', main), { childList: true, subtree: true }); }
+  try { mode = localStorage.getItem(VIEW_KEY) || 'vendor'; } catch { mode = 'vendor'; }
   if (!['vendor', 'date', 'item', 'sum'].includes(mode)) mode = 'vendor';
   if (matchMedia('(max-width: 820px)').matches) $('.rs-lines-fold', main).open = false; // 휴대폰은 분류·거래처별 표를 먼저, 입고 줄은 접어 둔다
-  try { cat = localStorage.getItem('wpa:rs-cat') || ''; } catch { cat = ''; }
-  bindPartnerPicker(form.elements.vendor, null, { type: 'purchase' }).catch(() => {});
+  try { cat = localStorage.getItem(CAT_KEY) || ''; } catch { cat = ''; }
+  bindPartnerPicker(form.elements.vendor, null, { type: SALES ? 'sales' : 'purchase' }).catch(() => {});
   const amount = n => n ? won(n) : '<span class="muted">0</span>';
   const label = c => c || '전체';
   // 15.96 거래가 있는 분류만(그 기간에 입고 줄이 있는 분류). 없는 분류는 탭·합계·거래처 칸에서 뺀다.
@@ -426,7 +437,7 @@ async function pageReceiptStatus(main) {
   const load = async () => {
     const v = formObj(form); if (!v.from || !v.to) return toast('기간을 고르세요.', 'err');
     loading = true; if (!data) drawDrill(); else $('#rsDrill', main).classList.add('is-loading');
-    try { data = await api('GET', '/api/purchase-receipt-status?' + new URLSearchParams({ from: v.from, to: v.to, vendor: v.vendor || '' })); } finally { loading = false; $('#rsDrill', main)?.classList.remove('is-loading'); }
+    try { data = await api('GET', (SALES ? '/api/sales-delivery-status?' : '/api/purchase-receipt-status?') + new URLSearchParams({ from: v.from, to: v.to, vendor: v.vendor || '' })); } finally { loading = false; $('#rsDrill', main)?.classList.remove('is-loading'); }
     if (!main.isConnected) return;
     vendorFilter = '';
     if (cat && !cardCats().includes(cat)) cat = '';
@@ -434,9 +445,9 @@ async function pageReceiptStatus(main) {
   };
   rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
   form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
-  const setCat = c => { cat = c; try { localStorage.setItem('wpa:rs-cat', cat); } catch { /* 편의 */ } if (data) drawAll(); };
+  const setCat = c => { cat = c; try { localStorage.setItem(CAT_KEY, cat); } catch { /* 편의 */ } if (data) drawAll(); };
   main.addEventListener('change', e => {
-    if (e.target.name === 'rs-mode') { mode = e.target.value; try { localStorage.setItem('wpa:rs-view', mode); } catch { /* 편의 */ } drawDrill(); }
+    if (e.target.name === 'rs-mode') { mode = e.target.value; try { localStorage.setItem(VIEW_KEY, mode); } catch { /* 편의 */ } drawDrill(); }
     if (e.target.id === 'rsCat') setCat(e.target.value);
   });
   let qTimer = 0; // 통합 검색: 받아 온 입고 줄을 화면에서 거른다(서버 다시 조회 안 함)
@@ -450,7 +461,7 @@ async function pageReceiptStatus(main) {
     const t = e.target.closest('[data-rs-tab]'); if (t && data) { setCat(t.dataset.rsTab); return; }
     const v = e.target.closest('[data-rs-vendor]'); if (v && data) { vendorFilter = v.dataset.rsVendor; drawLines(); $('#rsLines', main).scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
     if (e.target.closest('[data-rs-clear]')) { vendorFilter = ''; drawLines(); return; }
-    const b = e.target.closest('[data-rs-bill]'); if (b) { try { sessionStorage.setItem('wpa:bill-vendor', b.dataset.rsBill); } catch { /* 편의 */ } location.hash = '#/purchase/bills/new'; }
+    const b = e.target.closest('[data-rs-bill]'); if (b) { try { sessionStorage.setItem(SALES ? 'wpa:sbill-customer' : 'wpa:bill-vendor', b.dataset.rsBill); } catch { /* 편의 */ } location.hash = SALES ? '#/sales/bills/new' : '#/purchase/bills/new'; }
   });
   // 엑셀: 지금 보고 있는 분류(전체면 모든 분류)의 줄
   $('[data-xlsx]', form).onclick = async () => {
@@ -460,8 +471,8 @@ async function pageReceiptStatus(main) {
       const cats = shownCats().filter(c => !cat || c.category === cat);
       const lines = data.lines.filter(l => (!cat || l.category === cat) && qm(l)).map(l => [l.received_date, l.vendor, l.category, l.req_no || '', l.product_code || '', l.item, l.spec || '', l.lot || '', l.unit || '', l.qty, l.unit_price, l.confirmed, l.estimate, l.confirmed + l.estimate, RS_STATE[l.state][0] + (l.unpriced ? ' · 단가 없음' : '')]);
       const sum = i => lines.reduce((t, r) => t + (Number(r[i]) || 0), 0);
-      xlsxDownload(`입고현황_${cat || '전체'}_${data.from}_${data.to}${data.vendor ? '_' + data.vendor : ''}.xlsx`, { sheet: `입고현황 ${cat || '전체'}`, titles: [`입고현황 · ${cat || '전체'}`, `${COMPANY_NAME} · 입고일 ${data.from} ~ ${data.to}${data.vendor ? ' · 거래처 ' + data.vendor : ''}${q ? ' · 검색 ' + q : ''}`, `분류별 합계: ${cats.map(c => `${c.category} ${won(c.total)}`).join(' / ')}${!cat && data.freight.total ? ` / 운송비 ${won(data.freight.total)}` : ''}`],
-        columns: [{ label: '입고일', type: 'date' }, { label: '거래처', type: 'text', width: 18 }, { label: '분류', type: 'text', width: 9 }, { label: '구매의뢰번호', type: 'text', width: 15 }, { label: '품목코드', type: 'text', width: 13 }, { label: '품목', type: 'text', width: 24 }, { label: '규격', type: 'text' }, { label: 'LOT', type: 'text', width: 14 }, { label: '단위', type: 'text', width: 7 }, { label: '수량', type: 'number', width: 10 }, { label: '발주 단가', type: 'number', width: 12 }, { label: '확정(전표)', type: 'money', width: 14 }, { label: '미확정(발주 단가)', type: 'money', width: 16 }, { label: '금액 합계', type: 'money', width: 14 }, { label: '전표', type: 'text', width: 16 }],
+      xlsxDownload(TR(`입고현황_${cat || '전체'}_${data.from}_${data.to}${data.vendor ? '_' + data.vendor : ''}.xlsx`), { sheet: TR(`입고현황 ${cat || '전체'}`), titles: [TR(`입고현황 · ${cat || '전체'}`), `${COMPANY_NAME} · 입고일 ${data.from} ~ ${data.to}${data.vendor ? ' · 거래처 ' + data.vendor : ''}${q ? ' · 검색 ' + q : ''}`, `분류별 합계: ${cats.map(c => `${c.category} ${won(c.total)}`).join(' / ')}${!cat && data.freight.total ? ` / 운송비 ${won(data.freight.total)}` : ''}`],
+        columns: [{ label: TR('입고일'), type: 'date' }, { label: '거래처', type: 'text', width: 18 }, { label: '분류', type: 'text', width: 9 }, { label: TR('구매의뢰번호'), type: 'text', width: 15 }, { label: '품목코드', type: 'text', width: 13 }, { label: '품목', type: 'text', width: 24 }, { label: '규격', type: 'text' }, { label: 'LOT', type: 'text', width: 14 }, { label: '단위', type: 'text', width: 7 }, { label: '수량', type: 'number', width: 10 }, { label: TR('발주 단가'), type: 'number', width: 12 }, { label: '확정(전표)', type: 'money', width: 14 }, { label: TR('미확정(발주 단가)'), type: 'money', width: 16 }, { label: '금액 합계', type: 'money', width: 14 }, { label: '전표', type: 'text', width: 16 }],
         rows: lines, totals: ['합계', '', '', '', '', '', '', '', '', sum(9), '', sum(11), sum(12), sum(13), ''] });
     } catch (error) { fail(error); }
   };

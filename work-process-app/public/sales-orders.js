@@ -185,7 +185,7 @@ async function pageShipInstructions(main) {
   main.innerHTML = `<h1>출하지시</h1>
   <p class="muted">영업이 수주로 매출전표를 잡으면 여기에 출하지시가 내려옵니다. 출고할 줄을 체크하고 LOT을 넣어 「출하 처리」하면 출하 목록에 기록되고 재고가 빠집니다. 전표가 취소되면 대기 중인 지시도 함께 취소됩니다. 여러 줄을 체크해 「출고지시서 묶기」하면 한 장(DO-…)의 피킹·출고 지시서로 인쇄하고 한 번에 출하 처리할 수 있습니다.</p>
   <div class="seg class-tabs" id="siTabs" role="group" aria-label="지시 상태"></div>
-  <form class="list-filters toolbar" data-read-only id="siFilters"><label>지시일<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>거래처<input name="customer" maxlength="100"></label><label class="grow">검색<input type="search" name="q" placeholder="품목·제품코드·거래처·출고지시서 번호"></label><label class="inline" data-si-nobatch><input type="checkbox" name="nobatch"> 묶음 안 된 것만</label><button class="btn primary">조회</button></form>
+  <form class="list-filters toolbar lf-oneline" data-read-only id="siFilters"><label class="lf-period">지시일<span class="lf-pair"><input type="date" name="from" aria-label="지시일 시작"><span class="muted">~</span><input type="date" name="to" aria-label="지시일 끝"></span></label><label class="lf-partner">거래처<input name="customer" maxlength="100"></label><label class="grow lf-q">검색<input type="search" name="q" placeholder="품목·제품코드·거래처·지시서 번호"></label><label class="lf-check" data-si-nobatch><input type="checkbox" name="nobatch"> 묶음 안 된 것만</label><button class="btn primary">조회</button></form>
   <div id="siList"></div>
   <div class="actionbar" id="siBar"><span class="small" id="siCount"></span><label class="inline">출고일 <input type="date" id="siDate" value="${todayStr()}" max="${todayStr()}"></label><button type="button" class="btn" id="siBatch" title="체크한 지시를 출고지시서 한 장으로 묶어 인쇄">출고지시서 묶기</button><button type="button" class="btn primary" id="siShip">출하 처리</button></div>`;
   const form = $('#siFilters', main); let rows = [], status = 'pending', version = 0, busy = false, lotPickers = new Map();
@@ -267,7 +267,7 @@ async function pageShipInstructions(main) {
   };
   drawTabs();
   $('#siTabs', main).addEventListener('click', e => { const b = e.target.closest('[data-si-tab]'); if (!b) return; status = b.dataset.siTab; drawTabs(); load().catch(fail); });
-  rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
+  // 15.155 출하지시는 기간 빠른 선택을 쓰지 않는다(대기 지시는 날짜를 비워 두고 전부 보는 경우가 대부분)
   form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
   bindPartnerPicker(form.elements.customer, null, { type: 'sales' }).catch(() => {});
   await load();
@@ -339,4 +339,145 @@ function soPoInfo(r) {
   const p = parseCustomerNote(r.note), po = poOf(r.customer_po, r.note);
   if (!po && !p) return '';
   return `<div class="small so-po">${po ? `<span>PO <b>${esc(po)}</b></span>` : ''}${p?.req ? `<span>주문번호 <b>${esc(p.req)}</b></span>` : ''}${p?.person ? `<span>주문자 <b>${esc(p.person)}</b></span>` : ''}${p?.line ? `<span class="muted">${esc([p.line, p.site].filter(Boolean).join(' · '))}</span>` : ''}</div>`;
+}
+
+// ── 15.163 견적서(영업) ── 양식: 견적서 / 수신 / Quote # / 참조 / 견적일 / 유효기간 · 공급자(회사 정보) · 견적금액(V.A.T 별도) · 품목 줄 · 합계 · 기타
+// 거래처는 「거래처 찾기」(거래처코드), 품목은 품목 찾기(품목코드, 여러 개), 단가는 직접 입력(그 거래처 단가표가 있으면 미리 채움).
+const QT_CUR = { KRW: { label: '원화(₩)', sym: '₩', digits: 0 }, USD: { label: '달러($)', sym: '$', digits: 2 } };
+const qtMoney = (v, cur) => { const c = QT_CUR[cur] || QT_CUR.KRW; return `${c.sym} ${Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: c.digits, maximumFractionDigits: c.digits })}`; };
+const qtCalc = (qty, price, cur) => { const v = (Number(qty) || 0) * (Number(price) || 0); return cur === 'USD' ? Math.round(v * 100) / 100 : Math.trunc(v); };
+const qtKoDate = d => { const [y, m, dd] = String(d || '').split('-').map(Number); return y ? `${y}년 ${m}월 ${dd}일` : ''; };
+
+function quoteSheet(q, after = null) {
+  const c = q.company || {}, cur = q.currency, lines = q.lines || [], rows = Math.max(8, lines.length), terms = String(q.terms || '').split('\n').filter(t => t.trim());
+  const m = modal(`<h3 class="po-print-title">견적서 <span class="small muted">${esc(q.quote_no)}${q.status === 'cancelled' ? ' · <span class="chip red">취소</span>' : ''}</span></h3>
+    <section class="cert qt-doc">
+      <div class="qt-top">
+        <div class="qt-left"><h2>견 적 서</h2><div class="qt-to"><span>수 신</span> <b>${esc(q.customer)}</b></div>
+          <table class="qt-meta"><tbody><tr><th>Quote #</th><td>${esc(q.quote_no)}</td></tr><tr><th>참 조</th><td>${esc(q.attn || '-')}</td></tr><tr><th>견 적 일</th><td>${esc(qtKoDate(q.quote_date))}</td></tr><tr><th>유효 기간</th><td>${esc(q.valid_text || '')}</td></tr></tbody></table></div>
+        <table class="qt-sup"><tbody><tr><th colspan="4" class="qt-sup-h">공 급 자</th></tr>
+          <tr><th>상 호</th><td>${esc(c.biz_name || COMPANY_NAME)}</td><th>대 표 자</th><td>${esc(c.ceo || '')} <span class="taxf-seal">(인)</span></td></tr>
+          <tr><th>등록 번호</th><td>${esc(c.biz_no || '')}</td><th>문서 번호</th><td>SS ${esc(q.quote_date)}</td></tr>
+          <tr><th>주 소</th><td colspan="3">${esc(c.address || '')}</td></tr>
+          <tr><th>전 화</th><td>${esc(c.phone || '')}</td><th>팩 스</th><td>${esc(c.fax || '')}</td></tr>
+          <tr><th>담 당 자</th><td>${esc(q.manager || '')}</td><th>전 화</th><td>${esc(q.manager_phone || '')}</td></tr></tbody></table>
+      </div>
+      <p class="qt-greet">귀사의 일익 번창하심을 기원합니다.<br>하기와 같이 견적을 드리오니 검토하여 주시기 바랍니다.</p>
+      <div class="qt-ref">——— 하기 내용 참조 ———</div>
+      <div class="qt-amount"><b>견적금액 <small>(V.A.T 별도)</small></b><b>${esc(qtMoney(q.supply_total, cur))}</b></div>
+      <table class="qt-lines"><thead><tr><th>NO</th><th>ITEM NO</th><th>품명</th><th>단위</th><th>수량</th><th>단가</th><th>공급가액</th><th>비고</th></tr></thead>
+        <tbody>${Array.from({ length: rows }, (_, k) => { const l = lines[k]; return l ? `<tr><td class="c">${k + 1}</td><td class="c">${esc(l.product_code || '')}</td><td>${esc(l.item)}${l.spec ? ` ${esc(l.spec)}` : ''}</td><td class="c">${esc(l.unit || '')}</td><td class="r">${fmtNum(l.qty)}</td><td class="r">${esc(qtMoney(l.unit_price, cur))}</td><td class="r">${esc(qtMoney(l.supply, cur))}</td><td>${esc(l.note || '')}</td></tr>` : '<tr class="qt-blank"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>'; }).join('')}</tbody>
+        <tfoot><tr><th colspan="6">합 계</th><td class="r"><b>${esc(qtMoney(q.supply_total, cur))}</b></td><td></td></tr></tfoot></table>
+      <table class="qt-terms"><thead><tr><th>기 타</th></tr></thead><tbody>${Array.from({ length: Math.max(4, terms.length) }, (_, k) => `<tr><td>${esc(terms[k] || '')}</td></tr>`).join('')}</tbody></table>
+    </section>
+    ${(q.changes || []).length ? `<details class="small taxf-hist"><summary>고친 이력 ${q.changes.length}건</summary>${q.changes.map(x => `<div>${esc(String(x.changed_at).slice(0, 16))} · ${esc(x.changed_by)} · ${esc(x.summary)}</div>`).join('')}</details>` : ''}
+    <div class="actions"><button class="btn" data-close>닫기</button>${q.status === 'active' ? '<button class="btn danger" data-qt-cancel>견적 취소</button><button class="btn" data-qt-edit>수정</button>' : ''}<button class="btn" data-qt-copy>복사해 새 견적</button><button class="btn primary" data-print>인쇄 · PDF 저장</button></div>`, { wide: true });
+  m.el.classList.add('qt-modal'); m.el.parentElement.classList.add('lr-cert-wrap');
+  $('[data-close]', m.el).onclick = m.close;
+  $('[data-print]', m.el).onclick = () => rcPrint(`견적서_${q.quote_no}_${q.customer}`);
+  const open = copy => { try { sessionStorage.setItem('wpa:quote-load', JSON.stringify({ id: q.id, copy })); } catch { /* 편의 */ } m.close(); if (location.hash === '#/sales/quotes/new') render(); else location.hash = '#/sales/quotes/new'; };
+  $('[data-qt-edit]', m.el)?.addEventListener('click', () => open(false));
+  $('[data-qt-copy]', m.el).onclick = () => open(true);
+  $('[data-qt-cancel]', m.el)?.addEventListener('click', async () => {
+    if (!await confirmBox(`견적서 ${q.quote_no}를 취소할까요? (기록은 남고 목록에서 「취소」로 보입니다)`)) return;
+    try { const r = await api('POST', `/api/quotes/${q.id}/cancel`, {}); m.close(); toast('견적서를 취소했습니다.'); quoteSheet(r, after); await after?.(); } catch (error) { fail(error); }
+  });
+}
+
+async function pageQuoteEntry(main) {
+  let load = null; try { load = JSON.parse(sessionStorage.getItem('wpa:quote-load') || 'null'); sessionStorage.removeItem('wpa:quote-load'); } catch { load = null; }
+  const src = load?.id ? await api('GET', '/api/quotes/' + load.id).catch(error => { fail(error); return null; }) : null;
+  const editId = src && !load.copy ? src.id : null;
+  main.innerHTML = `<h1>${editId ? `견적서 수정 <span class="small muted">${esc(src.quote_no)}</span>` : '견적서 작성'}</h1>
+  <p class="muted small">수신은 「거래처 찾기」(거래처코드), 품목은 「품목 찾기」(품목코드, 여러 개 체크)로 고르고 단가를 넣으세요. 그 거래처 단가표가 있으면 단가를 미리 채웁니다. 금액은 V.A.T 별도 공급가액입니다.</p>
+  <form class="stack quote-form" id="qtForm" novalidate>
+    <div class="form-grid">
+      <label>수신(거래처) *<input name="customer" required maxlength="100" autocomplete="off"></label>
+      <label>참조<input name="attn" maxlength="100" placeholder="예) 구매팀 홍길동 책임"></label>
+      <label>견적일 *<input type="date" name="quote_date" required value="${todayStr()}"></label>
+      <label>유효기간<input name="valid_text" maxlength="100" value="견적일로부터 1개월"></label>
+      <label>통화<select name="currency">${Object.entries(QT_CUR).map(([k, c]) => `<option value="${k}">${c.label}</option>`).join('')}</select></label>
+      <label>담당자<input name="manager" maxlength="50" value="${esc(ME.name)}"></label>
+      <label>담당자 전화<input name="manager_phone" maxlength="30" placeholder="예) 010-0000-0000"></label>
+    </div>
+    <h2 class="rs-h">품목</h2>
+    <div class="actions" style="justify-content:flex-start"><button type="button" class="btn primary" data-qt-pick>+ 품목 찾기(품목코드)</button><button type="button" class="btn" data-qt-blank>+ 직접 입력 줄</button></div>
+    <div data-qt-lines></div><div data-qt-total></div>
+    <label>기타 <span class="hint">(한 줄에 하나 — 예: 제작기간 : 발주후 12주 / FOB 조건 단가)</span><textarea name="terms" rows="3" maxlength="1000"></textarea></label>
+    <label>내부 메모 <span class="hint">(견적서에는 안 나옴)</span><input name="note" maxlength="500"></label>
+    <div class="actions"><button class="btn primary">${editId ? '수정 저장' : '견적서 저장'}</button></div>
+  </form>`;
+  const form = $('#qtForm', main); let lines = [], catalog = null; const requestId = crypto.randomUUID();
+  bindPartnerPicker(form.elements.customer, null, { type: 'sales' }).catch(() => {});
+  if (src) {
+    for (const k of ['customer', 'attn', 'valid_text', 'currency', 'manager', 'manager_phone', 'terms', 'note']) if (form.elements[k]) form.elements[k].value = src[k] ?? '';
+    form.elements.quote_date.value = load.copy ? todayStr() : src.quote_date;
+    lines = src.lines.map(l => ({ bom_id: l.bom_id, product_code: l.product_code, item: l.item, spec: l.spec, unit: l.unit, qty: l.qty, unit_price: l.unit_price, note: l.note }));
+  }
+  const cur = () => form.elements.currency.value;
+  const draw = () => {
+    $('[data-qt-lines]', form).innerHTML = lines.length ? `<div class="table-wrap"><table class="grid keep-table qt-grid" data-no-sort data-keep-cols><thead><tr><th>NO</th><th>ITEM NO</th><th>품명 *</th><th>규격</th><th>단위</th><th class="r">수량 *</th><th class="r">단가 *</th><th class="r">공급가액</th><th>비고</th><th></th></tr></thead>
+      <tbody>${lines.map((l, i) => `<tr><td class="c">${i + 1}</td><td><input data-ql="product_code" data-i="${i}" value="${esc(l.product_code || '')}" maxlength="50" aria-label="${i + 1}번째 ITEM NO"></td><td><input data-ql="item" data-i="${i}" value="${esc(l.item || '')}" maxlength="200" aria-label="${i + 1}번째 품명"></td>
+        <td><input data-ql="spec" data-i="${i}" value="${esc(l.spec || '')}" maxlength="100" aria-label="${i + 1}번째 규격"></td><td><input data-ql="unit" data-i="${i}" value="${esc(l.unit || '')}" maxlength="20" class="qt-unit" aria-label="${i + 1}번째 단위"></td>
+        <td><input data-ql="qty" data-i="${i}" type="number" step="any" min="0" class="r" value="${l.qty ?? ''}" aria-label="${i + 1}번째 수량"></td><td><input data-ql="unit_price" data-i="${i}" type="number" step="any" min="0" class="r" value="${l.unit_price ?? ''}" aria-label="${i + 1}번째 단가"></td>
+        <td class="r nowrap" data-qt-amt="${i}">${l.qty !== '' && l.unit_price !== '' && l.qty != null && l.unit_price != null ? esc(qtMoney(qtCalc(l.qty, l.unit_price, cur()), cur())) : ''}</td><td><input data-ql="note" data-i="${i}" value="${esc(l.note || '')}" maxlength="200" aria-label="${i + 1}번째 비고"></td>
+        <td><button type="button" class="btn small" data-qt-del="${i}" aria-label="${i + 1}번째 줄 빼기">빼기</button></td></tr>`).join('')}</tbody></table></div>`
+      : '<p class="muted small">「+ 품목 찾기」로 품목을 고르세요.</p>';
+    totals();
+  };
+  const totals = () => {
+    const sum = lines.reduce((t, l) => t + qtCalc(l.qty, l.unit_price, cur()), 0), noPrice = lines.filter(l => l.unit_price === '' || l.unit_price == null).length;
+    $('[data-qt-total]', form).innerHTML = lines.length ? `<div class="bill-sum"><span>${esc(`${lines.length}품목`)}</span><span class="bill-grand">견적금액(V.A.T 별도) ${esc(qtMoney(cur() === 'USD' ? Math.round(sum * 100) / 100 : sum, cur()))}</span>${noPrice ? `<span class="chip yellow">단가 없는 줄 ${noPrice}</span>` : ''}</div>` : '';
+  };
+  form.addEventListener('input', e => {
+    const i = Number(e.target.dataset.i), k = e.target.dataset.ql; if (!k || !lines[i]) return;
+    lines[i][k] = e.target.value;
+    if (k === 'qty' || k === 'unit_price') { const l = lines[i]; $(`[data-qt-amt="${i}"]`, form).textContent = l.qty !== '' && l.unit_price !== '' ? qtMoney(qtCalc(l.qty, l.unit_price, cur()), cur()) : ''; totals(); }
+  });
+  form.elements.currency.addEventListener('change', draw);
+  form.addEventListener('click', e => { const d = e.target.closest('[data-qt-del]'); if (d) { lines.splice(Number(d.dataset.qtDel), 1); draw(); } });
+  $('[data-qt-blank]', form).onclick = () => { lines.push({ bom_id: null, product_code: '', item: '', spec: '', unit: 'EA', qty: '', unit_price: '', note: '' }); draw(); $(`[data-ql="product_code"][data-i="${lines.length - 1}"]`, form)?.focus(); };
+  $('[data-qt-pick]', form).onclick = async () => {
+    if (!catalog) catalog = await api('GET', '/api/boms').catch(error => { fail(error); return null; });
+    if (!catalog) return;
+    const picked = ((await openItemPicker(catalog, { title: '견적 품목 찾기(품목코드·품명)', filter: b => b.active !== 0 && !b.is_temp, multi: true, lots: false }))?.items || []).map(x => x.bom);
+    if (!picked.length) return;
+    const customer = form.elements.customer.value.trim();
+    const prices = customer ? (await api('GET', '/api/item-prices/lookup?' + new URLSearchParams({ side: 'sales', vendor: customer, date: form.elements.quote_date.value || todayStr() })).catch(() => ({ prices: {} }))).prices : {};
+    for (const b of picked) lines.push({ bom_id: b.id, product_code: b.product_code || '', item: b.product, spec: b.spec || '', unit: b.unit || 'EA', qty: '', unit_price: prices[b.id]?.unit_price ?? '', note: '' });
+    draw(); $(`[data-ql="qty"][data-i="${lines.length - picked.length}"]`, form)?.focus();
+    const filled = picked.filter(b => prices[b.id]).length; if (filled) toast(`${filled}품목 단가를 단가표에서 채웠습니다. 확인하고 고치세요.`);
+  };
+  draw();
+  form.onsubmit = async e => {
+    e.preventDefault();
+    const v = formObj(form); if (!v.customer.trim()) { form.elements.customer.focus(); return toast('수신(거래처)을 넣으세요.', 'err'); }
+    const bad = lines.findIndex(l => !String(l.item || '').trim() || !(Number(l.qty) > 0) || l.unit_price === '' || l.unit_price == null || Number(l.unit_price) < 0);
+    if (!lines.length) return toast('품목을 한 줄 이상 넣으세요.', 'err');
+    if (bad >= 0) { $(`[data-ql="${!String(lines[bad].item || '').trim() ? 'item' : !(Number(lines[bad].qty) > 0) ? 'qty' : 'unit_price'}"][data-i="${bad}"]`, form)?.focus(); return toast(`${bad + 1}번째 줄: 품명·수량·단가를 넣으세요.`, 'err'); }
+    const body = { ...v, lines: lines.map(l => ({ ...l, qty: Number(l.qty), unit_price: Number(l.unit_price) })), request_id: requestId };
+    try { const r = await api(editId ? 'PUT' : 'POST', editId ? `/api/quotes/${editId}` : '/api/quotes', body); toast(editId ? '견적서를 고쳤습니다.' : `견적서 ${r.quote_no}를 저장했습니다.`); try { sessionStorage.setItem('wpa:quote-month', r.quote_date.slice(0, 7)); } catch { /* 편의 */ } location.hash = '#/sales/quotes'; setTimeout(() => quoteSheet(r), 300); }
+    catch (error) { fail(error); }
+  };
+}
+
+async function pageQuoteList(main) {
+  let month = ''; try { month = sessionStorage.getItem('wpa:quote-month') || ''; sessionStorage.removeItem('wpa:quote-month'); } catch { month = ''; }
+  const r0 = month ? monthRange(month) : rpRange('month'); // 방금 저장한 견적서의 달로 열기
+  main.innerHTML = `<h1>견적서 목록</h1>
+  <form class="list-filters toolbar lf-oneline" data-read-only id="qtFilters"><label class="lf-period">견적일<span class="lf-pair"><input type="date" name="from" value="${r0.from}" aria-label="견적일 시작"><span class="muted">~</span><input type="date" name="to" value="${r0.to}" aria-label="견적일 끝"></span></label><label class="lf-partner">수신(거래처)<input name="customer" maxlength="100"></label><label class="grow lf-q">검색<input type="search" name="q" placeholder="견적번호·품명·품목코드·참조·담당자"></label><label class="lf-sel">상태<select name="status"><option value="">유효</option><option value="cancelled">취소</option><option value="all">전체</option></select></label><button class="btn primary">조회</button><a class="btn" href="#/sales/quotes/new">+ 견적서 작성</a></form>
+  <div id="qtList"></div>`;
+  const form = $('#qtFilters', main); let rows = [];
+  bindPartnerPicker(form.elements.customer, null, { type: 'sales' }).catch(() => {});
+  const load = async () => {
+    const data = await api('GET', '/api/quotes?' + new URLSearchParams(formObj(form))); if (!main.isConnected) return; rows = data.rows;
+    $('#qtList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>견적번호</th><th>견적일</th><th>수신</th><th>참조</th><th>품목</th><th>통화</th><th class="r">견적금액</th><th>담당자</th><th>상태</th><th>입력자</th><th></th></tr></thead>
+      <tbody>${rows.map(q => `<tr class="${q.status === 'cancelled' ? 'row-muted' : ''}"><td><a href="#" data-qt-open="${q.id}">${esc(q.quote_no)}</a></td><td class="nowrap">${esc(q.quote_date)}</td><td>${esc(q.customer)}${q.customer_code ? ` <span class="small muted">${esc(q.customer_code)}</span>` : ''}</td><td>${esc(q.attn || '')}</td>
+        <td>${esc(q.first_item || '')}${q.line_count > 1 ? ` <span class="small muted">${esc(`외 ${q.line_count - 1}`)}</span>` : ''}</td><td>${esc(q.currency)}</td><td class="r nowrap"><b>${esc(qtMoney(q.supply_total, q.currency))}</b></td><td>${esc(q.manager || '')}</td>
+        <td>${q.status === 'cancelled' ? '<span class="chip red">취소</span>' : '<span class="chip green">유효</span>'}</td><td class="small muted">${esc(q.created_by)}</td><td><button type="button" class="btn small" data-qt-open="${q.id}">보기·인쇄</button></td></tr>`).join('')}</tbody></table></div>${data.more ? '<p class="small muted">500건까지 보입니다. 기간을 좁히세요.</p>' : ''}`
+      : '<div class="empty">조건에 맞는 견적서가 없습니다.</div>';
+  };
+  form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
+  $('#qtList', main).addEventListener('click', async e => { const o = e.target.closest('[data-qt-open]'); if (!o) return; e.preventDefault(); try { quoteSheet(await api('GET', '/api/quotes/' + o.dataset.qtOpen), () => load()); } catch (error) { fail(error); } });
+  await load();
 }

@@ -77,7 +77,7 @@ async function bindPartnerPicker(input, hint, { recent = false, onPick, type = '
     const typed = input.value.trim(); if (!typed || vendors.some(v => partnerKey(v.name) === partnerKey(typed))) return;
     const byCode = vendors.find(v => v.code && v.code === typed.toUpperCase()); if (byCode) input.value = byCode.name;
   }, true);
-  if (!input.placeholder || /↓/.test(input.placeholder)) input.placeholder = '거래처 찾기 (이름·코드 입력 후 Enter)';
+  if (!input.placeholder || /↓/.test(input.placeholder)) input.placeholder = input.closest('form.list-filters') ? '이름·코드 입력' : '거래처 찾기 (이름·코드 입력 후 Enter)'; // 15.155 목록 조회 칸은 짧게
   button.title = '거래처 찾기 (이름·코드·담당자·연락처로 검색)';
   let serial = 0;
   const show = async () => {
