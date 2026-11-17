@@ -419,3 +419,15 @@ test('15.131 Bulk tax invoices from bill lists: merge per customer, no double ad
   const pb = (await buyer('GET', '/api/purchase-bills?vendor=' + encodeURIComponent('계산서상사'))).body.rows;
   assert.ok(pb.length && pb.every(x => x.invoice === null), 'cancelled purchase invoice does not count');
 });
+
+test('15.133 LOT prefix by category and sub-LOTs per package', async () => {
+  const raw = (await admin('POST', '/api/boms', { product: '서브원단', product_code: 'SUB-R', item_category: '원자재', kind: 'finished', base_qty: 1, unit: 'M', materials: [] })).body;
+  const next = (await staff('GET', `/api/lots/next?category=${encodeURIComponent('원자재')}&date=2026-08-04&count=2`)).body.lots;
+  assert.deepEqual(next, ['R260804_001', 'R260804_002']);
+  assert.equal((await staff('GET', `/api/lots/next?category=${encodeURIComponent('상품')}&date=2026-08-04`)).body.lots[0], 'G260804_001');
+  const rc = (await staff('POST', '/api/receipts', { receipt_date: today, vendor: '서브상사', request_id: rid(), lines: [1, 2, 3].map(() => ({ bom_id: raw.id, lot: 'R260804_001', qty: 30 })) })).body;
+  assert.deepEqual(rc.lines.map(l => [l.lot, l.sub_lot]), [['R260804_001', '001'], ['R260804_001', '002'], ['R260804_001', '003']]);
+  const rc2 = (await staff('POST', '/api/receipts', { receipt_date: today, vendor: '서브상사', request_id: rid(), lines: [{ bom_id: raw.id, lot: 'R260804_001', qty: 5 }] })).body;
+  assert.equal(rc2.lines[0].sub_lot, '004', 'continues after earlier sub-LOTs');
+  assert.equal((await staff('GET', `/api/lots/next?prefix=R&date=2026-08-04`)).body.lots[0], 'R260804_002');
+});

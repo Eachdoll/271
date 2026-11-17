@@ -133,3 +133,26 @@ test('Failed metadata writes clean up newly uploaded files and preserve prior at
     assert.deepEqual((await owner('GET', endpoint)).body.photos, saved.body.photos);
   } finally { sqlite.exec('DROP TRIGGER reject_attachment'); console.error = oldError; }
 });
+
+test('15.135 Production actual: material LOT inputs within LOT balance, finished LOT auto, LOT stock moves', async () => {
+  const b2 = (await admin('POST', '/api/boms', { ...bomBody, product: '완제품 L', product_code: 'L-001' })).body;
+  const p = (await owner('POST', '/api/schedules', { kind: 'finished', period: 'day', start_date: '2026-11-12', qty: 20, bom_id: b2.id })).body;
+  const cl = (await admin('POST', '/api/boms', { product: '원단', product_code: 'CL-1', item_category: '원자재', kind: 'finished', base_qty: 1, unit: 'kg', materials: [] })).body;
+  const rcv = await admin('POST', '/api/receipts', { receipt_date: '2026-11-10', vendor: '원단상사', request_id: crypto.randomUUID(), lines: [{ bom_id: cl.id, lot: 'R261110_001', qty: 3 }, { bom_id: cl.id, lot: 'R261110_002', qty: 10 }] });
+  assert.equal(rcv.status, 200, JSON.stringify(rcv.body));
+  const mats = (await owner('GET', `/api/schedules/${p.id}/lot-materials`)).body; assert.ok(mats.materials, JSON.stringify([p, mats]));
+  const cloth = mats.materials.find(m => m.item === '원단');
+  assert.equal(cloth.per, 0.2); assert.deepEqual(cloth.lots.map(l => [l.lot, l.balance]), [['R261110_001', 3], ['R261110_002', 10]]);
+  assert.equal(mats.product_lot_prefix, 'P');
+  const over = await owner('POST', `/api/schedules/${p.id}/actuals`, { production_date: '2026-11-12', qty: 20, request_id: crypto.randomUUID(), inputs: [{ item: '원단', unit: 'kg', lot: 'R261110_001', qty: 4 }] });
+  assert.match(over.body.error || '', /남은 수량은 3/);
+  const a = await owner('POST', `/api/schedules/${p.id}/actuals`, { production_date: '2026-11-12', qty: 20, request_id: crypto.randomUUID(), inputs: [{ item: '원단', unit: 'kg', lot: 'R261110_001', qty: 3 }, { item: '원단', unit: 'kg', lot: 'R261110_002', qty: 1 }] });
+  assert.equal(a.status, 200, JSON.stringify(a.body)); assert.equal(a.body.lot, 'P261112_001'); assert.equal(a.body.inputs.length, 2);
+  const stock = (await owner('GET', '/api/inventory/lots?q=' + encodeURIComponent('원단'))).body.rows ?? [];
+  const after = (await owner('GET', `/api/schedules/${p.id}/lot-materials`)).body.materials.find(m => m.item === '원단').lots;
+  assert.deepEqual(after.map(l => [l.lot, l.balance]), [['R261110_002', 9]], 'consumed LOTs leave stock');
+  const made = (await owner('GET', '/api/lots/available?item=' + encodeURIComponent('완제품 L'))).body.rows;
+  assert.deepEqual(made.map(l => [l.lot, l.balance]), [['P261112_001', 20]], 'finished LOT enters stock');
+  const hist = (await owner('GET', `/api/schedules/${p.id}/actuals`)).body.rows; assert.equal(hist[0].inputs.length, 2);
+  void stock;
+});

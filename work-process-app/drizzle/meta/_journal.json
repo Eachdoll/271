@@ -330,6 +330,13 @@
       "when": 1795949613000,
       "tag": "0046_ship_batches",
       "breakpoints": false
+    },
+    {
+      "idx": 47,
+      "version": "6",
+      "when": 1796036013000,
+      "tag": "0047_lot_tracking",
+      "breakpoints": false
     }
   ]
 }

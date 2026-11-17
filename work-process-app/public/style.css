@@ -1636,3 +1636,6 @@ tr.tc-missing td { background: var(--red-bg); } tr.tc-pending td { background: v
 .sb-doc .sb-check { width: 44px; } .sb-doc .sb-lot { width: 120px; } .sb-doc .sb-lot input { width: 110px; min-height: 36px; } .sb-doc .po-items td:nth-child(2) { min-width: 130px; } .sb-doc .po-items { table-layout: auto; width: 100%; } .modal .actions label.inline { white-space: nowrap; } .sb-doc tr.sb-cust th { text-align: left; background: var(--panel); }
 .sb-doc .sb-sign { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 12px; } .sb-doc .sb-sign div { border: 1px solid var(--line); padding: 6px 8px; min-height: 56px; } .sb-doc .sb-sign b { display: block; font-size: 12px; }
 body.printing-cert .sb-doc .sb-lot input { border: 0; padding: 0; } body.printing-cert .sb-doc [data-sb-remove] { display: none; }
+tr.rc-group td { background: var(--panel); } tr.rc-child td:first-child { border-left: 3px solid var(--accent, #2b6de5); } tr.rc-child td:nth-child(3) { padding-left: 22px; }
+.lot-hint { min-height: 0; } .lot-hint:empty { display: none; } body.printing-cert .lot-hint { display: none; }
+.lot-in-grid select { min-width: 220px; } .lot-in-grid input { width: 110px; }

@@ -184,7 +184,7 @@ async function pageShipInstructions(main) {
   <form class="list-filters toolbar" data-read-only id="siFilters"><label>지시일<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>거래처<input name="customer" maxlength="100"></label><label class="grow">검색<input type="search" name="q" placeholder="품목·제품코드·거래처·출고지시서 번호"></label><label class="inline" data-si-nobatch><input type="checkbox" name="nobatch"> 묶음 안 된 것만</label><button class="btn primary">조회</button></form>
   <div id="siList"></div>
   <div class="actionbar" id="siBar"><span class="small" id="siCount"></span><label class="inline">출고일 <input type="date" id="siDate" value="${todayStr()}" max="${todayStr()}"></label><button type="button" class="btn" id="siBatch" title="체크한 지시를 출고지시서 한 장으로 묶어 인쇄">출고지시서 묶기</button><button type="button" class="btn primary" id="siShip">출하 처리</button></div>`;
-  const form = $('#siFilters', main); let rows = [], status = 'pending', version = 0, busy = false;
+  const form = $('#siFilters', main); let rows = [], status = 'pending', version = 0, busy = false, lotPickers = new Map();
   const canShip = hasRole('logistics');
   const tabs = [['pending', '출하 대기'], ['batches', '출고지시서(묶음)'], ['held', '보류'], ['shipped', '출하 완료'], ['cancelled', '지시 취소']];
   const canHold = hasRole('logistics') || hasRole('sales');
@@ -209,6 +209,7 @@ async function pageShipInstructions(main) {
       : `<div class="empty">${pending ? '내려온 출하지시가 없습니다.' : held ? '보류 중인 출하지시가 없습니다.' : '해당하는 출하지시가 없습니다.'}</div>`;
     if (rows.length) $('#siList', main).insertAdjacentHTML('beforeend', sumLine([['합계', esc(`${rows.length}건`)], ['수량', esc(unitTotals(rows, r => r.qty, r => r.unit))]]));
     const all = $('#siAll', main); if (all) all.onchange = () => { $$('[data-si-pick]', main).forEach(c => { c.checked = all.checked; }); sync(); };
+    lotPickers = new Map($$('[data-si-lot]', main).map(inp => { const r = rows.find(x => x.id === Number(inp.dataset.siLot)); return [r.id, bindLotPicker(inp, () => r.item, () => r.qty)]; }));
     sync();
   };
   $('#siList', main).addEventListener('change', e => { if (e.target.matches('[data-si-pick]')) sync(); });
@@ -239,8 +240,9 @@ async function pageShipInstructions(main) {
   $('#siShip', main).onclick = async () => {
     const ids = picked(); if (!ids.length || busy) return;
     const lots = Object.fromEntries(ids.map(id => [id, $(`[data-si-lot="${id}"]`, main)?.value.trim() || '']));
-    const noLot = ids.filter(id => !lots[id]).length;
-    if (!(await confirmBox(`${ids.length}건을 ${$('#siDate', main).value}에 출하 처리할까요?${noLot ? ` (LOT 없는 줄 ${noLot}건)` : ''} 출하 목록에 기록되고 재고가 빠집니다.`))) return;
+    const noLot = ids.filter(id => !lots[id]).length, lotWarn = ids.map(id => lotPickers.get(id)?.check()).filter(Boolean);
+    if (!(await confirmBox(`${ids.length}건을 ${$('#siDate', main).value}에 출하 처리할까요?${noLot ? ` (LOT 없는 줄 ${noLot}건)` : ''}${lotWarn.length ? ` ⚠ ${lotWarn.join(' / ')}` : ''} 출하 목록에 기록되고 재고가 빠집니다.`))) return;
+    LOT_CACHE.clear();
     busy = true; sync();
     try { const r = await api('POST', '/api/ship-instructions/ship', { ids, ship_date: $('#siDate', main).value, lots }); toast(`${r.shipped}건을 출하 처리했습니다.`); await load(); }
     catch (error) { fail(error); await load().catch(() => {}); } finally { busy = false; sync(); }
@@ -290,6 +292,7 @@ function shipBatchSheet(b, after = null) {
     <div class="actions"><button class="btn" data-close>닫기</button>${canEdit ? '<button class="btn danger" data-sb-cancel>묶음 풀기</button>' : ''}<button class="btn" data-print>인쇄 · PDF 저장</button>
       ${canShip && b.status === 'open' && pend.length ? `<label class="inline">출고일 <input type="date" data-sb-date value="${esc(b.plan_date <= todayStr() ? b.plan_date : todayStr())}" max="${todayStr()}"></label><button class="btn primary" data-sb-ship>남은 ${pend.length}줄 출하 처리</button>` : ''}</div>`, { wide: true });
   m.el.parentElement.classList.add('lr-cert-wrap');
+  const sbPick = new Map($$('[data-sb-lot]', m.el).map(inp => { const l = b.lines.find(x => x.id === Number(inp.dataset.sbLot)); return [l.id, bindLotPicker(inp, () => l.item, () => l.qty)]; }));
   const reopen = async next => { m.close(); shipBatchSheet(next, after); await after?.(); };
   $('[data-close]', m.el).onclick = m.close;
   $('[data-print]', m.el).onclick = () => rcPrint(`출고지시서_${b.batch_no}`);
@@ -305,8 +308,8 @@ function shipBatchSheet(b, after = null) {
     const ready = pend.filter(l => !l.held), held = pend.length - ready.length;
     if (!ready.length) return toast('보류 중인 줄만 남았습니다. 보류를 풀고 출하 처리하세요.', 'err');
     const date = $('[data-sb-date]', m.el).value, lots = Object.fromEntries(ready.map(l => [l.id, $(`[data-sb-lot="${l.id}"]`, m.el)?.value.trim() || '']));
-    const noLot = ready.filter(l => !lots[l.id]).length;
-    if (!await confirmBox(`${b.batch_no}의 ${ready.length}줄을 ${date}에 출하 처리할까요?${noLot ? ` (LOT 없는 줄 ${noLot}건)` : ''}${held ? ` 보류 ${held}줄은 제외합니다.` : ''} 출하 목록에 기록되고 재고가 빠집니다.`)) return;
+    const noLot = ready.filter(l => !lots[l.id]).length, lotWarn = ready.map(l => sbPick.get(l.id)?.check()).filter(Boolean);
+    if (!await confirmBox(`${b.batch_no}의 ${ready.length}줄을 ${date}에 출하 처리할까요?${noLot ? ` (LOT 없는 줄 ${noLot}건)` : ''}${lotWarn.length ? ` ⚠ ${lotWarn.join(' / ')}` : ''}${held ? ` 보류 ${held}줄은 제외합니다.` : ''} 출하 목록에 기록되고 재고가 빠집니다.`)) return;
     e.target.disabled = true;
     try { const r = await api('POST', '/api/ship-instructions/ship', { ids: ready.map(l => l.id), ship_date: date, lots }); toast(`${r.shipped}줄을 출하 처리했습니다.`); await reopen(await api('GET', '/api/ship-batches/' + b.id)); refreshNavBadges?.(); }
     catch (error) { fail(error); e.target.disabled = false; }

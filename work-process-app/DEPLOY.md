@@ -527,3 +527,10 @@ Sites가 새 마이그레이션을 적용한 뒤 Worker를 배포합니다. 환�
 - 15.131 전표 목록 체크 → 세금계산서 일괄 담기: 매출전표 목록(체크 → 건별 kind single / 거래처별 합산 kind merge, merge는 monthly 형식으로 저장·기간=전표 일자 처음~끝·전표마다 linkBill), 매입전표 목록(세금계산서 열 + 한 매입처씩 체크 → POST /api/purchase-tax-invoices). 이미 담긴·취소 전표는 체크칸 잠금, 서버는 UNINVOICED 확인 + 활성 고유 인덱스로 중복 거절(409). GET /api/purchase-bills 줄에 invoice(번호|승인번호|id). 마이그레이션 없음.
 
 - 15.132 출고지시서(묶음): 마이그레이션 0046(ship_batches 표 + ship_instructions.batch_id). 출하지시 화면에서 체크 → 「출고지시서 묶기」(물류·영업, 1~50줄, 진행 중인 묶음 하나에만) → DO-YYMMDD-NN 지시서(거래처별 피킹표·LOT·확인·서명칸, 인쇄) → 남은 줄 한 번에 출하 처리(기존 /api/ship-instructions/ship). 줄 빼기·묶음 풀기(cancelled, 대기 줄만 놓아 줌). 상태(출고 대기·일부·완료)는 지시 상태로 계산. API: POST/GET /api/ship-batches, GET /:id, POST /:id/remove, POST /:id/cancel. 출하지시 목록에 batch_no, ?batch=none.
+
+- 15.133~15.136 LOT 추적(테스트 피드백 시트 반영, 마이그레이션 0047: po_receipt_lots·other_receipts.sub_lot, production_actuals.lot, production_lot_inputs 표).
+  - 15.133 LOT 체계: 자동 LOT = [식별문자][입고일]_[NNN], 식별문자는 품목 분류(원자재 R·제품/반제품 P·상품 G·부자재 S·소모품 C, 그 밖 M; 입력 칸에 적으면 그 글자). 자동 번호는 품목마다 LOT 1개, 같은 LOT 여러 줄(포장)은 저장 때 서브 LOT 001~(그 LOT에 이미 쓴 번호 다음부터). LOT 나누기는 같은 LOT 유지. 라벨에 서브/수량, QR 끝에 서브 LOT(스캔 호환). /api/lots/next?category=. LOT별 재고는 LOT 단위(서브 합산).
+  - 15.134 입고목록 › 기타입고: 같은 입고번호의 여러 줄을 머리줄(입고번호·품목·하위 N줄·LOT·합계)로 접고 누르면 하위 자재가 펼쳐짐, 「입고증」 버튼. /api/other-receipts에 receipt_no.
+  - 15.135 생산실적: BOM 자재마다 필요량(생산량×비율)을 먼저 들어온 LOT부터 채워 제안(LOT·수량 수정·+LOT), 저장 시 LOT 잔량 검사(초과 400). 완제품 LOT 자동 P/G+생산일_NNN(직접 입력 가능). LOT별 재고에 생산 LOT 입고·투입 LOT 출고 반영(취소된 실적 제외). 총량 재고 계산은 기존 BOM 차감 그대로. API: GET /api/schedules/:id/lot-materials, GET /api/lots/available?item=, POST actuals에 inputs·lot.
+  - 15.136 출하 LOT 연결: 출하 입력(여러 품목 표·단일 양식)·출하지시·출고지시서의 LOT 칸에서 그 품목 재고 LOT(남은 수량·위치) 고르기, 재고에 없는 LOT·잔량 초과는 빨간 안내 + 저장 전 확인.
+  - 예전 감사 v72/v75/v79는 「줄마다 다른 M LOT」을 기대하므로 새 규칙(품목당 LOT 1개·서브)과 다름(의도된 변경).

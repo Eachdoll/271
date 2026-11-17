@@ -47,7 +47,7 @@ async function installLineTable(legacy, entity) {
   if (['purchase_order', 'shipment'].includes(entity)) details.hidden = true;
   const box = $('[data-lt-lines]', form), status = $('[data-multi-status]', form), submit = $('[data-multi-submit]', form);
   const draft = bindPhotoDraft(form);
-  let lines = [], boms = [], requestId = crypto.randomUUID(), saved = null, payload = null, remaining = [], busy = false, loading = true;
+  let lines = [], boms = [], requestId = crypto.randomUUID(), saved = null, payload = null, remaining = [], busy = false, loading = true, lotPickers = [];
   const fixed = l => !!l.bom_id;
   const amount = l => cfg.price && l.qty !== '' && l.price !== '' && l.price != null ? billTruncC(Number(l.qty) * Number(l.price)) : null;
   const cats = v => categoryOptions(v || '').replace('분류 선택', '분류');
@@ -68,6 +68,8 @@ async function installLineTable(legacy, entity) {
         <td><button type="button" class="btn small danger lt-del" data-lt-del="${i}" aria-label="${i + 1}번째 줄 삭제" title="줄 삭제">×</button></td></tr>`).join('')}</tbody></table></div>`
       : `<p class="muted small">${loading ? '품목 목록을 불러오는 중…' : '「+ 품목 추가」로 품목을 고르세요.'}</p>`;
     totals();
+    // 15.136 출하: LOT 칸에서 그 품목의 재고 LOT을 고르고 남은 수량을 확인
+    if (entity === 'shipment') lotPickers = $$('[data-l="lot"]', box).map(inp => { const l = lines[Number(inp.dataset.i)]; return bindLotPicker(inp, () => l.item, () => l.qty); });
   };
   const totals = () => {
     const filled = lines.filter(l => Number(l.qty) > 0);
@@ -142,6 +144,7 @@ async function installLineTable(legacy, entity) {
     event.preventDefault(); if (busy || draft.busy || loading) return;
     let items;
     if (!saved) { try { items = lineTableItems(lines, entity); } catch (error) { return toast(error.message, 'err'); } }
+    if (!saved && entity === 'shipment') { const w = lotPickers.map(p => p?.check()).filter(Boolean); if (w.length && !await confirmBox(`LOT 확인: ${w.join(' / ')}. 그래도 등록할까요?`)) return; LOT_CACHE.clear(); }
     busy = true; submit.disabled = true; form.inert = true; entryDraft.start();
     try {
       if (!saved) {
