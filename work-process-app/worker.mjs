@@ -1887,6 +1887,7 @@ route('PUT', '/api/returns/:id', async ({ user, params, body }) => {
 });
 // 15.147 매출·매입전표 고치기: 일자·줄 단가·줄 비고·전표 비고(매입은 명세서 번호·명세서 합계·운송비도). 수량·줄 구성은 출하·입고에 묶여 있어 그대로.
 // 세금계산서에 담겼거나 마감된 달(원래·새 일자)이면 막고, 반입·반출로 생긴 전표는 그 반품 전표에서 고친다. 고친 내용은 doc_changes에 한 줄.
+const carryLimit = () => { const [y, m] = today().split('-').map(Number); return monthEnd(m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`); };
 async function billEditCommon(side, bill, body, user) {
   const c = side === 'sales' ? { need: requireSales, party: bill.customer, closed: (p, d) => salesClosed(p, d), retSide: 'in', link: 'tax_invoice_bills', inv: 'tax_invoices', live: "i.status<>'cancelled'" }
     : { need: requirePurchase, party: bill.vendor, closed: (p, d) => closedPeriod(p, d), retSide: 'out', link: 'purchase_tax_invoice_bills', inv: 'purchase_tax_invoices', live: "i.status='received'" };
@@ -1895,7 +1896,8 @@ async function billEditCommon(side, bill, body, user) {
   const ret = await returnOfBill(c.retSide, bill.id); if (ret) throw bad(`${c.retSide === 'in' ? '반입' : '반출'} ${ret.return_no}로 생긴 전표입니다. 그 ${c.retSide === 'in' ? '반입' : '반출'} 전표에서 고치세요.`);
   const inv = await db.prepare(`SELECT i.invoice_no FROM ${c.link} t JOIN ${c.inv} i ON i.id=t.invoice_id WHERE t.bill_id=? AND t.active=1 AND ${c.live}`).get(bill.id);
   if (inv) throw new HttpError(409, `세금계산서 ${inv.invoice_no}에 담긴 전표입니다. 계산서를 먼저 ${side === 'sales' ? '담기 취소' : '취소'}한 뒤 고치세요.`);
-  const date = body.bill_date === undefined ? bill.bill_date : dateStr(body.bill_date, '전표 일자'); if (date > today()) throw bad('전표 일자는 오늘 이전으로 선택하세요.');
+  // 15.148 이월: 고칠 때는 다음 달 말일까지 옮길 수 있다(출고·입고 기록은 그대로, 전표·계산서 달만 바뀜).
+  const date = body.bill_date === undefined ? bill.bill_date : dateStr(body.bill_date, '전표 일자'); if (date > carryLimit()) throw bad(`전표 일자는 다음 달 말일(${carryLimit()})까지 옮길 수 있습니다.`);
   for (const d of new Set([bill.bill_date, date])) if (await c.closed(c.party, d)) throw bad(`${c.party}의 ${d.slice(0, 7)}은 마감되었습니다. 마감 취소(관리자) 뒤에 고치세요.`);
   const lines = await db.prepare(`SELECT * FROM ${side}_bill_lines WHERE bill_id=? AND active=1 ORDER BY id`).all(bill.id);
   const edits = new Map((Array.isArray(body.lines) ? body.lines : []).filter(l => l && l.id).map(l => [Number(l.id), l]));
@@ -1911,7 +1913,7 @@ async function billEditCommon(side, bill, body, user) {
     if (l.newPrice !== l.unit_price) diff.push(`${l.item} 단가 ${l.unit_price}→${l.newPrice}`);
     else if (l.newNote !== l.note) diff.push(`${l.item} 비고`);
   }
-  if (date !== bill.bill_date) diff.unshift(`일자 ${bill.bill_date}→${date}`);
+  if (date !== bill.bill_date) diff.unshift(`일자 ${bill.bill_date}→${date}${date.slice(0, 7) > bill.bill_date.slice(0, 7) ? ' (이월)' : ''}`);
   const note = body.note === undefined ? bill.note : str(body.note, 500); if (note !== bill.note) diff.push('비고');
   return { c, date, lines, note, diff };
 }
@@ -5120,7 +5122,8 @@ route('POST', '/api/ship-instructions/ship', async ({ user, body }) => {
     if (!ins || ins.status !== 'pending') throw new HttpError(409, '이미 처리됐거나 취소된 출하지시가 있습니다. 새로 불러오세요.');
     if (ins.held) throw new HttpError(409, `${ins.item}: 보류 중인 지시입니다. 보류를 풀고 출하 처리하세요.`);
     const bill = await db.prepare('SELECT bill_date, customer FROM sales_bills WHERE id=?').get(ins.bill_id);
-    if (bill && date < String(bill.bill_date).slice(0, 7) + '-01') throw bad(`${ins.item}: 출고일은 전표 달(${String(bill.bill_date).slice(0, 7)}) 이후여야 합니다.`);
+    const billFloor = bill ? (([y, m]) => m === 1 ? `${y - 1}-12-01` : `${y}-${String(m - 1).padStart(2, '0')}-01`)(String(bill.bill_date).split('-').map(Number)) : ''; // 15.148 이월 전표는 앞 달 출고 허용
+    if (bill && date < billFloor) throw bad(`${ins.item}: 출고일은 전표 달(${String(bill.bill_date).slice(0, 7)})의 앞 달 이후여야 합니다.`);
     if (!closedCustomers.has(ins.customer) && await salesClosed(ins.customer, date)) throw bad(closedMessage(ins.customer, date, '출하 처리하세요'));
     closedCustomers.add(ins.customer);
     const lot = str(lots[id], 100), tag = `si:${id}`;

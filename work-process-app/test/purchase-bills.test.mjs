@@ -585,3 +585,20 @@ test('15.147 Edit returns (lines, process, refund) and bills (date, price, note)
   assert.equal(pe.total, 6050); assert.equal(pe.statement_no, 'ST-9'); assert.equal(pe.changes.length, 1);
   assert.equal((await staff('PUT', `/api/purchase-bills/${pb.id}`, { note: 'x' })).status, 403);
 });
+
+test('15.148 Carry a bill over to next month: shipment and stock stay, ledger month moves, limit end of next month', async () => {
+  const g = (await admin('POST', '/api/boms', { product: '이월장갑', product_code: 'CO-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  const s = (await admin('POST', '/api/shipments', { ship_date: today, bom_id: g.id, item: g.product, qty: 5, customer: '이월고객', unit: 'EA' })).body;
+  const sb = (await admin('POST', '/api/sales-bills', { customer: '이월고객', bill_date: today, request_id: rid(), lines: [{ source_type: 'ship', source_id: s.id, unit_price: 1000 }] })).body;
+  const [y, m] = today.split('-').map(Number), next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+  const stockBefore = (await admin('GET', '/api/inventory?q=' + encodeURIComponent('이월장갑'))).body.rows[0].stock;
+  const r = await admin('PUT', `/api/sales-bills/${sb.id}`, { bill_date: next + '-01' });
+  assert.equal(r.status, 200, JSON.stringify(r.body)); assert.equal(r.body.bill_date, next + '-01'); assert.match(r.body.changes[0].summary, /이월/);
+  assert.equal((await admin('GET', '/api/inventory?q=' + encodeURIComponent('이월장갑'))).body.rows[0].stock, stockBefore, 'stock unchanged');
+  const unbilled = (await admin('GET', '/api/sales-bills/unbilled?customer=' + encodeURIComponent('이월고객'))).body;
+  assert.equal((unbilled.rows || unbilled).filter?.(x => x.source_id === s.id).length ?? 0, 0, 'shipment still billed');
+  const book = (await admin('GET', `/api/partner-book?side=sales&from=${today.slice(0, 8)}01&to=${today}&party=${encodeURIComponent('이월고객')}`)).body;
+  assert.equal(book.totals.total, 0, 'not in this month any more');
+  const far = m >= 11 ? `${y + 1}-${String((m + 2) % 12 || 12).padStart(2, '0')}-01` : `${y}-${String(m + 2).padStart(2, '0')}-01`;
+  assert.match((await admin('PUT', `/api/sales-bills/${sb.id}`, { bill_date: far })).body.error, /다음 달 말일/);
+});
