@@ -2165,3 +2165,6 @@ input[type=date][name=asof] { min-width: 9.6em; }
 #main h1:has(+ .manage-tabs) .view-switch { display: none; }
 /* 「확인중으로 표시」가 상태 칩이 아니라 단추로 보이게 */
 .btn.yellow { border: 1px solid var(--yellow, #b7791f) !important; }
+
+/* 15.179 휴대폰: 달력 칸이 화면 밖으로 밀리지 않게 */
+@media (max-width: 600px) { .sc-grid { grid-template-columns: minmax(0, 1fr); } .sc-grid > * { min-width: 0; } .sc-cal { width: 100%; table-layout: fixed; } .sc-bar .sc-month { flex-wrap: wrap; } .sc-bar input[type=month] { min-width: 0; width: 100%; } }
