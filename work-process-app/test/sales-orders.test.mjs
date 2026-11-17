@@ -294,3 +294,18 @@ test('15.154 Ship batches: bundle part of an instruction splits the bill line an
   const order = (await seller('GET', `/api/sales-orders/${so.id}`)).body;
   assert.equal(order.lines[0].shipped_qty ?? order.lines[0].shipped, 10, JSON.stringify(order.lines[0]));
 });
+
+test('15.157 Delivery status: shipments by customer with bill amounts (confirmed) and price estimates (open)', async () => {
+  // 15.154에서 분할상사에 333원 × 3·7 출하(전표 확정). 전표 없는 출하 2개를 더하면 최근 매출 단가 333으로 미확정 666.
+  await staff('POST', '/api/shipments', { ship_date: today, bom_id: glove.id, item: '니트릴장갑', qty: 2, customer: '분할상사', unit: 'BOX' });
+  assert.equal((await staff('GET', `/api/sales-delivery-status?from=${today}&to=${today}`)).status, 403, 'sales only');
+  const r = await seller('GET', `/api/sales-delivery-status?from=${today}&to=${today}&vendor=${encodeURIComponent('분할상사')}`);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const ls = r.body.lines;
+  assert.deepEqual(ls.map(l => [l.qty, l.state, l.confirmed, l.estimate, l.vat]).sort((a, b) => a[0] - b[0]), [[2, 'open', 0, 666, 66], [3, 'billed', 999, 0, 100], [7, 'billed', 2331, 0, 233]]);
+  assert.ok(ls.filter(l => l.state === 'billed').every(l => l.bill_no && l.req_no), 'bill and order numbers');
+  const v = r.body.vendors.find(x => x.vendor === '분할상사'); assert.deepEqual([v.lines, v.confirmed, v.estimate, v.open], [3, 3330, 666, 1]);
+  assert.deepEqual(r.body.freight, { total: 0, bills: 0 });
+  // 입고현황(매입)도 같은 집계 함수로 그대로 동작
+  assert.equal((await admin('GET', `/api/purchase-receipt-status?from=${today}&to=${today}`)).status, 200);
+});

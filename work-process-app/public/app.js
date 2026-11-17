@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.155';
+const APP_VERSION = '15.158';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -334,7 +334,7 @@ async function saveNewAttachments(entity, row, draft, form) {
 // 메뉴: 업무 → 하위 메뉴 → 화면. 입력과 목록(조회·검색)은 서로 다른 화면입니다(VIEW_SPLIT).
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
-  { group: '영업', items: [{ sub: '수주', items: [['#/sales/orders/new', '수주 입력'], ['#/sales/orders', '수주 목록']] }, { sub: '매출전표', items: [['#/sales/bills/new', '매출전표 입력'], ['#/sales/bills', '매출전표 목록'], ['#/sales/book', '거래처별 장부'], ['#/sales/returns/new', '반입(반품) 입력'], ['#/sales/returns', '반입 목록'], ['#/sales/ledger', '기간별 거래보고'], ['#/sales/aging', '채권 연령표'], ['#/sales/closing', '매출 마감']] }, { sub: '세금계산서', items: [['#/sales/tax/new', '세금계산서 만들기'], ['#/sales/tax', '세금계산서 관리'], ['#/sales/tax-check', '발행 체크']] }, { sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
+  { group: '영업', items: [{ sub: '수주', items: [['#/sales/orders/new', '수주 입력'], ['#/sales/orders', '수주 목록']] }, { sub: '매출전표', items: [['#/sales/bills/new', '매출전표 입력'], ['#/sales/bills', '매출전표 목록'], ['#/sales/book', '거래처별 장부'], ['#/sales/returns/new', '반입(반품) 입력'], ['#/sales/returns', '반입 목록'], ['#/sales/delivery-status', '납품현황'], ['#/sales/ledger', '기간별 거래보고'], ['#/sales/aging', '채권 연령표'], ['#/sales/closing', '매출 마감']] }, { sub: '세금계산서', items: [['#/sales/tax/new', '세금계산서 만들기'], ['#/sales/tax', '세금계산서 관리'], ['#/sales/tax-check', '발행 체크']] }, { sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
   { group: '구매', items: [
     { sub: '발주', items: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
     { sub: '매입전표', items: [['#/purchase/bills/new', '매입전표 입력'], ['#/purchase/bills', '매입전표 목록'], ['#/purchase/book', '거래처별 장부'], ['#/purchase/returns/new', '반출(반품) 입력'], ['#/purchase/returns', '반출 목록'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/tax', '매입 세금계산서'], ['#/purchase/closing', '매입 마감']] },
@@ -532,6 +532,7 @@ const PAGES = {
   '#/purchase/bills': main => pageBillList(main),
   '#/purchase/closing': main => pageBillClosing(main),
   '#/purchase/receipt-status': main => pageReceiptStatus(main),
+  '#/sales/delivery-status': main => pageReceiptStatus(main, 'sales'), // 15.157 납품현황(입고현황의 매출 쪽)
   '#/sales/orders/new': main => pageSalesOrderEntry(main),
   '#/sales/orders/edit': main => { let id = null; try { id = sessionStorage.getItem('wpa:so-edit'); } catch { id = null; } if (!id) { location.hash = '#/sales/orders'; return; } return pageSalesOrderEntry(main, id); },
   '#/sales/orders': main => pageSalesOrderList(main),
@@ -587,9 +588,13 @@ function shell() {
   const link = ([h, l]) => `<a href="${h}" class="${cur === h ? 'active' : ''}">${l}</a>`;
   const entry = item => Array.isArray(item) ? link(item)
     : `<details class="nav-sub" data-sub="${esc(item.sub)}" ${item.items.some(([h]) => h === cur) ? 'open' : ''}><summary>${item.sub}</summary>${item.items.map(link).join('')}</details>`;
-  const nav = NAV.filter(g => canSeeMenu(NAV_GROUP_KEY[g.group])).map((g) => `<div class="nav-group" data-dept="${NAV_GROUP_KEY[g.group] || 'home'}"><div class="nav-title">${g.group}</div>${g.items.map(entry).join('')}</div>`).join('')
+  // 15.156 부서별 메뉴 접기: 머리글을 누르면 접고 펼침(기억). 지금 화면이 들어 있는 부서는 늘 펼친다.
+  let navShut = new Set(); try { navShut = new Set(JSON.parse(localStorage.getItem('wpa:nav-shut') || '[]')); } catch { /* 편의 */ }
+  const hasCur = items => items.some(i => Array.isArray(i) ? i[0] === cur : i.items.some(([h]) => h === cur));
+  const group = (dept, title, items, body) => { const shut = navShut.has(dept) && !hasCur(items); return `<div class="nav-group${shut ? ' shut' : ''}" data-dept="${dept}"><button type="button" class="nav-title" data-nav-toggle="${dept}" aria-expanded="${!shut}">${title}</button><div class="nav-body">${body}</div></div>`; };
+  const nav = NAV.filter(g => canSeeMenu(NAV_GROUP_KEY[g.group])).map((g) => group(NAV_GROUP_KEY[g.group] || 'home', g.group, g.items, g.items.map(entry).join(''))).join('')
     // 관리: 기준 정보 화면(메뉴 권한 「기준 정보」, 권한은 각 화면과 서버가 그대로 판단) + 관리자 전용 화면
-    + ([...(canSeeMenu('master') ? NAV_MANAGE : []), ...(ME.is_admin ? NAV_ADMIN : [])].length ? `<div class="nav-group" data-dept="manage"><div class="nav-title">관리</div>${[...(canSeeMenu('master') ? NAV_MANAGE : []), ...(ME.is_admin ? NAV_ADMIN : [])].map(link).join('')}</div>` : '');
+    + ((manage => manage.length ? group('manage', '관리', manage, manage.map(link).join('')) : '')([...(canSeeMenu('master') ? NAV_MANAGE : []), ...(ME.is_admin ? NAV_ADMIN : [])]));
   const roles = ME.roles.map((r) => ROLE_LABEL[r]).join(', ');
   // 15.87 메뉴를 다시 그려도 왼쪽 메뉴의 스크롤 위치와 펼쳐 둔 하위 메뉴를 그대로 둔다(누른 메뉴 자리에 머묾).
   const oldSide = $('.side'), sideScroll = oldSide ? oldSide.scrollTop : null;
@@ -614,6 +619,12 @@ function shell() {
   $('.tab-menu').onclick = () => document.body.classList.toggle('nav-open');
   $$('.side a').forEach((a) => (a.onclick = () => document.body.classList.remove('nav-open')));
   const side = $('.side');
+  side.addEventListener('click', e => {
+    const t = e.target.closest('[data-nav-toggle]'); if (!t) return;
+    const g = t.closest('.nav-group'), shut = !g.classList.contains('shut'), dept = t.dataset.navToggle;
+    g.classList.toggle('shut', shut); t.setAttribute('aria-expanded', String(!shut));
+    try { const s = new Set(JSON.parse(localStorage.getItem('wpa:nav-shut') || '[]')); shut ? s.add(dept) : s.delete(dept); localStorage.setItem('wpa:nav-shut', JSON.stringify([...s])); } catch { /* 편의 */ }
+  });
   if (openSubs) $$('.nav-sub', side).forEach(d => { if (openSubs.has(d.dataset.sub)) d.open = true; });
   if (sideScroll !== null) side.scrollTop = sideScroll;
   const active = $('.side a.active');
@@ -682,6 +693,99 @@ document.addEventListener('click', event => {
   aux.forEach(tr => { tr.classList.toggle('sort-aux-hidden', tr !== grand); body.append(tr); });
   if (grand) body.append(grand);
 });
+// 15.158 엑셀식 필터: 정렬되는 목록 표(table.grid) 머리글마다 깔때기 버튼 → 값 목록(검색·모두 선택·건수)에서 고르면 그 값의 줄만 보인다.
+// 여러 칸은 AND로 겹치고, 값 목록은 다른 칸 필터를 통과한 줄에서 만든다(엑셀과 같음). 필터 중에는 소계·합계 줄을 숨긴다(필터 전 금액이라).
+// 표를 다시 그리면(조회) 필터는 풀린다. 값은 칸에 보이는 글자 그대로 비교한다.
+const XF = new WeakMap();
+const xfText = td => (td?.textContent || '').replace(/\s+/g, ' ').trim();
+const XF_EMPTY = '(빈 칸)';
+const XF_ICON = '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="M2 3h12l-4.6 5.4V13l-2.8-1.4V8.4z" fill="currentColor"/></svg>';
+function xfAttach(table) {
+  if (table.dataset.xf || table.hasAttribute('data-no-filter')) return;
+  const ths = [...(table.tHead?.rows[0]?.cells || [])];
+  if (!ths.length || table.tHead.rows.length > 1 || ths.some(th => th.colSpan > 1)) return; // 머리글이 두 줄이거나 칸을 합친 표는 칸 번호가 어긋나 뺀다
+  table.dataset.xf = '1';
+  ths.forEach((th, i) => {
+    const name = th.textContent.trim();
+    if (!name || th.querySelector('input, select')) return;
+    th.classList.add('xf-th');
+    th.insertAdjacentHTML('beforeend', `<button type="button" class="xf-btn" data-xf-col="${i}" aria-label="${esc(name)} 필터" title="필터 · 정렬" aria-haspopup="dialog">${XF_ICON}</button>`);
+  });
+}
+const xfRows = table => [...(table.tBodies[0]?.rows || [])].filter(tr => !auxRow(tr));
+function xfApply(table) {
+  const st = XF.get(table) || new Map();
+  const rows = xfRows(table), aux = [...(table.tBodies[0]?.rows || [])].filter(auxRow);
+  let shown = 0;
+  for (const tr of rows) {
+    const ok = [...st].every(([i, set]) => set.has(xfText(tr.cells[i]) || XF_EMPTY));
+    tr.classList.toggle('xf-hide', !ok); if (ok) shown++;
+  }
+  aux.forEach(tr => tr.classList.toggle('xf-hide', st.size > 0));
+  $$('.xf-btn', table.tHead).forEach(b => { const on = st.has(Number(b.dataset.xfCol)); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+  // 표 위 상태 줄: 필터 n개 · 표시 x/y행 · 모두 지우기
+  const host = table.closest('.table-wrap') || table; let bar = host.previousElementSibling?.classList.contains('xf-bar') ? host.previousElementSibling : null;
+  if (!st.size) { bar?.remove(); return; }
+  if (!bar) { bar = document.createElement('div'); bar.className = 'xf-bar'; bar.setAttribute('role', 'status'); host.insertAdjacentElement('beforebegin', bar); }
+  const names = [...st.keys()].map(i => table.tHead.rows[0].cells[i]?.textContent.trim()).filter(Boolean);
+  bar.innerHTML = `<span class="xf-chip">${XF_ICON} 필터 ${st.size}개</span><span>${esc(names.join(' · '))}</span><span class="muted">${fmtNum(shown)} / ${fmtNum(rows.length)}행 표시${aux.length ? ' · 소계·합계 줄은 필터 중 숨김' : ''}</span><button type="button" class="link-btn small" data-xf-clear>필터 모두 지우기</button>`;
+  bar.querySelector('[data-xf-clear]').onclick = () => { XF.delete(table); xfApply(table); };
+}
+function xfClose() { $('.xf-pop')?.remove(); document.removeEventListener('keydown', xfKey, true); document.removeEventListener('mousedown', xfOutside, true); }
+function xfKey(e) { if (e.key === 'Escape') { e.stopPropagation(); const b = $('.xf-pop')?.xfButton; xfClose(); b?.focus(); } }
+function xfOutside(e) { const p = $('.xf-pop'); if (p && !p.contains(e.target) && !e.target.closest('.xf-btn')) xfClose(); }
+function xfOpen(btn) {
+  const same = $('.xf-pop')?.xfButton === btn; xfClose(); if (same) return;
+  const table = btn.closest('table'), col = Number(btn.dataset.xfCol), st = XF.get(table) || new Map(), cur = st.get(col);
+  // 값 목록: 이 칸을 뺀 나머지 필터를 통과한 줄에서
+  const counts = new Map();
+  for (const tr of xfRows(table)) {
+    if (![...st].every(([i, set]) => i === col || set.has(xfText(tr.cells[i]) || XF_EMPTY))) continue;
+    const v = xfText(tr.cells[col]) || XF_EMPTY; counts.set(v, (counts.get(v) || 0) + 1);
+  }
+  const vals = [...counts.keys()].sort((a, b) => { if (a === XF_EMPTY) return 1; if (b === XF_EMPTY) return -1; const x = sortKey({ textContent: a }), y = sortKey({ textContent: b }); return x.n !== undefined && y.n !== undefined ? x.n - y.n : a.localeCompare(b, 'ko', { numeric: true }); });
+  const LIMIT = 1000, name = table.tHead.rows[0].cells[col].textContent.trim();
+  const pop = document.createElement('div'); pop.className = 'xf-pop'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', `${name} 필터`); pop.xfButton = btn;
+  pop.innerHTML = `<div class="xf-head"><b>${esc(name)}</b></div>
+    <div class="xf-sorts"><button type="button" class="btn small" data-xf-sort="ascending">↑ 오름차순</button><button type="button" class="btn small" data-xf-sort="descending">↓ 내림차순</button></div>
+    <input type="search" class="xf-search" placeholder="값 검색" aria-label="${esc(name)} 값 검색">
+    <label class="xf-item xf-all"><input type="checkbox" data-xf-all> <span>(모두 선택)</span></label>
+    <div class="xf-list">${vals.slice(0, LIMIT).map(v => `<label class="xf-item"><input type="checkbox" value="${esc(v)}" ${!cur || cur.has(v) ? 'checked' : ''}> <span class="xf-v">${esc(v)}</span><span class="xf-n">${fmtNum(counts.get(v))}</span></label>`).join('')}${vals.length > LIMIT ? `<p class="small muted">${esc(`값이 많아 앞 ${LIMIT}개만 보입니다. 검색으로 좁히세요.`)}</p>` : ''}</div>
+    <div class="xf-actions"><button type="button" class="btn small" data-xf-reset ${cur ? '' : 'disabled'}>이 칸 필터 지우기</button><span class="grow"></span><button type="button" class="btn small" data-xf-cancel>취소</button><button type="button" class="btn small primary" data-xf-ok>확인</button></div>`;
+  document.body.appendChild(pop);
+  const r = btn.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
+  pop.style.left = `${Math.max(8, Math.min(r.right - w, innerWidth - w - 8))}px`;
+  pop.style.top = `${r.bottom + 4 + h > innerHeight - 8 ? Math.max(8, r.top - h - 4) : r.bottom + 4}px`;
+  const boxes = () => $$('.xf-list input', pop).filter(b => !b.closest('.xf-item').hidden), all = $('[data-xf-all]', pop), ok = $('[data-xf-ok]', pop);
+  const syncAll = () => { const b = boxes(), n = b.filter(x => x.checked).length; all.checked = n === b.length && n > 0; all.indeterminate = n > 0 && n < b.length; ok.disabled = !$$('.xf-list input:checked', pop).length; };
+  $('.xf-search', pop).addEventListener('input', e => {
+    const q = e.target.value.trim().toLowerCase();
+    $$('.xf-list .xf-item', pop).forEach(l => { l.hidden = !!q && !l.querySelector('.xf-v').textContent.toLowerCase().includes(q); });
+    if (q) $$('.xf-list input', pop).forEach(b => { b.checked = !b.closest('.xf-item').hidden; }); // 검색하면 맞는 값만 고른 상태로(엑셀과 같음)
+    syncAll();
+  });
+  all.onchange = () => { boxes().forEach(b => { b.checked = all.checked; }); syncAll(); };
+  $('.xf-list', pop).addEventListener('change', syncAll);
+  const apply = () => {
+    const picked = new Set($$('.xf-list input:checked', pop).map(b => b.value));
+    const s = XF.get(table) || new Map();
+    if (picked.size === vals.length && !$('.xf-search', pop).value.trim()) s.delete(col); else s.set(col, picked);
+    s.size ? XF.set(table, s) : XF.delete(table); xfClose(); xfApply(table); btn.focus();
+  };
+  ok.onclick = apply;
+  $('[data-xf-cancel]', pop).onclick = () => { xfClose(); btn.focus(); };
+  $('[data-xf-reset]', pop).onclick = () => { const s = XF.get(table); s?.delete(col); if (s && !s.size) XF.delete(table); xfClose(); xfApply(table); btn.focus(); };
+  $$('[data-xf-sort]', pop).forEach(b => b.onclick = () => {
+    const th = table.tHead.rows[0].cells[col]; xfClose();
+    // 기존 머리글 정렬(오름 → 내림 → 원래)을 원하는 방향이 될 때까지 누른다
+    for (let k = 0; k < 3 && th.getAttribute('aria-sort') !== b.dataset.xfSort; k++) th.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+  pop.addEventListener('keydown', e => { if (e.key === 'Enter' && !ok.disabled && !e.target.matches('button')) { e.preventDefault(); apply(); } });
+  syncAll(); $('.xf-search', pop).focus();
+  document.addEventListener('keydown', xfKey, true); document.addEventListener('mousedown', xfOutside, true);
+}
+document.addEventListener('click', e => { const b = e.target.closest('.xf-btn'); if (b) { e.preventDefault(); xfOpen(b); } });
+window.addEventListener('hashchange', xfClose);
 // 2) 입력 화면 아래 저장 줄 왼쪽에 「리스트」(같은 하위 메뉴의 목록 화면)와 「다시 작성」(입력과 보관 초안을 지우고 새로)
 function listRouteFor(route) {
   const subs = []; const walk = items => items.forEach(i => { if (!Array.isArray(i) && i.items) { subs.push(i.items); walk(i.items); } });
@@ -886,7 +990,7 @@ function labelGridTables() {
     rows.forEach(tr => [...tr.children].forEach((td, i) => { td.dataset.label = td.colSpan > 1 ? '' : heads[i] || ''; }));
     // Desktop: columns that are empty on every row are left out (입력 표처럼 칸이 나중에 채워지면 data-keep-cols로 끈다); short values stay on one line.
     const ths = $$('thead th', table);
-    if (sortableTable(table)) ths.forEach(th => { if (th.textContent.trim() && !th.querySelector('input')) th.classList.add('sortable'); }); // 15.97 머리글 눌러 정렬
+    if (sortableTable(table)) { ths.forEach(th => { if (th.textContent.trim() && !th.querySelector('input')) th.classList.add('sortable'); }); xfAttach(table); } // 15.97 머리글 눌러 정렬 · 15.158 엑셀식 필터
     heads.forEach((head, i) => {
       const cells = rows.map(tr => tr.children[i]).filter(Boolean);
       if (head && rows.length && !table.hasAttribute('data-keep-cols') && !table.querySelector('[colspan]') && cells.every(td => (!td.textContent.trim() || td.textContent.trim() === '—') && !td.querySelector('input, select, button, textarea'))) [ths[i], ...cells].forEach(c => c?.classList.add('col-empty'));

@@ -1425,6 +1425,27 @@ const RS_SOURCES = {
     FROM other_receipts o WHERE 1=1` },
 };
 const RS_ORDER = ['원자재', '부자재', '제품', '상품', '임가공', '반제품', '미분류'];
+// 15.157 입고현황·납품현황 공통 집계: 분류별·거래처별 줄 수·확정·미확정 금액
+function rsSummary(lines) {
+  const sumBy = key => {
+    const map = new Map();
+    for (const l of lines) { const k = key(l), g = map.get(k) || { lines: 0, confirmed: 0, estimate: 0, unpriced: 0, open: 0 }; g.lines++; g.confirmed += l.confirmed; g.estimate += l.estimate; if (l.unpriced) g.unpriced++; if (l.state === 'open' || l.state === 'partial') g.open++; map.set(k, g); }
+    return map;
+  };
+  const byCat = sumBy(l => l.category);
+  const categories = RS_ORDER.filter(c => byCat.has(c) || ['원자재', '부자재', '제품', '상품', '임가공'].includes(c)).map(c => ({ category: c, ...(byCat.get(c) || { lines: 0, confirmed: 0, estimate: 0, unpriced: 0, open: 0 }) })).map(g => ({ ...g, total: g.confirmed + g.estimate }));
+  // 거래처 집계: 줄을 한 번만 돌며 합계·분류별 금액·분류별 세부를 모은다(15.90, 거래처 × 줄 반복 제거)
+  const vmap = new Map();
+  for (const l of lines) {
+    const k = nameKey(l.vendor), v = vmap.get(k) || { vendor: l.vendor, lines: 0, confirmed: 0, estimate: 0, unpriced: 0, open: 0, categories: {}, by: {} };
+    const c = v.by[l.category] || (v.by[l.category] = { lines: 0, confirmed: 0, estimate: 0, open: 0, unpriced: 0 }), isOpen = l.state === 'open' || l.state === 'partial';
+    for (const g of [v, c]) { g.lines++; g.confirmed += l.confirmed; g.estimate += l.estimate; if (isOpen) g.open++; if (l.unpriced) g.unpriced++; }
+    v.categories[l.category] = (v.categories[l.category] || 0) + l.confirmed + l.estimate;
+    vmap.set(k, v);
+  }
+  const vendors = [...vmap.values()].map(v => ({ ...v, total: v.confirmed + v.estimate })).sort((a, b) => stockCompare(a.vendor, b.vendor));
+  return { categories, vendors };
+}
 route('GET', '/api/purchase-receipt-status', async ({ user, query }) => {
   requirePurchase(user);
   const from = dateStr(query.from, '시작일'), to = dateStr(query.to, '종료일');
@@ -1450,28 +1471,42 @@ route('GET', '/api/purchase-receipt-status', async ({ user, query }) => {
     const vat = billTrunc(r.billed_vat || 0) + (estimate ? Math.trunc(estimate * 0.1) : 0);
     return { ...r, category, confirmed: r.billed_supply || 0, estimate, remaining, unpriced: remaining !== 0 && r.unit_price == null, state, vat };
   });
-  const sumBy = key => {
-    const map = new Map();
-    for (const l of lines) { const k = key(l), g = map.get(k) || { lines: 0, confirmed: 0, estimate: 0, unpriced: 0, open: 0 }; g.lines++; g.confirmed += l.confirmed; g.estimate += l.estimate; if (l.unpriced) g.unpriced++; if (l.state === 'open' || l.state === 'partial') g.open++; map.set(k, g); }
-    return map;
-  };
-  const byCat = sumBy(l => l.category);
-  const categories = RS_ORDER.filter(c => byCat.has(c) || ['원자재', '부자재', '제품', '상품', '임가공'].includes(c)).map(c => ({ category: c, ...(byCat.get(c) || { lines: 0, confirmed: 0, estimate: 0, unpriced: 0, open: 0 }) })).map(g => ({ ...g, total: g.confirmed + g.estimate }));
-  // 거래처 집계: 줄을 한 번만 돌며 합계·분류별 금액·분류별 세부를 모은다(15.90, 거래처 × 줄 반복 제거)
-  const vmap = new Map();
-  for (const l of lines) {
-    const k = nameKey(l.vendor), v = vmap.get(k) || { vendor: l.vendor, lines: 0, confirmed: 0, estimate: 0, unpriced: 0, open: 0, categories: {}, by: {} };
-    const c = v.by[l.category] || (v.by[l.category] = { lines: 0, confirmed: 0, estimate: 0, open: 0, unpriced: 0 }), isOpen = l.state === 'open' || l.state === 'partial';
-    for (const g of [v, c]) { g.lines++; g.confirmed += l.confirmed; g.estimate += l.estimate; if (isOpen) g.open++; if (l.unpriced) g.unpriced++; }
-    v.categories[l.category] = (v.categories[l.category] || 0) + l.confirmed + l.estimate;
-    vmap.set(k, v);
-  }
-  const vendors = [...vmap.values()].map(v => ({ ...v, total: v.confirmed + v.estimate })).sort((a, b) => stockCompare(a.vendor, b.vendor));
+  const { categories, vendors } = rsSummary(lines); // 15.157 납품현황과 같은 집계
   // 운송비는 매입전표 머리에 있어 분류가 없다. 명세서 일자가 기간 안인 확정 전표의 운송비를 따로 보여 준다.
   const fw = ["status='confirmed'", 'bill_date>=?', 'bill_date<=?', 'freight>0'], fa = [from, to];
   if (vendor) { fw.push(`${billVendorKey('vendor')}=?`); fa.push(nameKey(vendor)); }
   const freight = (await db.prepare(`SELECT COALESCE(SUM(freight),0) AS f, COUNT(*) AS c FROM purchase_bills WHERE ${fw.join(' AND ')}`).get(...fa));
   return { from, to, vendor, categories, vendors, freight: { total: freight.f, bills: freight.c }, lines: lines.slice(0, 3000), more: lines.length > 3000, line_count: lines.length };
+});
+// ── 영업: 납품현황 (15.157) ── 입고현황의 매출 쪽. 출고일 기준으로 기간 안 출하 줄을 분류·고객사·품목·일자별로 본다.
+// 금액 = 매출전표에 잡은 출하는 전표 공급가액·세액(확정), 아직 안 잡은 출하는 단가 × 수량(미확정, 세액 10% 예상).
+// 미확정 단가: 그 출하를 낸 출하지시의 수주 단가 → 단가표(출고일 기준) → 그 고객사 최근 매출 단가. 없으면 「단가 없음」.
+route('GET', '/api/sales-delivery-status', async ({ user, query }) => {
+  requireSales(user);
+  const from = dateStr(query.from, '시작일'), to = dateStr(query.to, '종료일');
+  if (from > to) throw bad('시작일이 종료일보다 늦습니다.');
+  const customer = str(query.vendor ?? query.customer, 100);
+  const where = ['s.ship_date>=?', 's.ship_date<=?'], args = [from, to];
+  if (customer) { where.push(`${customerKey('s.customer')}=?`); args.push(nameKey(customer)); }
+  const rows = await db.prepare(`SELECT s.id AS source_id, s.ship_date AS received_date, s.customer AS vendor, s.item, s.spec, s.unit, s.product_code, s.lot, s.qty,
+      COALESCE(NULLIF(x.item_category,''), ${CODE_CAT('s.product_code')}, '') AS category, x.supply AS billed_supply, x.vat AS billed_vat, x.unit_price AS billed_price, b.bill_no, o.order_no AS req_no, ol.unit_price AS order_price,
+      (SELECT p.unit_price FROM item_prices p JOIN boms bm ON bm.id=p.bom_id WHERE p.side='sales' AND p.active=1 AND p.vendor_key=${customerKey('s.customer')} AND s.product_code<>'' AND bm.product_code=s.product_code AND p.valid_from<=s.ship_date ORDER BY p.valid_from DESC, p.id DESC LIMIT 1) AS table_price,
+      (SELECT y.unit_price FROM sales_bill_lines y JOIN sales_bills yb ON yb.id=y.bill_id WHERE y.active=1 AND yb.status='confirmed' AND ${customerKey('yb.customer')}=${customerKey('s.customer')}
+         AND (CASE WHEN s.product_code<>'' THEN y.product_code=s.product_code ELSE y.item=s.item END) ORDER BY yb.bill_date DESC, y.id DESC LIMIT 1) AS last_price
+    FROM shipments s LEFT JOIN sales_bill_lines x ON x.source_type='ship' AND x.source_id=s.id AND x.active=1 LEFT JOIN sales_bills b ON b.id=x.bill_id
+    LEFT JOIN ship_instructions i ON i.shipment_id=s.id AND i.status='shipped' LEFT JOIN sales_order_lines ol ON ol.id=i.order_line_id LEFT JOIN sales_orders o ON o.id=ol.order_id
+    WHERE ${where.join(' AND ')} ORDER BY s.ship_date, s.id LIMIT 10001`).all(...args);
+  if (rows.length > 10000) throw bad('출하 줄이 너무 많습니다. 기간이나 고객사로 좁히세요.');
+  rows.sort((a, b) => stockCompare(a.received_date, b.received_date) || stockCompare(a.vendor, b.vendor));
+  const lines = rows.map(r => {
+    const category = RS_ORDER.includes(r.category) ? r.category : '미분류', billed = r.billed_supply != null;
+    const price = billed ? r.billed_price : r.order_price ?? r.table_price ?? r.last_price ?? null;
+    const estimate = !billed && price != null ? billTrunc(r.qty * price) : 0;
+    return { ...r, category, unit_price: price, confirmed: billed ? r.billed_supply : 0, estimate, remaining: billed ? 0 : r.qty, unpriced: !billed && price == null, state: billed ? 'billed' : 'open',
+      vat: billed ? (r.billed_vat || 0) : Math.trunc(estimate * 0.1) };
+  });
+  const { categories, vendors } = rsSummary(lines);
+  return { from, to, vendor: customer, categories, vendors, freight: { total: 0, bills: 0 }, lines: lines.slice(0, 3000), more: lines.length > 3000, line_count: lines.length };
 });
 // ── 영업: 매출전표·입금·기간별 거래보고·매출 마감 (15.81) ──
 // 물류가 잡은 출하 줄(전표 없는 것)이나 직접 입력 줄로 매출전표(SB-…)를 만든다. 금액은 원 미만 절사,
