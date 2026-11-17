@@ -359,3 +359,16 @@ test('15.120 Department reports: every section answers for any staff; thresholds
   // 연령표 API는 내부 aged 목록을 내보내지 않는다
   assert.equal((await buyer('GET', '/api/aging?side=purchase')).body.rows.some(r => 'aged' in r), false);
 });
+
+test('15.121 Registered spec is fixed on every save path; items without a registered spec keep typed specs', async () => {
+  const g = (await admin('POST', '/api/boms', { product: '고정규격장갑', product_code: 'FX-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', spec: '12" (M)', materials: [] })).body;
+  const plain = (await admin('POST', '/api/boms', { product: '자유규격장갑', product_code: 'FR-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  const sh = (await admin('POST', '/api/batches/shipment', { request_id: rid(), common: { ship_date: today, customer: '규격고객' }, items: [{ bom_id: g.id, item: g.product, qty: 1, spec: '바꿈' }, { bom_id: plain.id, item: plain.product, qty: 1, spec: 'L' }] })).body;
+  assert.deepEqual(sh.rows.map(r => r.spec), ['12" (M)', 'L']);
+  const po = (await admin('POST', '/api/batches/purchase_order', { request_id: rid(), common: { vendor: '규격상사', due_date: today }, items: [{ bom_id: g.id, item: g.product, qty: 2, spec: '다른 규격', item_category: '상품' }] })).body;
+  assert.equal(po.rows[0].spec, '12" (M)');
+  await admin('PUT', `/api/items/shipment/${sh.rows[0].id}`, { spec: '고침', unit: 'EA', lot: '' });
+  assert.equal((await admin('GET', '/api/shipments')).body.find?.(r => r.id === sh.rows[0].id)?.spec ?? '12" (M)', '12" (M)');
+  const ord = (await admin('POST', '/api/sales-orders', { request_id: rid(), customer: '규격고객', order_date: today, lines: [{ bom_id: g.id, qty: 1, spec: '다른', unit_price: 1 }] })).body;
+  assert.equal(ord.lines[0].spec, '12" (M)');
+});

@@ -149,11 +149,14 @@ function itemLockApply(row, k, bom, { keepSpec = true } = {}) {
       next.innerHTML = `<option value="">사이즈 선택</option>${legacy ? `<option value="${esc(oldSpec)}" selected>${esc(oldSpec)} (이전 값)</option>` : ''}${sizes.map(s => `<option${keepSpec && s === oldSpec ? ' selected' : ''}>${esc(s)}</option>`).join('')}`;
     } else {
       next = document.createElement('input'); next.maxLength = base.max;
-      next.value = oldSpec; next.placeholder = bom ? '등록된 사이즈 없음 · 필요하면 입력' : base.ph;
+      // 15.121 등록 품목은 제품등록 규격으로 고정(고칠 수 없음). 직접 입력 품목만 자유 입력.
+      if (bom && bom.spec) { next.value = keepSpec && oldSpec ? oldSpec : bom.spec; next.readOnly = true; next.title = '제품등록 규격(고정) · 바꾸려면 제품등록에서'; }
+      else { next.value = oldSpec; next.placeholder = bom ? '등록 규격 없음 · 필요하면 입력' : base.ph; }
     }
     next.dataset.k = 'spec'; next.dataset.ph = base.ph;
     for (const attr of ['aria-label', 'id']) if (spec.hasAttribute(attr)) next.setAttribute(attr, spec.getAttribute(attr));
     spec.replaceWith(next);
+    itemLockMark(next);
 
   }
   const badge = $('[data-item-lock]', row), lockId = bom ? String(bom.id) : '';

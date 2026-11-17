@@ -2600,12 +2600,15 @@ async function sizeSets() {
   };
 }
 // 15.107 줄의 규격: 품목코드에 규격이 있으면 그것(입력값 무시). 분류에 사이즈 묶음이 있으면 줄마다 고른 사이즈. 둘 다 없으면 입력한 규격.
-async function catalogSpec(bomOrId, typed) {
+// 15.121 제품등록에 규격이 있으면 그 값으로 고정(입력값 무시). 사이즈가 등록된 품목은 그 사이즈 중 하나만. 둘 다 없으면 입력값.
+// keep = 고치는 기록의 지금 값(예전에 적은 값은 그대로 둘 수 있게).
+async function catalogSpec(bomOrId, typed, keep = null) {
   const bom = bomOrId && typeof bomOrId === 'object' ? bomOrId : bomOrId ? await db.prepare('SELECT * FROM boms WHERE id=?').get(Number(bomOrId)) : null;
   const value = str(typed, 100);
   if (!bom) return value;
+  if (keep !== null && value === keep) return value;
   const sizes = (await sizeSets())(bom.item_category, [bom.cat1, bom.cat2, bom.cat3]);
-  if (sizes.length) return value;
+  if (sizes.length) { if (value && !sizes.includes(value)) throw bad(`${bom.product}의 규격은 등록된 사이즈(${sizes.join(', ')}) 중에서 고르세요.`); return value; }
   return bom.spec || value;
 }
 async function withSizes(bom) { return { ...bom, sizes: (await sizeSets())(bom.item_category, [bom.cat1, bom.cat2, bom.cat3]) }; }
@@ -2987,6 +2990,7 @@ route('POST', '/api/batches/:entity', async ({ user, params, body }) => {
       } else if (entity === 'schedule') {
         record = await schedFields({ ...b, product: b.product || b.item });
         if (record.bom_id) meta.unit = JSON.parse(record.bom_snapshot).unit || '';
+        if (record.bom_id && record.kind !== 'semi') meta.spec = await catalogSpec(record.bom_id, meta.spec); // 15.121 완제품 계획: 등록 규격 고정
         // Write the size the way cutting/fusing records store it, so the plan finds its actuals.
         if (record.kind === 'semi' && meta.spec) { const kind = record.bom_id ? JSON.parse(record.bom_snapshot).semi_type : ''; const group = semiGroupOfLabel(record.product) || (kind ? Object.keys(SEMI_PRODUCTS).find(g => SEMI_PRODUCTS[g].types.includes(kind)) : null); if (group) meta.spec = semiSpec(group, meta.spec, false); }
       } else if (entity === 'laundry') {
@@ -3029,6 +3033,8 @@ route('PUT', '/api/items/:entity/:id', async ({ user, params, body }) => {
   }
   if (['schedule','other_receipt'].includes(params.entity) && row.bom_id && meta.unit !== (JSON.parse(row.bom_snapshot).unit || '')) throw bad('BOM 품목의 단위는 BOM에 저장된 단위를 사용하세요.');
   if (row.source_type) { const snapshot = JSON.parse(row.data || '{}'); if (meta.spec !== (row.spec || snapshot.spec || '') || meta.unit !== (row.unit || snapshot.unit || '') || meta.lot !== (row.lot || snapshot.lot_etc || snapshot.lot || '')) throw bad('입고 자동분석의 품목 정보는 입고 당시 스냅샷을 유지합니다. 정정사항은 코멘트에 남기세요.'); }
+  { const bom = row.bom_id ? await db.prepare('SELECT * FROM boms WHERE id=?').get(row.bom_id) : row.product_code ? await db.prepare("SELECT * FROM boms WHERE product_code<>'' AND UPPER(product_code)=UPPER(?) ORDER BY is_temp, id DESC LIMIT 1").get(row.product_code) : null;
+    if (bom && !row.source_type) meta.spec = await catalogSpec(bom, meta.spec, row.spec || ''); } // 15.121
   const set = ['spec=?','unit=?','lot=?']; const args = [meta.spec,meta.unit,meta.lot];
   if (params.entity === 'laundry') { set.push('item=?'); args.push(reqStr(body.item ?? row.item,'옷 종류',200)); }
   if (params.entity === 'request') {
@@ -4238,7 +4244,8 @@ const MR_PAGE = 300;
 // 15.70 등록 품목(코드)을 고른 줄: 단위는 등록 단위, 규격은 등록된 사이즈 중 하나(등록 사이즈가 없으면 입력값).
 function lockedSpec(bom, sizes, spec, no, prior = []) {
   const value = str(spec, 200);
-  if (!sizes.length) return value; // 등록 사이즈가 없는 품목은 규격(사이즈·메모)을 그대로 받는다
+  // 15.121 등록 사이즈가 없는 품목은 제품등록 규격으로 고정(고치는 의뢰의 기존 줄 값은 그대로)
+  if (!sizes.length) return bom.spec && !(value && prior.some(p => p.bom_id === bom.id && p.spec === value)) ? bom.spec : value;
   // 15.75 고치는 의뢰의 기존 줄이 같은 품목·같은 규격이면(사이즈 등록 전에 적은 값 등) 그대로 받는다.
   if (value && prior.some(p => p.bom_id === bom.id && p.spec === value)) return value;
   if (value && !sizes.includes(value)) throw bad(`${no}(${bom.product})의 규격은 등록된 사이즈(${sizes.join(', ')}) 중에서 고르세요.`);

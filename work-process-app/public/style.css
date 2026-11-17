@@ -1547,3 +1547,4 @@ table.grid.po-grid td:nth-child(1) { white-space: nowrap; }
 .dept-tables h3 a { font-weight: 400; margin-left: 6px; }
 .dept-detail-title { font-size: 18px; margin: 24px 0 8px; padding-top: 12px; border-top: 1px solid var(--line); }
 #deptMine { padding-top: 12px; border-top: 1px solid var(--line); }
+.spec-fixed { display: inline-block; padding: 2px 8px; border-radius: 4px; background: var(--bg); border: 1px dashed var(--line); }
