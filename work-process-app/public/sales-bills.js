@@ -241,7 +241,9 @@ async function statementSheet(bills) {
   const prev = ledger ? ledger.totals.balance - total + ledger.totals.paid : null, paid = ledger ? ledger.totals.paid : null, last = ledger ? ledger.totals.balance : null;
   // 15.125 전표 비고(전표마다 적은 비고)를 아래 비고 칸 맨 앞에 · 줄 비고는 표의 비고 칸에
   const billNotes = [...new Set(bills.map(b => String(b.note || '').trim()).filter(Boolean))];
-  const note = [...billNotes, manyDays ? `거래기간 ${from} ~ ${to}` : '', company.bank ? `입금 계좌 ${company.bank}` : ''].filter(Boolean).join(' · ');
+  // 15.139 수주 비고(고객 비고 원문)도 아래 비고 칸에 — 예전에는 줄 비고 칸에 PO만 나와 비고가 안 보였음
+  const orderNotes = [...new Set(lines.map(l => String(l.order_note || '').trim()).filter(Boolean))].filter(t => !billNotes.includes(t));
+  const note = [...billNotes, ...orderNotes, manyDays ? `거래기간 ${from} ~ ${to}` : '', company.bank ? `입금 계좌 ${company.bank}` : ''].filter(Boolean).join(' · ');
   const w = n => n == null ? '' : won(n);
   const copy = (kind, tone) => `<section class="stmt2 stmt2-${tone}${compact ? ' stmt2-half' : ''}">
     <div class="s2-top"><span class="s2-no">전표NO: <b>${esc(docNo)}</b></span><h2>거 래 명 세 표</h2><span class="s2-date"><b>${y}</b> 년 <b>${Number(mo)}</b> 월 <b>${Number(d)}</b> 일</span></div>
