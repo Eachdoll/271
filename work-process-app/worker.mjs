@@ -476,7 +476,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -1478,6 +1478,84 @@ route('GET', '/api/purchase-receipt-status', async ({ user, query }) => {
   const freight = (await db.prepare(`SELECT COALESCE(SUM(freight),0) AS f, COUNT(*) AS c FROM purchase_bills WHERE ${fw.join(' AND ')}`).get(...fa));
   return { from, to, vendor, categories, vendors, freight: { total: freight.f, bills: freight.c }, lines: lines.slice(0, 3000), more: lines.length > 3000, line_count: lines.length };
 });
+// ── 영업: 견적서 (15.163) ── 수신(거래처, 거래처코드로 찾기)·참조·견적일·유효기간·통화(원/달러)·담당자·기타 + 품목 줄(품목코드로 찾기, 단가 입력).
+// 금액은 V.A.T 별도 공급가액: 원화는 원 미만 절사, 달러는 센트(소수 둘째 자리) 반올림. 견적번호 SST-연도-월일-순번. 고치면 이력, 취소는 상태만.
+const QUOTE_MAX_LINES = 60;
+const quoteMoney = (v, cur) => cur === 'USD' ? Math.round(Number(v) * 100) / 100 : billTrunc(v);
+async function quoteFields(body, old = {}) {
+  const customer = reqStr(body.customer ?? old.customer, '수신(거래처)', 100), v = await vendorByName(customer);
+  const currency = (body.currency ?? old.currency) === 'USD' ? 'USD' : 'KRW';
+  const date = dateStr(body.quote_date ?? old.quote_date ?? today(), '견적일');
+  const raw = Array.isArray(body.lines) ? body.lines.filter(l => l && typeof l === 'object' && String(l.item ?? '').trim()) : [];
+  if (!raw.length || raw.length > QUOTE_MAX_LINES) throw bad(`품목을 1~${QUOTE_MAX_LINES}줄 넣으세요.`);
+  const lines = [];
+  for (const [k, l] of raw.entries()) {
+    const no = `${k + 1}번째 품목`, qty = num(l.qty, `${no} 수량`), price = num(l.unit_price, `${no} 단가`);
+    if (qty <= 0) throw bad(`${no}: 수량을 0보다 크게 넣으세요.`);
+    if (price < 0) throw bad(`${no}: 단가를 확인하세요.`);
+    let bom = null; if (l.bom_id) { const id = Number(l.bom_id); if (Number.isSafeInteger(id) && id > 0) bom = await db.prepare('SELECT id, product_code FROM boms WHERE id=?').get(id); }
+    lines.push({ bom_id: bom?.id ?? null, product_code: str(l.product_code ?? bom?.product_code ?? '', 50), item: reqStr(l.item, `${no} 품명`, 200), spec: str(l.spec, 100), unit: str(l.unit, 20), qty: stockRound(qty), unit_price: Number(price), supply: quoteMoney(qty * price, currency), note: str(l.note, 200) });
+  }
+  return { quote_date: date, customer: v?.name || customer, customer_code: v?.code || '', attn: str(body.attn ?? old.attn, 100), valid_text: str(body.valid_text ?? old.valid_text ?? '견적일로부터 1개월', 100) || '견적일로부터 1개월', currency,
+    manager: str(body.manager ?? old.manager, 50), manager_phone: str(body.manager_phone ?? old.manager_phone, 30), terms: str(body.terms ?? old.terms, 1000), note: str(body.note ?? old.note, 500),
+    supply_total: quoteMoney(lines.reduce((t, l) => t + l.supply, 0), currency), lines };
+}
+async function quoteDetail(q) {
+  const lines = await db.prepare('SELECT * FROM quote_lines WHERE quote_id=? ORDER BY line_no').all(q.id);
+  const changes = await db.prepare("SELECT summary, changed_by, changed_at FROM doc_changes WHERE doc_type='quote' AND doc_id=? ORDER BY id DESC LIMIT 20").all(q.id);
+  const v = await vendorByName(q.customer);
+  return { ...q, lines, changes, company: await companyInfo(), customer_info: v ? { code: v.code, biz_no: v.biz_no, address: v.address, ceo: v.ceo } : null };
+}
+const quoteLineCmds = (QID, args, lines) => lines.map((l, k) => ({ sql: `INSERT INTO quote_lines(quote_id,line_no,bom_id,product_code,item,spec,unit,qty,unit_price,supply,note) VALUES(${QID},?,?,?,?,?,?,?,?,?,?)`, args: [...args, k + 1, l.bom_id, l.product_code, l.item, l.spec, l.unit, l.qty, l.unit_price, l.supply, l.note] }));
+route('POST', '/api/quotes', async ({ user, body }) => {
+  requireSales(user);
+  const key = str(body.request_id, 80);
+  if (key) { const old = await db.prepare('SELECT * FROM quotes WHERE request_id=?').get(key); if (old) return { ...await quoteDetail(old), duplicate: true }; }
+  const q = await quoteFields(body), token = key || 'srv:' + crypto.randomUUID(), d = q.quote_date, prefix = `SST-${d.slice(0, 4)}-${d.slice(5, 7)}${d.slice(8, 10)}-`;
+  const QID = '(SELECT id FROM quotes WHERE request_id=?)';
+  await db.batch([
+    { sql: `INSERT INTO quotes(quote_no,quote_date,customer,customer_code,attn,valid_text,currency,manager,manager_phone,terms,note,supply_total,created_by,created_by_id,request_id) VALUES(${nextDocNo('quotes', 'quote_no')},?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      args: [prefix, prefix, prefix, q.quote_date, q.customer, q.customer_code, q.attn, q.valid_text, q.currency, q.manager, q.manager_phone, q.terms, q.note, q.supply_total, user.name, user.id, token] },
+    ...quoteLineCmds(QID, [token], q.lines),
+  ]);
+  return quoteDetail(await db.prepare('SELECT * FROM quotes WHERE request_id=?').get(token));
+});
+route('GET', '/api/quotes', async ({ user, query }) => {
+  requireSales(user);
+  const where = [], args = [];
+  applyListDates(where, args, query, 'q.quote_date');
+  if (query.customer) { where.push(`${customerKey('q.customer')}=?`); args.push(nameKey(str(query.customer, 100))); }
+  if (query.status === 'cancelled') where.push("q.status='cancelled'"); else if (query.status !== 'all') where.push("q.status='active'");
+  const kw = str(query.q, 100).trim(); // 견적번호·수신·참조·담당자·비고·기타 + 품명·품목코드
+  if (kw) { const like = `%${kw}%`; where.push("(q.quote_no LIKE ? OR q.customer LIKE ? OR q.attn LIKE ? OR q.manager LIKE ? OR q.note LIKE ? OR q.terms LIKE ? OR EXISTS(SELECT 1 FROM quote_lines l WHERE l.quote_id=q.id AND (l.item LIKE ? OR l.product_code LIKE ?)))"); args.push(like, like, like, like, like, like, like, like); }
+  const rows = await db.prepare(`SELECT q.*, (SELECT COUNT(*) FROM quote_lines l WHERE l.quote_id=q.id) AS line_count, (SELECT item FROM quote_lines l WHERE l.quote_id=q.id ORDER BY line_no LIMIT 1) AS first_item
+    FROM quotes q ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY q.quote_date DESC, q.id DESC LIMIT 501`).all(...args);
+  return { rows: rows.slice(0, 500), more: rows.length > 500 };
+});
+route('GET', '/api/quotes/:id', async ({ user, params }) => { requireSales(user); return quoteDetail(await mustGet('quotes', params.id)); });
+route('PUT', '/api/quotes/:id', async ({ user, params, body }) => {
+  requireSales(user);
+  const old = await mustGet('quotes', params.id); if (old.status !== 'active') throw bad('취소된 견적서는 고칠 수 없습니다. 「복사」로 새 견적서를 만드세요.');
+  const q = await quoteFields(body, old), oldLines = await db.prepare('SELECT item, qty, unit_price FROM quote_lines WHERE quote_id=? ORDER BY line_no').all(old.id);
+  const diff = [];
+  for (const [k, label] of [['quote_date', '견적일'], ['customer', '수신'], ['attn', '참조'], ['valid_text', '유효기간'], ['currency', '통화'], ['manager', '담당자'], ['terms', '기타']]) if (String(q[k] ?? '') !== String(old[k] ?? '')) diff.push(label);
+  if (JSON.stringify(oldLines.map(l => [l.item, l.qty, l.unit_price])) !== JSON.stringify(q.lines.map(l => [l.item, l.qty, l.unit_price]))) diff.push(`품목 ${q.lines.length}줄`);
+  if (q.supply_total !== old.supply_total) diff.push(`금액 ${old.supply_total} → ${q.supply_total}`);
+  const r = await db.batch([
+    { sql: "UPDATE quotes SET quote_date=?,customer=?,customer_code=?,attn=?,valid_text=?,currency=?,manager=?,manager_phone=?,terms=?,note=?,supply_total=?,updated_by=?,updated_at=? WHERE id=? AND status='active'",
+      args: [q.quote_date, q.customer, q.customer_code, q.attn, q.valid_text, q.currency, q.manager, q.manager_phone, q.terms, q.note, q.supply_total, user.name, now(), old.id] }, RC_GUARD,
+    { sql: 'DELETE FROM quote_lines WHERE quote_id=?', args: [old.id] },
+    ...quoteLineCmds('?', [old.id], q.lines),
+    docChange('quote', old.id, diff.join(' · ') || '저장', user),
+  ]).catch(error => { if (isGuardError(error)) throw new HttpError(409, '그 사이 견적서가 취소되었습니다. 새로 불러오세요.'); throw error; });
+  return quoteDetail(await mustGet('quotes', old.id));
+});
+route('POST', '/api/quotes/:id/cancel', async ({ user, params }) => {
+  requireSales(user);
+  const q = await mustGet('quotes', params.id); if (q.status !== 'active') throw bad('이미 취소된 견적서입니다.');
+  await db.batch([{ sql: "UPDATE quotes SET status='cancelled',cancelled_by=?,cancelled_at=? WHERE id=? AND status='active'", args: [user.name, now(), q.id] }, docChange('quote', q.id, '취소', user)]);
+  return quoteDetail(await mustGet('quotes', q.id));
+});
 // ── 영업: 납품현황 (15.157) ── 입고현황의 매출 쪽. 출고일 기준으로 기간 안 출하 줄을 분류·고객사·품목·일자별로 본다.
 // 금액 = 매출전표에 잡은 출하는 전표 공급가액·세액(확정), 아직 안 잡은 출하는 단가 × 수량(미확정, 세액 10% 예상).
 // 미확정 단가: 그 출하를 낸 출하지시의 수주 단가 → 단가표(출고일 기준) → 그 고객사 최근 매출 단가. 없으면 「단가 없음」.
@@ -2148,7 +2226,7 @@ route('GET', '/api/bill-lines', async ({ user, query }) => {
 // 발행 요청은 409로 분명히 막는다(조용히 쌓아 두지 않음). 받는 쪽 사업자 정보는 담을 때 거래처에서 복사한다.
 const TAX_STATUS = ['draft', 'queued', 'issued', 'sent', 'failed', 'cancelled'];
 const TAX_VENDOR_FIELDS = ['biz_no', 'biz_name', 'ceo', 'address', 'biz_type', 'biz_item', 'tax_email', 'tax_email2', 'tax_reverse'];
-const COMPANY_FIELDS = ['biz_no', 'biz_name', 'ceo', 'address', 'biz_type', 'biz_item', 'email', 'phone', 'bank'];
+const COMPANY_FIELDS = ['biz_no', 'biz_name', 'ceo', 'address', 'biz_type', 'biz_item', 'email', 'phone', 'bank', 'fax'];
 const bizNo = v => String(v || '').replace(/[^0-9]/g, '');
 const emailOk = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || ''));
 function taxEmail(value, label) { const v = str(value, 100); if (v && !emailOk(v)) throw bad(`${label} 형식을 확인하세요.`); return v; }
@@ -2157,7 +2235,7 @@ async function companyInfo() { let v = {}; try { v = JSON.parse(await getSetting
 route('GET', '/api/tax-company', async ({ user }) => { requireSales(user); return companyInfo(); });
 route('PUT', '/api/tax-company', async ({ user, body }) => {
   requireAdmin(user);
-  const v = { biz_no: bizNoField(body.biz_no), biz_name: str(body.biz_name, 100), ceo: str(body.ceo, 50), address: str(body.address, 200), biz_type: str(body.biz_type, 100), biz_item: str(body.biz_item, 100), email: taxEmail(body.email, '이메일'), phone: str(body.phone, 30), bank: str(body.bank, 100) };
+  const v = { biz_no: bizNoField(body.biz_no), biz_name: str(body.biz_name, 100), ceo: str(body.ceo, 50), address: str(body.address, 200), biz_type: str(body.biz_type, 100), biz_item: str(body.biz_item, 100), email: taxEmail(body.email, '이메일'), phone: str(body.phone, 30), bank: str(body.bank, 100), fax: str(body.fax, 30) };
   await setSetting('company_tax_info', JSON.stringify(v));
   return v;
 });

@@ -309,3 +309,23 @@ test('15.157 Delivery status: shipments by customer with bill amounts (confirmed
   // 입고현황(매입)도 같은 집계 함수로 그대로 동작
   assert.equal((await admin('GET', `/api/purchase-receipt-status?from=${today}&to=${today}`)).status, 200);
 });
+
+test('15.163 Quotes: create (USD, cents), list/search, edit with history, cancel, sales only', async () => {
+  await admin('POST', '/api/vendors', { name: '앱솔릭스', is_sales: true });
+  const body = { request_id: rid(), quote_date: '2026-05-05', customer: '앱솔릭스', attn: '-', currency: 'USD', manager: '강대호', manager_phone: '010-8208-4495', terms: '제작기간 : 발주후 12주\nFOB 조건 단가',
+    lines: [{ bom_id: glove.id, product_code: 'C00097', item: 'SVAA61PE1 (SAVANA 226 PS PLUS 1.0UM)', unit: 'EA', qty: 250, unit_price: 249.4624 }] };
+  assert.equal((await staff('POST', '/api/quotes', body)).status, 403);
+  const q = await seller('POST', '/api/quotes', body);
+  assert.equal(q.status, 200, JSON.stringify(q.body));
+  assert.match(q.body.quote_no, /^SST-2026-0505-\d+$/); assert.equal(q.body.supply_total, 62365.6); assert.equal(q.body.lines[0].supply, 62365.6);
+  assert.equal(q.body.customer_code.length > 0, true, 'customer code from vendor');
+  assert.equal((await seller('POST', '/api/quotes', body)).body.duplicate, true);
+  assert.match((await seller('POST', '/api/quotes', { ...body, request_id: rid(), lines: [{ item: 'x', qty: 0, unit_price: 1 }] })).body.error, /수량/);
+  const list = (await seller('GET', '/api/quotes?from=2026-05-01&to=2026-05-31&q=C00097')).body.rows;
+  assert.deepEqual(list.map(r => [r.quote_no, r.line_count]), [[q.body.quote_no, 1]]);
+  const u = await seller('PUT', `/api/quotes/${q.body.id}`, { ...body, currency: 'KRW', lines: [{ item: '장갑', qty: 3, unit_price: 333.7 }, { item: '마스크', qty: 1, unit_price: 1000 }] });
+  assert.equal(u.status, 200, JSON.stringify(u.body)); assert.equal(u.body.supply_total, 2001, 'KRW truncates per line'); assert.ok(u.body.changes[0].summary.includes('통화'));
+  const c = (await seller('POST', `/api/quotes/${q.body.id}/cancel`, {})).body; assert.equal(c.status, 'cancelled');
+  assert.match((await seller('PUT', `/api/quotes/${q.body.id}`, body)).body.error, /취소된/);
+  assert.equal((await seller('GET', '/api/quotes?from=2026-05-01&to=2026-05-31')).body.rows.length, 0, 'cancelled hidden by default');
+});

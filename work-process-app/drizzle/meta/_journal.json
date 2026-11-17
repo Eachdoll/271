@@ -372,6 +372,13 @@
       "when": 1796468013000,
       "tag": "0052_purchase_tax_items",
       "breakpoints": false
+    },
+    {
+      "idx": 53,
+      "version": "6",
+      "when": 1796554413000,
+      "tag": "0053_quotes",
+      "breakpoints": false
     }
   ]
 }

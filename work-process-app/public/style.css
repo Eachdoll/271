@@ -2016,3 +2016,20 @@ form.list-filters, .rs-page .rs-filter, .table-wrap, .card, .xf-pop, .xf-bar { b
 .taxf-items .taxf-in { width: 100%; min-width: 0; box-sizing: border-box; padding-left: 4px; padding-right: 4px; }
 .taxf-items input[type=date].taxf-in { font-size: 12px; padding: 2px; }
 .taxf-items .taxf-in.r { text-align: right; }
+
+/* 15.163 견적서 양식 */
+.qt-modal { max-width: 980px; }
+.qt-doc { background: #fff; color: #111; padding: 28px 30px; font-size: 13px; }
+.qt-top { display: grid; grid-template-columns: 1fr 1.1fr; gap: 24px; align-items: start; }
+.qt-left h2 { font-size: 28px; letter-spacing: .5em; margin: 0 0 14px; }
+.qt-to { font-size: 18px; margin-bottom: 12px; } .qt-to span { letter-spacing: .4em; font-weight: 700; } .qt-to b { font-size: 19px; }
+.qt-meta { border-collapse: collapse; } .qt-meta th { text-align: left; padding: 3px 12px 3px 0; white-space: nowrap; letter-spacing: .2em; } .qt-meta td { padding: 3px 0; border-bottom: 1px solid #333; min-width: 180px; }
+.qt-sup { width: 100%; border-collapse: collapse; border-top: 1px solid #333; } .qt-sup th, .qt-sup td { padding: 4px 6px; border-bottom: 1px solid #555; text-align: left; font-size: 12.5px; } .qt-sup th { white-space: nowrap; font-weight: 400; letter-spacing: .15em; color: #333; } .qt-sup-h { font-size: 11px; letter-spacing: .3em; }
+.qt-greet { margin: 26px 0 16px; line-height: 1.6; } .qt-ref { text-align: center; margin: 12px 0 22px; color: #333; }
+.qt-amount { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; font-size: 18px; } .qt-amount small { font-size: 12px; } .qt-amount b:last-child { font-size: 22px; }
+.qt-lines { width: 100%; border-collapse: collapse; border-top: 2px solid #222; } .qt-lines th { font-weight: 400; padding: 4px 6px; border-bottom: 1px solid #222; } .qt-lines td { padding: 8px 6px; border-bottom: 1px solid #999; height: 30px; }
+.qt-lines td.r { text-align: right; white-space: nowrap; } .qt-lines td.c { text-align: center; } .qt-lines tfoot th, .qt-lines tfoot td { background: #e6e6e6; border-top: 1px solid #222; border-bottom: 1px solid #222; padding: 6px; text-align: left; } .qt-lines tfoot td.r { text-align: right; }
+.qt-terms { width: 100%; border-collapse: collapse; margin-top: 14px; } .qt-terms th { background: #e6e6e6; text-align: left; padding: 4px 6px; border-top: 1px solid #222; border-bottom: 1px solid #222; font-weight: 400; } .qt-terms td { border-bottom: 1px solid #555; padding: 4px 6px; height: 22px; font-size: 12px; }
+.qt-grid input { width: 100%; min-width: 0; box-sizing: border-box; } .qt-grid td:nth-child(3) { min-width: 220px; } .qt-grid .qt-unit { width: 5em; } .qt-grid td:nth-child(6), .qt-grid td:nth-child(7) { width: 9em; }
+@media (max-width: 760px) { .qt-top { grid-template-columns: 1fr; } }
+.qt-left h2 { text-align: left; }
