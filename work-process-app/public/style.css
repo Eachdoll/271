@@ -1533,3 +1533,17 @@ table.grid.po-grid td:nth-child(1) { white-space: nowrap; }
   body.printing-cert .stmt-doc .stmt-party, body.printing-cert .stmt-doc .stmt-balance { font-size: 11.5px; }
 }
 @media (max-width: 700px) { .stmt-parties { grid-template-columns: minmax(0, 1fr); } }
+/* 15.120 부서별 리포트 */
+.dept-sec { margin: 16px 0 20px; }
+.dept-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 8px; }
+.dept-head h2 { margin: 0; font-size: 18px; }
+.dept-head .seg { flex-wrap: wrap; }
+.dept-kpi { text-decoration: none; color: inherit; }
+.dept-kpi:hover { border-color: var(--accent); }
+.dept-kpi.tone-warn strong { color: var(--yellow); }
+.dept-kpi.tone-bad strong { color: var(--red); }
+.dept-link { cursor: pointer; }
+.dept-link:hover td { background: var(--accent-soft); }
+.dept-tables h3 a { font-weight: 400; margin-left: 6px; }
+.dept-detail-title { font-size: 18px; margin: 24px 0 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+#deptMine { padding-top: 12px; border-top: 1px solid var(--line); }

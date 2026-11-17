@@ -343,3 +343,19 @@ test('15.117 Sales bill lines: product/goods class fixed at save, uncoded lines 
   const ledger = (await admin('GET', `/api/sales-ledger?customer=${encodeURIComponent('분류고객')}&from=${today}&to=${today}`)).body;
   assert.deepEqual(ledger.rows.filter(r => r.kind === 'sale').map(r => r.category), ['상품', '']);
 });
+
+test('15.120 Department reports: every section answers for any staff; thresholds admin-only and validated', async () => {
+  for (const section of ['common', 'sales', 'purchase', 'production', 'quality', 'dev', 'logistics']) {
+    const r = await staff('GET', `/api/reports/dept?section=${section}&from=${today.slice(0, 8)}01&to=${today}&grain=week`);
+    assert.equal(r.status, 200, section); assert.equal(r.body.kpis.length, 4, section);
+  }
+  assert.equal((await staff('GET', '/api/reports/dept?section=nope')).status, 400);
+  assert.equal((await staff('PUT', '/api/report-settings', { ar_overdue_days: 60, old_lot_days: 30, due_grace_days: 1, plan_late_days: 0, dev_long_days: 30 })).status, 403);
+  assert.equal((await admin('PUT', '/api/report-settings', { ar_overdue_days: 60, old_lot_days: 30, due_grace_days: 1.5, plan_late_days: 0, dev_long_days: 30 })).status, 400);
+  assert.equal((await admin('PUT', '/api/report-settings', { ar_overdue_days: 60, old_lot_days: 30, due_grace_days: 1, plan_late_days: 0, dev_long_days: 30 })).status, 200);
+  assert.equal((await staff('GET', '/api/report-settings')).body.values.ar_overdue_days, 60);
+  const sales = (await staff('GET', `/api/reports/dept?section=sales&from=${today}&to=${today}`)).body;
+  assert.equal(sales.kpis[3].label, '60일 넘은 미수');
+  // 연령표 API는 내부 aged 목록을 내보내지 않는다
+  assert.equal((await buyer('GET', '/api/aging?side=purchase')).body.rows.some(r => 'aged' in r), false);
+});

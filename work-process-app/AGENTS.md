@@ -859,3 +859,10 @@ INVITE_CODE=local-test-code npm start
 ## 인쇄 정리 (15.119)
 - rcPrint는 맨 위(가장 나중에 연) .lr-cert-wrap만 인쇄(나머지 print-skip). 매출전표 위에 거래명세서를 열고 인쇄해도 거래명세서만 나감.
 - 전표 표(.po-items) 머리글·숫자 칸 nowrap, 인쇄 글자 11.5px. 거래명세서 공급자/공급받는자 표는 table-layout fixed + colgroup(17/43/13/27%), 두 칸 grid minmax(0,1fr).
+
+## 부서별 리포트 (15.120)
+- 리포트·통계 화면: 필터 아래 「공통」(매출·매입 금액, 완제품 달성률, 안전재고 미달, 금액·건수 추이, 부서별 처리 대기) → 「부서별」 탭(영업·구매·생산·품질·개발·물류, 기본 = 내 역할의 부서, 마지막 선택 기억) → 기존 「수량 상세」. 모든 직원이 금액 포함 전부 본다(사용자 결정).
+- GET /api/reports/dept?section&from&to&grain → {kpis[4], charts, tables}(DEPT 객체, worker.mjs). 화면 렌더러 deptHtml(reports.js) · 차트는 reportChart. 카드·표 줄은 해당 화면 링크.
+- 기준값 settings report_thresholds(REPORT_THRESHOLDS: ar_overdue_days 90, old_lot_days 90, due_grace_days 0, plan_late_days 0, dev_long_days 30). GET /api/report-settings 누구나, PUT 관리자(0~3650 정수). 화면 「기준값 설정」.
+- 재사용: agingData(side, asof)(연령표, 줄마다 aged[{age,left}] — /api/aging 응답에서는 뺌), lotStockReport(query)(LOT별 재고).
+- 개발·VOC·분석 처리 기간은 등록일 → 마지막 변경일(updated_at) 기준(완료 시각을 따로 저장하지 않음).

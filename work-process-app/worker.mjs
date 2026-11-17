@@ -1664,7 +1664,10 @@ const AGING_BUCKETS = [[30, '0~30일'], [60, '31~60일'], [90, '61~90일'], [180
 route('GET', '/api/aging', async ({ user, query }) => {
   const side = query.side === 'purchase' ? 'purchase' : query.side === 'sales' ? 'sales' : null; if (!side) throw bad('매출·매입을 고르세요.');
   if (side === 'sales') requireSales(user); else requirePurchase(user);
-  const asof = query.asof ? dateStr(query.asof, '기준일') : today();
+  const data = await agingData(side, query.asof ? dateStr(query.asof, '기준일') : today());
+  return { ...data, rows: data.rows.map(({ aged, ...r }) => r) };
+});
+async function agingData(side, asof) {
   const [bills, pays, col] = side === 'sales' ? ['sales_bills', 'sales_payments', 'customer'] : ['purchase_bills', 'purchase_payments', 'vendor'];
   const key = side === 'sales' ? customerKey('customer') : billVendorKey('vendor');
   const debits = await db.prepare(`SELECT k, MIN(name) AS name, d, SUM(amt) AS amt FROM (
@@ -1680,18 +1683,18 @@ route('GET', '/api/aging', async ({ user, query }) => {
   const rows = [];
   for (const [k, g] of groups) {
     let paid = credits.get(k)?.paid || 0; const total = g.lines.reduce((t, l) => t + l.amt, 0);
-    const buckets = AGING_BUCKETS.map(() => 0); let oldest = null;
+    const buckets = AGING_BUCKETS.map(() => 0), aged = []; let oldest = null;
     for (const l of g.lines) { // 날짜 순: 오래된 것부터 갚음
       const take = Math.min(Math.max(paid, 0), l.amt); paid -= take; const left = l.amt - take;
-      if (left > 0.000001) { const age = now - day(l.d); buckets[AGING_BUCKETS.findIndex(([max]) => age <= max)] += left; oldest ??= l.d; }
+      if (left > 0.000001) { const age = now - day(l.d); buckets[AGING_BUCKETS.findIndex(([max]) => age <= max)] += left; aged.push({ age, left }); oldest ??= l.d; }
     }
     const balance = total - (credits.get(k)?.paid || 0);
     if (Math.abs(balance) < 0.5 && !buckets.some(Boolean)) continue;
-    rows.push({ name: g.name, balance: billTrunc(balance), buckets: buckets.map(billTrunc), advance: billTrunc(Math.max(paid, 0)), oldest, days: oldest ? now - day(oldest) : 0 });
+    rows.push({ name: g.name, balance: billTrunc(balance), buckets: buckets.map(billTrunc), advance: billTrunc(Math.max(paid, 0)), oldest, days: oldest ? now - day(oldest) : 0, aged });
   }
   rows.sort((a, b) => b.days - a.days || b.balance - a.balance);
   return { side, asof, labels: AGING_BUCKETS.map(b => b[1]), rows };
-});
+}
 route('GET', '/api/sales-ledger', async ({ user, query }) => {
   requireSales(user);
   const from = dateStr(query.from, '시작일'), to = dateStr(query.to, '종료일');
@@ -3670,7 +3673,8 @@ route('POST', '/api/stock-transfers/:id/cancel', async ({ user, params }) => {
 
 // LOT별 재고(15.72): LOT가 적힌 입고(발주입고 LOT 줄·예전 발주입고·기타입고) − 같은 LOT의 출하. 생산 투입은 LOT를 기록하지 않아 빼지 않는다.
 // D1이 큰 UNION 조회를 거부한 적이 있어(15.40) 원천별로 나눠 읽고 서버에서 합친다.
-route('GET', '/api/inventory/lots', async ({ query }) => {
+route('GET', '/api/inventory/lots', async ({ query }) => lotStockReport(query));
+async function lotStockReport(query) {
   const asof = stockAsOf(query.asof), q = str(query.q, 200);
   const like = q ? '%' + q.replace(/[\\%_]/g, m => '\\' + m) + '%' : null;
   const filter = like ? " AND (item LIKE ? ESCAPE '\\' OR lot LIKE ? ESCAPE '\\')" : '';
@@ -3700,7 +3704,7 @@ route('GET', '/api/inventory/lots', async ({ query }) => {
   if (query.state === 'instock') rows = rows.filter(r => r.balance > 0);
   rows.sort((a, b) => stockCompare(a.item, b.item) || stockCompare(a.first_date, b.first_date) || stockCompare(a.lot, b.lot));
   return { asof, rows: rows.slice(0, 2000), more: truncated || rows.length > 2000 };
-});
+}
 route('GET', '/api/inventory/movements', async ({ query }) => {
   const item = reqStr(query.item, '품목명', 200), unit = str(query.unit, 20); const asof = stockAsOf(query.asof);
   const bySpec = query.spec !== undefined;
@@ -3816,6 +3820,243 @@ route('POST', '/api/import/items', async ({ user, body }) => {
   }
   return importFinish(body, results, cmds, '품목');
 });
+
+// ── 15.120 부서별 리포트: 위 = 공통, 아래 = 부서(영업·구매·생산·품질·개발·물류). 모든 직원이 본다. ──
+// 응답 모양(화면 공통 렌더러): { kpis:[{label,value,detail,href,tone}], charts:[{title,series:[{key,label}],rows:[{bucket,..}],kind}], tables:[{title,columns:[{label,type}],rows:[[..]],href,empty}] }
+// 기준값(설정 report_thresholds, 관리자가 리포트 화면에서 바꿈)
+const REPORT_THRESHOLDS = { ar_overdue_days: 90, old_lot_days: 90, due_grace_days: 0, plan_late_days: 0, dev_long_days: 30 };
+const REPORT_THRESHOLD_LABEL = { ar_overdue_days: '미수·미지급 경과 기준(일)', old_lot_days: '오래된 LOT 기준(입고 후 일)', due_grace_days: '납기 준수 허용(납기일 + 일)', plan_late_days: '생산 지연 판단(계획일 + 일)', dev_long_days: '오래 걸린 의뢰 기준(일)' };
+async function reportThresholds() { let v = {}; try { v = JSON.parse(await getSetting('report_thresholds') || '{}'); } catch { v = {}; } return Object.fromEntries(Object.entries(REPORT_THRESHOLDS).map(([k, d]) => [k, Number.isFinite(Number(v[k])) && v[k] !== '' && v[k] !== null ? Number(v[k]) : d])); }
+route('GET', '/api/report-settings', async () => ({ values: await reportThresholds(), labels: REPORT_THRESHOLD_LABEL, defaults: REPORT_THRESHOLDS }));
+route('PUT', '/api/report-settings', async ({ user, body }) => {
+  requireAdmin(user);
+  const v = {};
+  for (const k of Object.keys(REPORT_THRESHOLDS)) { const n = Number(body[k]); if (!Number.isInteger(n) || n < 0 || n > 3650) throw bad(`${REPORT_THRESHOLD_LABEL[k]}은(는) 0~3650 사이 정수로 넣으세요.`); v[k] = n; }
+  await db.prepare("INSERT INTO settings(key,value) VALUES('report_thresholds',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify(v));
+  return { values: v };
+});
+const rb = (col, grain) => grain === 'month' ? `strftime('%Y-%m-01',${col})` : grain === 'week' ? `date(${col},'-' || ((CAST(strftime('%w',${col}) AS INTEGER)+6)%7) || ' days')` : `date(${col})`;
+function rbDates(from, to, grain) {
+  const d = new Date(from + 'T00:00:00Z'), last = new Date(to + 'T00:00:00Z'), out = [];
+  if (grain === 'week') d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); if (grain === 'month') d.setUTCDate(1);
+  while (d <= last && out.length < 800) { out.push(d.toISOString().slice(0, 10)); if (grain === 'month') d.setUTCMonth(d.getUTCMonth() + 1); else d.setUTCDate(d.getUTCDate() + (grain === 'week' ? 7 : 1)); }
+  return out;
+}
+const rpct = (a, b) => b ? Math.round(a / b * 1000) / 10 : null;
+const rdays = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+// 줄 [{bucket, key, value}] → 차트 행
+function rSeries(buckets, rows, keys) { const m = new Map(buckets.map(b => [b, Object.fromEntries(keys.map(k => [k, 0]))])); for (const r of rows) { const g = m.get(r.bucket); if (g && r.key in g) g[r.key] += Number(r.value) || 0; } return buckets.map(b => ({ bucket: b, ...m.get(b) })); }
+const SECTIONS = ['common', 'sales', 'purchase', 'production', 'quality', 'dev', 'logistics'];
+route('GET', '/api/reports/dept', async ({ query }) => {
+  const section = SECTIONS.includes(query.section) ? query.section : null; if (!section) throw bad('리포트 구분을 확인하세요.');
+  const to = query.to ? dateStr(query.to, '종료일') : today(), from = query.from ? dateStr(query.from, '시작일') : to.slice(0, 8) + '01';
+  if (from > to) throw bad('시작일이 종료일보다 늦습니다.');
+  if (Date.parse(to) - Date.parse(from) > 3 * 366 * 864e5) throw bad('기간은 3년까지 볼 수 있습니다.');
+  const grain = ['day', 'week', 'month'].includes(query.grain) ? query.grain : 'month';
+  const t = await reportThresholds(), now = today(), buckets = rbDates(from, to, grain);
+  const out = await DEPT[section]({ from, to, grain, t, now, buckets });
+  return { section, from, to, grain, thresholds: t, ...out };
+});
+const DEPT = {
+  async common({ from, to, grain, t, now, buckets }) {
+    const sales = await db.prepare(`SELECT ${rb('bill_date', grain)} AS bucket, 'sale' AS key, SUM(supply_total) AS value FROM sales_bills WHERE status='confirmed' AND bill_date BETWEEN ? AND ? GROUP BY 1`).all(from, to);
+    const buys = await db.prepare(`SELECT ${rb('bill_date', grain)} AS bucket, 'buy' AS key, SUM(supply_total) AS value FROM purchase_bills WHERE status='confirmed' AND bill_date BETWEEN ? AND ? GROUP BY 1`).all(from, to);
+    const sale = sales.reduce((s, r) => s + r.value, 0), buy = buys.reduce((s, r) => s + r.value, 0);
+    const plan = await db.prepare(`SELECT COALESCE(SUM(s.qty),0) AS plan, COALESCE(SUM((SELECT COALESCE(SUM(a.qty),0) FROM production_actuals a WHERE a.schedule_id=s.id AND a.voided_at IS NULL)),0) AS act FROM schedules s WHERE s.kind='finished' AND s.period='day' AND s.start_date BETWEEN ? AND ?`).get(from, to > now ? now : to);
+    const alerts = await stockAlerts();
+    const counts = async sql => (await db.prepare(sql).get()).c;
+    const ins = await db.prepare(`SELECT ${rb('d', grain)} AS bucket, 'in' AS key, COUNT(*) AS value FROM (SELECT received_date AS d FROM po_receipt_lots WHERE voided_at IS NULL UNION ALL SELECT received_date FROM other_receipts) WHERE d BETWEEN ? AND ? GROUP BY 1`).all(from, to);
+    const outs = await db.prepare(`SELECT ${rb('ship_date', grain)} AS bucket, 'out' AS key, COUNT(*) AS value FROM shipments WHERE ship_date BETWEEN ? AND ? GROUP BY 1`).all(from, to);
+    const prods = await db.prepare(`SELECT ${rb('production_date', grain)} AS bucket, 'prod' AS key, COUNT(*) AS value FROM production_actuals WHERE voided_at IS NULL AND production_date BETWEEN ? AND ? GROUP BY 1`).all(from, to);
+    const waits = [
+      ['영업', '출하 대기 출하지시', await counts("SELECT COUNT(*) c FROM ship_instructions WHERE status='pending'"), '#/logistics/ship-orders'],
+      ['구매', '결재 대기 구매의뢰', await counts("SELECT COUNT(*) c FROM purchase_requests WHERE status='pending'"), '#/sales/pr'],
+      ['구매', '미입고 발주', await counts("SELECT COUNT(*) c FROM purchase_orders WHERE recv_status IN ('','checking')"), '#/purchase/po'],
+      ['물류', '입고 수량 수정 요청', await counts("SELECT COUNT(*) c FROM receipt_qty_changes WHERE status='pending'"), '#/logistics/receive'],
+      ['생산', '미출고 생산의뢰', await counts('SELECT COUNT(*) c FROM production_requests WHERE shipped=0'), '#/prod/orders'],
+      ['품질', '판정 대기 검사', await counts("SELECT COUNT(*) c FROM requests r WHERE r.type='analysis' AND r.status NOT IN ('done','rejected') AND NOT EXISTS(SELECT 1 FROM inspection_measurements m WHERE m.request_id=r.id AND m.result IN ('pass','fail'))"), '#/quality/inspections'],
+      ['품질', '처리 중 VOC', await counts("SELECT COUNT(*) c FROM requests WHERE type='voc' AND status NOT IN ('done','rejected')"), '#/quality/voc/list'],
+      ['개발', '진행 중 개발의뢰', await counts("SELECT COUNT(*) c FROM requests WHERE type='development' AND status NOT IN ('done','rejected')"), '#/dev/list'],
+    ];
+    return {
+      kpis: [
+        { label: '매출액(공급가액)', value: sale, type: 'won', detail: `확정 매출전표 ${from} ~ ${to}`, href: '#/sales/bills' },
+        { label: '매입액(공급가액)', value: buy, type: 'won', detail: '확정 매입전표', href: '#/purchase/bills' },
+        { label: '완제품 생산 달성률', value: rpct(plan.act, plan.plan), type: 'pct', detail: `실적 ${Math.round(plan.act)} / 계획 ${Math.round(plan.plan)} (일간 계획, 오늘까지)`, href: '#/prod/finished', tone: plan.plan && plan.act / plan.plan < 0.9 ? 'warn' : '' },
+        { label: '안전재고 미달', value: alerts.low, type: 'count', unit: '품목', detail: alerts.negative ? `재고 음수 ${alerts.negative}품목` : '재고 현황 기준(오늘)', href: '#/logistics/stock', tone: alerts.low ? 'warn' : '' },
+      ],
+      charts: [
+        { title: '매출 · 매입 금액(공급가액)', type: 'won', series: [{ key: 'sale', label: '매출' }, { key: 'buy', label: '매입' }], rows: rSeries(buckets, [...sales, ...buys], ['sale', 'buy']) },
+        { title: '입고 · 생산실적 · 출하 건수', type: 'count', series: [{ key: 'in', label: '입고 줄' }, { key: 'prod', label: '생산실적' }, { key: 'out', label: '출하' }], rows: rSeries(buckets, [...ins, ...prods, ...outs], ['in', 'prod', 'out']) },
+      ],
+      tables: [{ title: '부서별 처리 대기(지금)', columns: [{ label: '부서' }, { label: '일' }, { label: '건수', type: 'count' }], rows: waits.map(w => [w[0], w[1], w[2]]), links: waits.map(w => w[3]) }],
+    };
+  },
+  async sales({ from, to, grain, t, now, buckets }) {
+    const cat = `CASE ${LINE_CAT('l')} WHEN '제품' THEN 'prod' WHEN '상품' THEN 'goods' ELSE 'etc' END`;
+    const lines = await db.prepare(`SELECT ${rb('b.bill_date', grain)} AS bucket, ${cat} AS key, SUM(l.supply) AS value FROM sales_bill_lines l JOIN sales_bills b ON b.id=l.bill_id WHERE b.status='confirmed' AND l.active=1 AND b.bill_date BETWEEN ? AND ? GROUP BY 1, 2`).all(from, to);
+    const by = k => lines.filter(r => r.key === k).reduce((s, r) => s + r.value, 0);
+    const total = by('prod') + by('goods') + by('etc');
+    const open = await db.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM((ol.qty - ${ORDER_TAKEN}) * COALESCE(ol.unit_price,0)),0) AS amt FROM sales_order_lines ol JOIN sales_orders o ON o.id=ol.order_id WHERE o.status='open' AND ol.qty - ${ORDER_TAKEN} > 0.000001`).get();
+    const ag = await agingData('sales', now), ar = ag.rows.reduce((s, r) => s + Math.max(0, r.balance), 0);
+    const over = ag.rows.reduce((s, r) => s + agedOver(r, t.ar_overdue_days, now), 0);
+    const orders = await db.prepare(`SELECT ${rb('o.order_date', grain)} AS bucket, 'order' AS key, SUM(ol.qty * COALESCE(ol.unit_price,0)) AS value FROM sales_order_lines ol JOIN sales_orders o ON o.id=ol.order_id WHERE o.status<>'cancelled' AND o.order_date BETWEEN ? AND ? GROUP BY 1`).all(from, to);
+    const billed = lines.map(r => ({ ...r, key: 'bill' }));
+    const top = await db.prepare(`SELECT MIN(b.customer) AS name, SUM(l.supply) AS amt, COUNT(DISTINCT b.id) AS bills FROM sales_bill_lines l JOIN sales_bills b ON b.id=l.bill_id WHERE b.status='confirmed' AND l.active=1 AND b.bill_date BETWEEN ? AND ? GROUP BY ${customerKey('b.customer')} ORDER BY amt DESC LIMIT 10`).all(from, to);
+    const items = await db.prepare(`SELECT MIN(l.item) AS item, ${LINE_CAT('l')} AS cat, SUM(l.qty) AS qty, MIN(l.unit) AS unit, SUM(l.supply) AS amt FROM sales_bill_lines l JOIN sales_bills b ON b.id=l.bill_id WHERE b.status='confirmed' AND l.active=1 AND b.bill_date BETWEEN ? AND ? GROUP BY CASE WHEN l.product_code<>'' THEN UPPER(l.product_code) ELSE l.item END ORDER BY amt DESC LIMIT 10`).all(from, to);
+    return {
+      kpis: [
+        { label: '매출액(공급가액)', value: total, type: 'won', detail: `제품 ${won0(by('prod'))} · 상품 ${won0(by('goods'))}${by('etc') ? ` · 기타 ${won0(by('etc'))}` : ''}`, href: '#/sales/bills' },
+        { label: '수주 잔량(미출하)', value: open.amt, type: 'won', detail: `열린 수주 ${open.n}줄 · 단가 기준`, href: '#/sales/orders' },
+        { label: '미수 잔액(오늘)', value: ar, type: 'won', detail: `거래처 ${ag.rows.filter(r => r.balance > 0).length}곳`, href: '#/sales/aging' },
+        { label: `${t.ar_overdue_days}일 넘은 미수`, value: over, type: 'won', detail: '전표 일자 기준 · 입금은 오래된 것부터', href: '#/sales/aging', tone: over ? 'bad' : '' },
+      ],
+      charts: [
+        { title: '매출 추이(분류별 공급가액)', type: 'won', stacked: true, series: [{ key: 'prod', label: '제품' }, { key: 'goods', label: '상품' }, { key: 'etc', label: '기타·미분류' }], rows: rSeries(buckets, lines, ['prod', 'goods', 'etc']) },
+        { title: '수주 금액 · 매출 금액', type: 'won', series: [{ key: 'order', label: '수주' }, { key: 'bill', label: '매출' }], rows: rSeries(buckets, [...orders, ...billed], ['order', 'bill']) },
+      ],
+      tables: [
+        { title: '거래처별 매출 TOP 10', columns: [{ label: '거래처' }, { label: '전표', type: 'count' }, { label: '공급가액', type: 'won' }, { label: '비중', type: 'pct' }], rows: top.map(r => [r.name, r.bills, r.amt, rpct(r.amt, total)]) },
+        { title: '품목별 매출 TOP 10', columns: [{ label: '품목' }, { label: '분류' }, { label: '수량', type: 'num' }, { label: '단위' }, { label: '공급가액', type: 'won' }], rows: items.map(r => [r.item, r.cat || '미분류', r.qty, r.unit, r.amt]) },
+      ],
+    };
+  },
+  async purchase({ from, to, grain, t, now, buckets }) {
+    const cat = `CASE ${LINE_CAT('l')} WHEN '원자재' THEN 'raw' WHEN '부자재' THEN 'sub' WHEN '임가공' THEN 'proc' ELSE 'etc' END`;
+    const lines = await db.prepare(`SELECT ${rb('b.bill_date', grain)} AS bucket, ${cat} AS key, SUM(l.supply) AS value FROM purchase_bill_lines l JOIN purchase_bills b ON b.id=l.bill_id WHERE b.status='confirmed' AND l.active=1 AND b.bill_date BETWEEN ? AND ? GROUP BY 1, 2`).all(from, to);
+    const by = k => lines.filter(r => r.key === k).reduce((s, r) => s + r.value, 0), total = ['raw', 'sub', 'proc', 'etc'].reduce((s, k) => s + by(k), 0);
+    const open = await db.prepare("SELECT COUNT(*) AS n, SUM(CASE WHEN due_date < ? THEN 1 ELSE 0 END) AS late FROM purchase_orders WHERE recv_status IN ('','checking')").get(now);
+    const ag = await agingData('purchase', now), ap = ag.rows.reduce((s, r) => s + Math.max(0, r.balance), 0);
+    // 납기 준수: 납기가 기간 안인 발주 중 받은 것 — 첫 입고일 ≤ 납기 + 허용일
+    const firstIn = "COALESCE((SELECT MIN(l.received_date) FROM po_receipt_lots l WHERE l.po_id=p.id AND l.voided_at IS NULL), substr(p.recv_at,1,10))";
+    const due = await db.prepare(`SELECT ${rb('p.due_date', grain)} AS bucket, COUNT(*) AS n, SUM(CASE WHEN ${firstIn} <= date(p.due_date, '+' || ? || ' days') THEN 1 ELSE 0 END) AS ok FROM purchase_orders p WHERE p.due_date BETWEEN ? AND ? AND p.recv_status IN ('ok','mismatch') GROUP BY 1`).all(t.due_grace_days, from, to);
+    const dn = due.reduce((s, r) => s + r.n, 0), dok = due.reduce((s, r) => s + r.ok, 0);
+    const top = await db.prepare(`SELECT MIN(b.vendor) AS name, SUM(l.supply) AS amt, COUNT(DISTINCT b.id) AS bills FROM purchase_bill_lines l JOIN purchase_bills b ON b.id=l.bill_id WHERE b.status='confirmed' AND l.active=1 AND b.bill_date BETWEEN ? AND ? GROUP BY ${billVendorKey('b.vendor')} ORDER BY amt DESC LIMIT 10`).all(from, to);
+    const ups = await db.prepare(`SELECT p.vendor, bm.product, bm.product_code, p.unit_price AS now_price, p.valid_from, (SELECT q.unit_price FROM item_prices q WHERE q.side='purchase' AND q.active=1 AND q.vendor_key=p.vendor_key AND q.bom_id=p.bom_id AND q.valid_from<p.valid_from ORDER BY q.valid_from DESC LIMIT 1) AS before_price FROM item_prices p JOIN boms bm ON bm.id=p.bom_id WHERE p.side='purchase' AND p.active=1 AND p.valid_from BETWEEN ? AND ? ORDER BY p.valid_from DESC LIMIT 200`).all(from, to);
+    const rises = ups.filter(r => r.before_price != null && r.now_price > r.before_price).sort((a, b) => (b.now_price / b.before_price) - (a.now_price / a.before_price)).slice(0, 10);
+    return {
+      kpis: [
+        { label: '매입액(공급가액)', value: total, type: 'won', detail: `원자재 ${won0(by('raw'))} · 부자재 ${won0(by('sub'))} · 임가공 ${won0(by('proc'))}`, href: '#/purchase/bills' },
+        { label: '미입고 발주', value: open.n, type: 'count', unit: '건', detail: open.late ? `납기 지난 것 ${open.late}건` : '납기 지난 것 없음', href: '#/purchase/po', tone: open.late ? 'warn' : '' },
+        { label: '미지급 잔액(오늘)', value: ap, type: 'won', detail: `매입처 ${ag.rows.filter(r => r.balance > 0).length}곳`, href: '#/purchase/aging' },
+        { label: '납기 준수율', value: rpct(dok, dn), type: 'pct', detail: `납기 ${from} ~ ${to} 받은 발주 ${dn}건 · 허용 ${t.due_grace_days}일`, href: '#/purchase/po', tone: dn && dok / dn < 0.9 ? 'warn' : '' },
+      ],
+      charts: [
+        { title: '매입 추이(분류별 공급가액)', type: 'won', stacked: true, series: [{ key: 'raw', label: '원자재' }, { key: 'sub', label: '부자재' }, { key: 'proc', label: '임가공' }, { key: 'etc', label: '기타' }], rows: rSeries(buckets, lines, ['raw', 'sub', 'proc', 'etc']) },
+        { title: '납기 준수율(%)', type: 'pct', series: [{ key: 'rate', label: '준수율' }], rows: buckets.map(b => { const r = due.find(x => x.bucket === b); return { bucket: b, rate: r ? rpct(r.ok, r.n) : 0 }; }) },
+      ],
+      tables: [
+        { title: '매입처별 매입 TOP 10', columns: [{ label: '매입처' }, { label: '전표', type: 'count' }, { label: '공급가액', type: 'won' }, { label: '비중', type: 'pct' }], rows: top.map(r => [r.name, r.bills, r.amt, rpct(r.amt, total)]) },
+        { title: '단가 오른 품목(기간 안 단가표 변경)', columns: [{ label: '매입처' }, { label: '품목' }, { label: '이전', type: 'won' }, { label: '지금', type: 'won' }, { label: '변동', type: 'pct' }, { label: '적용일' }], rows: rises.map(r => [r.vendor, `${r.product}${r.product_code ? ' · ' + r.product_code : ''}`, r.before_price, r.now_price, rpct(r.now_price - r.before_price, r.before_price), r.valid_from]), href: '#/purchase/prices', empty: '기간 안에 오른 단가가 없습니다.' },
+      ],
+    };
+  },
+  async production({ from, to, grain, t, now, buckets }) {
+    const act = "(SELECT COALESCE(SUM(a.qty),0) FROM production_actuals a WHERE a.schedule_id=s.id AND a.voided_at IS NULL)";
+    const end = to > now ? now : to;
+    const plans = await db.prepare(`SELECT ${rb('s.start_date', grain)} AS bucket, SUM(s.qty) AS plan, SUM(${act}) AS act FROM schedules s WHERE s.kind='finished' AND s.period='day' AND s.start_date BETWEEN ? AND ? GROUP BY 1`).all(from, end);
+    const P = plans.reduce((s, r) => s + r.plan, 0), A = plans.reduce((s, r) => s + r.act, 0);
+    const late = (await db.prepare(`SELECT COUNT(*) AS c FROM schedules s WHERE s.period='day' AND s.kind='finished' AND s.done=0 AND s.start_date BETWEEN ? AND ? AND s.start_date < date(?, '-' || ? || ' days') AND ${act} < s.qty`).get(from, to, now, t.plan_late_days)).c;
+    const semi = await db.prepare(`SELECT ${rb('work_date', grain)} AS bucket, SUM(qty) AS good, SUM(defect_qty) AS bad FROM semi_records WHERE work_date BETWEEN ? AND ? GROUP BY 1`).all(from, to);
+    const G = semi.reduce((s, r) => s + r.good, 0), D = semi.reduce((s, r) => s + r.bad, 0);
+    const lines = await db.prepare("SELECT unit_name AS name, CASE process WHEN 'cut' THEN '커팅/융착' ELSE '세탁' END AS proc, SUM(qty) AS good, SUM(defect_qty) AS bad, COUNT(*) AS n FROM semi_records WHERE work_date BETWEEN ? AND ? GROUP BY unit_name, process ORDER BY good DESC LIMIT 15").all(from, to);
+    const prods = await db.prepare(`SELECT s.product, MIN(s.unit) AS unit, SUM(s.qty) AS plan, SUM(${act}) AS act FROM schedules s WHERE s.kind='finished' AND s.period='day' AND s.start_date BETWEEN ? AND ? GROUP BY s.product ORDER BY (SUM(${act}) * 1.0 / SUM(s.qty)) ASC LIMIT 15`).all(from, end);
+    const reasons = await db.prepare("SELECT CASE WHEN defect_reason='' THEN '사유 미입력' ELSE defect_reason END AS reason, SUM(defect_qty) AS bad, COUNT(*) AS n FROM semi_records WHERE work_date BETWEEN ? AND ? AND defect_qty>0 GROUP BY 1 ORDER BY bad DESC LIMIT 10").all(from, to);
+    return {
+      kpis: [
+        { label: '완제품 달성률', value: rpct(A, P), type: 'pct', detail: `실적 ${Math.round(A)} / 계획 ${Math.round(P)} (일간 계획, 오늘까지)`, href: '#/prod/finished', tone: P && A / P < 0.9 ? 'warn' : '' },
+        { label: '지연 계획', value: late, type: 'count', unit: '건', detail: `계획일 + ${t.plan_late_days}일 지나도 미완료·실적 부족`, href: '#/prod/finished', tone: late ? 'bad' : '' },
+        { label: '반제품 양품', value: G, type: 'num', detail: `커팅/융착·세탁 ${from} ~ ${to}`, href: '#/prod/semi/cut' },
+        { label: '반제품 불량률', value: rpct(D, G + D), type: 'pct', detail: `불량 ${Math.round(D)} / 전체 ${Math.round(G + D)}`, href: '#/prod/semi/cut', tone: (G + D) && D / (G + D) > 0.03 ? 'warn' : '' },
+      ],
+      charts: [
+        { title: '완제품 계획 · 실적(수량)', type: 'num', series: [{ key: 'plan', label: '계획' }, { key: 'act', label: '실적' }], rows: buckets.map(b => { const r = plans.find(x => x.bucket === b); return { bucket: b, plan: r?.plan || 0, act: r?.act || 0 }; }) },
+        { title: '반제품 양품 · 불량', type: 'num', series: [{ key: 'good', label: '양품' }, { key: 'bad', label: '불량' }], rows: buckets.map(b => { const r = semi.find(x => x.bucket === b); return { bucket: b, good: r?.good || 0, bad: r?.bad || 0 }; }) },
+      ],
+      tables: [
+        { title: '제품별 달성률(낮은 순)', columns: [{ label: '제품' }, { label: '계획', type: 'num' }, { label: '실적', type: 'num' }, { label: '단위' }, { label: '달성률', type: 'pct' }], rows: prods.map(r => [r.product, r.plan, r.act, r.unit || '', rpct(r.act, r.plan)]), href: '#/prod/finished' },
+        { title: '라인별 반제품 생산', columns: [{ label: '라인' }, { label: '공정' }, { label: '기록', type: 'count' }, { label: '양품', type: 'num' }, { label: '불량', type: 'num' }, { label: '불량률', type: 'pct' }], rows: lines.map(r => [r.name, r.proc, r.n, r.good, r.bad, rpct(r.bad, r.good + r.bad)]) },
+        { title: '불량 사유 순위', columns: [{ label: '사유' }, { label: '기록', type: 'count' }, { label: '불량 수량', type: 'num' }, { label: '비중', type: 'pct' }], rows: reasons.map(r => [r.reason, r.n, r.bad, rpct(r.bad, D)]) },
+      ],
+    };
+  },
+  async quality({ from, to, grain, t, now, buckets }) {
+    const insp = await db.prepare(`SELECT ${rb('substr(r.created_at,1,10)', grain)} AS bucket, m.result, r.category, r.customer, r.title FROM requests r JOIN inspection_measurements m ON m.request_id=r.id WHERE r.type='analysis' AND m.result IN ('pass','fail') AND substr(r.created_at,1,10) BETWEEN ? AND ?`).all(from, to);
+    const incoming = insp.filter(r => r.category === '수입검사'), pass = incoming.filter(r => r.result === 'pass').length;
+    const fails = insp.filter(r => r.result === 'fail');
+    const voc = await db.prepare(`SELECT ${rb('substr(created_at,1,10)', grain)} AS bucket, status, substr(created_at,1,10) AS d, substr(updated_at,1,10) AS u FROM requests WHERE type='voc' AND substr(created_at,1,10) BETWEEN ? AND ?`).all(from, to);
+    const vocOpen = (await db.prepare("SELECT COUNT(*) c FROM requests WHERE type='voc' AND status NOT IN ('done','rejected')").get()).c;
+    const ana = await db.prepare("SELECT AVG(julianday(substr(updated_at,1,10)) - julianday(substr(created_at,1,10))) AS days, COUNT(*) AS n FROM requests WHERE type='analysis' AND status='done' AND substr(updated_at,1,10) BETWEEN ? AND ?").get(from, to);
+    const vend = new Map(); for (const r of insp) { const k = r.customer || '(거래처 없음)', g = vend.get(k) || { n: 0, f: 0 }; g.n++; if (r.result === 'fail') g.f++; vend.set(k, g); }
+    const items = new Map(); for (const r of fails) items.set(r.title, (items.get(r.title) || 0) + 1);
+    return {
+      kpis: [
+        { label: '수입검사 합격률', value: rpct(pass, incoming.length), type: 'pct', detail: `판정 ${incoming.length}건 중 합격 ${pass}건`, href: '#/quality/inspections', tone: incoming.length && pass / incoming.length < 0.95 ? 'warn' : '' },
+        { label: '불합격 검사', value: fails.length, type: 'count', unit: '건', detail: '수입·출하·공정 검사 전체', href: '#/quality/inspections', tone: fails.length ? 'bad' : '' },
+        { label: 'VOC', value: voc.length, type: 'count', unit: '건 접수', detail: `지금 처리 중 ${vocOpen}건`, href: '#/quality/voc/list', tone: vocOpen ? 'warn' : '' },
+        { label: '분석 평균 처리', value: ana.n ? Math.round(ana.days * 10) / 10 : null, type: 'num', unit: '일', detail: `완료 ${ana.n}건 · 등록 → 마지막 변경일`, href: '#/quality/list' },
+      ],
+      charts: [
+        { title: '검사 판정(합격 · 불합격)', type: 'count', series: [{ key: 'pass', label: '합격' }, { key: 'fail', label: '불합격' }], rows: rSeries(buckets, insp.map(r => ({ bucket: r.bucket, key: r.result, value: 1 })), ['pass', 'fail']) },
+        { title: 'VOC 접수 · 완료', type: 'count', series: [{ key: 'in', label: '접수' }, { key: 'done', label: '완료' }], rows: rSeries(buckets, voc.flatMap(r => [{ bucket: r.bucket, key: 'in', value: 1 }, ...(r.status === 'done' ? [{ bucket: r.bucket, key: 'done', value: 1 }] : [])]), ['in', 'done']) },
+      ],
+      tables: [
+        { title: '거래처별 불합격률', columns: [{ label: '거래처' }, { label: '판정', type: 'count' }, { label: '불합격', type: 'count' }, { label: '불합격률', type: 'pct' }], rows: [...vend].sort((a, b) => b[1].f - a[1].f || b[1].n - a[1].n).slice(0, 10).map(([k, g]) => [k, g.n, g.f, rpct(g.f, g.n)]) },
+        { title: '불합격 품목 순위', columns: [{ label: '품목·검사' }, { label: '불합격', type: 'count' }], rows: [...items].sort((a, b) => b[1] - a[1]).slice(0, 10), href: '#/quality/inspections', empty: '기간 안에 불합격이 없습니다.' },
+      ],
+    };
+  },
+  async dev({ from, to, grain, t, now, buckets }) {
+    const rows = await db.prepare(`SELECT id, req_no, title, customer, status, due_date, requester_name, substr(created_at,1,10) AS d, substr(updated_at,1,10) AS u FROM requests WHERE type='development'`).all();
+    const inP = rows.filter(r => r.d >= from && r.d <= to), done = rows.filter(r => r.status === 'done' && r.u >= from && r.u <= to);
+    const openRows = rows.filter(r => !['done', 'rejected'].includes(r.status));
+    const late = openRows.filter(r => r.due_date && r.due_date < now);
+    const avg = done.length ? Math.round(done.reduce((s, r) => s + (Date.parse(r.u) - Date.parse(r.d)) / 864e5, 0) / done.length * 10) / 10 : null;
+    const age = r => Math.round((Date.parse(now) - Date.parse(r.d)) / 864e5);
+    const ST = { pending: '대기', waiting: '승인 대기', progress: '진행', done: '완료', rejected: '반려' };
+    return {
+      kpis: [
+        { label: '개발의뢰 접수', value: inP.length, type: 'count', unit: '건', detail: `${from} ~ ${to}`, href: '#/dev/list' },
+        { label: '완료', value: done.length, type: 'count', unit: '건', detail: avg != null ? `평균 ${avg}일(등록 → 마지막 변경)` : '기간 안 완료 없음', href: '#/dev/list' },
+        { label: '진행 중', value: openRows.length, type: 'count', unit: '건', detail: `${t.dev_long_days}일 넘은 것 ${openRows.filter(r => age(r) > t.dev_long_days).length}건`, href: '#/dev/list', tone: openRows.some(r => age(r) > t.dev_long_days) ? 'warn' : '' },
+        { label: '기한 지난 의뢰', value: late.length, type: 'count', unit: '건', detail: '희망 기한이 오늘 전인데 미완료', href: '#/dev/list', tone: late.length ? 'bad' : '' },
+      ],
+      charts: [{ title: '개발의뢰 접수 · 완료', type: 'count', series: [{ key: 'in', label: '접수' }, { key: 'done', label: '완료' }], rows: rSeries(buckets, [...inP.map(r => ({ bucket: bucketOf(r.d, grain), key: 'in', value: 1 })), ...done.map(r => ({ bucket: bucketOf(r.u, grain), key: 'done', value: 1 }))], ['in', 'done']) }],
+      tables: [
+        { title: '진행 중 의뢰(오래된 순)', columns: [{ label: '번호' }, { label: '제목' }, { label: '업체' }, { label: '상태' }, { label: '희망 기한' }, { label: '경과(일)', type: 'count' }], rows: openRows.sort((a, b) => a.d.localeCompare(b.d)).slice(0, 15).map(r => [r.req_no || '', r.title, r.customer || '', ST[r.status] || r.status, r.due_date || '', age(r)]), href: '#/dev/list', empty: '진행 중인 의뢰가 없습니다.' },
+        { title: '상태별 건수(전체)', columns: [{ label: '상태' }, { label: '건수', type: 'count' }], rows: Object.entries(ST).map(([k, v]) => [v, rows.filter(r => r.status === k).length]) },
+      ],
+    };
+  },
+  async logistics({ from, to, grain, t, now, buckets }) {
+    const ins = await db.prepare(`SELECT ${rb('d', grain)} AS bucket, 'in' AS key, COUNT(*) AS value FROM (SELECT received_date AS d FROM po_receipt_lots WHERE voided_at IS NULL UNION ALL SELECT received_date FROM other_receipts) WHERE d BETWEEN ? AND ? GROUP BY 1`).all(from, to);
+    const outs = await db.prepare(`SELECT ${rb('ship_date', grain)} AS bucket, 'out' AS key, COUNT(*) AS value FROM shipments WHERE ship_date BETWEEN ? AND ? GROUP BY 1`).all(from, to);
+    const si = await db.prepare("SELECT COUNT(*) AS n, SUM(held) AS held FROM ship_instructions WHERE status='pending'").get();
+    const lead = await db.prepare("SELECT AVG(julianday(substr(processed_at,1,10)) - julianday(substr(created_at,1,10))) AS days, COUNT(*) AS n FROM ship_instructions WHERE status='shipped' AND substr(processed_at,1,10) BETWEEN ? AND ?").get(from, to);
+    const alerts = await stockAlerts();
+    const lots = (await lotStockReport({ state: 'instock' })).rows.filter(r => r.first_date && r.first_date <= rdays(now, -t.old_lot_days)).sort((a, b) => a.first_date.localeCompare(b.first_date));
+    const waiting = await db.prepare("SELECT customer, item, qty, unit, ship_date, held, hold_note, substr(created_at,1,10) AS d FROM ship_instructions WHERE status='pending' ORDER BY ship_date, id LIMIT 15").all();
+    const changes = (await db.prepare("SELECT COUNT(*) c FROM receipt_qty_changes WHERE status='pending'").get()).c;
+    const n = rows => rows.reduce((s, r) => s + r.value, 0);
+    return {
+      kpis: [
+        { label: '입고 · 출하', value: `${n(ins)} / ${n(outs)}`, type: 'text', detail: `입고 줄 / 출하 건 · ${from} ~ ${to}`, href: '#/logistics/receive' },
+        { label: '출하지시 대기', value: si.n || 0, type: 'count', unit: '건', detail: `보류 ${si.held || 0}건 · 처리 평균 ${lead.n ? Math.round(lead.days * 10) / 10 + '일' : '—'}`, href: '#/logistics/ship-orders', tone: si.held ? 'warn' : '' },
+        { label: '안전재고 미달', value: alerts.low, type: 'count', unit: '품목', detail: changes ? `입고 수량 수정 요청 ${changes}건` : '재고 현황 기준(오늘)', href: '#/logistics/stock', tone: alerts.low ? 'warn' : '' },
+        { label: `${t.old_lot_days}일 넘은 LOT`, value: lots.length, type: 'count', unit: '개', detail: '잔량 있는 LOT · 입고일 기준', href: '#/logistics/stock', tone: lots.length ? 'warn' : '' },
+      ],
+      charts: [{ title: '입고 줄 · 출하 건수', type: 'count', series: [{ key: 'in', label: '입고' }, { key: 'out', label: '출하' }], rows: rSeries(buckets, [...ins, ...outs], ['in', 'out']) }],
+      tables: [
+        { title: '출하 대기 출하지시(출하일 순)', columns: [{ label: '출하일' }, { label: '거래처' }, { label: '품목' }, { label: '수량', type: 'num' }, { label: '단위' }, { label: '보류' }], rows: waiting.map(r => [r.ship_date, r.customer, r.item, r.qty, r.unit, r.held ? `보류${r.hold_note ? ' · ' + r.hold_note : ''}` : '']), href: '#/logistics/ship-orders', empty: '대기 중인 출하지시가 없습니다.' },
+        { title: `${t.old_lot_days}일 넘은 LOT(오래된 순)`, columns: [{ label: '품목' }, { label: 'LOT' }, { label: '잔량', type: 'num' }, { label: '단위' }, { label: '입고일' }, { label: '위치' }], rows: lots.slice(0, 15).map(r => [r.item, r.lot, r.balance, r.unit, r.first_date, r.places]), href: '#/logistics/stock', empty: '기준을 넘은 LOT가 없습니다.' },
+      ],
+    };
+  },
+};
+function bucketOf(d, grain) { return grain === 'month' ? d.slice(0, 7) + '-01' : grain === 'week' ? (() => { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() - ((x.getUTCDay() + 6) % 7)); return x.toISOString().slice(0, 10); })() : d; }
+const won0 = n => Math.trunc(Number(n) || 0).toLocaleString('ko-KR');
+// 기준일 기준 N일 넘은 미결 금액(연령표 구간에서 계산: 91~180·180일 초과는 그대로, 경계는 기준이 구간 끝과 같을 때 정확)
+function agedOver(r, days, now) { return (r.aged || []).filter(x => x.age > days).reduce((s, x) => s + x.left, 0); }
 
 // ── 내가 처리할 일: 내가 승인할 수 있는 대기 건과 내가 올린 요청의 상태 ──
 route('GET', '/api/my-tasks', async ({ user }) => {
