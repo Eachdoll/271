@@ -1814,3 +1814,19 @@ main:has(> .rs-page) { max-width: 1760px; }
 .rs-page .rs-grid tfoot th, .rs-page .rs-grid tfoot td { color: var(--ink); background: var(--rs-head); }
 @media (max-width: 1440px) { .rs-page .rs-acc col.rs-c-m { width: 140px; } .rs-page .rs-acc col.rs-c-n { width: 90px; } }
 @media (max-width: 760px) { .rs-page .rs-acc col.rs-c-n { width: 64px; } .rs-page .rs-acc col.rs-c-m { width: 100px; } .rs-page .rs-acc > tbody > tr.rs-v > td, .rs-page .rs-acc > thead th, .rs-page .rs-acc > tfoot th, .rs-page .rs-acc > tfoot td { padding: 0 8px; } .rs-page tr.rs-v-detail > td { padding: 8px; } .rs-page .rs-acc-wrap { overflow-x: auto; } .rs-page table.rs-acc { min-width: 560px; } }
+
+/* 15.152 품목별 아코디언: 1단계 품목명 옆 품목코드·규격, 수량 칸 */
+.rs-page .rs-acc .rs-sub { margin-left: 8px; font-size: 12px; color: var(--rs-ink2); } .rs-page .rs-acc .rs-unit { font-size: 12px; color: var(--rs-ink2); }
+.rs-page .rs-acc col.rs-c-q { width: 140px; }
+@media (max-width: 1440px) { .rs-page .rs-acc col.rs-c-q { width: 120px; } }
+@media (max-width: 760px) { .rs-page .rs-acc col.rs-c-q { width: 90px; } .rs-page .rs-acc .rs-sub { display: none; } }
+
+/* 15.154 출고지시서 묶기: 줄별 묶을 수량 */
+.sb-split .sb-qty { width: 7.5em; text-align: right; } .sb-split td { vertical-align: middle; }
+.sb-split .sb-qty:invalid { border-color: var(--red, #c8323e); }
+
+/* 15.154 출하 대기: 출고지시서에 묶인 줄 */
+#siList tr.si-batched > td { background: #eef4ff; } #siList tr.si-batched > td:first-child { box-shadow: inset 4px 0 0 #2563eb; }
+.si-batch-tag { margin-top: 4px; white-space: nowrap; } .si-batch-tag .chip.blue { background: #dbe7ff; color: #1d4ed8; font-weight: 700; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #siList tr.si-batched > td { background: #1f2a40; } :root:not([data-theme="light"]) .si-batch-tag .chip.blue { background: #23365c; color: #9cc0ff; } }
+:root[data-theme="dark"] #siList tr.si-batched > td { background: #1f2a40; } :root[data-theme="dark"] .si-batch-tag .chip.blue { background: #23365c; color: #9cc0ff; }
