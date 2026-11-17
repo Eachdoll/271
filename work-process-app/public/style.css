@@ -1712,3 +1712,12 @@ tr.book-pay td { background: var(--green-bg, #eefaf1); } tr.book-open td { backg
 /* 15.146 거래처 찾기 버튼을 글자로 보이게 */
 .partner-picker > .btn.partner-find { font-size: 13px; width: auto; min-width: 72px; padding: 0 10px; gap: 4px; color: var(--text); white-space: nowrap; }
 .doc-changes { margin-top: 8px; padding: 6px 8px; border-top: 1px dashed var(--line); line-height: 1.5; } .ret-chip { cursor: pointer; border: 0; font: inherit; font-size: 12px; } .bill-edit-grid input { min-width: 90px; }
+/* 15.149 입고현황 일자별·품목별·거래처별 */
+.rs-modes { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 8px 0; } .rs-modes label.inline { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; } .rs-modes input { width: auto; min-height: 0; }
+.rs-drill { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 12px; align-items: start; } .rs-right { display: grid; gap: 12px; }
+.rs-pane-h { margin: 0; padding: 6px 10px; background: #1f8a70; color: #fff; font-size: 14px; display: inline-block; } .rs-pane-h .muted { color: #e6f4ef; }
+.rs-pane .table-wrap { max-height: 520px; overflow: auto; border-top: 2px solid #1f8a70; } .rs-right .rs-pane .table-wrap { max-height: 300px; }
+.rs-grid tbody tr { cursor: pointer; } .rs-grid tbody tr:hover td { background: #fff7e0; } .rs-grid tr.rs-on td { background: #fde3c8 !important; font-weight: 600; }
+.rs-grid tfoot th, .rs-grid tfoot td { background: var(--panel); color: #8a1c1c; font-weight: 700; position: sticky; bottom: 0; } .rs-grid thead th { position: sticky; top: 0; z-index: 1; }
+@media (max-width: 1000px) { .rs-drill { grid-template-columns: 1fr; } }
+.rs-grid td, .rs-grid th { white-space: nowrap; } .rs-grid td:nth-child(3) { white-space: normal; min-width: 90px; }

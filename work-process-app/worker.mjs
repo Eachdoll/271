@@ -1409,15 +1409,18 @@ route('GET', '/api/purchase-ledger', async ({ user, query }) => {
 const RS_SOURCES = {
   po_lot: { date: 'l.received_date', sql: `SELECT 'po_lot' AS source_type, l.id AS source_id, l.received_date AS received_date, p.vendor, p.req_no, p.item, p.spec, p.unit, p.product_code, l.lot, p.item_category AS category, l.qty, p.unit_price,
       ${lotBilled()} AS billed_qty,
-      (SELECT COALESCE(SUM(b.supply),0) FROM purchase_bill_lines b WHERE b.active=1 AND ((b.source_type='po_lot' AND b.source_id=l.id) OR (${PREV_LOT} AND b.source_type='po' AND b.source_id=p.id))) AS billed_supply
+      (SELECT COALESCE(SUM(b.supply),0) FROM purchase_bill_lines b WHERE b.active=1 AND ((b.source_type='po_lot' AND b.source_id=l.id) OR (${PREV_LOT} AND b.source_type='po' AND b.source_id=p.id))) AS billed_supply,
+      (SELECT COALESCE(SUM(CASE WHEN pb.tax_type='zero' THEN 0 ELSE b.supply * 0.1 END),0) FROM purchase_bill_lines b JOIN purchase_bills pb ON pb.id=b.bill_id WHERE b.active=1 AND ((b.source_type='po_lot' AND b.source_id=l.id) OR (${PREV_LOT} AND b.source_type='po' AND b.source_id=p.id))) AS billed_vat
     FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id WHERE l.voided_at IS NULL AND p.recv_status IN ('ok','mismatch')` },
   po: { date: "COALESCE(substr(p.recv_at,1,10), p.due_date)", sql: `SELECT 'po' AS source_type, p.id AS source_id, COALESCE(substr(p.recv_at,1,10), p.due_date) AS received_date, p.vendor, p.req_no, p.item, p.spec, p.unit, p.product_code, p.lot, p.item_category AS category, p.recv_qty AS qty, p.unit_price,
       ${billedOf('po', 'p.id')} AS billed_qty,
-      (SELECT COALESCE(SUM(b.supply),0) FROM purchase_bill_lines b WHERE b.active=1 AND b.source_type='po' AND b.source_id=p.id) AS billed_supply
+      (SELECT COALESCE(SUM(b.supply),0) FROM purchase_bill_lines b WHERE b.active=1 AND b.source_type='po' AND b.source_id=p.id) AS billed_supply,
+      (SELECT COALESCE(SUM(CASE WHEN pb.tax_type='zero' THEN 0 ELSE b.supply * 0.1 END),0) FROM purchase_bill_lines b JOIN purchase_bills pb ON pb.id=b.bill_id WHERE b.active=1 AND b.source_type='po' AND b.source_id=p.id) AS billed_vat
     FROM purchase_orders p WHERE p.recv_status IN ('ok','mismatch') AND p.recv_qty IS NOT NULL AND NOT EXISTS(SELECT 1 FROM po_receipt_lots l WHERE l.po_id=p.id AND l.voided_at IS NULL)` },
   other: { date: 'o.received_date', sql: `SELECT 'other' AS source_type, o.id AS source_id, o.received_date, o.vendor, '' AS req_no, o.item, o.spec, COALESCE(NULLIF(o.unit,''), json_extract(o.bom_snapshot,'$.unit'), '') AS unit, COALESCE(json_extract(o.bom_snapshot,'$.product_code'), '') AS product_code, o.lot, o.item_category AS category, o.qty, NULL AS unit_price,
       ${billedOf('other', 'o.id')} AS billed_qty,
-      (SELECT COALESCE(SUM(b.supply),0) FROM purchase_bill_lines b WHERE b.active=1 AND b.source_type='other' AND b.source_id=o.id) AS billed_supply
+      (SELECT COALESCE(SUM(b.supply),0) FROM purchase_bill_lines b WHERE b.active=1 AND b.source_type='other' AND b.source_id=o.id) AS billed_supply,
+      (SELECT COALESCE(SUM(CASE WHEN pb.tax_type='zero' THEN 0 ELSE b.supply * 0.1 END),0) FROM purchase_bill_lines b JOIN purchase_bills pb ON pb.id=b.bill_id WHERE b.active=1 AND b.source_type='other' AND b.source_id=o.id) AS billed_vat
     FROM other_receipts o WHERE 1=1` },
 };
 const RS_ORDER = ['원자재', '부자재', '제품', '상품', '임가공', '반제품', '미분류'];
@@ -1442,7 +1445,9 @@ route('GET', '/api/purchase-receipt-status', async ({ user, query }) => {
     const remaining = adjust ? r.qty : Math.max(0, stockRound(r.qty - (r.billed_qty || 0)));
     const estimate = remaining !== 0 && r.unit_price != null ? (adjust ? -billTrunc(-remaining * r.unit_price) : billTrunc(remaining * r.unit_price)) : 0;
     const state = adjust ? 'adjust' : remaining <= 0 ? 'billed' : (r.billed_qty || 0) > 0 ? 'partial' : 'open';
-    return { ...r, category, confirmed: r.billed_supply || 0, estimate, remaining, unpriced: remaining !== 0 && r.unit_price == null, state };
+    // 15.149 세액: 전표 잡은 금액은 그 전표의 과세 여부대로, 미확정(발주 단가) 금액은 10% 예상
+    const vat = billTrunc(r.billed_vat || 0) + (estimate ? Math.trunc(estimate * 0.1) : 0);
+    return { ...r, category, confirmed: r.billed_supply || 0, estimate, remaining, unpriced: remaining !== 0 && r.unit_price == null, state, vat };
   });
   const sumBy = key => {
     const map = new Map();
