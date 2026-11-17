@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.150';
+const APP_VERSION = '15.151';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -343,7 +343,6 @@ const NAV = [
     { sub: '세탁', items: [['#/purchase/laundry/new', '불량·폐기 입력'], ['#/purchase/laundry', '불량·폐기 목록'], ['#/purchase/laundry-reports', '세탁 검수·성적서']] },
   ] },
   { group: '품질', items: [
-    ['#/quality/incoming', '수입검사 현황'],
     ['#/quality/inspections', '수입·출하 검사 이력'],
     { sub: '분석', items: [['#/quality/request', '분석의뢰'], ['#/quality/list', '분석리스트']] },
     { sub: 'VOC', items: [['#/quality/voc/request', 'VOC 접수'], ['#/quality/voc/list', 'VOC 처리목록']] },
@@ -508,7 +507,7 @@ const PAGES = {
   '#/purchase/laundry/new': pageLaundry,
   '#/purchase/laundry-reports': pageLaundryReports,
   '#/quality/inspections': pageInspections,
-  '#/quality/incoming': main => pageIncomingQc(main),
+  '#/quality/incoming': () => { location.replace('#/quality/inspections'); }, // 15.151 수입검사 현황 메뉴 없앰(검사 이력의 필터로 봄) — 예전 즐겨찾기는 이력으로
   '#/quality/specs': pageInspectionSpecs,
   '#/quality/request': () => pageIntake('analysis'),
   '#/quality/list': () => pageWorkList('analysis'),
