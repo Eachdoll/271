@@ -17,15 +17,22 @@ function applyNavLayout(mode) {
   for (const b of document.querySelectorAll('.nav-layout-toggle')) { b.innerHTML = `<span class="theme-icon" aria-hidden="true">${NAV_ICON[mode]}</span> <span>${NAV_LABEL[mode]}</span>`; b.title = '메뉴 위치 바꾸기(좌측 ↔ 상단)'; b.setAttribute('aria-pressed', String(mode === 'top')); }
   document.querySelectorAll('.nav-group.drop').forEach(g => g.classList.remove('drop'));
 }
+// 15.180 화면 밀도: 촘촘(기본) · 보통. <html data-density="compact">이면 입력칸·단추·표 줄을 줄여 한 화면에 더 많이.
+const DENSITY_KEY = 'wpa:density', DENSITY_LABEL = { compact: '촘촘', normal: '보통' };
+function densityMode() { try { return localStorage.getItem(DENSITY_KEY) === 'normal' ? 'normal' : 'compact'; } catch { return 'compact'; } }
+function applyDensity(mode) {
+  document.documentElement.setAttribute('data-density', mode);
+  for (const b of document.querySelectorAll('.density-toggle')) { b.innerHTML = `<span class="theme-icon" aria-hidden="true">${mode === 'compact' ? '☰' : '≡'}</span> <span>${DENSITY_LABEL[mode]}</span>`; b.title = '화면 밀도(촘촘 ↔ 보통)'; b.setAttribute('aria-label', `화면 밀도: ${DENSITY_LABEL[mode]}`); }
+}
 function themeMode() { try { const v = localStorage.getItem(THEME_KEY); return THEME_MODES.includes(v) ? v : 'auto'; } catch { return 'auto'; } }
 function applyTheme(mode) {
   const root = document.documentElement;
   if (mode === 'auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', mode);
-  for (const button of document.querySelectorAll('.theme-toggle:not(.nav-layout-toggle)')) { button.innerHTML = `<span class="theme-icon" aria-hidden="true">${THEME_ICON[mode]}</span> <span>${THEME_LABEL[mode]}</span>`; button.title = '화면 모드'; }
+  for (const button of document.querySelectorAll('.theme-toggle:not(.nav-layout-toggle):not(.density-toggle)')) { button.innerHTML = `<span class="theme-icon" aria-hidden="true">${THEME_ICON[mode]}</span> <span>${THEME_LABEL[mode]}</span>`; button.title = '화면 모드'; }
 }
 (function themeStart() {
   if (typeof document === 'undefined' || !document.documentElement) return;
-  applyTheme(themeMode()); applyNavLayout(navLayout());
+  applyTheme(themeMode()); applyNavLayout(navLayout()); applyDensity(densityMode());
   const place = () => {
     for (const found of document.querySelectorAll('.who, .auth-card, .side')) {
       const host = found.classList.contains('side') ? (found.querySelector(':scope > .side-prefs') || found.insertAdjacentElement('afterbegin', Object.assign(document.createElement('div'), { className: 'side-prefs' }))) : found;
@@ -40,6 +47,9 @@ function applyTheme(mode) {
         const nb = document.createElement('button'); nb.type = 'button'; nb.className = 'btn small theme-toggle nav-layout-toggle'; nb.setAttribute('aria-label', '메뉴 위치');
         nb.onclick = () => { const next = navLayout() === 'top' ? 'side' : 'top'; try { localStorage.setItem(NAV_KEY, next); } catch { /* 이 화면에만 */ } applyNavLayout(next); };
         button.after(nb); applyNavLayout(navLayout());
+        const db = document.createElement('button'); db.type = 'button'; db.className = 'btn small theme-toggle density-toggle';
+        db.onclick = () => { const next = densityMode() === 'compact' ? 'normal' : 'compact'; try { localStorage.setItem(DENSITY_KEY, next); } catch { /* 이 화면에만 */ } applyDensity(next); };
+        nb.after(db); applyDensity(densityMode());
       }
     }
   };

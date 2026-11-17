@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.179';
+const APP_VERSION = '15.180';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -51,6 +51,7 @@ function enterMovesInTable(root) {
 // 15.117 품목 분류 칩(전표 줄). 빈 값 = 미분류(코드 없는 직접 입력 줄)
 const CAT_TONE = { 제품: 'blue', 상품: 'green', 원자재: 'gray', 부자재: 'gray', 반제품: 'gray', 임가공: 'orange' };
 const catChip = c => `<span class="cat-chip cat-${CAT_TONE[c] || 'none'}">${esc(c || '미분류')}</span>`;
+const resultCount = (n, more, extra = '') => `<span class="rc-n">결과 <b>${fmtNum(n)}</b>건${more ? ' (더 있음)' : ''}</span>${extra ? ` <span class="rc-x">· ${esc(extra)}</span>` : ''}`; // 15.180
 const catChips = list => list == null ? '' : String(list).split(',').map(c => catChip(c)).join(' ');
 const catSummary = (by, label = '분류별 공급가액') => by?.length ? `<div class="small cat-sum">${esc(label)}: ${by.map(c => `${catChip(c.category)} ${won(c.supply)}원`).join(' · ')}</div>` : '';
 const catOptions = order => '<option value="">전체</option>' + order.map(c => `<option>${c}</option>`).join('');
@@ -477,7 +478,8 @@ function foldHelp(main) {
   for (const p of main.querySelectorAll(':scope > p.muted, :scope > section > p.muted, #receiptContent > p.muted')) {
     if (p.textContent.trim().length < 80 || p.closest('details')) continue;
     const details = document.createElement('details'); details.className = 'help';
-    details.innerHTML = '<summary>도움말 · 이 화면 설명</summary>'; p.replaceWith(details); details.append(p);
+    details.innerHTML = '<summary title="이 화면 설명">도움말</summary>'; p.replaceWith(details); details.append(p); // 15.180 오른쪽 위 단추
+    if (details.parentElement === main) requestAnimationFrame(() => { const h1 = $('h1', main); if (h1 && details.isConnected) details.style.top = `${h1.offsetTop}px`; }); // 제목 줄 높이에(위치 표시와 겹치지 않게)
   }
 }
 function applyView(main, route) {
@@ -660,7 +662,8 @@ function managedTabs(main, route) {
   const m = MANAGE[navRoute(route)], h1 = $('h1', main); if (!m || !h1 || $('.manage-tabs', main)) return;
   const t = [...h1.childNodes].find(n => n.nodeType === 3 && n.nodeValue.trim());
   if (t) t.nodeValue = /수정|고치기/.test(t.nodeValue) ? `${m.title} · ${t.nodeValue.trim()} ` : m.title + ' '; else h1.prepend(m.title + ' '); // 15.178 고치는 중 표시 유지
-  h1.insertAdjacentHTML('afterend', `<nav class="manage-tabs" aria-label="${esc(m.title)}">${m.tabs.filter(([h]) => canSeeRoute(h)).map(([h, l]) => `<a href="${h}" class="${h === route ? 'on' : ''}"${h === route ? ' aria-current="page"' : ''}>${esc(l)}</a>`).join('')}</nav>`);
+  const anchor = h1.nextElementSibling?.matches('.tax-side, .class-tabs.tax-side') ? h1.nextElementSibling : h1; // 15.180 매출/매입 탭 아래 둘째 줄
+  anchor.insertAdjacentHTML('afterend', `<nav class="manage-tabs${anchor !== h1 ? ' sub' : ''}" aria-label="${esc(m.title)}">${m.tabs.filter(([h]) => canSeeRoute(h)).map(([h, l]) => `<a href="${h}" class="${h === route ? 'on' : ''}"${h === route ? ' aria-current="page"' : ''}>${esc(l)}</a>`).join('')}</nav>`);
 }
 async function managedPage(main, route, fn) { await fn(main); managedTabs(main, route); }
 function shell() {
@@ -741,7 +744,8 @@ function pageTabs(main, route) {
   const bar = document.createElement('nav'); bar.className = 'page-tabs'; bar.setAttribute('aria-label', '연 화면');
   bar.innerHTML = `<a href="#/" class="pt-tab pt-home${path === '#/' ? ' on' : ''}">HOME</a>${tabs.map(t => `<span class="pt-tab${t.href === path ? ' on' : ''}"><a href="${esc(t.href)}">${PIN}<span>${esc(t.label)}</span></a><button type="button" class="pt-x" data-tab-close="${esc(t.href)}" aria-label="${esc(t.label)} 탭 닫기" title="닫기">×</button></span>`).join('')}${tabs.length > 1 ? '<button type="button" class="pt-clear" data-tab-clear title="다른 탭 모두 닫기" aria-label="다른 탭 모두 닫기">≡×</button>' : ''}`;
   main.prepend(bar);
-  if (trail.length && h1) h1.insertAdjacentHTML('beforebegin', `<div class="crumbs" aria-label="위치"><a href="#/" aria-label="홈">⌂</a>${trail.map(t => ` <span>›</span> ${esc(t)}`).join('')}</div>`);
+  const code = path.replace(/^#\/?/, '').split('/').filter(Boolean).join('-').toUpperCase() || 'HOME'; // 15.180 화면 코드(문의할 때)
+  if (trail.length && h1) h1.insertAdjacentHTML('beforebegin', `<div class="crumbs" aria-label="위치"><a href="#/" aria-label="홈">⌂</a>${trail.map(t => ` <span>›</span> ${esc(t)}`).join('')} <span class="screen-code" title="화면 코드 — 문의할 때 알려 주세요">[${esc(code)}]</span></div>`);
   bar.addEventListener('click', e => {
     const x = e.target.closest('[data-tab-close]'), all = e.target.closest('[data-tab-clear]'); if (!x && !all) return;
     e.preventDefault();
@@ -1133,6 +1137,7 @@ function tasksCard(tasks) {
 // 3) 좁은 화면에서는 표를 카드로 보여 주기 위해 각 칸에 머리글을 붙입니다 (CSS가 data-label을 사용).
 // Phone cards show the main fields; the rest (memo, entered by, row buttons…) opens with 「자세히」. Long lists show 30 at a time.
 const CARD_SECONDARY = new Set(['COA 요청', '비고', '메모', '입력자', '입고 처리자', '처리자', '사진·검수', 'LOT', '분류', '1차 분류', '2차 분류', '3차 분류', '입고', '생산', '사용', '출하', '조정', '안전재고', '최근 일자', '입력자 · 검사일', '입력자 / 입력시각', '수정', '사유', '거래처 · 담당', '시작', '종료', '작업시간', '인원', '불량 사유', '단가', '비용']);
+const CENTER_HEADS = /^(.*일자|.*일|날짜|납기|만기|상태|처리구분|입고상태|구분|분류)$/; // 15.180 일자·상태 칸 가운데
 const ITEM_HEADS = new Set(['품목', '품목명', '품명', '제품명', '제품', '자재명', '샘플명', '품명 · LOT']); // 15.177 최소 너비
 const NOWRAP_HEADS = new Set(['코드', '품목코드', '제품코드', '전표번호', '구매의뢰번호', '수주번호', '발주번호', '입고번호', '출하번호', '접수번호', '어음번호', '계산서번호', '승인번호', '전표 일자', '명세서 일자', '수주일', '발주일', '만기일자', '발행일자', '분류', '거래처', '납기일', '입고일', '출고일', '작업일', '세탁일', '의뢰일', '상태', '입고상태', '수량', '발주수량', '실입고', '입력자', 'COA 요청', '단위', '현재고']);
 // ── 15.173 표 열 너비·순서(엑셀처럼): 머리글 오른쪽 경계를 끌어 너비 조절(두 번 누르면 원래 너비),
@@ -1140,7 +1145,7 @@ const NOWRAP_HEADS = new Set(['코드', '품목코드', '제품코드', '전표�
 // 순서 바꾸기는 입력칸·합친 칸·두 줄 머리글·합계 줄이 없는 표만(칸 번호로 읽는 코드 보호). 휴대폰 카드 모양에서는 쓰지 않음.
 const grKey = table => { const names = [...table.tHead.rows[0].cells].map(c => c.textContent.trim()).filter(Boolean); return names.length ? `wpa:grid:${ME?.id || 0}:${navRoute(location.hash)}:${[...names].sort().join('|')}` : ''; };
 const grRead = k => { try { const v = JSON.parse(localStorage.getItem(k) || 'null'); return v && typeof v === 'object' ? v : {}; } catch { return {}; } };
-const grWrite = (k, v) => { try { if (!v.order && !v.widths) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch { /* 저장 못 해도 화면은 그대로 */ } };
+const grWrite = (k, v) => { try { if (!v.order && !v.widths && !v.hidden) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch { /* 저장 못 해도 화면은 그대로 */ } };
 const grName = th => [...th.childNodes].filter(n => n.nodeType === 3 || !n.matches?.('.xf-btn, .gr-rz')).map(n => n.textContent).join('').trim();
 function grCanMove(table) {
   if (table.hasAttribute('data-no-reorder') || table.tHead.rows.length > 1) return false;
@@ -1166,13 +1171,32 @@ function grWidths(table, widths) {
   head.forEach((th, i) => { if (!shown(th)) { th.style.width = ''; return; } const w = widths[grName(th) || `#${i}`]; th.style.width = `${Math.max(40, Math.round(w || cur[i] || 80))}px`; });
   table.classList.add('gr-fixed'); table.style.width = `${head.filter(shown).reduce((t, th) => t + parseFloat(th.style.width), 0)}px`;
 }
+// 15.180 ⚙ 열 설정: 표 오른쪽 위 작은 단추 → 보일 열 체크·열 배치 초기화(너비·순서·숨김). 저장은 열 너비·순서와 같은 곳.
 function grReset(table) {
-  const host = table.closest('.table-wrap') || table, prev = host.previousElementSibling;
-  const has = !!(table.dataset.grKey && (grRead(table.dataset.grKey).order || grRead(table.dataset.grKey).widths));
-  if (prev?.classList.contains('gr-bar')) { if (has) return; prev.remove(); return; }
-  if (!has) return;
-  host.insertAdjacentHTML('beforebegin', `<div class="gr-bar"><button type="button" class="btn small" data-gr-reset>열 배치 초기화</button></div>`);
-  host.previousElementSibling.querySelector('[data-gr-reset]').onclick = () => { grWrite(table.dataset.grKey, {}); render(); };
+  const host = table.closest('.table-wrap'); if (!host || host.querySelector(':scope > .gr-gear')) return;
+  host.classList.add('has-gear');
+  host.insertAdjacentHTML('afterbegin', `<button type="button" class="gr-gear" title="열 설정(보일 열·초기화)" aria-label="열 설정">⚙</button>`);
+  host.querySelector(':scope > .gr-gear').onclick = e => { e.stopPropagation(); grSettings(table, e.currentTarget); };
+}
+function grHide(table) {
+  const k = table.dataset.grKey, hidden = new Set(grRead(k).hidden || []), head = [...table.tHead.rows[0].cells], n = head.length;
+  const idx = head.map((th, i) => hidden.has(grName(th)) ? i : -1).filter(i => i >= 0);
+  for (const tr of table.rows) { if (tr.cells.length !== n) continue; [...tr.cells].forEach((c, i) => c.classList.toggle('gr-hidden', idx.includes(i))); }
+}
+function grSettings(table, btn) {
+  $('.gr-pop')?.remove(); const k = table.dataset.grKey, st = grRead(k), hidden = new Set(st.hidden || []);
+  const names = [...table.tHead.rows[0].cells].map(grName).filter(Boolean);
+  const pop = document.createElement('div'); pop.className = 'gr-pop xf-pop'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', '열 설정');
+  pop.innerHTML = `<b>보일 열</b><div class="gr-cols">${names.map(n => `<label class="check"><input type="checkbox" value="${esc(n)}" ${hidden.has(n) ? '' : 'checked'}> ${esc(n)}</label>`).join('')}</div><div class="actions"><button type="button" class="btn small" data-gr-all>모두 보이기</button><button type="button" class="btn small" data-gr-reset>열 배치 초기화</button></div><p class="small muted">열 너비는 머리글 경계를 끌어서, 순서는 머리글을 끌어 놓아서 바꿉니다.</p>`;
+  document.body.append(pop); const r = btn.getBoundingClientRect(); pop.style.top = `${r.bottom + scrollY + 4}px`; pop.style.left = `${Math.max(8, r.right + scrollX - pop.offsetWidth)}px`;
+  const save = () => { const s = grRead(k), off = [...pop.querySelectorAll('input:not(:checked)')].map(x => x.value); if (off.length) s.hidden = off; else delete s.hidden; grWrite(k, s); grHide(table); };
+  pop.addEventListener('change', save);
+  pop.querySelector('[data-gr-all]').onclick = () => { pop.querySelectorAll('input').forEach(x => { x.checked = true; }); save(); };
+  pop.querySelector('[data-gr-reset]').onclick = () => { grWrite(k, {}); pop.remove(); render(); };
+  const close = e => { if (!pop.contains(e.target) && e.target !== btn) { pop.remove(); document.removeEventListener('mousedown', close, true); } };
+  setTimeout(() => document.addEventListener('mousedown', close, true), 0);
+  pop.addEventListener('keydown', e => { if (e.key === 'Escape') { pop.remove(); btn.focus(); } });
+  pop.querySelector('input')?.focus();
 }
 function gridLayout(table) {
   if (table.dataset.gr || table.hasAttribute('data-no-layout') || !table.tHead?.rows[0] || table.closest('.modal-wrap, .xf-pop')) return;
@@ -1181,6 +1205,7 @@ function gridLayout(table) {
   const st = grRead(k), move = grCanMove(table);
   if (move && Array.isArray(st.order)) grMove(table, st.order);
   if (st.widths) grWidths(table, st.widths);
+  if (st.hidden?.length) grHide(table); // 15.180 숨긴 열
   [...table.tHead.rows[0].cells].forEach((th, i) => {
     th.insertAdjacentHTML('beforeend', '<span class="gr-rz" aria-hidden="true" title="끌어서 너비 조절 · 두 번 누르면 원래대로"></span>');
     const name = grName(th);
@@ -1238,8 +1263,10 @@ function labelGridTables() {
       if (head && rows.length && !table.hasAttribute('data-keep-cols') && !table.querySelector('[colspan]') && cells.every(td => (!td.textContent.trim() || td.textContent.trim() === '—') && !td.querySelector('input, select, button, textarea'))) [ths[i], ...cells].forEach(c => c?.classList.add('col-empty'));
       if (NOWRAP_HEADS.has(head)) [ths[i], ...cells].forEach(c => c?.classList.add('nowrap-cell'));
       if (ITEM_HEADS.has(head)) ths[i]?.classList.add('item-col'); // 15.177
+      if (CENTER_HEADS.test(head) && !cells.some(td => td.querySelector('input, select, button:not(.link-btn)'))) [ths[i], ...cells].forEach(c => c && !c.classList.contains('r') && c.classList.add('c')); // 15.180
     });
     gridLayout(table); // 15.173 열 너비·순서(빈 열 숨긴 뒤)
+    if (rows.length > 15 && !table.closest('.modal-wrap')) table.closest('.table-wrap')?.classList.add('tw-fill'); // 15.180 긴 목록: 머리글 고정
     if (!table.classList.contains('as-cards')) return;
     let secondary = 0;
     rows.forEach(tr => [...tr.children].forEach(td => {
@@ -1293,6 +1320,26 @@ function foldReportSections() {
 }
 new MutationObserver(foldReportSections).observe(document.body, { childList: true, subtree: true });
 // 15.177 조회 줄의 「~」 라벨(끝 날짜)을 시작 날짜 칸 옆으로 붙인다: [전표 일자: 시작 ~ 끝]. 입력 이름·이벤트는 그대로.
+// 15.180 조회 조건: 아래 가운데 「–」 손잡이로 접기(화면마다 기억), 초기화(↺)·조회는 오른쪽 끝에.
+function filterTools() {
+  $$('#main form.list-filters:not([data-ft])').forEach(f => {
+    f.dataset.ft = '1';
+    const submit = f.querySelector(':scope > button.primary:not(.filter-toggle), :scope > .actions > button.primary, :scope button.btn.primary[type=submit], :scope > button.btn.primary');
+    const hasReset = [...f.querySelectorAll('button')].some(b => /초기화/.test(b.textContent));
+    if (submit && !hasReset && submit.parentElement === f) {
+      const rb = document.createElement('button'); rb.type = 'button'; rb.className = 'btn lf-reset'; rb.title = '조건 초기화'; rb.setAttribute('aria-label', '조건 초기화'); rb.textContent = '↺';
+      rb.onclick = () => { f.reset(); f.requestSubmit ? f.requestSubmit() : f.dispatchEvent(new Event('submit', { cancelable: true })); };
+      const grp = document.createElement('span'); grp.className = 'lf-actions'; submit.before(grp); grp.append(rb, submit); // 초기화·조회 한 덩어리로 오른쪽 끝
+    }
+    if (submit) submit.classList.add('lf-go');
+    const key = 'wpa:lf-fold:' + navRoute(location.hash), fold = document.createElement('button');
+    fold.type = 'button'; fold.className = 'lf-fold'; fold.title = '조회 조건 접기·펴기';
+    const set = shut => { f.classList.toggle('lf-folded', shut); fold.textContent = shut ? '▾ 조회 조건' : '–'; fold.setAttribute('aria-expanded', String(!shut)); };
+    let shut = false; try { shut = localStorage.getItem(key) === '1'; } catch { /* */ }
+    set(shut); fold.onclick = () => { shut = !f.classList.contains('lf-folded'); set(shut); try { if (shut) localStorage.setItem(key, '1'); else localStorage.removeItem(key); } catch { /* */ } };
+    f.after(fold);
+  });
+}
 function pairDateRanges() {
   $$('form.list-filters > label:not([data-paired])').forEach(l => {
     l.dataset.paired = '1';
@@ -1304,7 +1351,7 @@ function pairDateRanges() {
     end.setAttribute('aria-label', (prev.childNodes[0]?.nodeValue || '').trim() + ' 끝'); prev.classList.add('lf-period'); l.remove();
   });
 }
-new MutationObserver(() => { labelGridTables(); pairDateRanges(); }).observe(document.body, { childList: true, subtree: true });
+new MutationObserver(() => { labelGridTables(); pairDateRanges(); filterTools(); }).observe(document.body, { childList: true, subtree: true });
 
 async function pageHome(main) {
   const [d, tasks, alerts] = await Promise.all([api('GET', '/api/dashboard'), api('GET', '/api/my-tasks'), api('GET', '/api/alerts').catch(() => null)]);
