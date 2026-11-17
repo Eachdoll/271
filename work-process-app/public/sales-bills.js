@@ -211,7 +211,7 @@ async function statementSheet(bills) {
   const lines = bills.flatMap(b => b.lines.filter(l => l.active !== 0).map(l => ({ ...l, date: l.ship_date || b.bill_date, bill_no: b.bill_no })));
   const supply = bills.reduce((t, b) => t + b.supply_total, 0), vat = bills.reduce((t, b) => t + b.vat_total, 0), total = supply + vat;
   const md = d => String(d || '').slice(5).replace('-', '/');
-  const party = (title, p) => `<table class="po-info stmt-party"><caption>${title}</caption><tbody>
+  const party = (title, p) => `<table class="po-info stmt-party"><caption>${title}</caption><colgroup><col style="width:17%"><col style="width:43%"><col style="width:13%"><col style="width:27%"></colgroup><tbody>
     <tr><th>등록번호</th><td colspan="3"><b>${esc(p.biz_no || '')}</b></td></tr>
     <tr><th>상호</th><td>${esc(p.biz_name || p.name || '')}</td><th>대표</th><td>${esc(p.ceo || '')}</td></tr>
     <tr><th>주소</th><td colspan="3">${esc(p.address || '')}</td></tr>

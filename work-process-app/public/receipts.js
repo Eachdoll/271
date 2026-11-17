@@ -286,7 +286,7 @@ function receiptSlip(r) {
   $('[data-rc-labels]', m.el).onclick = () => { m.close(); lotLabels(r); };
   $('[data-print]', m.el).onclick = () => rcPrint(`입고증_${r.receipt_no}`);
 }
-function rcPrint(name) { const title = document.title; document.title = name; document.body.classList.add('printing-cert'); try { window.print(); } finally { document.body.classList.remove('printing-cert'); document.title = title; } }
+function rcPrint(name) { const title = document.title; document.title = name; const wraps = [...document.querySelectorAll('.lr-cert-wrap')], top = wraps.at(-1); wraps.forEach(w => w.classList.toggle('print-skip', w !== top)); document.body.classList.add('printing-cert'); try { window.print(); } finally { wraps.forEach(w => w.classList.remove('print-skip')); document.body.classList.remove('printing-cert'); document.title = title; } }
 
 // LOT 라벨(15.72): 줄마다 한 장(품목·코드·LOT·수량·입고일·거래처·입고번호 + QR). QR 내용은 「LOT|코드|수량 단위|입고번호」.
 function lotLabels(r) {
