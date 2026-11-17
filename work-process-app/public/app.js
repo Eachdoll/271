@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.168';
+const APP_VERSION = '15.174';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -345,7 +345,7 @@ async function saveNewAttachments(entity, row, draft, form) {
 // 메뉴: 업무 → 하위 메뉴 → 화면. 입력과 목록(조회·검색)은 서로 다른 화면입니다(VIEW_SPLIT).
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
-  { group: '영업', items: [{ sub: '견적', items: [['#/sales/quotes/new', '견적서 작성'], ['#/sales/quotes', '견적서 목록']] }, { sub: '수주', items: [['#/sales/orders/new', '수주 입력'], ['#/sales/orders', '수주 목록']] }, { sub: '매출전표', items: [['#/sales/bills/new', '매출전표 입력'], ['#/sales/bills', '매출전표 목록'], ['#/sales/calendar', '매출 달력'], ['#/sales/returns/new', '반입(반품) 입력'], ['#/sales/returns', '반입 목록'], ['#/sales/delivery-status', '납품현황'], ['#/sales/ledger', '기간별 거래보고'], ['#/sales/closing', '매출 마감']] }, { sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
+  { group: '영업', items: [{ sub: '견적', items: [['#/sales/quotes/new', '견적서 작성'], ['#/sales/quotes', '견적서 목록']] }, { sub: '수주', items: [['#/sales/orders/new', '수주 입력'], ['#/sales/orders', '수주 목록']] }, { sub: '매출전표', items: [['#/sales/bills', '매출전표 관리'], ['#/sales/calendar', '매출 달력'], ['#/sales/returns/new', '반입(반품) 입력'], ['#/sales/returns', '반입 목록'], ['#/sales/delivery-status', '납품현황'], ['#/sales/ledger', '기간별 거래보고'], ['#/sales/closing', '매출 마감']] }, { sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
   { group: '구매', items: [
     { sub: '발주', items: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
     { sub: '매입전표', items: [['#/purchase/bills/new', '매입전표 입력'], ['#/purchase/bills', '매입전표 목록'], ['#/purchase/returns/new', '반출(반품) 입력'], ['#/purchase/returns', '반출 목록'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/closing', '매입 마감']] },
@@ -354,7 +354,7 @@ const NAV = [
   ] },
   // 15.164 경리: 매입·매출 세금계산서, 매입·매출 거래처별 장부, 대금(입금·지급·원장·연령표)을 한곳에. 화면 주소는 그대로라 볼 수 있는 사람(영업·구매 메뉴 권한)도 그대로이고, 권한 없는 화면은 메뉴에서 빠진다.
   { group: '경리', items: [
-    { sub: '세금계산서', items: [['#/sales/tax/new', '매출 세금계산서 만들기'], ['#/sales/tax', '매출 세금계산서 관리'], ['#/sales/tax-check', '매출 발행 체크'], ['#/purchase/tax', '매입 세금계산서'], ['#/purchase/tax-check', '매입 발행 체크']] },
+    { sub: '세금계산서', items: [['#/sales/tax', '매출 세금계산서 관리'], ['#/sales/tax-check', '매출 발행 체크'], ['#/purchase/tax', '매입 세금계산서'], ['#/purchase/tax-check', '매입 발행 체크']] },
     { sub: '거래처별 장부', items: [['#/sales/book', '매출 거래처별 장부'], ['#/purchase/book', '매입 거래처별 장부']] },
     { sub: '대금', items: [['#/purchase/payments', '입금확인'], ['#/purchase/disbursements', '지급확인'], ['#/purchase/notes', '어음 관리'], ['#/purchase/ledger', '매입처 원장'], ['#/sales/aging', '채권 연령표'], ['#/purchase/aging', '채무 연령표']] },
   ] },
@@ -557,8 +557,8 @@ const PAGES = {
   '#/sales/orders/edit': main => { let id = null; try { id = sessionStorage.getItem('wpa:so-edit'); } catch { id = null; } if (!id) { location.hash = '#/sales/orders'; return; } return pageSalesOrderEntry(main, id); },
   '#/sales/orders': main => pageSalesOrderList(main),
   '#/logistics/ship-orders': main => pageShipInstructions(main),
-  '#/sales/bills/new': main => pageSalesBillEntry(main),
-  '#/sales/bills': main => pageSalesBillList(main),
+  '#/sales/bills/new': main => managedPage(main, '#/sales/bills/new', pageSalesBillEntry), // 15.170 매출전표 관리(입력)
+  '#/sales/bills': main => managedPage(main, '#/sales/bills', pageSalesBillList), // 15.170 매출전표 관리(목록)
   '#/purchase/payments': main => pagePayments(main, 'sales'),
   '#/purchase/disbursements': main => pagePayments(main, 'purchase'),
   '#/purchase/ledger': main => pagePurchaseLedger(main),
@@ -575,8 +575,8 @@ const PAGES = {
   '#/sales/aging': main => pageAging(main, 'sales'),
   '#/purchase/aging': main => pageAging(main, 'purchase'),
   '#/sales/closing': main => pageSalesClosing(main),
-  '#/sales/tax/new': main => pageTaxMake(main),
-  '#/sales/tax': main => pageTaxList(main),
+  '#/sales/tax/new': main => managedPage(main, '#/sales/tax/new', pageTaxMake), // 15.170 세금계산서 관리(만들기)
+  '#/sales/tax': main => pageTaxList(main).then(() => managedTabs(main, '#/sales/tax')), // 15.170 세금계산서 관리(목록)
   '#/purchase/tax': main => pagePurchaseTax(main),
   '#/sales/tax-check': main => pageTaxCheck(main, 'sales'),
   '#/purchase/tax-check': main => pageTaxCheck(main, 'purchase'),
@@ -621,8 +621,22 @@ function refreshFavNav() {
   const after = side.querySelector(':scope > .side-prefs'); after ? after.insertAdjacentHTML('afterend', html) : side.insertAdjacentHTML('afterbegin', html);
   $$('.nav-fav a', side).forEach(a => { a.onclick = () => document.body.classList.remove('nav-open'); });
 }
+// ── 15.170 「관리」 화면: 목록과 입력(만들기)을 한 메뉴로. 같은 화면 제목 아래 전환 단추, 입력 주소(/new)는 그대로 쓰되
+// 메뉴 강조·화면 탭·위치 표시는 관리 화면 하나로 묶는다(navRoute).
+const MANAGE = {
+  '#/sales/bills': { title: '매출전표 관리', tabs: [['#/sales/bills', '전표 목록'], ['#/sales/bills/new', '전표 입력']] },
+  '#/sales/tax': { title: '세금계산서 관리', tabs: [['#/sales/tax', '계산서 목록'], ['#/sales/tax/new', '계산서 만들기']] },
+};
+const ROUTE_ALIAS = { '#/sales/bills/new': '#/sales/bills', '#/sales/tax/new': '#/sales/tax' };
+const navRoute = r => ROUTE_ALIAS[String(r || '#/').split('?')[0]] || String(r || '#/').split('?')[0];
+function managedTabs(main, route) {
+  const m = MANAGE[navRoute(route)], h1 = $('h1', main); if (!m || !h1 || $('.manage-tabs', main)) return;
+  const t = [...h1.childNodes].find(n => n.nodeType === 3 && n.nodeValue.trim()); if (t) t.nodeValue = m.title + ' '; else h1.prepend(m.title + ' ');
+  h1.insertAdjacentHTML('afterend', `<nav class="manage-tabs" aria-label="${esc(m.title)}">${m.tabs.map(([h, l]) => `<a href="${h}" class="${h === route ? 'on' : ''}"${h === route ? ' aria-current="page"' : ''}>${esc(l)}</a>`).join('')}</nav>`);
+}
+async function managedPage(main, route, fn) { await fn(main); managedTabs(main, route); }
 function shell() {
-  const cur = location.hash || '#/';
+  const cur = navRoute(location.hash || '#/'); // 15.170 입력 주소도 관리 메뉴로 강조
   const link = ([h, l]) => `<a href="${h}" class="${cur === h ? 'active' : ''}">${l}${navStar(h, l)}</a>`;
   const entry = item => Array.isArray(item) ? link(item)
     : `<details class="nav-sub" data-sub="${esc(item.sub)}" ${item.items.some(([h]) => h === cur) ? 'open' : ''}><summary>${item.sub}</summary>${item.items.map(link).join('')}</details>`;
@@ -691,7 +705,7 @@ function crumbPath(route) {
 }
 function pageTabs(main, route) {
   if (!main || main.querySelector(':scope > .page-tabs')) return;
-  const path = String(route || '#/').split('?')[0], trail = crumbPath(path), h1 = $('h1', main);
+  const path = navRoute(route), trail = crumbPath(path), h1 = $('h1', main); // 15.170 입력·목록은 한 탭
   const label = trail.at(-1) || (h1 ? screenTitle(main) : '');
   let tabs = readTabs();
   if (path !== '#/' && label && PAGES[path]) { if (!tabs.some(t => t.href === path)) tabs.push({ href: path, label }); writeTabs(tabs); tabs = readTabs(); }
@@ -703,7 +717,7 @@ function pageTabs(main, route) {
   bar.addEventListener('click', e => {
     const x = e.target.closest('[data-tab-close]'), all = e.target.closest('[data-tab-clear]'); if (!x && !all) return;
     e.preventDefault();
-    if (all) { writeTabs(readTabs().filter(t => t.href === path)); render(); return; }
+    if (all) { writeTabs(readTabs().filter(t => t.href === path)); bar.querySelectorAll('.pt-tab:not(.on):not(.pt-home)').forEach(t => t.remove()); all.remove(); return; } // 15.169 화면은 그대로(입력 보존)
     const list = readTabs(), k = list.findIndex(t => t.href === x.dataset.tabClose); list.splice(k, 1); writeTabs(list);
     if (x.dataset.tabClose === path) location.hash = (list[k] || list[k - 1])?.href || '#/'; else x.closest('.pt-tab').remove();
   });
@@ -725,7 +739,29 @@ async function render() {
   try { pageTabs($('#main'), route); } catch { /* 탭은 편의 기능 */ }
   uxAfterRender(route);
 }
-window.addEventListener('hashchange', render);
+// 15.169 저장 안 한 입력 지키기: 입력 화면(#main의 저장 폼, 조회 조건·읽기 전용·팝업 제외)에 값을 넣고 저장하지 않은 채
+// 다른 메뉴·탭·주소로 가면 물어본다(「취소」면 주소를 되돌려 화면·입력 그대로). 자동 보관(초안)이 붙은 폼은 이미 보관되므로 묻지 않는다.
+// 저장(submit)하면 표시를 지우고, 새로 고침·창 닫기에는 브라우저 경고.
+const dirtyForms = () => $$('#main form[data-dirty]').filter(f => f.isConnected && !f.querySelector('.draft-state'));
+const markDirty = e => { const f = e.target?.closest?.('#main form'); if (!f || f.matches('.list-filters, [data-read-only]') || f.closest('.modal-wrap') || e.target.closest('.draft-state')) return; f.dataset.dirty = '1'; };
+document.addEventListener('input', markDirty, true); document.addEventListener('change', markDirty, true);
+document.addEventListener('click', e => { if (e.target?.closest?.('#main form button[type=button]:not(.partner-find):not([data-help])')) markDirty(e); }, true); // 품목 찾기·줄 추가/빼기처럼 단추로 바뀌는 입력
+document.addEventListener('submit', e => { if (e.target?.dataset) delete e.target.dataset.dirty; }, true);
+window.addEventListener('beforeunload', e => { if (dirtyForms().length) { e.preventDefault(); e.returnValue = ''; } });
+let shownHash = location.hash || '#/', leaveSkip = false;
+window.addEventListener('hashchange', () => {
+  const to = location.hash || '#/';
+  if (leaveSkip) { leaveSkip = false; return; } // 되돌린 주소 바뀜은 그냥 넘김
+  if (to !== shownHash && dirtyForms().length) {
+    leaveSkip = true; location.hash = shownHash; // 화면은 그대로 두고 먼저 묻는다
+    confirmBox('저장하지 않은 입력이 있습니다. 이 화면을 나가면 입력한 내용이 사라집니다. 나갈까요?').then(go => {
+      if (!go) return;
+      dirtyForms().forEach(f => { delete f.dataset.dirty; }); location.hash = to;
+    });
+    return;
+  }
+  shownHash = to; render();
+});
 
 // ── 15.97 ERP식 표·입력 화면 ──
 // 1) 표 머리글을 누르면 그 칸으로 정렬: 오름차순 → 내림차순 → 원래 순서(15.137부터 모든 목록 표).
@@ -746,7 +782,7 @@ function sortKey(td) {
 }
 document.addEventListener('click', event => {
   const th = event.target.closest('table.grid > thead > tr > th');
-  if (!th || event.target.closest('input, button, a, select') || !th.textContent.trim()) return;
+  if (!th || grNoClick || event.target.closest('input, button, a, select, .gr-rz') || !th.textContent.trim()) return;
   const table = th.closest('table'); if (!sortableTable(table)) return;
   const body = table.tBodies[0], all = [...body.rows];
   all.forEach((tr, k) => { if (tr.dataset.orig === undefined) tr.dataset.orig = String(k); });
@@ -1069,6 +1105,94 @@ function tasksCard(tasks) {
 // Phone cards show the main fields; the rest (memo, entered by, row buttons…) opens with 「자세히」. Long lists show 30 at a time.
 const CARD_SECONDARY = new Set(['COA 요청', '비고', '메모', '입력자', '입고 처리자', '처리자', '사진·검수', 'LOT', '분류', '1차 분류', '2차 분류', '3차 분류', '입고', '생산', '사용', '출하', '조정', '안전재고', '최근 일자', '입력자 · 검사일', '입력자 / 입력시각', '수정', '사유', '거래처 · 담당', '시작', '종료', '작업시간', '인원', '불량 사유', '단가', '비용']);
 const NOWRAP_HEADS = new Set(['분류', '거래처', '납기일', '입고일', '출고일', '작업일', '세탁일', '의뢰일', '상태', '입고상태', '수량', '발주수량', '실입고', '입력자', 'COA 요청', '단위', '현재고']);
+// ── 15.173 표 열 너비·순서(엑셀처럼): 머리글 오른쪽 경계를 끌어 너비 조절(두 번 누르면 원래 너비),
+// 머리글을 끌어 다른 머리글 위에 놓으면 열 순서 바꿈. 사용자·화면·표(머리글 이름)마다 이 브라우저에 저장, 「열 배치 초기화」로 되돌림.
+// 순서 바꾸기는 입력칸·합친 칸·두 줄 머리글·합계 줄이 없는 표만(칸 번호로 읽는 코드 보호). 휴대폰 카드 모양에서는 쓰지 않음.
+const grKey = table => { const names = [...table.tHead.rows[0].cells].map(c => c.textContent.trim()).filter(Boolean); return names.length ? `wpa:grid:${ME?.id || 0}:${navRoute(location.hash)}:${[...names].sort().join('|')}` : ''; };
+const grRead = k => { try { const v = JSON.parse(localStorage.getItem(k) || 'null'); return v && typeof v === 'object' ? v : {}; } catch { return {}; } };
+const grWrite = (k, v) => { try { if (!v.order && !v.widths) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch { /* 저장 못 해도 화면은 그대로 */ } };
+const grName = th => [...th.childNodes].filter(n => n.nodeType === 3 || !n.matches?.('.xf-btn, .gr-rz')).map(n => n.textContent).join('').trim();
+function grCanMove(table) {
+  if (table.hasAttribute('data-no-reorder') || table.tHead.rows.length > 1) return false;
+  if (table.querySelector('[colspan], [rowspan], tbody input:not([type=checkbox]), tbody select, tbody textarea')) return false;
+  return ![...(table.tBodies[0]?.rows || [])].some(auxRow);
+}
+function grMove(table, order) { // order: 머리글 이름 순서. 이름 없는 칸(체크·단추)은 원래 자리 순서대로 남은 자리에
+  const head = [...table.tHead.rows[0].cells], names = head.map(grName), n = head.length;
+  const want = order.filter(x => names.includes(x)); if (want.length < 2) return;
+  const named = names.map((x, i) => x && want.includes(x) ? i : -1).filter(i => i >= 0);
+  const target = names.map((_, i) => i); const slots = [...named]; // 이름 있는 칸이 있던 자리에 원하는 순서로
+  want.forEach((x, k) => { target[slots[k]] = names.indexOf(x); });
+  if (target.every((v, i) => v === i)) return;
+  for (const tr of table.rows) { if (tr.cells.length !== n) continue; const cells = [...tr.cells]; target.forEach(i => tr.appendChild(cells[i])); }
+  $$('.xf-btn', table.tHead).forEach(b => { b.dataset.xfCol = String(b.closest('th').cellIndex); });
+  if (typeof XF !== 'undefined' && XF.has(table)) { XF.delete(table); xfApply(table); }
+}
+function grWidths(table, widths) {
+  const head = [...table.tHead.rows[0].cells];
+  if (!widths || !Object.keys(widths).length) { table.classList.remove('gr-fixed'); table.style.width = ''; head.forEach(th => { th.style.width = ''; }); return; }
+  const shown = th => getComputedStyle(th).display !== 'none'; // 빈 칸이라 숨긴 열은 너비 합에서 뺀다
+  const cur = head.map(th => th.getBoundingClientRect().width);
+  head.forEach((th, i) => { if (!shown(th)) { th.style.width = ''; return; } const w = widths[grName(th) || `#${i}`]; th.style.width = `${Math.max(40, Math.round(w || cur[i] || 80))}px`; });
+  table.classList.add('gr-fixed'); table.style.width = `${head.filter(shown).reduce((t, th) => t + parseFloat(th.style.width), 0)}px`;
+}
+function grReset(table) {
+  const host = table.closest('.table-wrap') || table, prev = host.previousElementSibling;
+  const has = !!(table.dataset.grKey && (grRead(table.dataset.grKey).order || grRead(table.dataset.grKey).widths));
+  if (prev?.classList.contains('gr-bar')) { if (has) return; prev.remove(); return; }
+  if (!has) return;
+  host.insertAdjacentHTML('beforebegin', `<div class="gr-bar"><button type="button" class="btn small" data-gr-reset>열 배치 초기화</button></div>`);
+  host.previousElementSibling.querySelector('[data-gr-reset]').onclick = () => { grWrite(table.dataset.grKey, {}); render(); };
+}
+function gridLayout(table) {
+  if (table.dataset.gr || table.hasAttribute('data-no-layout') || !table.tHead?.rows[0] || table.closest('.modal-wrap, .xf-pop')) return;
+  const head = [...table.tHead.rows[0].cells]; if (head.length < 2 || head.some(c => c.colSpan > 1)) return;
+  const k = grKey(table); if (!k) return; table.dataset.gr = '1'; table.dataset.grKey = k;
+  const st = grRead(k), move = grCanMove(table);
+  if (move && Array.isArray(st.order)) grMove(table, st.order);
+  if (st.widths) grWidths(table, st.widths);
+  [...table.tHead.rows[0].cells].forEach((th, i) => {
+    th.insertAdjacentHTML('beforeend', '<span class="gr-rz" aria-hidden="true" title="끌어서 너비 조절 · 두 번 누르면 원래대로"></span>');
+    const name = grName(th);
+    if (move && name) { th.draggable = true; th.classList.add('gr-drag'); }
+  });
+  grReset(table);
+}
+// 너비 조절(포인터 끌기)
+let grNoClick = false;
+document.addEventListener('pointerdown', e => {
+  const rz = e.target.closest('.gr-rz'); if (!rz || e.button !== 0) return;
+  e.preventDefault(); e.stopPropagation();
+  const th = rz.closest('th'), table = th.closest('table'), k = table.dataset.grKey; if (!k) return;
+  const head = [...table.tHead.rows[0].cells], x0 = e.clientX;
+  const widths = Object.fromEntries(head.map((c, i) => [grName(c) || `#${i}`, Math.round(c.getBoundingClientRect().width)]).filter(([, w]) => w > 0));
+  const key = grName(th) || `#${th.cellIndex}`, w0 = widths[key];
+  let moved = false; document.body.classList.add('gr-resizing');
+  const mv = ev => { if (!moved && Math.abs(ev.clientX - x0) < 3) return; moved = true; widths[key] = Math.max(40, Math.round(w0 + ev.clientX - x0)); grWidths(table, widths); };
+  const up = () => { document.removeEventListener('pointermove', mv); document.removeEventListener('pointerup', up); document.body.classList.remove('gr-resizing');
+    if (!moved) return; grNoClick = true; setTimeout(() => { grNoClick = false; }, 0); // 손을 뗄 때 생기는 click이 정렬로 가지 않게
+    const st = grRead(k); st.widths = widths; grWrite(k, st); grReset(table); };
+  document.addEventListener('pointermove', mv); document.addEventListener('pointerup', up);
+}, true);
+document.addEventListener('dblclick', e => {
+  const rz = e.target.closest('.gr-rz'); if (!rz) return; e.preventDefault();
+  const th = rz.closest('th'), table = th.closest('table'), k = table.dataset.grKey; if (!k) return;
+  const st = grRead(k); if (!st.widths) return; delete st.widths[grName(th) || `#${th.cellIndex}`];
+  if (!Object.keys(st.widths).length) delete st.widths; grWrite(k, st); render();
+});
+// 순서 바꾸기(머리글 끌어 놓기)
+let grDragTh = null;
+document.addEventListener('dragstart', e => { const th = e.target.closest?.('th.gr-drag'); if (!th) return; grDragTh = th; th.classList.add('gr-dragging'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', grName(th)); } catch { /* */ } });
+document.addEventListener('dragover', e => { const th = e.target.closest?.('th.gr-drag'); if (!grDragTh || !th || th === grDragTh || th.closest('table') !== grDragTh.closest('table')) return; e.preventDefault(); $$('.gr-over', th.parentElement).forEach(c => c.classList.remove('gr-over')); th.classList.add('gr-over'); });
+document.addEventListener('dragend', () => { if (!grDragTh) return; grDragTh.classList.remove('gr-dragging'); $$('.gr-over').forEach(c => c.classList.remove('gr-over')); grDragTh = null; });
+document.addEventListener('drop', e => {
+  const th = e.target.closest?.('th.gr-drag'); if (!grDragTh || !th || th === grDragTh) return; e.preventDefault();
+  const table = th.closest('table'); if (table !== grDragTh.closest('table')) return;
+  const names = [...table.tHead.rows[0].cells].map(grName).filter(Boolean), from = grName(grDragTh), to = grName(th);
+  const order = names.filter(x => x !== from); const at = order.indexOf(to);
+  order.splice(names.indexOf(from) < names.indexOf(to) ? at + 1 : at, 0, from); // 오른쪽으로 끌면 놓은 칸 뒤, 왼쪽이면 앞
+  grMove(table, order); const st = grRead(table.dataset.grKey); st.order = order; grWrite(table.dataset.grKey, st); grReset(table);
+});
 function labelGridTables() {
   $$('table.grid:not([data-labeled])').forEach(table => {
     table.dataset.labeled = 'true';
@@ -1084,6 +1208,7 @@ function labelGridTables() {
       if (head && rows.length && !table.hasAttribute('data-keep-cols') && !table.querySelector('[colspan]') && cells.every(td => (!td.textContent.trim() || td.textContent.trim() === '—') && !td.querySelector('input, select, button, textarea'))) [ths[i], ...cells].forEach(c => c?.classList.add('col-empty'));
       if (NOWRAP_HEADS.has(head)) [ths[i], ...cells].forEach(c => c?.classList.add('nowrap-cell'));
     });
+    gridLayout(table); // 15.173 열 너비·순서(빈 열 숨긴 뒤)
     if (!table.classList.contains('as-cards')) return;
     let secondary = 0;
     rows.forEach(tr => [...tr.children].forEach(td => {
@@ -1765,6 +1890,33 @@ function requestDetail(type, r, reload) {
 }
 
 // 의뢰 접수 페이지: 양식 + 접수대기 목록
+// 15.174 분석의뢰 작성: 검사 구분이 수입·출하검사이면 샘플명 아래에 연결될 검사규격을 바로 보여 준다(이름 목록 제안 포함).
+function bindSpecHint(form) {
+  const title = form.elements.title; if (!title) return;
+  const box = document.createElement('p'); box.className = 'small spec-hint'; box.setAttribute('role', 'status'); box.hidden = true;
+  title.insertAdjacentElement('afterend', box); // 샘플명 칸 바로 아래
+  let names = null, seq = 0, timer = 0;
+  const val = n => form.querySelector(`[name=${n}]:checked`)?.value || '';
+  const run = async () => {
+    const kind = val('category'), cat = val('item_category'), q = title.value.trim(), my = ++seq;
+    if (!['수입검사', '출하검사'].includes(kind)) { box.hidden = true; return; }
+    if (!names) { try { const d = await api('GET', '/api/inspection-specs'); names = d.specs.filter(s => s.active); const dl = document.createElement('datalist'); dl.id = 'specNames'; dl.innerHTML = [...new Set(names.flatMap(s => [s.product, ...(s.aliases || [])]))].map(n => `<option value="${esc(n)}">`).join(''); form.append(dl); title.setAttribute('list', 'specNames'); } catch { names = []; } }
+    if (!q) { box.hidden = false; box.innerHTML = `<span class="muted">샘플명을 검사규격의 품명·제품코드와 같게 쓰면 규격이 자동으로 연결됩니다.</span>`; return; }
+    try {
+      const m = await api('GET', '/api/inspection-specs/match?' + new URLSearchParams({ kind, item_category: cat, title: q })); if (my !== seq) return;
+      box.hidden = false;
+      box.innerHTML = m.exact.length === 1 ? `<span class="chip green">검사규격 연결</span> ${esc(m.exact[0].product)} · ${esc(m.exact[0].item_category)} · 규격 ${m.exact[0].revision} (${esc(m.exact[0].items.join(', '))})`
+        : m.exact.length > 1 ? `<span class="chip yellow">규격 ${m.exact.length}개 일치</span> 품목 카테고리를 고르면 하나로 정해집니다.`
+        : m.partial.length ? `<span class="chip yellow">이름이 같은 규격 없음</span> 비슷한 규격: ${m.partial.map(s => `<button type="button" class="linklike" data-spec-use="${esc(s.product)}">${esc(s.product)}</button>`).join(', ')} — 누르면 샘플명이 바뀝니다.`
+        : `<span class="chip">맞는 규격 없음</span> 접수 뒤 품질팀장이 규격을 고르거나 새로 등록합니다.`;
+      $$('[data-spec-use]', box).forEach(b => b.onclick = () => { title.value = b.dataset.specUse; title.dispatchEvent(new Event('input', { bubbles: true })); });
+    } catch { box.hidden = true; }
+  };
+  const later = () => { clearTimeout(timer); timer = setTimeout(() => run().catch(() => {}), 250); };
+  form.addEventListener('input', e => { if (e.target === title) later(); });
+  form.addEventListener('change', e => { if (['category', 'item_category'].includes(e.target.name)) later(); });
+  form.addEventListener('reset', () => setTimeout(later, 0));
+}
 async function pageIntake(type) {
   const cfg = REQ[type]; const main = $('#main'); const mgr = canApproveRequest(type);
   const managers = ['analysis','development','voc'].includes(type) ? (await api('GET', '/api/approval-managers'))[type === 'voc' ? 'analysis' : type] : null;
@@ -1797,6 +1949,7 @@ async function pageIntake(type) {
   // 15.58: 고객사 칸은 매출처 목록에서 고른다(상품 샘플의 「공급처 · 고객사」는 양쪽이라 전체 목록).
   const customerInput = $('[name=customer]', newForm); if (customerInput) bindPartnerPicker(customerInput, null, { type: type === 'sample_goods' ? '' : 'sales' });
   // 15.62: 의뢰서 입력 초안(이 탭). 라디오·체크 묶음도 칸 순서로 보관한다. 사진은 보관하지 않는다.
+  if (type === 'analysis') bindSpecHint(newForm); // 15.174 수입·출하검사면 연결될 검사규격 미리 보기
   const intakeDraft = bindEntryDraft(newForm, 'intake:' + type, { read: () => uxIndexRead(newForm), restore: value => uxIndexRestore(newForm, value) });
   bindListControls(filterForm, load);
   newForm.onsubmit = async (e) => {

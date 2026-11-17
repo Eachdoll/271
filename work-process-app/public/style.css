@@ -2083,3 +2083,60 @@ input[type=checkbox], input[type=radio], input[type=file], input[type=range], in
 form.list-filters input, form.list-filters select, .rs-page .rs-filter input, .rs-page .rs-filter select { border-color: var(--field-line); background-color: var(--field-bg); }
 /* 표 안 입력칸(전표·견적 줄)도 테두리가 보이게 */
 table input:not([type=checkbox]):not([type=radio]), table select { border-color: var(--field-line); background-color: var(--field-bg); }
+
+/* 15.170 관리 화면 전환 단추(목록 | 입력) */
+.manage-tabs { display: inline-flex; margin: 2px 0 12px; border: 1px solid var(--ns-head-line, var(--line)); border-radius: 6px !important; overflow: hidden; background: var(--panel); }
+.manage-tabs a { padding: 8px 18px; font-weight: 600; font-size: 14px; color: var(--text); text-decoration: none; border-right: 1px solid var(--ns-head-line, var(--line)); }
+.manage-tabs a:last-child { border-right: 0; } .manage-tabs a:hover { background: var(--accent-soft); }
+.manage-tabs a.on { background: var(--ns-pill, var(--accent)); color: #fff; }
+
+/* ── 15.171 가독성: 77개 화면 측정 결과로 단추 높이·글자 크기·표 줄 간격·대비·단추 간격을 한 기준으로 ── */
+/* 단추: 보통 42px·14px, 작은 단추 32px·13px. 조회 줄 안 단추는 입력칸(44px)과 같은 높이로 맞춤(◀ 기간 ▶·거래처 찾기 포함) */
+.btn:not(.small) { min-height: 42px; font-size: 14px; }
+.btn.small { min-height: 32px; padding: 5px 12px; font-size: 13px; }
+.list-filters .btn, .toolbar > .btn, .list-filters .range-presets .btn { min-height: 44px; }
+.range-presets { gap: 6px; } .range-presets .rp-arrow { font-size: 13px; min-width: 40px; }
+/* 붙어 있는 단추 사이 여백(표 칸·한 줄에 나란히 놓인 단추) */
+td > .btn + .btn, td > .btn ~ .btn, td > a.btn + .btn, h1 > .btn + .btn { margin-left: 6px; }
+/* 표: 글자 14px, 제목 13.5px 진하게, 줄 간격 넉넉히, 줄 구분선 보이게, 숫자 자리 맞춤 */
+table.grid { font-size: 14px; }
+table.grid td { padding: 10px 12px; line-height: 1.45; border-bottom: 1px solid var(--line); }
+table.grid th { padding: 10px 12px; font-size: 13.5px; color: var(--text-2, var(--text)); }
+table.grid td.r, table.grid th.r, .r { font-variant-numeric: tabular-nums; }
+table.grid tbody tr:hover > td { background: var(--accent-soft); }
+/* 작은 글자 최소 13px(설명·선택 표시·상태 칩·부서 표시) */
+.hint, label > span.opt, legend > span.opt, summary span.opt, .form-legend span.opt, p.small, span.small, .input-author, .rs-page .rs-f-l { font-size: 13px; }
+.chip, .dept, .tag { font-size: 12.5px; padding: 3px 8px; }
+/* 대비: 화면 탭 글자·닫기, 관리 전환 단추, 흐린 글씨를 한 단계 진하게 */
+.pt-tab { color: var(--text-2, var(--text)); }
+.pt-x { display: inline-grid; place-items: center; min-width: 26px; min-height: 26px; opacity: .8; }
+.manage-tabs a.on { background: var(--ns-navy, var(--accent)); }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --muted: #566070; } }
+:root[data-theme="light"] { --muted: #566070; }
+/* 표 제목 필터 단추(▼)를 조금 크게 */
+.xf-btn { width: 24px; height: 24px; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .pt-tab.on { color: var(--ns-navy-2, #16307d); } }
+:root[data-theme="light"] .pt-tab.on { color: var(--ns-navy-2, #16307d); }
+.bulk-bar .bulk-end { margin-left: auto; } /* 15.172 거래명세서(기간 합산)는 결과 영역 오른쪽 */
+
+/* 15.173 표 열 너비·순서 */
+table.grid > thead > tr > th { position: relative; }
+.gr-rz { position: absolute; top: 0; right: -4px; width: 9px; height: 100%; cursor: col-resize; z-index: 2; touch-action: none; }
+.gr-rz::after { content: ''; position: absolute; top: 25%; bottom: 25%; left: 4px; width: 1px; background: var(--line); }
+th:hover > .gr-rz::after, .gr-resizing .gr-rz::after { background: var(--ns-pill, var(--accent)); width: 2px; }
+body.gr-resizing, body.gr-resizing * { cursor: col-resize !important; user-select: none; }
+th.gr-drag { cursor: grab; } th.gr-dragging { opacity: .45; }
+th.gr-over { box-shadow: inset 3px 0 0 var(--ns-pill, var(--accent)); background: var(--accent-soft); }
+table.grid.gr-fixed { table-layout: fixed; max-width: none; }
+table.grid.gr-fixed > thead > tr > th { box-sizing: border-box; }
+table.grid.gr-fixed td, table.grid.gr-fixed th { overflow: hidden; text-overflow: ellipsis; }
+.gr-bar { display: flex; justify-content: flex-end; margin: 0 0 6px; }
+@media (max-width: 820px) { .gr-rz, .gr-bar { display: none; } th.gr-drag { cursor: auto; } table.grid.as-cards.gr-fixed { width: auto !important; table-layout: auto; } }
+
+/* 15.174 검사규격 고르기·연결 미리 보기 */
+.spec-pick-list { display: grid; gap: 6px; max-height: 50vh; overflow: auto; }
+.spec-pick { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font-weight: 400; cursor: pointer; }
+.spec-pick:has(input:checked) { border-color: var(--ns-pill, var(--accent)); background: var(--accent-soft); }
+.spec-pick input { margin-top: 3px; min-height: 0; }
+.spec-hint { margin: 4px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+button.linklike { border: 0; background: none; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; }

@@ -113,7 +113,7 @@ function taxInvoiceView(inv, after) {
     if (!items.length) return toast('품목을 한 줄 이상 넣으세요.', 'err');
     if (!ed.check()) return toast('품목 줄 합계가 계산서 합계와 다릅니다. 금액을 맞춰 주세요.', 'err');
     const body = { doc_type: $('[name="taxf-doc"]:checked', m.el)?.value || inv.doc_type || 'tax', write_date: wd.value, charge: $('[name="taxf-charge"]:checked', m.el)?.value || inv.charge, email1: tf('email1'), email2: tf('email2'), note: tf('note'),
-      buyer: Object.fromEntries(['biz_no', 'biz_name', 'ceo', 'address', 'biz_type', 'biz_item'].map(k => [k, tf(k)])), items, issue_type: issue, ...(reverseEdit ? { approval_no: tf('approval_no') } : {}) };
+      buyer: Object.fromEntries(['biz_no', 'biz_name', 'ceo', 'address', 'biz_type', 'biz_item'].map(k => [k, tf(k)])), items, issue_type: issue, version: inv.updated_at ?? null, ...(reverseEdit ? { approval_no: tf('approval_no') } : {}) };
     e.target.disabled = true;
     try { const r = await api('PUT', `/api/tax-invoices/${inv.id}`, body); toast('계산서를 고쳤습니다.'); reopen(r); } catch (error) { fail(error); e.target.disabled = false; }
   };

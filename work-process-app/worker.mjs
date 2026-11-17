@@ -1512,8 +1512,10 @@ route('POST', '/api/notes', async ({ user, body }) => {
   const n = await noteFields(body);
   if (await noteDup(n)) throw new HttpError(409, `${NOTE_KIND[n.kind]} ${n.note_no}는 이미 등록되어 있습니다.`);
   const token = key || 'srv:' + crypto.randomUUID();
-  await db.prepare('INSERT INTO bill_notes(kind,issue_date,note_no,partner,amount,due_date,bank,memo,created_by,created_by_id,request_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)')
-    .run(n.kind, n.issue_date, n.note_no, n.partner, n.amount, n.due_date, n.bank, n.memo, user.name, user.id, token);
+  // 15.169 동시에 같은 어음번호가 들어와도 한 건만(확인과 넣기를 한 문장으로)
+  const ins = await db.prepare("INSERT INTO bill_notes(kind,issue_date,note_no,partner,amount,due_date,bank,memo,created_by,created_by_id,request_id) SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM bill_notes WHERE kind=? AND note_no=? AND status<>'cancelled')")
+    .run(n.kind, n.issue_date, n.note_no, n.partner, n.amount, n.due_date, n.bank, n.memo, user.name, user.id, token, n.kind, n.note_no);
+  if (!ins.changes) throw new HttpError(409, `${NOTE_KIND[n.kind]} ${n.note_no}는 이미 등록되어 있습니다.`);
   return db.prepare('SELECT * FROM bill_notes WHERE request_id=?').get(token);
 });
 route('PUT', '/api/notes/:id', async ({ user, params, body }) => {
@@ -1524,8 +1526,8 @@ route('PUT', '/api/notes/:id', async ({ user, params, body }) => {
   const labels = { kind: '구분', issue_date: '발행일자', note_no: '어음번호', partner: '거래처', amount: '발행금액', due_date: '만기일자', bank: '발행은행', memo: '비고' };
   const diff = Object.keys(labels).filter(k => String(n[k]) !== String(old[k])).map(k => k === 'memo' ? labels[k] : `${labels[k]} ${old[k]} → ${n[k]}`);
   if (!diff.length) return old;
-  await db.batch([{ sql: "UPDATE bill_notes SET kind=?,issue_date=?,note_no=?,partner=?,amount=?,due_date=?,bank=?,memo=?,updated_by=?,updated_at=? WHERE id=? AND status<>'cancelled'", args: [n.kind, n.issue_date, n.note_no, n.partner, n.amount, n.due_date, n.bank, n.memo, user.name, now(), old.id] }, RC_GUARD, docChange('note', old.id, diff.join(' · '), user)])
-    .catch(error => { if (isGuardError(error)) throw new HttpError(409, '그 사이 어음이 삭제되었습니다. 새로 불러오세요.'); throw error; });
+  await db.batch([{ sql: "UPDATE bill_notes SET kind=?,issue_date=?,note_no=?,partner=?,amount=?,due_date=?,bank=?,memo=?,updated_by=?,updated_at=? WHERE id=? AND status<>'cancelled' AND NOT EXISTS(SELECT 1 FROM bill_notes x WHERE x.kind=? AND x.note_no=? AND x.status<>'cancelled' AND x.id<>?)", args: [n.kind, n.issue_date, n.note_no, n.partner, n.amount, n.due_date, n.bank, n.memo, user.name, now(), old.id, n.kind, n.note_no, old.id] }, RC_GUARD, docChange('note', old.id, diff.join(' · '), user)])
+    .catch(error => { if (isGuardError(error)) throw new HttpError(409, '그 사이 어음이 삭제되었거나 같은 어음번호가 등록되었습니다. 새로 불러오세요.'); throw error; });
   return mustGet('bill_notes', old.id);
 });
 // 처리구분: collect(만기회수, 처리일자) · reopen(미처리로 되돌림) · cancel(삭제 — 기록은 남김)
@@ -1544,7 +1546,7 @@ route('GET', '/api/notes/:id/history', async ({ user, params }) => { requirePaym
 // ── 영업: 견적서 (15.163) ── 수신(거래처, 거래처코드로 찾기)·참조·견적일·유효기간·통화(원/달러)·담당자·기타 + 품목 줄(품목코드로 찾기, 단가 입력).
 // 금액은 V.A.T 별도 공급가액: 원화는 원 미만 절사, 달러는 센트(소수 둘째 자리) 반올림. 견적번호 SST-연도-월일-순번. 고치면 이력, 취소는 상태만.
 const QUOTE_MAX_LINES = 60;
-const quoteMoney = (v, cur) => cur === 'USD' ? Math.round(Number(v) * 100) / 100 : billTrunc(v);
+const quoteMoney = (v, cur) => cur === 'USD' ? Number(Math.round(Number(Number(v).toFixed(8) + 'e2')) + 'e-2') : billTrunc(v); // 15.169 1.005 → 1.01(소수 오차 없이)
 async function quoteFields(body, old = {}) {
   const customer = reqStr(body.customer ?? old.customer, '수신(거래처)', 100), v = await vendorByName(customer);
   const currency = (body.currency ?? old.currency) === 'USD' ? 'USD' : 'KRW';
@@ -1557,9 +1559,9 @@ async function quoteFields(body, old = {}) {
     if (qty <= 0) throw bad(`${no}: 수량을 0보다 크게 넣으세요.`);
     if (price < 0) throw bad(`${no}: 단가를 확인하세요.`);
     let bom = null; if (l.bom_id) { const id = Number(l.bom_id); if (Number.isSafeInteger(id) && id > 0) bom = await db.prepare('SELECT id, product_code FROM boms WHERE id=?').get(id); }
-    lines.push({ bom_id: bom?.id ?? null, product_code: str(l.product_code ?? bom?.product_code ?? '', 50), item: reqStr(l.item, `${no} 품명`, 200), spec: str(l.spec, 100), unit: str(l.unit, 20), qty: stockRound(qty), unit_price: Number(price), supply: quoteMoney(qty * price, currency), note: str(l.note, 200) });
+    const q2 = stockRound(qty); lines.push({ bom_id: bom?.id ?? null, product_code: str(l.product_code ?? bom?.product_code ?? '', 50), item: reqStr(l.item, `${no} 품명`, 200), spec: str(l.spec, 100), unit: str(l.unit, 20), qty: q2, unit_price: Number(price), supply: quoteMoney(q2 * price, currency), note: str(l.note, 200) });
   }
-  return { quote_date: date, customer: v?.name || customer, customer_code: v?.code || '', attn: str(body.attn ?? old.attn, 100), valid_text: str(body.valid_text ?? old.valid_text ?? '견적일로부터 1개월', 100) || '견적일로부터 1개월', currency,
+  return { quote_date: date, customer: v?.name || customer, customer_code: v?.code || (nameKey(customer) === nameKey(old.customer || '') ? old.customer_code || '' : ''), attn: str(body.attn ?? old.attn, 100), valid_text: str(body.valid_text ?? old.valid_text ?? '견적일로부터 1개월', 100) || '견적일로부터 1개월', currency,
     manager: str(body.manager ?? old.manager, 50), manager_phone: str(body.manager_phone ?? old.manager_phone, 30), terms: str(body.terms ?? old.terms, 1000), note: str(body.note ?? old.note, 500),
     supply_total: quoteMoney(lines.reduce((t, l) => t + l.supply, 0), currency), lines };
 }
@@ -1599,24 +1601,26 @@ route('GET', '/api/quotes/:id', async ({ user, params }) => { requireSales(user)
 route('PUT', '/api/quotes/:id', async ({ user, params, body }) => {
   requireSales(user);
   const old = await mustGet('quotes', params.id); if (old.status !== 'active') throw bad('취소된 견적서는 고칠 수 없습니다. 「복사」로 새 견적서를 만드세요.');
+  const ver = old.updated_at || old.created_at; if (body.version !== undefined && String(body.version ?? '') !== String(ver ?? '')) throw new HttpError(409, '그 사이 다른 사람이 이 견적서를 고쳤습니다. 다시 불러온 뒤 고치세요.'); // 15.169
   const q = await quoteFields(body, old), oldLines = await db.prepare('SELECT item, qty, unit_price FROM quote_lines WHERE quote_id=? ORDER BY line_no').all(old.id);
   const diff = [];
   for (const [k, label] of [['quote_date', '견적일'], ['customer', '수신'], ['attn', '참조'], ['valid_text', '유효기간'], ['currency', '통화'], ['manager', '담당자'], ['terms', '기타']]) if (String(q[k] ?? '') !== String(old[k] ?? '')) diff.push(label);
   if (JSON.stringify(oldLines.map(l => [l.item, l.qty, l.unit_price])) !== JSON.stringify(q.lines.map(l => [l.item, l.qty, l.unit_price]))) diff.push(`품목 ${q.lines.length}줄`);
   if (q.supply_total !== old.supply_total) diff.push(`금액 ${old.supply_total} → ${q.supply_total}`);
   const r = await db.batch([
-    { sql: "UPDATE quotes SET quote_date=?,customer=?,customer_code=?,attn=?,valid_text=?,currency=?,manager=?,manager_phone=?,terms=?,note=?,supply_total=?,updated_by=?,updated_at=? WHERE id=? AND status='active'",
-      args: [q.quote_date, q.customer, q.customer_code, q.attn, q.valid_text, q.currency, q.manager, q.manager_phone, q.terms, q.note, q.supply_total, user.name, now(), old.id] }, RC_GUARD,
+    { sql: "UPDATE quotes SET quote_date=?,customer=?,customer_code=?,attn=?,valid_text=?,currency=?,manager=?,manager_phone=?,terms=?,note=?,supply_total=?,updated_by=?,updated_at=? WHERE id=? AND status='active' AND COALESCE(updated_at,created_at)=?",
+      args: [q.quote_date, q.customer, q.customer_code, q.attn, q.valid_text, q.currency, q.manager, q.manager_phone, q.terms, q.note, q.supply_total, user.name, now(), old.id, ver] }, RC_GUARD,
     { sql: 'DELETE FROM quote_lines WHERE quote_id=?', args: [old.id] },
     ...quoteLineCmds('?', [old.id], q.lines),
     docChange('quote', old.id, diff.join(' · ') || '저장', user),
-  ]).catch(error => { if (isGuardError(error)) throw new HttpError(409, '그 사이 견적서가 취소되었습니다. 새로 불러오세요.'); throw error; });
+  ]).catch(error => { if (isGuardError(error)) throw new HttpError(409, '그 사이 견적서가 취소되었거나 다른 사람이 고쳤습니다. 새로 불러오세요.'); throw error; });
   return quoteDetail(await mustGet('quotes', old.id));
 });
 route('POST', '/api/quotes/:id/cancel', async ({ user, params }) => {
   requireSales(user);
   const q = await mustGet('quotes', params.id); if (q.status !== 'active') throw bad('이미 취소된 견적서입니다.');
-  await db.batch([{ sql: "UPDATE quotes SET status='cancelled',cancelled_by=?,cancelled_at=? WHERE id=? AND status='active'", args: [user.name, now(), q.id] }, docChange('quote', q.id, '취소', user)]);
+  await db.batch([{ sql: "UPDATE quotes SET status='cancelled',cancelled_by=?,cancelled_at=? WHERE id=? AND status='active'", args: [user.name, now(), q.id] }, RC_GUARD, docChange('quote', q.id, '취소', user)])
+    .catch(error => { if (isGuardError(error)) throw bad('이미 취소된 견적서입니다.'); throw error; }); // 15.169 두 번 눌러도 이력 한 줄
   return quoteDetail(await mustGet('quotes', q.id));
 });
 // ── 영업: 납품현황 (15.157) ── 입고현황의 매출 쪽. 출고일 기준으로 기간 안 출하 줄을 분류·고객사·품목·일자별로 본다.
@@ -2636,15 +2640,18 @@ route('PUT', '/api/tax-invoices/:id', async ({ user, params, body }) => {
   // 15.164 역발행(거래처가 홈택스에서 발행, 우리는 기록만)은 발행 기록 뒤에도 고칠 수 있다. 우리가 발행한 정발행은 발행 요청 뒤 못 고침.
   const pending = ['draft', 'failed'].includes(inv.status), reverseEdit = inv.issue_type === 'reverse' && inv.status !== 'cancelled';
   if (!pending && !reverseEdit) throw bad('발행을 요청한 계산서는 고칠 수 없습니다(역발행 계산서는 발행 기록 뒤에도 고칠 수 있음).');
+  // 15.169 동시 수정 막기: 화면이 읽은 버전(updated_at)과 다르면 409(그 사이 다른 사람이 발행 기록·수정)
+  if (body.version !== undefined && String(body.version ?? '') !== String(inv.updated_at ?? '')) throw new HttpError(409, '그 사이 다른 사람이 이 계산서를 고쳤거나 발행을 기록했습니다. 창을 닫고 다시 열어 주세요.');
   const writeDate = body.write_date === undefined ? inv.write_date : dateStr(body.write_date, '작성일자');
   if (inv.kind === 'monthly' && inv.period_from && writeDate < inv.period_from) throw bad('작성일자는 기간 시작일 이후여야 합니다.');
+  if (!pending) for (const d of new Set([inv.write_date, writeDate])) if (await salesClosed(inv.customer, d)) throw bad(closedMessage(inv.customer, d, '발행된 역발행 계산서를 고치세요')); // 15.169
   const set = { write_date: writeDate, charge: body.charge === undefined ? inv.charge : body.charge === 'receipt' ? 'receipt' : 'claim', email1: body.email1 === undefined ? inv.email1 : taxEmail(body.email1, '이메일 1'), email2: body.email2 === undefined ? inv.email2 : taxEmail(body.email2, '이메일 2'), note: body.note === undefined ? inv.note : str(body.note, 200) };
   if (body.refresh_customer) { const v = await vendorByName(inv.customer); if (v) Object.assign(set, { biz_no: v.biz_no, biz_name: v.biz_name || v.name, ceo: v.ceo, address: v.address, biz_type: v.biz_type, biz_item: v.biz_item }); }
   // 15.142 양식 창에서 바로 고치기: 공급받는자 정보 · 품목 줄(월일·품목·규격·비고, 금액은 전표 그대로)
   if (body.buyer && typeof body.buyer === 'object' && !body.refresh_customer) {
     const b = body.buyer; Object.assign(set, { biz_no: b.biz_no === undefined ? inv.biz_no : bizNoField(b.biz_no), biz_name: str(b.biz_name ?? inv.biz_name, 100), ceo: str(b.ceo ?? inv.ceo, 50), address: str(b.address ?? inv.address, 200), biz_type: str(b.biz_type ?? inv.biz_type, 100), biz_item: str(b.biz_item ?? inv.biz_item, 100) });
   }
-  if (body.issue_type !== undefined && pending) { if (!['normal', 'reverse'].includes(body.issue_type)) throw bad('발행구분을 확인하세요.'); set.issue_type = body.issue_type; }
+  if (body.issue_type !== undefined && pending) { if (!['normal', 'reverse'].includes(body.issue_type)) throw bad('발행구분을 확인하세요.'); if (body.issue_type !== inv.issue_type) set.issue_type = body.issue_type; }
   if (body.approval_no !== undefined && reverseEdit) {
     const appr = approvalNo(body.approval_no);
     if (appr && appr !== inv.approval_no && await db.prepare("SELECT 1 FROM tax_invoices WHERE approval_no=? AND status<>'cancelled' AND id<>?").get(appr, inv.id)) throw new HttpError(409, `승인번호 ${appr}는 이미 다른 계산서에 있습니다.`);
@@ -2656,9 +2663,10 @@ route('PUT', '/api/tax-invoices/:id', async ({ user, params, body }) => {
   if (Array.isArray(body.items)) {
     // 15.162 수량·단가·공급가액·세액도 고치고 줄을 보태거나(품목명 넣기) 뺄(품목명 비우기) 수 있다. 줄 금액 합은 계산서(담긴 전표) 합계와 같아야 한다.
     const raw = body.items.filter(e => e && typeof e === 'object' && String(e.item ?? '').trim()), max = Math.max(16, items.length);
+    const aligned = body.items.length === items.length && raw.length === items.length; // 15.169 줄을 보태거나 뺐으면 옛 줄 값을 물려받지 않는다
     if (!raw.length || raw.length > max) throw bad(`품목 줄은 1~${max}줄로 넣으세요(품목명이 빈 줄은 빠집니다).`);
     const optNum = (v, old, label) => v === undefined ? old ?? null : v === null || v === '' ? null : num(v, label);
-    items = raw.map((e, k) => { const it = items[k] || {}; const date = e.date ? dateStr(e.date, `${k + 1}번째 품목 월일`) : it.date || writeDate;
+    items = raw.map((e, k) => { const it = aligned ? items[k] || {} : {}; const date = e.date ? dateStr(e.date, `${k + 1}번째 품목 월일`) : it.date || writeDate;
       if (String(date).slice(0, 7) !== month) throw bad(`${k + 1}번째 품목 월일(${date})은 작성일자와 같은 달이어야 합니다.`);
       const supply = e.supply === undefined ? Number(it.supply ?? 0) : Number(e.supply), vat = e.vat === undefined ? Number(it.vat ?? 0) : Number(e.vat ?? 0);
       if (!Number.isInteger(supply) || !Number.isInteger(vat)) throw bad(`${k + 1}번째 품목: 공급가액·세액은 원 단위 정수로 넣으세요.`);
@@ -2672,7 +2680,10 @@ route('PUT', '/api/tax-invoices/:id', async ({ user, params, body }) => {
     items = items.map(it => ({ ...it, date: inv.kind === 'single' || String(it.date || '').slice(0, 7) !== month ? writeDate : it.date })); set.items = JSON.stringify(items);
   }
   const keys = Object.keys(set);
-  const r = await db.prepare(`UPDATE tax_invoices SET ${keys.map(k => `${k}=?`).join(',')},updated_by=?,updated_at=? WHERE id=? AND (status IN ('draft','failed') OR (issue_type='reverse' AND status<>'cancelled'))`).run(...keys.map(k => set[k]), user.name, now(), inv.id);
+  // 15.169 읽은 상태·버전 그대로일 때만(그 사이 발행 기록·다른 수정이면 덮지 않음) · 발행 뒤 역발행 고치기는 이력
+  const changedKeys = keys.filter(k => String(set[k] ?? '') !== String(inv[k] ?? ''));
+  const r = await db.prepare(`UPDATE tax_invoices SET ${keys.map(k => `${k}=?`).join(',')},updated_by=?,updated_at=? WHERE id=? AND status=? AND COALESCE(updated_at,'')=? AND (status IN ('draft','failed') OR (issue_type='reverse' AND status<>'cancelled'))`).run(...keys.map(k => set[k]), user.name, now(), inv.id, inv.status, inv.updated_at || '');
+  if (r.changes && !pending && changedKeys.length) await db.prepare('INSERT INTO doc_changes(doc_type,doc_id,summary,changed_by) VALUES(?,?,?,?)').run('tax_invoice', inv.id, `발행 뒤 역발행 고침: ${changedKeys.map(k => ({ write_date: '작성일자', approval_no: '승인번호', items: '품목 줄', item_summary: '', note: '비고', biz_no: '사업자번호', biz_name: '상호', email1: '이메일', email2: '이메일', charge: '영수/청구', doc_type: '문서 구분' })[k] ?? k).filter(Boolean).join('·')}`.slice(0, 500), user.name);
   if (!r.changes) throw new HttpError(409, '그 사이 발행이 요청되었습니다. 새로 불러오세요.');
   return invoiceDetail(await mustGet('tax_invoices', inv.id));
 });
@@ -2942,9 +2953,27 @@ function inspectionSnapshotSQL(title, kind, category, code = "''") {
 async function inspectionSnapshot(f) {
   if (!['수입검사','출하검사'].includes(f.category)) return '';
   const keys = [...new Set([inspectionKey(f.title), inspectionKey(f.data.product_code)].filter(Boolean))];
-  const rows = await db.prepare(`SELECT DISTINCT s.* FROM inspection_specs s JOIN inspection_spec_keys k ON k.spec_id=s.id WHERE s.active=1 AND s.kind=? AND s.item_category=? AND k.name_key IN (${keys.map(() => '?').join(',')})`).all(f.category, f.data.item_category || '', ...keys);
-  return rows.length === 1 ? JSON.stringify({ ...JSON.parse(rows[0].definition), id: rows[0].id, revision: rows[0].revision }) : '';
+  const m = await inspectionSpecMatch(f.category, f.data.item_category || '', f.title, f.data.product_code);
+  return m.exact.length === 1 ? m.exact[0].snapshot : '';
 }
+// 15.174 의뢰 ↔ 검사규격 찾기. exact: 품명·제품코드가 규격 품명·별칭과 같음(공백·대소문자 무시),
+// partial: 서로 포함(3자 이상) — 추천으로만 보여 주고 자동 연결하지 않는다. 의뢰에 품목 카테고리가 있으면 같은 카테고리만.
+async function inspectionSpecMatch(kind, category, title, code) {
+  if (!['수입검사','출하검사'].includes(kind)) return { exact: [], partial: [] };
+  const specs = await db.prepare('SELECT s.*, (SELECT GROUP_CONCAT(name_key, char(31)) FROM inspection_spec_keys k WHERE k.spec_id=s.id) keys FROM inspection_specs s WHERE s.active=1 AND s.kind=?').all(kind);
+  const loose = k => String(k || '').toLowerCase().replace(/[\s\-_.,·()[\]{}\/]/g, ''); // 하이픈·괄호·점·공백 무시(NX-707 = nx 707)
+  const want = [...new Set([loose(title), loose(code)].filter(Boolean))], exact = [], partial = [];
+  for (const sp of specs) {
+    if (category && sp.item_category !== category) continue;
+    const keys = [...new Set(String(sp.keys || '').split('\u001f').map(loose).filter(Boolean))];
+    const def = JSON.parse(sp.definition), row = { id: sp.id, product: def.product, item_category: sp.item_category, revision: sp.revision, items: def.items.map(i => i.name), snapshot: JSON.stringify({ ...def, id: sp.id, revision: sp.revision }) };
+    if (keys.some(k => want.includes(k))) exact.push(row);
+    else if (keys.some(k => want.some(w => (k.length >= 3 && w.includes(k)) || (w.length >= 3 && k.includes(w))))) partial.push(row);
+  }
+  return { exact, partial };
+}
+const specBrief = ({ snapshot, ...r }) => r;
+route('GET','/api/inspection-specs/match',async ({query}) => { const m = await inspectionSpecMatch(query.kind, query.item_category || '', query.title, query.code); return { exact: m.exact.map(specBrief), partial: m.partial.map(specBrief) }; });
 function requireInspectionManager(user) { requireRole(user,'quality_approver','품질팀장'); }
 function validateInspectionSpec(body) {
   if (!['수입검사','출하검사'].includes(body.kind)) throw bad('수입검사 또는 출하검사를 선택하세요.');
@@ -3011,8 +3040,15 @@ route('PUT','/api/inspection-specs/:id',({user,body,params})=>saveInspectionSpec
 function decodeInspection(row) { return row ? {...row,values:JSON.parse(row.values_json)} : null; }
 async function inspectionRequest(id) { const r=await getRequest(id); if(r.type!=='analysis'||!['수입검사','출하검사'].includes(r.category)) throw bad('수입검사·출하검사 의뢰를 선택하세요.'); return r; }
 route('GET','/api/requests/:id/inspection',async ({user,params})=>{
-  const r=await inspectionRequest(params.id);
-  return { request:decodeRequest(r), spec:r.inspection_snapshot?JSON.parse(r.inspection_snapshot):null, measurement:decodeInspection(await db.prepare('SELECT * FROM inspection_measurements WHERE request_id=?').get(r.id)), can_manage:!isOperator(user)&&hasRole(user,'quality_approver'),can_write:!isOperator(user)&&hasRole(user,'quality')&&WORK_STATUSES.includes(r.status),history:await db.prepare('SELECT id,revision,result,reason,saved_by,saved_at FROM inspection_measurement_history WHERE request_id=? ORDER BY id DESC LIMIT 50').all(r.id) };
+  let r=await inspectionRequest(params.id), suggest=null;
+  if(!r.inspection_snapshot){
+    const d=JSON.parse(r.data||'{}'), m=await inspectionSpecMatch(r.category,d.item_category||'',r.title,d.product_code);
+    if(m.exact.length===1&&r.status!=='done'){
+      await db.prepare("UPDATE requests SET inspection_snapshot=? WHERE id=? AND inspection_snapshot=''").run(m.exact[0].snapshot,r.id);
+      r=await inspectionRequest(params.id);
+    } else suggest={exact:m.exact.map(specBrief),partial:m.partial.map(specBrief)};
+  }
+  return { suggest, request:decodeRequest(r), spec:r.inspection_snapshot?JSON.parse(r.inspection_snapshot):null, measurement:decodeInspection(await db.prepare('SELECT * FROM inspection_measurements WHERE request_id=?').get(r.id)), can_manage:!isOperator(user)&&hasRole(user,'quality_approver'),can_write:!isOperator(user)&&hasRole(user,'quality')&&WORK_STATUSES.includes(r.status),history:await db.prepare('SELECT id,revision,result,reason,saved_by,saved_at FROM inspection_measurement_history WHERE request_id=? ORDER BY id DESC LIMIT 50').all(r.id) };
 });
 route('POST','/api/requests/:id/inspection/spec',async ({user,params,body})=>{
   requireInspectionManager(user); const r=await inspectionRequest(params.id), s=await mustGet('inspection_specs',body.spec_id);

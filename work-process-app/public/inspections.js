@@ -192,11 +192,26 @@ async function pageInspections(main) {
 }
 async function openInspection(id,done=()=>{}) {
   const data=await api('GET',`/api/requests/${id}/inspection`),{request:r,spec,measurement}=data;
-  if(!spec){
-    const choices=data.can_manage?(await api('GET','/api/inspection-specs')).specs.filter(s=>s.active&&s.kind===r.category&&(!r.data.item_category||r.data.item_category===s.item_category)):[];
-    const m=modal(`<h3>${esc(r.title)} · ${esc(r.category)}</h3><p>검사규격이 아직 지정되지 않았습니다. 품질팀장이 규격을 등록하고 적용해주세요.</p>${data.can_manage?`<form class="stack"><label>적용할 규격<select name="spec_id" required><option value="">규격 선택</option>${choices.map(s=>`<option value="${s.id}">${esc(s.item_category)} · ${esc(s.product)} · 규격 ${s.revision}</option>`).join('')}</select></label><p class="small muted">적용한 규격은 이 검사에 고정되며 이후 규격 설정을 바꿔도 유지됩니다.</p><button class="btn primary">규격 적용</button></form><a href="#/quality/specs" data-spec-link>검사규격 설정으로 이동</a>`:''}`);
-    if(data.can_manage){$('[data-spec-link]',m.el).onclick=m.close;const form=$('form',m.el);let busy=false;form.onsubmit=async e=>{e.preventDefault();if(busy)return;busy=true;form.inert=true;try{await api('POST',`/api/requests/${id}/inspection/spec`,formObj(form));m.close();await openInspection(id,done);}catch(error){fail(error);}finally{busy=false;form.inert=false;}};}return;
+  if(!spec){ // 15.174 규격이 없을 때: 이름이 비슷한 규격을 먼저 추천하고 한 번에 적용, 없으면 이 품명으로 바로 등록
+    const sg=data.suggest||{exact:[],partial:[]}, picked=new Set([...sg.exact,...sg.partial].map(x=>x.id));
+    const all=data.can_manage?(await api('GET','/api/inspection-specs')).specs.filter(s=>s.active&&s.kind===r.category&&!picked.has(s.id)&&(!r.data.item_category||r.data.item_category===s.item_category)):[];
+    const opt=(s,tag)=>`<label class="spec-pick"><input type="radio" name="spec_id" value="${s.id}" required> <span><b>${esc(s.product)}</b> ${tag} <span class="small muted">${esc(s.item_category)} · 규격 ${s.revision}${s.items?.length?` · ${esc((s.items||[]).map(x=>x.name||x).join(', '))}`:''}</span></span></label>`;
+    const list=[...sg.exact.map(s=>opt(s,'<span class="chip green">이름 일치</span>')),...sg.partial.map(s=>opt(s,'<span class="chip yellow">비슷한 이름</span>')),...all.map(s=>opt(s,''))];
+    const hint=sg.exact.length>1?`이름이 맞는 규격이 ${sg.exact.length}개라 자동으로 고르지 않았습니다. 하나를 고르세요.`:sg.partial.length?'이름이 정확히 같은 규격은 없고, 비슷한 규격이 있습니다.':`「${esc(r.title)}」${r.data.item_category?` (${esc(r.data.item_category)})`:''}에 맞는 ${esc(r.category)} 규격이 없습니다.`;
+    const m=modal(`<h3>${esc(r.title)} · ${esc(r.category)}</h3><p>${hint}</p>
+      ${data.can_manage?`<form class="stack spec-pick-form">${list.length?`<div class="spec-pick-list" role="radiogroup" aria-label="적용할 규격">${list.join('')}</div>`:''}
+        <p class="small muted">적용한 규격은 이 검사에 고정되며 이후 규격 설정을 바꿔도 유지됩니다. 규격의 품명·별칭을 이 품명과 같게 해 두면 다음부터 자동으로 연결됩니다.</p>
+        <div class="actions">${list.length?'<button class="btn primary">규격 적용</button>':''}<button type="button" class="btn" data-spec-new>「${esc(r.title)}」 규격 새로 등록</button></div></form>`
+      :`${sg.exact.length||sg.partial.length?`<p class="small">후보: ${[...sg.exact,...sg.partial].map(s=>esc(s.product)).join(', ')}</p>`:''}<p class="small muted">규격 지정은 품질팀장이 합니다. 품질팀장에게 이 의뢰의 규격 지정을 요청하세요.</p>`}`,{wide:true});
+    if(data.can_manage){
+      const form=$('form',m.el);let busy=false;
+      $('[name=spec_id]',form)?.click();
+      $('[data-spec-new]',form).onclick=()=>{m.close();editInspectionSpec({kind:r.category,item_category:r.data.item_category||'원자재',product:r.title,aliases:r.data.product_code?[r.data.product_code]:[],items:[]},()=>openInspection(id,done));};
+      form.onsubmit=async e=>{e.preventDefault();if(busy)return;busy=true;form.inert=true;try{await api('POST',`/api/requests/${id}/inspection/spec`,formObj(form));m.close();await openInspection(id,done);}catch(error){fail(error);}finally{busy=false;form.inert=false;}};
+    }
+    return;
   }
+
   const m=modal(`<h3>${esc(r.title)} · ${esc(r.category)}</h3><p>${esc(spec.item_category)} · 적용 품목 ${esc(spec.product)} · 규격 ${spec.revision}</p><p class="small muted">모든 값이 규격 이내면 합격, 하나라도 벗어나면 불합격입니다. 빈 칸이 남고 규격 이탈이 없으면 검사 대기입니다. 평균은 참고용입니다.</p>${!data.can_write?'<p class="muted">승인된 의뢰에서 품질 담당자만 측정값을 입력할 수 있습니다.</p>':''}<form class="stack"><div data-measure-rows></div>${data.can_write?'<button type="button" class="btn" data-add-sample>LOT / 시료 추가</button><label>수정 사유 (판정된 결과 수정 시 필수)<input name="reason" maxlength="500"></label>':''}<div data-verdict role="status"></div>${data.can_write?'<button class="btn primary">측정값 저장 · 자동 판정</button>':''}</form><details class="card"><summary>저장 이력 (${data.history.length}건 표시)</summary>${data.history.map(h=>`<p><button class="btn small" data-history="${h.id}">기록 ${h.revision} · ${INSPECTION_RESULT[h.result]}</button> ${esc(h.saved_by)} · ${esc(h.saved_at)} ${esc(h.reason)}</p>`).join('')||'<p>저장 이력이 없습니다.</p>'}</details>`,{wide:true});
   const form=$('form',m.el),root=$('[data-measure-rows]',form);
   const read=()=>[...root.children].map(row=>({lot:$('[data-lot]',row).value,values:Object.fromEntries(spec.items.map(item=>[item.key,$$(`[data-item="${item.key}"]`,row).map(el=>el.value)]))}));
@@ -209,6 +224,7 @@ async function openInspection(id,done=()=>{}) {
     const row=document.createElement('fieldset');row.className='inspection-sample';row.innerHTML=`<label>LOT / 시료명 *<input data-lot required maxlength="100" value="${esc(value.lot)}" ${data.can_write?'':'readonly'}></label>${spec.items.map(item=>`<div class="inspection-measure"><b>${esc(inspectionRange(item))}</b><div class="inspection-values">${Array.from({length:item.count},(_,i)=>`<label>#${i+1}<input type="number" step="any" data-item="${item.key}" aria-label="${esc(item.name)} ${i+1}회" value="${esc(value.values[item.key]?.[i]??'')}" ${data.can_write?'':'readonly'}></label>`).join('')}</div><p class="small muted">평균 (참고): <span data-average="${item.key}"></span> ${esc(item.unit)}</p></div>`).join('')}${data.can_write?'<button type="button" class="btn small danger" data-remove-sample>시료 행 제거</button>':''}`;root.append(row);if(data.can_write)$('[data-remove-sample]',row).onclick=()=>{if(root.children.length===1)return toast('시료 행은 1개 이상 필요합니다.','err');row.remove();update();};update();
   };
   (measurement?.values||[undefined]).forEach(add);form.addEventListener('input',()=>{edited=true;update();});
+  form.addEventListener('keydown',e=>{if(e.key!=='Enter'||!e.target.matches('input[data-item],input[data-lot]'))return;e.preventDefault();const all=$$('input[data-item]:not([readonly]),input[data-lot]:not([readonly])',form);const n=all[all.indexOf(e.target)+1];if(n){n.focus();n.select?.();}}); // 15.174 Enter로 다음 측정 칸
   $$('[data-history]',m.el).forEach(b=>b.onclick=async()=>{try{const h=await api('GET',`/api/requests/${id}/inspection/history/${b.dataset.history}`);modal(`<h3>검사 기록 ${h.revision}</h3><p>${qualityInspectionBadge(h.result)} ${esc(h.saved_by)} · ${esc(h.saved_at)}</p>${inspectionMatrix(spec,h.values)}`,{wide:true});}catch(error){fail(error);}});
   if(!data.can_write)return;
   $('[data-add-sample]',form).onclick=()=>add();
