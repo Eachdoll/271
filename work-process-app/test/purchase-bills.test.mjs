@@ -512,3 +512,19 @@ test('15.140 Returns: 반입 restocks and cuts receivable, refund keeps balance,
   assert.equal((await buyer('GET', `/api/purchase-bills/${o1.bill_id}`)).status, 200, 'negative purchase bill opens');
   assert.equal((await staff('POST', '/api/returns', { side: 'out', return_date: today, party: '반출상사', lines: [] })).status, 403);
 });
+
+test('15.141 Aging treats later returns as credit against the oldest bill; return refunds cannot be cancelled alone', async () => {
+  const g = (await admin('POST', '/api/boms', { product: '연령반품', product_code: 'AG-R1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  const sell = async (d, p) => { const s = (await admin('POST', '/api/shipments', { ship_date: d, bom_id: g.id, item: g.product, qty: 1, customer: '연령고객', unit: 'EA' })).body; return (await admin('POST', '/api/sales-bills', { customer: '연령고객', bill_date: d, request_id: rid(), lines: [{ source_type: 'ship', source_id: s.id, unit_price: p }] })).body; };
+  const old = new Date(Date.now() + 9 * 3600e3 - 100 * 864e5).toISOString().slice(0, 10);
+  const b1 = await sell(old, 10000); await sell(today, 5000);
+  const ln = (await admin('GET', `/api/returns/sources?side=in&party=${encodeURIComponent('연령고객')}&months=12`)).body.rows.find(r => r.bill_no === b1.bill_no);
+  await admin('POST', '/api/returns', { side: 'in', return_date: today, party: '연령고객', process: 'amount', request_id: rid(), lines: [{ source_id: ln.id, qty: 1, unit_price: 4000 }] });
+  const row = (await admin('GET', `/api/aging?side=sales&asof=${today}`)).body.rows.find(r => r.name === '연령고객');
+  assert.equal(row.balance, 11000 + 5500 - 4400);
+  assert.equal(row.buckets[0], 5500, 'newest bill untouched'); assert.equal(row.buckets.slice(1).reduce((t, v) => t + v, 0), 11000 - 4400, 'return reduces the oldest bill');
+  const ln2 = (await admin('GET', `/api/returns/sources?side=in&party=${encodeURIComponent('연령고객')}&months=12`)).body.rows.find(r => r.bill_no !== b1.bill_no && r.left > 0);
+  const r2 = (await admin('POST', '/api/returns', { side: 'in', return_date: today, party: '연령고객', process: 'amount', settle: 'refund', request_id: rid(), lines: [{ source_id: ln2.id, qty: 0.5, unit_price: 1000 }] })).body;
+  assert.ok(r2.payment_id, JSON.stringify(r2));
+  assert.match((await admin('POST', `/api/sales-payments/${r2.payment_id}/cancel`, { reason: 'x' })).body.error, /반입 RI-/);
+});

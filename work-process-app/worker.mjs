@@ -1360,6 +1360,7 @@ route('POST', '/api/purchase-payments/:id/cancel', async ({ user, params, body }
   requirePurchase(user);
   const row = await mustGet('purchase_payments', params.id);
   if (row.status !== 'confirmed') throw bad('이미 취소된 지급입니다.');
+  const ret = await db.prepare("SELECT return_no FROM stock_returns WHERE side='out' AND payment_id=? AND status='confirmed'").get(row.id); if (ret) throw bad(`반출 ${ret.return_no}의 현금 환불입니다. 반출 목록에서 그 반출을 취소하세요.`); // 15.141
   if (await closedPeriod(row.vendor, row.pay_date)) throw bad(`${row.vendor}의 ${row.pay_date.slice(0, 7)} 매입은 마감되었습니다. 마감 취소(관리자) 뒤에 취소하세요.`);
   const reason = reqStr(body.reason, '취소 사유', 200);
   const r = await db.prepare("UPDATE purchase_payments SET status='cancelled',cancelled_at=?,cancelled_by=?,cancel_reason=? WHERE id=? AND status='confirmed'").run(now(), user.name, reason, row.id);
@@ -1655,6 +1656,7 @@ route('POST', '/api/sales-payments/:id/cancel', async ({ user, params, body }) =
   requirePayments(user);
   const row = await mustGet('sales_payments', params.id);
   if (row.status !== 'confirmed') throw bad('이미 취소된 입금입니다.');
+  const ret = await db.prepare("SELECT return_no FROM stock_returns WHERE side='in' AND payment_id=? AND status='confirmed'").get(row.id); if (ret) throw bad(`반입 ${ret.return_no}의 현금 환불입니다. 반입 목록에서 그 반입을 취소하세요.`); // 15.141
   if (await salesClosed(row.customer, row.pay_date)) throw bad(closedMessage(row.customer, row.pay_date, '취소하세요'));
   const reason = reqStr(body.reason, '취소 사유', 200);
   const r = await db.prepare("UPDATE sales_payments SET status='cancelled',cancelled_at=?,cancelled_by=?,cancel_reason=? WHERE id=? AND status='confirmed'").run(now(), user.name, reason, row.id);
@@ -1685,7 +1687,7 @@ async function agingData(side, asof) {
   const debits = await db.prepare(`SELECT k, MIN(name) AS name, d, SUM(amt) AS amt FROM (
       SELECT ${key} AS k, ${col} AS name, bill_date AS d, total AS amt FROM ${bills} WHERE status='confirmed' AND bill_date<=?
       UNION ALL SELECT ${key} AS k, ${col} AS name, pay_date AS d, amount AS amt FROM ${pays} WHERE status='confirmed' AND kind='opening' AND pay_date<=?)
-    GROUP BY k, d ORDER BY k, d LIMIT 200001`).all(asof, asof);
+    GROUP BY k, d, amt<0 ORDER BY k, d LIMIT 200001`).all(asof, asof); // 15.141 같은 날 반품(음수)은 따로 묶어 크레딧으로
   if (debits.length > 200000) throw bad('전표가 너무 많습니다.');
   const credits = new Map((await db.prepare(`SELECT ${key} AS k, MIN(${col}) AS name, SUM(amount) AS paid FROM ${pays} WHERE status='confirmed' AND kind='payment' AND pay_date<=? GROUP BY k`).all(asof)).map(r => [r.k, r]));
   const day = d => Date.parse(d + 'T00:00:00Z') / 864e5, now = day(asof);
@@ -1694,9 +1696,10 @@ async function agingData(side, asof) {
   for (const [k, c] of credits) if (!groups.has(k)) groups.set(k, { name: c.name, lines: [] });
   const rows = [];
   for (const [k, g] of groups) {
-    let paid = credits.get(k)?.paid || 0; const total = g.lines.reduce((t, l) => t + l.amt, 0);
+    // 15.141 반입·반출(음수 전표)은 입금·지급처럼 오래된 전표부터 갚은 것으로 본다(날짜가 늦어도 새 전표에 붙지 않게).
+    let paid = (credits.get(k)?.paid || 0) - g.lines.filter(l => l.amt < 0).reduce((t, l) => t + l.amt, 0); const total = g.lines.reduce((t, l) => t + l.amt, 0);
     const buckets = AGING_BUCKETS.map(() => 0), aged = []; let oldest = null;
-    for (const l of g.lines) { // 날짜 순: 오래된 것부터 갚음
+    for (const l of g.lines.filter(x => x.amt > 0)) { // 날짜 순: 오래된 것부터 갚음
       const take = Math.min(Math.max(paid, 0), l.amt); paid -= take; const left = l.amt - take;
       if (left > 0.000001) { const age = now - day(l.d); buckets[AGING_BUCKETS.findIndex(([max]) => age <= max)] += left; aged.push({ age, left }); oldest ??= l.d; }
     }
@@ -2274,7 +2277,7 @@ function invoiceProblems(inv, company) {
   if (!inv.biz_name || !inv.ceo) p.push('거래처 상호·대표자');
   if (!emailOk(inv.email1)) p.push('받는 이메일 1');
   if (inv.email2 && !emailOk(inv.email2)) p.push('받는 이메일 2');
-  if (!(inv.total > 0) && inv.kind) p.push('금액');
+  if (!(inv.total > 0) && inv.kind) p.push('금액(0 이하 — 반입 금액은 월별 계산서에 합치거나 수정 계산서로 직접 발행 기록)');
   return p;
 }
 // 15.138 상태 바꾸기(기존 ERP의 「상태조회」 대신, 트러스빌 연동 전에는 손으로): 상대방 수신 확인·거부·미확인, 국세청 전송·미전송, 정발행·역발행.
