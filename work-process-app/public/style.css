@@ -1879,3 +1879,26 @@ tr.xf-hide { display: none !important; }
 .xf-all { padding: 2px 10px; font-weight: 600; }
 .xf-actions { display: flex; align-items: center; gap: 6px; } .xf-actions .grow { flex: 1; }
 @media print { .xf-btn, .xf-bar { display: none !important; } }
+
+/* 15.159 상단 메뉴(사용자 선택, 넓은 화면만): 왼쪽 메뉴를 머리줄 아래 가로 줄로. 부서를 누르면 하위 메뉴가 여러 칸으로 펼쳐진다. */
+@media (min-width: 821px) {
+  :root[data-nav="top"] .layout { flex-direction: column; }
+  :root[data-nav="top"] .side { position: sticky; top: 56px; z-index: 40; width: auto; height: auto; overflow: visible; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px 16px; border-right: 0; border-bottom: 1px solid var(--line); box-shadow: 0 1px 2px rgba(15, 23, 42, .04); }
+  :root[data-nav="top"] .side > .side-prefs, :root[data-nav="top"] .side > .side-account { display: none !important; }
+  :root[data-nav="top"] .nav-group { position: relative; margin: 0; padding: 0; border: 0 !important; }
+  :root[data-nav="top"] .nav-group > button.nav-title { width: auto; margin: 0; padding: 7px 12px; white-space: nowrap; }
+  :root[data-nav="top"] .nav-group.drop > button.nav-title { background: color-mix(in srgb, var(--dept) 20%, transparent); }
+  :root[data-nav="top"] .nav-group > button.nav-title::after { transform: rotate(45deg); }
+  :root[data-nav="top"] .nav-group.drop > button.nav-title::after { transform: rotate(-135deg); }
+  :root[data-nav="top"] .nav-group:has(a.active) > button.nav-title { box-shadow: inset 0 -3px 0 var(--dept); }
+  :root[data-nav="top"] .nav-group > .nav-body { display: none !important; position: absolute; top: calc(100% + 6px); left: 0; z-index: 50; min-width: 240px; max-width: min(860px, calc(100vw - 32px)); max-height: calc(100vh - 140px); overflow: auto; padding: 12px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(15, 23, 42, .16);
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 4px 16px; width: max-content; }
+  :root[data-nav="top"] .nav-group.drop > .nav-body { display: grid !important; }
+  :root[data-nav="top"] .nav-group:nth-last-child(-n+3) > .nav-body { left: auto; right: 0; } /* 오른쪽 끝 부서는 화면 밖으로 안 나가게 */
+  :root[data-nav="top"] .nav-body > .nav-sub > summary { pointer-events: none; padding: 6px 10px 4px; font-size: 12.5px; color: var(--muted); font-weight: 800; border-bottom: 1px solid var(--line); margin-bottom: 2px; }
+  :root[data-nav="top"] .nav-body > .nav-sub > summary::after { display: none; }
+  :root[data-nav="top"] .nav-body .nav-sub > a { padding-left: 10px !important; }
+  :root[data-nav="top"] .nav-body a { white-space: nowrap; }
+  :root[data-nav="top"] main { max-width: 1440px; margin: 0 auto; width: 100%; }
+}
+@media (max-width: 820px) { .nav-layout-toggle { display: none !important; } }

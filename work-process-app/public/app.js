@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.158';
+const APP_VERSION = '15.159';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -619,8 +619,16 @@ function shell() {
   $('.tab-menu').onclick = () => document.body.classList.toggle('nav-open');
   $$('.side a').forEach((a) => (a.onclick = () => document.body.classList.remove('nav-open')));
   const side = $('.side');
+  // 15.159 상단 메뉴: 머리글을 누르면(또는 올리면) 그 부서의 하위 메뉴가 아래로 펼쳐진다. 바깥·Esc·메뉴를 누르면 닫힘.
+  const topNav = () => document.documentElement.dataset.nav === 'top' && matchMedia('(min-width: 821px)').matches;
+  const drop = (g, on) => { $$('.nav-group.drop', side).forEach(x => { if (x !== g) { x.classList.remove('drop'); x.querySelector('.nav-title')?.setAttribute('aria-expanded', 'false'); } }); if (!g) return; g.classList.toggle('drop', on); g.querySelector('.nav-title').setAttribute('aria-expanded', String(on)); if (on) $$('.nav-sub', g).forEach(d => { d.open = true; }); };
+  side.addEventListener('mouseover', e => { if (!topNav() || !$('.nav-group.drop', side)) return; const g = e.target.closest('.nav-group'); if (g && !g.classList.contains('drop')) drop(g, true); }); // 하나가 열려 있으면 옆 부서로 옮겨 가며 봄
+  side.addEventListener('keydown', e => { if (e.key === 'Escape' && topNav()) { const g = $('.nav-group.drop', side); drop(null); g?.querySelector('.nav-title')?.focus(); } });
+  if (!window.navTopOutside) { window.navTopOutside = true; document.addEventListener('mousedown', e => { if (!e.target.closest('.side')) $$('.side .nav-group.drop').forEach(g => { g.classList.remove('drop'); g.querySelector('.nav-title')?.setAttribute('aria-expanded', 'false'); }); }); } // 한 번만 건다(메뉴는 화면마다 다시 그림)
+  side.addEventListener('click', e => { if (topNav() && e.target.closest('a')) drop(null); });
   side.addEventListener('click', e => {
     const t = e.target.closest('[data-nav-toggle]'); if (!t) return;
+    if (topNav()) { const g = t.closest('.nav-group'); drop(g, !g.classList.contains('drop')); return; }
     const g = t.closest('.nav-group'), shut = !g.classList.contains('shut'), dept = t.dataset.navToggle;
     g.classList.toggle('shut', shut); t.setAttribute('aria-expanded', String(!shut));
     try { const s = new Set(JSON.parse(localStorage.getItem('wpa:nav-shut') || '[]')); shut ? s.add(dept) : s.delete(dept); localStorage.setItem('wpa:nav-shut', JSON.stringify([...s])); } catch { /* 편의 */ }
