@@ -2117,3 +2117,4 @@ table.grid tbody tr:hover > td { background: var(--accent-soft); }
 .xf-btn { width: 24px; height: 24px; }
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .pt-tab.on { color: var(--ns-navy-2, #16307d); } }
 :root[data-theme="light"] .pt-tab.on { color: var(--ns-navy-2, #16307d); }
+.bulk-bar .bulk-end { margin-left: auto; } /* 15.172 거래명세서(기간 합산)는 결과 영역 오른쪽 */
