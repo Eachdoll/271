@@ -2900,3 +2900,12 @@ form.list-filters > label.rp-moved, .toolbar > label.rp-moved { display: none !i
 /* 바닥: 아주 옅은 눈송이 무늬 */
 :root[data-skin="christmas"] body { background-image: radial-gradient(1.5px 1.5px at 30px 40px, rgba(15,77,47,.07) 50%, transparent 51%), radial-gradient(2px 2px at 120px 160px, rgba(198,40,40,.05) 50%, transparent 51%); background-size: 220px 220px; }
 @media print { :root[data-skin="christmas"] .top::before, :root[data-skin="christmas"] .top::after { display: none; } :root[data-skin="christmas"] .brand-text::after, :root[data-skin="christmas"] .dash-head h1::after { content: none; } }
+/* 15.221 휴대폰 메뉴 위 설정: 스킨 고르기는 다음 줄 전체 폭, 메뉴가 옆으로 밀리지 않게 */
+.side-prefs { flex-wrap: wrap; }
+.side-prefs .lang-select { min-width: 0; }
+.side-prefs .skin-select { flex: 1 1 100%; width: 100%; min-height: 36px; }
+@media (max-width: 820px) { .side { overflow-x: hidden; } .side > * { max-width: 100%; } }
+/* 15.221 크리스마스: 좌측·휴대폰 메뉴의 펼친 부서 머리는 연한 빨강(상단 메뉴의 고른 부서만 진한 빨강) */
+@media (max-width: 820px) { :root[data-skin="christmas"] .side .nav-group .nav-title[aria-expanded="true"] { background: #fdeceb; color: #9f1d1d; } :root[data-skin="christmas"][data-theme="dark"] .side .nav-group .nav-title[aria-expanded="true"] { background: #3a1f22; color: #ffb4b4; } }
+@media (min-width: 821px) { :root[data-skin="christmas"]:not([data-nav="top"]) .side .nav-group .nav-title[aria-expanded="true"] { background: #fdeceb; color: #9f1d1d; } :root[data-skin="christmas"][data-nav="top"] .side .nav-group:not(.drop):not(:has(a.active)) > .nav-title { background: transparent; color: inherit; } }
+@media (min-width: 821px) { :root[data-skin="christmas"][data-nav="top"] .side .nav-group.drop > .nav-title, :root[data-skin="christmas"][data-nav="top"] .side .nav-group:has(a.active) > .nav-title { background: #c62828; color: #fff; } }
