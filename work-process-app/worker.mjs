@@ -636,9 +636,12 @@ function receiptAnalysisQuery(sourceType, id, user) {
   const date = purchase ? 'substr(src.recv_at,1,10)' : 'src.received_date';
   const prefix = `Q-${today().slice(2).replace(/-/g, '')}-`;
   const inspection = inspectionSnapshotSQL('src.item', "'수입검사'", 'src.item_category', purchase ? 'src.product_code' : "json_extract(src.bom_snapshot,'$.product_code')");
+  // 15.207 제품등록에서 「수입검사 제외」한 품목: 리스트에는 올리되 「검사 제외」로 바로 완료
+  const code = purchase ? "COALESCE(src.product_code,'')" : "COALESCE(json_extract(src.bom_snapshot,'$.product_code'),'')";
+  const exempt = `EXISTS(SELECT 1 FROM boms eb WHERE eb.skip_incoming=1 AND ((${code}<>'' AND UPPER(eb.product_code)=UPPER(${code})) OR REPLACE(LOWER(eb.product),' ','')=REPLACE(LOWER(src.item),' ','')${purchase ? '' : ' OR eb.id=src.bom_id'}))`;
   return {
     sql: `INSERT INTO requests(type,status,req_no,title,customer,category,data,requester_id,requester_name,approver_name,approved_at,source_type,source_id,batch_id,spec,unit,lot,qty,inspection_snapshot)
-      SELECT 'analysis','waiting',
+      SELECT 'analysis',CASE WHEN ${exempt} THEN 'done' ELSE 'waiting' END,
         ? || printf('%02d', (SELECT COALESCE(MAX(CAST(substr(req_no,length(?) + 1) AS INTEGER)),0)+1 FROM requests WHERE req_no LIKE ?)),
         src.item,src.vendor,'수입검사',
         json_object('purpose','입고 수입검사','sample_qty',CAST(${qty} AS TEXT),
@@ -648,8 +651,8 @@ function receiptAnalysisQuery(sourceType, id, user) {
           'bom_id',${purchase ? 'NULL' : 'src.bom_id'},
           'product_code',${purchase ? "src.product_code" : "COALESCE(json_extract(src.bom_snapshot,'$.product_code'),'')"},
           'unit',COALESCE(NULLIF(src.unit,''),${purchase ? "''" : "json_extract(src.bom_snapshot,'$.unit')"},''),'spec',src.spec,'lot',src.lot,'lot_etc',src.lot,'qty',${qty},
-          'result_type',CASE WHEN ${coa}=1 THEN 'COA발행' ELSE '기본(데이터공유)' END,'extra',src.note),
-        ?,?,'입고 자동접수',datetime('now','+9 hours'),?,src.id,src.batch_id,src.spec,src.unit,src.lot,${qty},${inspection}
+          'result_type',CASE WHEN ${coa}=1 THEN 'COA발행' ELSE '기본(데이터공유)' END,'extra',src.note,'exempt',CASE WHEN ${exempt} THEN 1 ELSE 0 END),
+        ?,?,CASE WHEN ${exempt} THEN '검사 제외(제품등록)' ELSE '입고 자동접수' END,datetime('now','+9 hours'),?,src.id,src.batch_id,src.spec,src.unit,src.lot,${qty},${inspection}
       FROM ${table} src WHERE src.id=${id == null ? 'last_insert_rowid()' : '?'}
         ${purchase ? "AND src.recv_status IN ('ok','mismatch')" : ''}
         AND NOT EXISTS(SELECT 1 FROM requests WHERE source_type=? AND source_id=src.id)
@@ -718,7 +721,7 @@ route('GET', '/api/po', async ({ query }) => {
   if (query.coa_requested) { if (!['0','1'].includes(query.coa_requested)) throw bad('COA 요청 조건을 확인하세요.'); where.push('coa_requested=?'); args.push(Number(query.coa_requested)); }
   applyInspectionFilter(where, args, query, 'purchase_order', 'purchase_orders');
   return (await db.prepare(`SELECT purchase_orders.*, ${attachmentSummary('purchase_order','purchase_orders')},
-    (SELECT m.result FROM requests q JOIN inspection_measurements m ON m.request_id=q.id WHERE q.source_type='purchase_order' AND q.source_id=purchase_orders.id LIMIT 1) AS qc_result,
+    COALESCE((SELECT m.result FROM requests q JOIN inspection_measurements m ON m.request_id=q.id WHERE q.source_type='purchase_order' AND q.source_id=purchase_orders.id LIMIT 1), (SELECT 'exempt' FROM requests q WHERE q.source_type='purchase_order' AND q.source_id=purchase_orders.id AND json_extract(q.data,'$.exempt')=1 LIMIT 1)) AS qc_result,
     (SELECT json_object('id',c.id,'action',c.action,'new_recv_qty',c.new_recv_qty,'reason',c.reason,'requested_by',c.requested_by,'requested_by_id',c.requested_by_id,'requested_at',c.requested_at) FROM receipt_qty_changes c WHERE c.po_id=purchase_orders.id AND c.status='pending') AS pending_change,
     (SELECT i.id FROM purchase_request_items i WHERE i.po_id=purchase_orders.id LIMIT 1) AS pr_item_id,
     (SELECT COALESCE(SUM(x.qty),0) FROM purchase_bill_lines x WHERE x.active=1 AND x.po_id=purchase_orders.id) AS billed_qty
@@ -3155,11 +3158,11 @@ route('GET','/api/inspections',async ({query})=>{
   if(query.kind){if(!['수입검사','출하검사'].includes(query.kind)) throw bad('검사 구분을 확인하세요.');where.push('r.category=?');args.push(query.kind);}
   const category="COALESCE(json_extract(NULLIF(r.inspection_snapshot,''),'$.item_category'),json_extract(r.data,'$.item_category'),'')";
   if(query.item_category){where.push(category+'=?');args.push(query.item_category==='미분류'?'':itemCategory(query.item_category));}
-  if(query.result){if(!['pending','pass','fail','unconfigured'].includes(query.result)) throw bad('판정을 확인하세요.');where.push("CASE WHEN r.inspection_snapshot='' THEN 'unconfigured' ELSE COALESCE(m.result,'pending') END=?");args.push(query.result);}
+  if(query.result){if(!['pending','pass','fail','unconfigured','exempt'].includes(query.result)) throw bad('판정을 확인하세요.');where.push("CASE WHEN json_extract(r.data,'$.exempt')=1 THEN 'exempt' WHEN r.inspection_snapshot='' THEN 'unconfigured' ELSE COALESCE(m.result,'pending') END=?");args.push(query.result);}
   applyListDates(where,args,query,'substr(r.created_at,1,10)');
   applyListKeyword(where,args,query.q,['r.title','r.req_no','r.lot','r.customer',"json_extract(r.data,'$.product_code')","json_extract(NULLIF(r.inspection_snapshot,''),'$.aliases')"]);
   if(query.before){if(!/^[1-9]\d*$/.test(query.before)) throw bad('조회 위치를 확인하세요.');where.push('r.id<?');args.push(Number(query.before));}
-  const rows=await db.prepare(`SELECT r.id,r.req_no,r.title,r.category,r.status,r.customer,r.lot,r.created_at,${category} AS item_category,CASE WHEN r.inspection_snapshot='' THEN 'unconfigured' ELSE COALESCE(m.result,'pending') END AS result,m.updated_by,m.updated_at FROM requests r LEFT JOIN inspection_measurements m ON m.request_id=r.id WHERE ${where.join(' AND ')} ORDER BY r.id DESC LIMIT 101`).all(...args);
+  const rows=await db.prepare(`SELECT r.id,r.req_no,r.title,r.category,r.status,r.customer,r.lot,r.created_at,${category} AS item_category,CASE WHEN json_extract(r.data,'$.exempt')=1 THEN 'exempt' WHEN r.inspection_snapshot='' THEN 'unconfigured' ELSE COALESCE(m.result,'pending') END AS result,m.updated_by,m.updated_at FROM requests r LEFT JOIN inspection_measurements m ON m.request_id=r.id WHERE ${where.join(' AND ')} ORDER BY r.id DESC LIMIT 101`).all(...args);
   return {rows:rows.slice(0,100),next:rows.length>100?rows[99].id:null};
 });
 
@@ -3242,8 +3245,16 @@ route('POST', '/api/requests/:id/approve', async ({ user, params }) => {
     approver_name=?, approved_at=?, reject_reason='', updated_at=datetime('now','+9 hours')
     WHERE id=? AND status IN ('pending','rejected')`).run(prefix, prefix, prefix + '%', user.name, now(), r.id);
   if (!updated.changes) throw bad('이미 승인된 의뢰입니다.');
+  if (r.type === 'analysis' && await inspectExempt(r)) await db.prepare("UPDATE requests SET status='done',data=json_set(data,'$.exempt',1),updated_at=datetime('now','+9 hours') WHERE id=? AND status='waiting'").run(r.id); // 15.207
   return decodeRequest((await getRequest(r.id)));
 });
+// 15.207 수입·출하검사 의뢰의 품목이 제품등록에서 그 검사 「제외」로 체크돼 있는가(bom_id·제품코드·품목명으로 찾음)
+async function inspectExempt(r) {
+  const col = r.category === '수입검사' ? 'skip_incoming' : r.category === '출하검사' ? 'skip_outgoing' : ''; if (!col) return false;
+  let d = {}; try { d = typeof r.data === 'string' ? JSON.parse(r.data || '{}') : r.data || {}; } catch { d = {}; }
+  const code = String(d.product_code || '').trim(), id = Number(d.bom_id) || 0;
+  return !!(await db.prepare(`SELECT 1 FROM boms WHERE ${col}=1 AND (id=? OR (?<>'' AND UPPER(product_code)=UPPER(?)) OR REPLACE(LOWER(product),' ','')=?) LIMIT 1`).get(id, code, code, nameKey(r.title)));
+}
 route('POST', '/api/requests/:id/reject', async ({ user, params, body }) => {
   const r = (await getRequest(params.id)); requireRequestApprover(user, r.type);
   if (r.status !== 'pending') throw bad('접수대기 중인 의뢰만 반려할 수 있습니다.');
@@ -3392,6 +3403,7 @@ route('POST', '/api/boms', async ({ user, body }) => {
   const result = await db.prepare('INSERT INTO boms(product,product_code,kind,base_qty,unit,materials,note,active,item_category,created_by,cat1,cat2,cat3,semi_type,semi_unit,pack_qty) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(...fields, user.name, ...cats, semiType, semiUnit, packQty);
   if (spec) await db.prepare('UPDATE boms SET spec=? WHERE id=?').run(spec, result.lastInsertRowid);
   const vendorInfo = str(body.vendor_info, 500); if (vendorInfo) await db.prepare('UPDATE boms SET vendor_info=? WHERE id=?').run(vendorInfo, result.lastInsertRowid); // 15.190
+  if (body.skip_incoming !== undefined || body.skip_outgoing !== undefined) await db.prepare('UPDATE boms SET skip_incoming=?,skip_outgoing=? WHERE id=?').run(isChecked(body.skip_incoming) ? 1 : 0, isChecked(body.skip_outgoing) ? 1 : 0, result.lastInsertRowid); // 15.207
   return withSizes(decodeBom(await mustGet('boms', result.lastInsertRowid)));
 });
 route('PUT', '/api/boms/:id', async ({ user, params, body }) => {
@@ -3407,6 +3419,7 @@ route('PUT', '/api/boms/:id', async ({ user, params, body }) => {
   } else commands.push(...await bomFollowRename(before, fields[0], fields[1]));
   if (body.spec !== undefined) commands.push({ sql: 'UPDATE boms SET spec=? WHERE id=?', args: [str(body.spec, 100), before.id] });
   if (body.vendor_info !== undefined) commands.push({ sql: 'UPDATE boms SET vendor_info=? WHERE id=?', args: [str(body.vendor_info, 500), before.id] }); // 15.190 업체 정보
+  if (body.skip_incoming !== undefined || body.skip_outgoing !== undefined) commands.push({ sql: 'UPDATE boms SET skip_incoming=?,skip_outgoing=? WHERE id=?', args: [isChecked(body.skip_incoming) ? 1 : 0, isChecked(body.skip_outgoing) ? 1 : 0, before.id] }); // 15.207 검사 제외
   await db.batch(commands);
   return withSizes(decodeBom(await mustGet('boms', params.id)));
 });
@@ -3783,7 +3796,7 @@ route('GET', '/api/other-receipts', async ({ query }) => {
   if (query.item_category) { where.push('item_category=?'); args.push(itemCategory(query.item_category)); }
   applyListKeyword(where, args, query.q, ['item','spec','lot','vendor','note','created_by',"json_extract(bom_snapshot,'$.product_code')"]);
   applyInspectionFilter(where, args, query, 'other_receipt', 'other_receipts');
-  return await db.prepare(`SELECT other_receipts.*, (SELECT receipt_no FROM receipts WHERE id=other_receipts.receipt_id) AS receipt_no, ${attachmentSummary('other_receipt','other_receipts')}, (SELECT m.result FROM requests q JOIN inspection_measurements m ON m.request_id=q.id WHERE q.source_type='other_receipt' AND q.source_id=other_receipts.id LIMIT 1) AS qc_result FROM other_receipts ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY received_date DESC, id DESC`).all(...args);
+  return await db.prepare(`SELECT other_receipts.*, (SELECT receipt_no FROM receipts WHERE id=other_receipts.receipt_id) AS receipt_no, ${attachmentSummary('other_receipt','other_receipts')}, COALESCE((SELECT m.result FROM requests q JOIN inspection_measurements m ON m.request_id=q.id WHERE q.source_type='other_receipt' AND q.source_id=other_receipts.id LIMIT 1), (SELECT 'exempt' FROM requests q WHERE q.source_type='other_receipt' AND q.source_id=other_receipts.id AND json_extract(q.data,'$.exempt')=1 LIMIT 1)) AS qc_result FROM other_receipts ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY received_date DESC, id DESC`).all(...args);
 });
 route('POST', '/api/other-receipts', async ({ user, body }) => {
   const fields = await otherReceiptFields(body); await ensureVendor(fields[4], user, 'purchase');

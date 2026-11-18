@@ -2642,3 +2642,8 @@ table.sbl-table tr.sbl-line td.sbl-cust { padding-left: 20px; white-space: nowra
   table.si-table td.si-c-item { font-size: 14.5px; }
   table.si-table td.si-c-item b { font-weight: 600; }
 }
+
+/* 15.207 검사 제외: 리스트에서 회색 */
+table.grid tbody tr.row-exempt > td { color: var(--muted); background: rgba(0,0,0,.035); }
+table.grid tbody tr.row-exempt > td b { color: var(--muted); font-weight: 600; }
+fieldset.inspect-skip { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
