@@ -2651,3 +2651,18 @@ fieldset.inspect-skip { display: flex; flex-wrap: wrap; gap: 6px 16px; align-ite
 /* 15.208 출하 수량 입력(지시 수량보다 적게 = 일부 출하) */
 table.si-table input.si-qty, .sb-doc input.sb-qty-in { width: 6.5em; text-align: right; font-weight: 700; }
 @media screen and (max-width: 600px) { table.si-table input.si-qty { width: 5.5em; height: 30px; min-height: 30px; padding: 2px 6px; } .sb-doc input.sb-qty-in { width: 6em; height: 34px; min-height: 34px; } }
+
+/* 15.210 모든 목록 휴대폰 3줄 그리드: 체크칸은 첫 줄 맨 앞 */
+@media (max-width: 600px) {
+  table.m-grid td.m-k { order: 0; flex: 0 0 auto; align-self: center; }
+  table.m-grid td.m-k input[type=checkbox] { width: 20px; height: 20px; margin: 0; }
+  table.m-grid td.m-d select { min-height: 36px; }
+}
+@media (max-width: 600px) { table.m-grid.gr-freeze > * > tr > * { position: static !important; } }
+/* 15.210 휴대폰 그리드: 합계 줄(tfoot)도 줄바꿈 그리드 */
+@media (max-width: 600px) {
+  table.m-grid tfoot { display: block; width: 100%; }
+  table.m-grid tfoot tr { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 10px; padding: 9px 12px; font-weight: 700; }
+  table.m-grid tfoot td { display: block; padding: 0 !important; border: 0 !important; text-align: left; }
+  table.m-grid tfoot td.m-a { flex: 1 1 100%; }
+}

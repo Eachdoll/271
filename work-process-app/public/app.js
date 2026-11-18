@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.209';
+const APP_VERSION = '15.210';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -1300,6 +1300,7 @@ const PHONE_GRID = [
   ['#stockList', { a: ['품목명'], b: ['현재고'], c: ['품목코드', '분류', ['안전재고', '안전'], ['최근 변동', '변동']], d: [''] }],
   ['#shList', { a: ['품목명'], b: ['수량'], c: ['거래처', '출고일', ['LOT', 'LOT']], d: [''] }],
   ['#rcsList', { a: ['품목'], b: ['입고일'], c: ['입고번호', '거래처', ['줄', '줄']], d: [''] }],
+  ['.mr-needs', { a: ['품목'], b: ['생산 필요'], c: ['규격·사이즈', ['의뢰', '의뢰'], ['생산', '생산'], ['계획 안 됨', '미계획']] }], // 15.210
   ['#faList', { a: ['품목명'], b: ['잔량'], c: ['계획일', ['계획수량', '계획'], ['실적 누계', '실적']], d: ['양품수량', '비고', ''] }],
 ];
 function phoneGrid(table, spec) {
@@ -1307,7 +1308,11 @@ function phoneGrid(table, spec) {
   // 화면에 안 보이는 머리글(.sr-only 「작업」 등)은 빈 머리글('')로 본다(단추 칸).
   const heads = $$('thead th', table).map(th => [...th.childNodes].filter(x => !(x.classList && x.classList.contains('sr-only'))).map(x => x.textContent).join('').replace(/[☆▾▴▼▲]/g, '').trim());
   const find = h => { for (const [role, list] of Object.entries(spec)) for (const e of list) { const name = Array.isArray(e) ? e[0] : e; if (name === '' ? h === '' : h === name || h.startsWith(name + ' ')) return [role, Array.isArray(e) ? e[1] : '']; } return ['x', '']; };
-  const roles = heads.map(find);
+  const roles = spec.roles || heads.map(find); // 15.210 자동 설정은 칸별 역할
+  $$('tfoot tr', table).forEach(tr => { let col = 0; [...tr.children].forEach(td => { const i = col; col += td.colSpan || 1; // 15.210 합계 줄도 같은 칸 역할(합친 칸·첫 칸 = 제목)
+    if (td.colSpan > 1 || i === 0) { td.classList.add('m-a'); return; }
+    const [role, label] = roles[i] || ['x', '']; td.classList.add('m-' + (role === 'a' ? 'c' : role === 'k' || role === 'd' ? 'x' : role)); if (label) td.dataset.m = label;
+    if (/^[\s—-]*$/.test(td.textContent)) td.classList.add('m-empty'); }); });
   $$('tbody tr', table).forEach(tr => [...tr.children].forEach((td, i) => {
     if (td.colSpan > 1) { td.classList.add('m-full'); return; }
     const [role, label] = roles[i] || ['x', '']; td.classList.add('m-' + role); if (label) td.dataset.m = label;
@@ -1315,11 +1320,36 @@ function phoneGrid(table, spec) {
     if (role === 'd' && heads[i]) td.querySelectorAll('input:not([type=checkbox]):not([type=radio])').forEach(inp => { if (!inp.dataset.mPh) { inp.dataset.mPh = '1'; inp.placeholder = heads[i] + (inp.placeholder ? ' ' + inp.placeholder : ''); } }); // 휴대폰에선 머리줄이 없으니 칸 이름을 입력칸 안에
   }));
 }
+// 15.210 휴대폰 카드(as-cards) 대신 모든 목록을 3줄 그리드로: 머리글·칸 내용을 보고 역할을 자동으로 정한다.
+// a = 품목·제목(없으면 첫 글자 칸), b = 수량·금액·상태 중 첫 칸, d = 입력·단추 칸, k = 체크칸(맨 앞), 나머지는 c(짧은 이름표). PHONE_GRID에 있는 표는 그 설정을 쓴다.
+const AUTO_A = ['품목명', '품목', '제품명', '제품', '품명 · LOT', '품명', '제목', '이름', '내용', '거래처', '업체', '업체명'];
+const AUTO_B = /^(수량|출하 수량|입고 수량|의뢰 수량|계획 수량|금액|합계|합계금액|총액|공급가액|잔량|잔액|현재고|재고|상태|진행|결과|판정|미수금|미지급)/;
+function autoGridSpec(table) {
+  const heads = $$('thead th', table).map(th => [...th.childNodes].filter(x => !(x.classList && x.classList.contains('sr-only'))).map(x => x.textContent).join('').replace(/[☆▾▴▼▲]/g, '').trim());
+  const rows = $$('tbody tr', table).filter(tr => ![...tr.children].some(td => td.colSpan > 1)).slice(0, 40);
+  const cells = i => rows.map(tr => tr.children[i]).filter(Boolean);
+  const kind = heads.map((h, i) => {
+    const cs = cells(i);
+    if (cs.length && cs.every(td => { const ctl = td.querySelectorAll('input, select, textarea, button, a.btn, summary.btn'); return ctl.length && [...ctl].every(x => x.type === 'checkbox') && !td.textContent.trim(); })) return 'k';
+    if (cs.some(td => td.querySelector('input:not([type=checkbox]), select, textarea, button:not(.link-btn), a.btn, details.row-menu'))) return 'd';
+    return '';
+  });
+  let a = AUTO_A.map(n => heads.findIndex((h, i) => !kind[i] && (h === n || h.startsWith(n + ' ')))).find(i => i >= 0);
+  if (a === undefined) a = heads.findIndex((h, i) => !kind[i] && h && !/일$|일자|날짜|번호|No|NO|코드/.test(h) && cells(i).some(td => /[가-힣A-Za-z]/.test(td.textContent)));
+  if (a < 0) a = heads.findIndex((h, i) => !kind[i] && h);
+  const pickB = re => heads.findIndex((h, i) => i !== a && !kind[i] && re.test(h));
+  let b = -1; // 수량·금액 먼저(이름이 딱 맞는 칸 우선: 잔액 > 기초 잔액), 없으면 상태
+  for (const n of ['잔액', '현재고', '잔량', '미수금', '미지급', '합계금액', '합계', '총액', '금액', '공급가액', '수량']) { b = heads.findIndex((h, i) => i !== a && !kind[i] && h === n); if (b >= 0) break; }
+  if (b < 0) b = pickB(/(수량|금액|합계|총액|공급가액|잔량|잔액|현재고|재고|미수금|미지급)$/); if (b < 0) b = pickB(AUTO_B);
+  const short = h => { const x = h.split(/ · |\s*\(|\s+/)[0]; return x.length > 6 ? x.slice(0, 6) : x; };
+  const roles = heads.map((h, i) => i === a ? ['a', ''] : i === b ? ['b', ''] : kind[i] ? [kind[i], ''] : ['c', h && !/^no$/i.test(h) ? short(h) : '']);
+  return { roles };
+}
 function labelGridTables() {
   $$('table.grid:not([data-labeled])').forEach(table => {
     table.dataset.labeled = 'true';
     const pg = PHONE_GRID.find(([sel]) => table.closest(sel)); if (pg) { phoneGrid(table, pg[1]); return; } // 15.204
-    if (!table.classList.contains('keep-table')) table.classList.add('as-cards'); // small numeric tables opt out with keep-table
+    if (!table.classList.contains('keep-table') && !table.classList.contains('m-grid')) phoneGrid(table, autoGridSpec(table)); // 15.210 카드 대신 3줄 그리드(keep-table 표는 휴대폰에서도 표 그대로)
     const heads = $$('thead th', table).map(th => th.textContent.trim());
     const rows = $$('tbody tr', table);
     rows.forEach(tr => [...tr.children].forEach((td, i) => { td.dataset.label = td.colSpan > 1 ? '' : heads[i] || ''; }));
@@ -2750,7 +2780,7 @@ async function pageMe(main) {
 // 15.62: 휴대폰 카드에서 체크박스 칸 어디를 눌러도 체크된다(작은 칸을 정확히 누르지 않아도 됨).
 document.addEventListener('click', event => {
   if (event.target.closest('input, button, a, label, select, textarea')) return;
-  const cell = event.target.closest('table.grid.as-cards td'); if (!cell) return;
+  const cell = event.target.closest('table.grid.as-cards td, table.grid.m-grid td.m-k'); if (!cell) return;
   const box = cell.querySelector(':scope > input[type=checkbox]:only-child'); if (!box || box.disabled) return;
   box.click();
 });
