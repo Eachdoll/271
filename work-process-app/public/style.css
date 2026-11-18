@@ -2433,3 +2433,52 @@ table.bs-table.bom-tree td:first-child { width: 32px; text-align: center; }
 /* 15.198 전표 목록: 줄을 누르면 전표 창 */
 table.bill-list tbody tr.row-open { cursor: pointer; }
 table.bill-list tbody tr.row-open:hover > td { background: var(--accent-soft); }
+
+/* 15.199 입고 입력: 머리 한 줄(입고일 · 거래처 찾기 · 비고), 발주입고/기타입고 구분 패널, 입고 상세 구분 칸, 일괄적용 줄 */
+.rc-head { display: grid; grid-template-columns: minmax(10em, 13em) minmax(18em, 1.3fr) minmax(16em, 2fr); gap: 10px 12px; align-items: end; }
+.rc-head > label { margin: 0; }
+@media (max-width: 760px) { .rc-head { grid-template-columns: 1fr; } }
+.rc-src-panel { border: 1px solid var(--line); border-top: 3px solid var(--rc-kind, var(--accent)); border-radius: 8px; background: var(--panel); padding: 0 12px 6px; margin: 10px 0 12px; }
+.rc-src-panel[data-rc-panel="po"] { --rc-kind: #2f6fdb; } .rc-src-panel[data-rc-panel="other"] { --rc-kind: #1f9d6b; }
+.rc-src-tabs { display: flex; gap: 0; margin: 0 -12px 8px; border-bottom: 1px solid var(--line); }
+.rc-src-tabs > button { flex: 0 0 auto; padding: 9px 22px; border: 0; border-right: 1px solid var(--line); background: var(--bg, #f4f6f9); color: var(--muted); font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+.rc-src-tabs > button.on { background: var(--panel); color: var(--text); box-shadow: inset 0 -2px 0 var(--rc-kind); }
+.rc-kind-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; } .rc-kind-dot.po { background: #2f6fdb; } .rc-kind-dot.other { background: #1f9d6b; }
+.rc-kind { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.rc-kind.po { background: #e6efff; color: #1d4fae; } .rc-kind.other { background: #e2f6ee; color: #137352; }
+.rc-grid tr.rc-kind-po > td:first-child { box-shadow: inset 3px 0 0 #2f6fdb; } .rc-grid tr.rc-kind-other > td:first-child { box-shadow: inset 3px 0 0 #1f9d6b; }
+.rc-bulk-bar { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg, #f4f6f9); margin-right: auto; }
+.rc-bulk-bar > label { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-weight: 700; white-space: nowrap; }
+.rc-bulk-bar select { min-width: 10em; }
+.rc-grid td:nth-child(7) input { min-width: 10em; } .rc-grid td:nth-child(8) input { min-width: 6em; text-align: right; }
+.rc-grid td:nth-child(9) select, .rc-grid td:nth-child(10) select { min-width: 6.5em; } .rc-grid td:nth-child(4) { min-width: 12em; }
+.rc-grid td:nth-child(6) input { min-width: 0; } .rc-grid td:nth-child(3) { width: 4.5em; }
+.rc-grid td:nth-child(11) input, .rc-grid td:nth-child(12) input { min-width: 8em; }
+
+/* 15.199 NO 칸(코드 오른쪽) */
+.bom-table td.bom-no, table.bs-table td.bs-no { width: 3.5em; font-variant-numeric: tabular-nums; }
+table.bs-table.bom-tree tbody tr.bt-mat > td:nth-child(2)::before { left: 12px; }
+
+/* 15.199 완제품 계획생산 접수·관리(월 계획표) · 실적 입력 */
+.fp-tools .fp-reg { display: inline-flex; align-items: center; gap: 4px 12px; flex-wrap: wrap; } .fp-tools .fp-reg b { font-size: 13px; }
+.fp-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 8px 0; } .fp-bar .grow { flex: 1; }
+.fp-legend { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 13px; }
+.fp-sw { display: inline-block; width: 44px; height: 14px; border-radius: 2px; vertical-align: middle; } .fp-sw.wait { background: #f7a8a0; } .fp-sw.ok { background: #5fd38a; }
+.fp-wrap { max-height: 72vh; }
+table.fp-grid { min-width: max-content; }
+table.fp-grid th, table.fp-grid td { white-space: nowrap; }
+table.fp-grid thead th { position: sticky; top: 0; z-index: 2; }
+table.fp-grid th.fp-d { min-width: 54px; text-align: center; } table.fp-grid th.fp-we { color: #c0392b; } table.fp-grid th.fp-today { box-shadow: inset 0 -3px 0 var(--accent); }
+table.fp-grid td.fp-cell { min-width: 54px; text-align: right; cursor: pointer; font-variant-numeric: tabular-nums; }
+table.fp-grid td.fp-cell:hover { outline: 2px solid var(--accent); outline-offset: -2px; }
+table.fp-grid td.fp-we:not(.ok):not(.wait) { background: rgba(0,0,0,.025); }
+table.fp-grid td.fp-cell.wait { background: #fbd0cb; color: #7a1d12; font-weight: 600; } table.fp-grid td.fp-cell.ok { background: #bff0cf; color: #0f5a2b; font-weight: 600; }
+table.fp-grid td.fp-cat { text-align: center; vertical-align: middle; background: var(--panel); font-weight: 600; }
+table.fp-grid td.fp-sum, table.fp-grid th.fp-sum-h { border-right: 2px solid #d9a300; font-weight: 700; }
+table.fp-grid td.fp-name { font-weight: 600; }
+table.fa-grid input[data-fa-qty] { width: 8em; text-align: right; } table.fa-grid input[data-fa-note] { min-width: 10em; }
+table.fa-grid tr.fa-done td { color: var(--muted); } table.fa-grid tr.fa-late td:first-child { box-shadow: inset 3px 0 0 #e0a100; }
+/* 15.199 계획표 칸 색이 표 줄무늬·밀도 규칙에 덮이지 않게 */
+table.fp-grid tbody td.fp-cell.wait { background: #f7b6ae !important; color: #6b170e; }
+table.fp-grid tbody td.fp-cell.ok { background: #6fd796 !important; color: #08391b; }
+table.fp-grid tbody td.fp-cat { background: var(--panel) !important; }

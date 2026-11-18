@@ -393,6 +393,20 @@
       "when": 1796727213000,
       "tag": "0055_bom_vendor_info",
       "breakpoints": false
+    },
+    {
+      "idx": 56,
+      "version": "6",
+      "when": 1796813613000,
+      "tag": "0056_receipt_note2",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "6",
+      "when": 1796900013000,
+      "tag": "0057_schedule_confirm",
+      "breakpoints": true
     }
   ]
 }

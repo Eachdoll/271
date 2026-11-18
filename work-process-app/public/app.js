@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.198';
+const APP_VERSION = '15.199';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -368,7 +368,7 @@ const NAV = [
   { group: '생산', items: [
     { sub: '샘플(제품)', items: [['#/prod/list', '제품 샘플리스트']] },
     ['#/prod/orders', '생산의뢰 접수'],
-    { sub: '완제품 생산', items: [['#/prod/finished/new', '완제품 생산계획 입력'], ['#/prod/finished', '완제품 생산일정 · 실적']] },
+    { sub: '완제품 생산', items: [['#/prod/finished/plan', '완제품 계획생산 접수·관리'], ['#/prod/finished', '완제품 실적 입력']] },
     { sub: '반제품 생산', items: [['#/prod/semi/new', '반제품 생산계획 입력'], ['#/prod/semi', '반제품 생산일정']] },
     { sub: '커팅/융착', items: [['#/prod/semi/cut/new', '커팅/융착 작업 입력'], ['#/prod/semi/cut', '커팅/융착 작업 기록']] },
     { sub: '세탁(호기별)', items: [['#/prod/semi/wash/new', '세탁 작업 입력'], ['#/prod/semi/wash', '세탁 작업 기록']] },
@@ -442,8 +442,6 @@ const VIEW_SPLIT = {
   '#/purchase/po': ['#/purchase/po', 'list', '발주 목록', '#/purchase/po/new', '발주 입력'],
   '#/purchase/laundry/new': ['#/purchase/laundry', 'entry', '세탁 불량·폐기 입력', '#/purchase/laundry', '불량·폐기 목록 보기'],
   '#/purchase/laundry': ['#/purchase/laundry', 'list', '세탁 불량·폐기 목록', '#/purchase/laundry/new', '불량·폐기 입력'],
-  '#/prod/finished/new': ['#/prod/finished', 'entry', '완제품 생산계획 입력', '#/prod/finished', '생산일정 보기'],
-  '#/prod/finished': ['#/prod/finished', 'list', '완제품 생산일정 · 실적', '#/prod/finished/new', '생산계획 입력'],
   '#/prod/semi/new': ['#/prod/semi', 'entry', '반제품 생산계획 입력', '#/prod/semi', '생산일정 보기'],
   '#/prod/semi': ['#/prod/semi', 'list', '반제품 생산일정', '#/prod/semi/new', '생산계획 입력'],
   '#/prod/semi/cut/new': ['#/prod/semi/cut', 'entry', '커팅/융착 작업 입력', '#/prod/semi/cut', '작업 기록 보기'],
@@ -517,7 +515,6 @@ const RECENT_SOURCES = {
   '#/logistics/ship/new': t => `/api/shipments?from=${t}&to=${t}`,
   '#/logistics/other/new': t => `/api/other-receipts?from=${addDays(t, -31)}&to=${t}`,
   '#/purchase/laundry/new': t => `/api/laundry?from=${addDays(t, -31)}&to=${t}`,
-  '#/prod/finished/new': t => `/api/schedules?kind=finished&from=${addDays(t, -62)}&to=${addDays(t, 62)}`,
   '#/prod/semi/new': t => `/api/schedules?kind=semi&from=${addDays(t, -62)}&to=${addDays(t, 62)}`,
   '#/prod/semi/cut/new': t => `/api/semi-records?process=cut&from=${addDays(t, -7)}&to=${t}`,
   '#/prod/semi/wash/new': t => `/api/semi-records?process=wash&from=${addDays(t, -7)}&to=${t}`,
@@ -560,8 +557,11 @@ const PAGES = {
   '#/sales/sample/product': () => pageIntake('sample'), // 15.183 제품 샘플의뢰(영업)
   '#/sales/sample/goods': () => pageIntake('sample_goods'), // 15.183 상품 샘플의뢰(영업)
   '#/prod/list': () => pageWorkList('sample'),
-  '#/prod/finished': () => pageSchedule('finished'),
-  '#/prod/finished/new': () => pageSchedule('finished'),
+  // 15.199 완제품: 1) 계획생산 접수·관리(월 계획표, 대기 → 확정) 2) 실적 입력(확정 계획 · 양품수량). 예전 일정·카드 화면은 /schedule
+  '#/prod/finished/plan': main => pageFinishedPlan(main),
+  '#/prod/finished': main => pageFinishedActual(main),
+  '#/prod/finished/new': main => pageFinishedPlan(main),
+  '#/prod/finished/schedule': () => pageSchedule('finished'),
   '#/prod/semi': () => pageSchedule('semi'),
   '#/prod/semi/new': () => pageSchedule('semi'),
   '#/logistics/receive': main => pageReceipts(main, 'purchase'),
@@ -2224,8 +2224,9 @@ async function pageBoms(main) {
     // 15.74 가독성: 코드 칸을 맨 앞에, 한 줄 높이·줄무늬, 버튼은 「수정」 + 「⋯」(진행 코멘트·사용 중지/다시 사용·합치기·삭제), 사용 중 품목을 위로.
     const sorted = boms.slice().sort((a, b) => (b.active - a.active));
     const classPath = bom => [bom.item_category || '미분류', bom.cat1, bom.cat2, bom.cat3].filter(Boolean).join(' › ');
-    $('#bomList').innerHTML = sorted.length ? `<div class="table-wrap"><table class="grid bom-table"><caption class="sr-only">제품 목록</caption><thead><tr><th scope="col">코드</th><th scope="col">품목명</th><th scope="col">분류</th><th scope="col">단위 · 기준</th><th scope="col">구성자재</th><th scope="col">업체 정보</th><th scope="col">비고</th><th scope="col">상태</th><th scope="col"><span class="sr-only">작업</span></th></tr></thead><tbody>${sorted.map(bom => `<tr class="bom-row${bom.active ? '' : ' row-off'}" title="입력: ${esc(bom.created_by || '미기록')} · ${esc(String(bom.created_at || '').slice(0, 16))}">
+    $('#bomList').innerHTML = sorted.length ? `<div class="table-wrap"><table class="grid bom-table"><caption class="sr-only">제품 목록</caption><thead><tr><th scope="col">코드</th><th scope="col" class="c">NO</th><th scope="col">품목명</th><th scope="col">분류</th><th scope="col">단위 · 기준</th><th scope="col">구성자재</th><th scope="col">업체 정보</th><th scope="col">비고</th><th scope="col">상태</th><th scope="col"><span class="sr-only">작업</span></th></tr></thead><tbody>${sorted.map((bom, bi) => `<tr class="bom-row${bom.active ? '' : ' row-off'}" title="입력: ${esc(bom.created_by || '미기록')} · ${esc(String(bom.created_at || '').slice(0, 16))}">
       <td class="bom-code nowrap">${bom.product_code ? `<b>${esc(bom.product_code)}</b>` : '<span class="muted">코드 없음</span>'}${bom.is_temp ? ' <span class="chip yellow">임시</span>' : ''}</td>
+      <td class="c small muted bom-no">${bi + 1}</td>
       <td data-card-primary class="bom-name"><b>${esc(bom.product)}</b>${bom.spec ? ` <span class="small muted">${esc(bom.spec)}</span>` : ''}</td>
       <td class="bom-class">${esc(classPath(bom))}${bom.semi_type ? ` <span class="chip green">생산: ${esc(bom.semi_type)}</span>` : ''}${bom.sizes?.length ? ` <span class="small muted">사이즈 ${esc(bom.sizes.join('·'))}</span>` : ''}</td>
       <td class="nowrap">${esc(bom.unit || '—')}${['제품', '반제품'].includes(bom.item_category) ? ` <span class="small muted">· ${bom.kind === 'finished' ? '완제품' : '반제품'} 기준 ${fmtNum(bom.base_qty)}</span>` : ''}${bom.pack_qty ? `<div class="small muted">1${esc(bom.unit)} = ${fmtNum(bom.pack_qty)}${esc(bom.semi_unit)}</div>` : ''}</td>

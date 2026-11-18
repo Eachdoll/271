@@ -185,3 +185,21 @@ test('15.150 LOT protection: used LOT locks receipt edits/LOT change, unit misma
   assert.equal((await admin('POST', '/api/shipments', { ship_date: '2026-11-12', item: 'LOT없는품목', qty: 1, customer: '보호고객', lot: 'ANY-1' })).status, 200);
   void rc2; void oid;
 });
+
+test('15.199 plan confirm: new plans wait, confirm/unconfirm by production, confirmed plans locked, legacy marker', async () => {
+  const d = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date());
+  const p = (await admin('POST', '/api/boms', { item_category: '제품', product: '확정제품', product_code: 'CF-1', kind: 'finished', base_qty: 1, unit: 'EA', materials: [{ item: '원단', item_category: '원자재', qty: 1, unit: 'kg' }] })).body;
+  const s = (await admin('POST', '/api/schedules', { kind: 'finished', period: 'day', start_date: d, bom_id: p.id, qty: 100 })).body;
+  assert.equal(s.confirmed_at, '', 'new plan waits');
+  assert.equal((await other('POST', '/api/schedules/confirm', { ids: [s.id] })).status, 403, 'only production');
+  const c = await admin('POST', '/api/schedules/confirm', { ids: [s.id] }); assert.equal(c.body.changed, 1);
+  assert.match((await admin('PUT', `/api/schedules/${s.id}`, { period: 'day', start_date: d, bom_id: p.id, qty: 120 })).body.error, /확정취소/);
+  assert.match((await admin('DELETE', `/api/schedules/${s.id}`)).body.error, /확정취소/);
+  assert.equal((await admin('POST', '/api/schedules/confirm', { ids: [s.id], confirm: false })).body.changed, 1);
+  assert.equal((await admin('PUT', `/api/schedules/${s.id}`, { period: 'day', start_date: d, bom_id: p.id, qty: 120 })).status, 200, 'editable after unconfirm');
+  await admin('POST', '/api/schedules/confirm', { ids: [s.id] });
+  assert.equal((await admin('POST', `/api/schedules/${s.id}/actuals`, { production_date: d, qty: 50, request_id: crypto.randomUUID() })).status, 200);
+  assert.match((await admin('POST', '/api/schedules/confirm', { ids: [s.id], confirm: false })).body.error, /실적이 있는/);
+  const row = (await admin('GET', `/api/schedules?kind=finished&from=${d}&to=${d}`)).body.find(x => x.id === s.id);
+  assert.ok(row.confirmed_at && row.confirmed_by === 'BOM관리자'); assert.equal(row.actual_qty, 50);
+});

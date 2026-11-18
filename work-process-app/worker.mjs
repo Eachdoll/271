@@ -939,12 +939,12 @@ async function warehouseRules() {
   };
 }
 function receiptLineSql() {
-  return `SELECT 'po' AS kind, l.id, l.receipt_id, l.po_id, NULL AS other_id, COALESCE(p.req_no,'') AS req_no, COALESCE(p.item,'(삭제된 발주)') AS item, COALESCE(p.spec,'') AS spec, COALESCE(p.unit,'') AS unit, COALESCE(p.product_code,'') AS product_code, COALESCE(p.item_category,'') AS item_category, l.lot, l.sub_lot, l.qty, l.received_date, l.warehouse, l.location, l.note, l.voided_at, p.qty AS po_qty, p.recv_qty, p.recv_status
+  return `SELECT 'po' AS kind, l.id, l.receipt_id, l.po_id, NULL AS other_id, COALESCE(p.req_no,'') AS req_no, COALESCE(p.item,'(삭제된 발주)') AS item, COALESCE(p.spec,'') AS spec, COALESCE(p.unit,'') AS unit, COALESCE(p.product_code,'') AS product_code, COALESCE(p.item_category,'') AS item_category, l.lot, l.sub_lot, l.qty, l.received_date, l.warehouse, l.location, l.note, l.note2, l.voided_at, p.qty AS po_qty, p.recv_qty, p.recv_status
       FROM po_receipt_lots l LEFT JOIN purchase_orders p ON p.id=l.po_id`;
 }
 async function receiptDetail(r) {
   const po = await db.prepare(`${receiptLineSql()} WHERE l.receipt_id=? ORDER BY l.id`).all(r.id);
-  const other = await db.prepare(`SELECT 'other' AS kind, id, receipt_id, NULL AS po_id, id AS other_id, '' AS req_no, item, spec, COALESCE(NULLIF(unit,''), json_extract(bom_snapshot,'$.unit'), '') AS unit, json_extract(bom_snapshot,'$.product_code') AS product_code, item_category, lot, sub_lot, qty, received_date, warehouse, location, note, NULL AS voided_at FROM other_receipts WHERE receipt_id=? ORDER BY id`).all(r.id);
+  const other = await db.prepare(`SELECT 'other' AS kind, id, receipt_id, NULL AS po_id, id AS other_id, '' AS req_no, item, spec, COALESCE(NULLIF(unit,''), json_extract(bom_snapshot,'$.unit'), '') AS unit, json_extract(bom_snapshot,'$.product_code') AS product_code, item_category, lot, sub_lot, qty, received_date, warehouse, location, note, note2, NULL AS voided_at FROM other_receipts WHERE receipt_id=? ORDER BY id`).all(r.id);
   return { ...r, lines: [...po, ...other] };
 }
 route('GET', '/api/receipts', async ({ query }) => {
@@ -997,7 +997,7 @@ route('POST', '/api/receipts', async ({ user, body }) => {
     const l = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
     try {
       const qty = num(l.qty, '수량'); if (!(qty > 0)) throw bad('수량은 0보다 커야 합니다.');
-      const line = { lot: str(l.lot, 100), qty, note: str(l.note, 200), ...rules.check(l.warehouse, l.location), no: index + 1 };
+      const line = { lot: str(l.lot, 100), qty, note: str(l.note, 200), note2: str(l.note2, 200), ...rules.check(l.warehouse, l.location), no: index + 1 }; // 15.199 note2 = 업체 정보(비고2)
       if (l.po_id !== undefined && l.po_id !== null && l.po_id !== '') {
         const id = Number(l.po_id); if (!Number.isSafeInteger(id) || id <= 0) throw bad('발주를 다시 고르세요.');
         const group = poLines.get(id) || []; group.push(line); poLines.set(id, group);
@@ -1027,7 +1027,7 @@ route('POST', '/api/receipts', async ({ user, body }) => {
     const add = stockRound(group.reduce((t, l) => t + l.qty, 0)), total = stockRound(recorded + add), status = total === po.qty ? 'ok' : 'mismatch';
     // 예전 방식으로 기록된 입고(줄 없음)는 먼저 한 줄로 옮겨 recv_qty = 줄 합을 지킨다.
     if (!active.length && recorded) cmds.push({ sql: 'INSERT INTO po_receipt_lots(po_id,lot,qty,received_date,note,created_by) VALUES(?,?,?,?,?,?)', args: [poId, po.lot || '', recorded, (po.recv_at || '').slice(0, 10) || date, '이전 입고', po.recv_by || ''] });
-    for (const l of group) cmds.push({ sql: `INSERT INTO po_receipt_lots(po_id,receipt_id,lot,sub_lot,qty,received_date,warehouse,location,note,created_by) VALUES(?,${RID},?,?,?,?,?,?,?,?)`, args: [poId, token, l.lot, l.sub_lot || '', l.qty, date, l.warehouse, l.location, l.note, user.name] });
+    for (const l of group) cmds.push({ sql: `INSERT INTO po_receipt_lots(po_id,receipt_id,lot,sub_lot,qty,received_date,warehouse,location,note,created_by,note2) VALUES(?,${RID},?,?,?,?,?,?,?,?,?)`, args: [poId, token, l.lot, l.sub_lot || '', l.qty, date, l.warehouse, l.location, l.note, user.name, l.note2 || ''] });
     const keepPoLot = !active.length && (recorded || !group.some(l => l.lot)); // 예전 입고를 옮기거나, 이번 줄에 LOT가 없으면 발주의 LOT 유지(15.77)
     const lots = [...new Set([...active.map(a => a.lot), ...(keepPoLot ? [po.lot] : []), ...group.map(l => l.lot)].filter(Boolean))].join(', ').slice(0, 100);
     cmds.push({ sql: `UPDATE purchase_orders SET recv_status=?,recv_qty=?,recv_by=?,recv_at=CASE WHEN recv_at IS NULL OR recv_status NOT IN ('ok','mismatch') OR recv_at<? THEN ? ELSE recv_at END,lot=? WHERE id=? AND recv_status=? AND recv_qty IS ? AND NOT EXISTS(SELECT 1 FROM receipt_qty_changes c WHERE c.po_id=purchase_orders.id AND c.status='pending')`, args: [status, total, user.name, at, at, lots, poId, po.recv_status, po.recv_qty] });
@@ -1043,8 +1043,8 @@ route('POST', '/api/receipts', async ({ user, body }) => {
     try { fields = await otherReceiptFields({ ...l.raw, received_date: date, vendor, note: l.note || note, qty: l.qty }); }
     catch (error) { if (error.status === 400 || error.status === 404) throw bad(`${l.no}번째 줄: ${error.message}`); throw error; }
     const snapshot = JSON.parse(fields[7]);
-    cmds.push({ sql: `INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,bom_id,bom_snapshot,created_by,spec,unit,lot,batch_id,receipt_id,warehouse,location,sub_lot) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,${RID},?,?,?)`,
-      args: [...fields, user.name, await catalogSpec(fields[6], l.raw.spec), snapshot.unit || '', l.lot, token, token, l.warehouse, l.location, l.sub_lot || ''] });
+    cmds.push({ sql: `INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,bom_id,bom_snapshot,created_by,spec,unit,lot,batch_id,receipt_id,warehouse,location,sub_lot,note2) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,${RID},?,?,?,?)`,
+      args: [...fields, user.name, await catalogSpec(fields[6], l.raw.spec), snapshot.unit || '', l.lot, token, token, l.warehouse, l.location, l.sub_lot || '', l.note2 || ''] });
     cmds.push(receiptAnalysisQuery('other_receipt', null, user));
   }
   try { await db.batch(cmds); }
@@ -3723,12 +3723,28 @@ route('PUT', '/api/schedules/:id', async ({ user, params, body }) => {
   if (body.toggle_done) { await db.prepare('UPDATE schedules SET done=1-done WHERE id=?').run(row.id); return decodeSchedule(await mustGet('schedules', row.id)); }
   const f = await schedFields({ ...body, kind: row.kind }, row);
   if (hasActuals && ['product','period','start_date','bom_id'].some(key => f[key] !== row[key])) throw bad('생산실적이 있는 일정의 품목·기간·BOM은 변경할 수 없습니다.');
+  if (row.confirmed_at && row.confirmed_by !== '(기존 계획)' && ['product','period','start_date','bom_id','qty'].some(key => f[key] !== row[key])) throw bad('확정된 계획입니다. 「확정취소」 후 고치세요.'); // 15.199
   await db.prepare('UPDATE schedules SET period=?,start_date=?,product=?,qty=?,note=?,bom_id=?,bom_snapshot=? WHERE id=?').run(f.period, f.start_date, f.product, f.qty, f.note, f.bom_id, f.bom_snapshot, row.id);
   await recordEdit('schedule', 'schedules', row.id, row, EDIT_LABELS.schedule, user);
   return decodeSchedule(await mustGet('schedules', row.id));
 });
+// 15.199 계획 확정·확정 취소(생산 담당·관리자). 확정한 계획만 실적 입력에 나온다. 실적이 있는 계획은 확정 취소하지 않는다.
+route('POST', '/api/schedules/confirm', async ({ user, body }) => {
+  if (!hasRole(user, 'production')) throw new HttpError(403, '계획 확정은 생산 담당자 또는 관리자가 합니다.');
+  const ids = Array.isArray(body.ids) ? [...new Set(body.ids.map(Number))] : [];
+  if (!ids.length || ids.length > 1000 || ids.some(id => !Number.isSafeInteger(id) || id <= 0)) throw bad('확정할 계획을 고르세요.');
+  const on = body.confirm !== false;
+  const rows = []; for (const id of ids) { const r = await db.prepare('SELECT * FROM schedules WHERE id=?').get(id); if (!r) throw new HttpError(404, '없는 계획이 있습니다. 새로 불러오세요.'); rows.push(r); }
+  if (!on) { const used = rows.filter(r => r.confirmed_at); for (const r of used) if (await db.prepare('SELECT 1 FROM production_actuals WHERE schedule_id=? AND voided_at IS NULL').get(r.id)) throw bad(`${r.product} ${r.start_date}: 실적이 있는 계획은 확정 취소할 수 없습니다.`); }
+  const target = rows.filter(r => on ? !r.confirmed_at : !!r.confirmed_at);
+  if (target.length) await db.batch(target.map(r => on
+    ? { sql: "UPDATE schedules SET confirmed_at=datetime('now','+9 hours'),confirmed_by=? WHERE id=? AND confirmed_at=''", args: [user.name, r.id] }
+    : { sql: "UPDATE schedules SET confirmed_at='',confirmed_by='' WHERE id=? AND NOT EXISTS(SELECT 1 FROM production_actuals WHERE schedule_id=? AND voided_at IS NULL)", args: [r.id, r.id] }));
+  return { changed: target.length, skipped: rows.length - target.length };
+});
 route('DELETE', '/api/schedules/:id', async ({ user, params }) => {
   const row = (await mustGet('schedules', params.id)); if (!canModify(user, row) && !hasRole(user, 'production')) throw new HttpError(403, '등록자 또는 생산 담당자만 삭제할 수 있습니다.');
+  if (row.confirmed_at && row.confirmed_by !== '(기존 계획)') throw bad('확정된 계획입니다. 「확정취소」 후 지우세요.'); // 15.199
   if (await db.prepare('SELECT 1 FROM production_actuals WHERE schedule_id=?').get(row.id)) throw bad('생산실적이 있는 일정은 삭제할 수 없습니다. 실적 이력을 확인하세요.');
   const r = await db.prepare('DELETE FROM schedules WHERE id=? AND NOT EXISTS(SELECT 1 FROM production_actuals WHERE schedule_id=?)').run(row.id, row.id);
   if (!r.changes) throw bad('그 사이 생산실적이 기록되어 삭제할 수 없습니다. 새로 불러오세요.');

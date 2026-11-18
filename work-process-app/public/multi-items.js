@@ -356,3 +356,173 @@ function actualLotInputs(box, materials, getQty) {
     short: () => { const q = getQty(); const out = materials.filter(m => { const need = Math.round(q * m.per * 1000) / 1000, got = rows.filter(r => r.item === m.item && r.lot).reduce((t, r) => t + (Number(r.qty) || 0), 0); return m.lots.length && got + 0.0005 < need; }); return out.map(m => m.item).join(', '); },
   };
 }
+
+
+// ── 15.199 완제품 계획생산 접수·관리: 월 계획표(제품 × 1~31일). 칸 = 그날 계획 수량, 대기(분홍)·확정(초록).
+// 칸을 눌러 그날 수량 넣기·고치기(0·빈칸이면 지움), 「추가」로 품목·날짜·수량, 줄 체크 → 「확정」·「확정취소」(체크 없으면 보이는 줄 전체).
+// 확정한 계획만 「완제품 실적 입력」에 나온다. 확정한 칸은 확정취소 후 고친다(실적이 있으면 확정취소 불가).
+async function pageFinishedPlan(main) {
+  const canEdit = hasRole('production');
+  let month = todayStr().slice(0, 7); try { month = sessionStorage.getItem('wpa:fp-month') || month; } catch { /* 편의 기능 */ }
+  main.innerHTML = `<h1>완제품 계획생산 접수·관리 <span class="dept">생산</span></h1>
+  <p class="muted">달마다 완제품의 날짜별 생산 계획을 받습니다. 칸을 눌러 수량을 넣으면 <b>대기</b>로 들어가고, 줄을 체크해 「확정」하면 <b>확정</b>이 되어 「완제품 실적 입력」에 나옵니다.</p>
+  <form class="toolbar fp-tools" id="fpTools" data-read-only>
+    <label>계획월<input type="month" name="month" value="${month}" required></label>
+    <div class="nav-date"><button type="button" class="btn small" data-fp-move="-1" aria-label="이전 달">◀</button><button type="button" class="btn small" data-fp-move="0">이번 달</button><button type="button" class="btn small" data-fp-move="1" aria-label="다음 달">▶</button></div>
+    <label>품목코드/명<input type="search" name="q" placeholder="품목코드/명 검색" autocomplete="off"></label>
+    <div class="fp-reg" role="radiogroup" aria-label="계획여부"><b>계획여부</b><label class="inline"><input type="radio" name="reg" value="1" checked> 등록</label><label class="inline"><input type="radio" name="reg" value="0"> 미등록</label><label class="inline"><input type="radio" name="reg" value=""> 전체</label></div>
+  </form>
+  <div class="fp-bar"><span class="fp-legend"><i class="fp-sw wait"></i>대기 <i class="fp-sw ok"></i>확정</span><span class="small muted" id="fpSum" role="status"></span><span class="grow"></span>
+    ${canEdit ? '<button type="button" class="btn" id="fpAdd">추가</button><button type="button" class="btn primary" id="fpConfirm">확정</button><button type="button" class="btn" id="fpUnconfirm">확정취소</button>' : ''}<a class="btn" href="#/prod/finished">실적 입력 →</a></div>
+  <div id="fpGrid"><p class="muted">불러오는 중…</p></div>`;
+  const form = $('#fpTools', main); let boms = [], plans = [], rows = [];
+  form.onsubmit = e => e.preventDefault();
+  const days = () => { const [y, m] = form.elements.month.value.split('-').map(Number); return new Date(y, m, 0).getDate(); };
+  const dateOf = d => `${form.elements.month.value}-${String(d).padStart(2, '0')}`;
+  const keyOf = x => x.bom_id ? 'b' + x.bom_id : 'n' + partnerKey(x.product);
+  const load = async () => {
+    const mon = form.elements.month.value; if (!/^\d{4}-\d{2}$/.test(mon)) return;
+    try { sessionStorage.setItem('wpa:fp-month', mon); } catch { /* 편의 기능 */ }
+    const [b, p] = await Promise.all([boms.length ? boms : api('GET', '/api/boms?kind=finished'), api('GET', '/api/schedules?' + new URLSearchParams({ kind: 'finished', from: mon + '-01', to: dateOf(days()) }))]);
+    if (!main.isConnected) return; boms = b; plans = p; draw();
+  };
+  const build = () => {
+    const by = new Map();
+    for (const b of boms.filter(b => b.item_category === '제품' && b.active !== 0)) by.set('b' + b.id, { key: 'b' + b.id, bom: b, product: b.product, code: b.product_code || '', cat1: b.cat1 || '', cat2: b.cat2 || '', cls: b.item_category, plans: [] });
+    for (const s of plans) { const k = keyOf(s); if (!by.has(k)) by.set(k, { key: k, bom: boms.find(b => b.id === s.bom_id) || null, product: s.product, code: s.bom_snapshot?.product_code || '', cat1: s.bom_snapshot?.cat1 || '', cat2: s.bom_snapshot?.cat2 || '', cls: s.bom_snapshot?.item_category || '제품', plans: [] }); by.get(k).plans.push(s); }
+    const q = form.elements.q.value.trim().toLowerCase(), reg = form.elements.reg.value;
+    return [...by.values()].filter(r => (!q || `${r.code} ${r.product}`.toLowerCase().includes(q)) && (reg === '' || (reg === '1' ? r.plans.length > 0 : !r.plans.length)))
+      .sort((x, y) => (x.cat1 || '~').localeCompare(y.cat1 || '~', 'ko') || (x.cat2 || '~').localeCompare(y.cat2 || '~', 'ko') || (x.code || '~').localeCompare(y.code || '~') || x.product.localeCompare(y.product, 'ko'));
+  };
+  const draw = () => {
+    rows = build(); const n = days(), today = todayStr();
+    const dow = d => new Date(dateOf(d) + 'T00:00:00').getDay();
+    const all = rows.flatMap(r => r.plans), wait = all.filter(s => !s.confirmed_at);
+    $('#fpSum', main).textContent = `품목 ${rows.length}개 · 계획 ${all.length}건(대기 ${wait.length} · 확정 ${all.length - wait.length}) · 계획수량 ${fmtNum(all.reduce((t, s) => t + s.qty, 0))}`;
+    if (!rows.length) { $('#fpGrid', main).innerHTML = `<div class="empty">${form.elements.reg.value === '1' ? '이 달에 등록된 계획이 없습니다. 「미등록」·「전체」를 보거나 「추가」하세요.' : '조건에 맞는 완제품이 없습니다. 제품등록에서 분류 「제품」으로 등록하세요.'}</div>`; return; }
+    const span = new Map(); rows.forEach(r => span.set(r.cat1, (span.get(r.cat1) || 0) + 1)); const seen = new Set();
+    const head = `<tr><th class="fp-chk"><input type="checkbox" data-fp-all aria-label="모든 줄 고르기"></th><th>No.</th><th>제품분류</th><th>제품구분</th><th>품목코드</th><th>품목명</th><th>품목분류</th><th class="r fp-sum-h">계획수량</th>${Array.from({ length: n }, (_, i) => `<th class="fp-d${[0, 6].includes(dow(i + 1)) ? ' fp-we' : ''}${dateOf(i + 1) === today ? ' fp-today' : ''}">${i + 1}</th>`).join('')}</tr>`;
+    const body = rows.map((r, i) => {
+      const dayPlans = d => r.plans.filter(s => s.period === 'day' && s.start_date === dateOf(d)), other = r.plans.filter(s => s.period !== 'day');
+      const first = !seen.has(r.cat1); seen.add(r.cat1);
+      return `<tr data-fp-row="${i}"><td class="fp-chk"><input type="checkbox" data-fp-pick="${i}" aria-label="${esc(r.product)} 고르기"></td><td class="c">${i + 1}</td>${first ? `<td class="fp-cat" rowspan="${span.get(r.cat1)}">${esc(r.cat1 || '(분류 없음)')}</td>` : ''}<td>${esc(r.cat2)}</td><td class="nowrap">${esc(r.code || '—')}</td><td class="fp-name">${esc(r.product)}</td><td>${esc(r.cls)}</td>
+        <td class="r fp-sum">${r.plans.length ? fmtNum(r.plans.reduce((t, s) => t + s.qty, 0)) : ''}${other.length ? `<div class="small muted">주·월 ${other.length}건</div>` : ''}</td>
+        ${Array.from({ length: n }, (_, k) => { const ps = dayPlans(k + 1), q = ps.reduce((t, s) => t + s.qty, 0), st = !ps.length ? '' : ps.every(s => s.confirmed_at) ? ' ok' : ' wait';
+          return `<td class="fp-cell${st}${[0, 6].includes(dow(k + 1)) ? ' fp-we' : ''}" data-fp-cell="${i}|${k + 1}" title="${esc(r.product)} ${dateOf(k + 1)}${ps.length ? ` · ${ps.every(s => s.confirmed_at) ? '확정' : '대기'}` : ''}">${ps.length ? fmtNum(q) : ''}</td>`; }).join('')}</tr>`;
+    }).join('');
+    $('#fpGrid', main).innerHTML = `<div class="table-wrap fp-wrap"><table class="grid keep-table fp-grid" data-no-sort data-no-filter data-keep-cols data-no-reorder><caption class="sr-only">${esc(form.elements.month.value)} 완제품 생산 계획</caption><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+    $('[data-fp-all]', main).onchange = e => $$('[data-fp-pick]', main).forEach(x => { x.checked = e.target.checked; });
+    $$('[data-fp-cell]', main).forEach(td => td.onclick = () => cellEdit(td.dataset.fpCell).catch(fail));
+  };
+  const picked = () => { const ids = $$('[data-fp-pick]:checked', main).map(x => rows[Number(x.dataset.fpPick)]); return ids.length ? ids : rows; };
+  const cellEdit = async key => {
+    if (!canEdit) return toast('계획 입력은 생산 담당자가 합니다.', 'err');
+    const [ri, d] = key.split('|').map(Number), r = rows[ri], date = dateOf(d), ps = r.plans.filter(s => s.period === 'day' && s.start_date === date);
+    if (ps.some(s => s.confirmed_at)) return toast(`${r.product} ${date}: 확정된 계획입니다. 줄을 체크해 「확정취소」한 뒤 고치세요.`, 'err');
+    const v = await promptBox(`${r.product} · ${date} (${'일월화수목금토'[new Date(date + 'T00:00:00').getDay()]})`, `${ps.length > 1 ? `<p class="small muted">이 날 대기 계획 ${ps.length}건 — 합쳐서 한 건으로 고칩니다.</p>` : ''}<label>계획 수량 <span class="hint">(비우거나 0이면 이 날 계획을 지웁니다)</span><input name="qty" type="number" min="0" step="any" inputmode="decimal" value="${ps.length ? ps.reduce((t, s) => t + s.qty, 0) : ''}" autofocus></label><label>비고<input name="note" maxlength="200" value="${esc(ps[0]?.note || '')}"></label>`);
+    if (!v) return;
+    const qty = Number(v.qty) || 0;
+    try {
+      if (!qty) { for (const s of ps) await api('DELETE', '/api/schedules/' + s.id); if (ps.length) toast('계획을 지웠습니다.'); }
+      else if (ps.length) { await api('PUT', '/api/schedules/' + ps[0].id, { period: 'day', start_date: date, qty, note: v.note, ...(ps[0].bom_id ? { bom_id: ps[0].bom_id } : { product: ps[0].product }) }); for (const s of ps.slice(1)) await api('DELETE', '/api/schedules/' + s.id); toast('계획을 고쳤습니다(대기).'); }
+      else { await api('POST', '/api/schedules', { kind: 'finished', period: 'day', start_date: date, qty, note: v.note, ...(r.bom ? { bom_id: r.bom.id } : { product: r.product }) }); toast('계획을 넣었습니다(대기).'); }
+    } catch (error) { fail(error); }
+    await load();
+  };
+  $('#fpAdd', main)?.addEventListener('click', async () => {
+    const list = boms.filter(b => b.item_category === '제품' && b.active !== 0).sort((x, y) => (x.product_code || '~').localeCompare(y.product_code || '~'));
+    const v = await promptBox('계획 추가', `<label>품목 *<select name="bom_id" required><option value="">품목 고르기</option>${list.map(b => `<option value="${b.id}">${esc(b.product_code || '—')} · ${esc(b.product)}</option>`).join('')}</select></label>
+      <div class="form-grid"><label>날짜 *<input name="start_date" type="date" required value="${todayStr().startsWith(form.elements.month.value) ? todayStr() : form.elements.month.value + '-01'}"></label><label>계획 수량 *<input name="qty" type="number" min="0.0001" step="any" required></label></div><label>비고<input name="note" maxlength="200"></label>`);
+    if (!v) return;
+    try { await api('POST', '/api/schedules', { kind: 'finished', period: 'day', start_date: v.start_date, bom_id: Number(v.bom_id), qty: v.qty, note: v.note }); toast('계획을 넣었습니다(대기).'); if (!v.start_date.startsWith(form.elements.month.value)) form.elements.month.value = v.start_date.slice(0, 7); await load(); } catch (error) { fail(error); }
+  });
+  const confirmAll = async on => {
+    const rs = picked(), target = rs.flatMap(r => r.plans).filter(s => on ? !s.confirmed_at : s.confirmed_at && !(s.actual_qty > 0));
+    const blocked = on ? 0 : rs.flatMap(r => r.plans).filter(s => s.confirmed_at && s.actual_qty > 0).length;
+    if (!target.length) return toast(on ? '확정할 대기 계획이 없습니다.' : `확정취소할 계획이 없습니다.${blocked ? ` (실적이 있는 확정 계획 ${blocked}건은 취소할 수 없습니다)` : ''}`, 'err');
+    const scope = $$('[data-fp-pick]:checked', main).length ? `체크한 ${rs.length}개 품목` : `보이는 ${rs.length}개 품목 전체`;
+    if (!await confirmBox(`${scope}의 ${on ? '대기' : '확정'} 계획 ${target.length}건을 ${on ? '확정' : '확정취소'}할까요?${blocked ? ` 실적이 있는 ${blocked}건은 그대로 둡니다.` : ''}`)) return;
+    try { const r = await api('POST', '/api/schedules/confirm', { ids: target.map(s => s.id), confirm: on }); toast(`${r.changed}건을 ${on ? '확정' : '확정취소'}했습니다.`); } catch (error) { fail(error); }
+    await load();
+  };
+  $('#fpConfirm', main)?.addEventListener('click', () => confirmAll(true));
+  $('#fpUnconfirm', main)?.addEventListener('click', () => confirmAll(false));
+  $$('[data-fp-move]', main).forEach(b => b.onclick = () => { const step = Number(b.dataset.fpMove); if (!step) form.elements.month.value = todayStr().slice(0, 7); else { const [y, m] = form.elements.month.value.split('-').map(Number); const d = new Date(y, m - 1 + step, 1); form.elements.month.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; } load().catch(fail); });
+  form.elements.month.addEventListener('change', () => load().catch(fail));
+  let t = null; form.elements.q.addEventListener('input', () => { clearTimeout(t); t = setTimeout(draw, 150); });
+  $$('[name=reg]', form).forEach(x => x.onchange = draw);
+  await load();
+}
+
+// ── 15.199 완제품 실적 입력: 생산일을 고르면 그날 확정 계획(계획수량·실적 누계·잔량)이 나오고, 양품수량을 넣어 저장한다.
+// 완제품 LOT는 서버가 P+생산일-순번으로 붙이고, 투입 자재 LOT는 먼저 들어온 것부터 필요량만큼 채운다(「상세」에서 직접 고르기·이력·수정 요청).
+async function pageFinishedActual(main) {
+  const canEnter = hasRole('production');
+  main.innerHTML = `<h1>완제품 실적 입력 <span class="dept">생산</span></h1>
+  <div id="actualChanges"></div>
+  <p class="muted">「완제품 계획생산 접수·관리」에서 <b>확정</b>한 계획이 나옵니다. 양품수량을 넣고 「저장」(여러 줄은 「입력한 줄 모두 저장」)하면 완제품 LOT가 붙고 투입 자재 LOT는 먼저 들어온 것부터 자동으로 채웁니다. 자재 LOT를 직접 고르거나 지난 실적을 고치려면 「상세」.</p>
+  <form class="toolbar fa-tools" id="faTools" data-read-only>
+    <label>생산일<input type="date" name="date" value="${todayStr()}" max="${todayStr()}" required></label>
+    <div class="nav-date"><button type="button" class="btn small" data-fa-move="-1" aria-label="전날">◀</button><button type="button" class="btn small" data-fa-move="0">오늘</button><button type="button" class="btn small" data-fa-move="1" aria-label="다음 날">▶</button></div>
+    <label>품목<input type="search" name="q" placeholder="품목코드/명" autocomplete="off"></label>
+    <label class="inline"><input type="checkbox" name="late" checked> 지난 2주 미완료 계획 포함</label>
+  </form>
+  <div class="fp-bar"><span class="small muted" id="faSum" role="status"></span><span class="grow"></span>${canEnter ? '<button type="button" class="btn primary" id="faSaveAll">입력한 줄 모두 저장</button>' : ''}<a class="btn" href="#/prod/finished/plan">계획생산 접수·관리 →</a></div>
+  <div id="faList"><p class="muted">불러오는 중…</p></div>`;
+  renderActualChanges($('#actualChanges', main), 'finished').catch(fail);
+  const form = $('#faTools', main); let rows = [];
+  form.onsubmit = e => e.preventDefault();
+  const end = s => s.period === 'day' ? s.start_date : s.period === 'week' ? addDays(s.start_date, 6) : monthEnd(s.start_date);
+  const load = async () => {
+    const date = form.elements.date.value; if (!date) return;
+    const from = form.elements.late.checked ? addDays(date, -14) : date;
+    const list = await api('GET', '/api/schedules?' + new URLSearchParams({ kind: 'finished', from, to: date }));
+    if (!main.isConnected) return;
+    const q = form.elements.q.value.trim().toLowerCase();
+    rows = list.filter(s => s.confirmed_at && (!q || `${s.bom_snapshot?.product_code || ''} ${s.product}`.toLowerCase().includes(q)) && (s.start_date <= date && end(s) >= date || (!s.done && s.actual_qty < s.qty)))
+      .sort((a, b) => (a.start_date === date) - (b.start_date === date) || a.start_date.localeCompare(b.start_date) || a.product.localeCompare(b.product, 'ko'));
+    draw();
+  };
+  const draw = () => {
+    const date = form.elements.date.value;
+    $('#faSum', main).textContent = `확정 계획 ${rows.length}건 · 계획 ${fmtNum(rows.reduce((t, s) => t + s.qty, 0))} · 실적 ${fmtNum(rows.reduce((t, s) => t + s.actual_qty, 0))}`;
+    if (!rows.length) { $('#faList', main).innerHTML = `<div class="empty">${esc(date)}에 확정된 완제품 계획이 없습니다. 「계획생산 접수·관리」에서 계획을 확정하세요.</div>`; return; }
+    $('#faList', main).innerHTML = `<div class="table-wrap"><table class="grid keep-table fa-grid" data-no-sort data-no-filter data-keep-cols data-no-reorder><caption class="sr-only">${esc(date)} 완제품 실적 입력</caption><thead><tr><th>No.</th><th>계획일</th><th>품목코드</th><th>품목명</th><th>단위</th><th class="r">계획수량</th><th class="r">실적 누계</th><th class="r">잔량</th><th class="r">양품수량</th><th>비고</th><th><span class="sr-only">작업</span></th></tr></thead><tbody>${rows.map((s, i) => { const left = Math.round((s.qty - s.actual_qty) * 1000) / 1000, unit = s.unit || s.bom_snapshot?.unit || '';
+      return `<tr data-fa-row="${i}" class="${s.done || left <= 0 ? 'fa-done' : s.start_date < date ? 'fa-late' : ''}"><td class="c">${i + 1}</td><td class="nowrap">${s.period === 'day' ? esc(s.start_date.slice(5)) : `${PERIOD[s.period]} ${esc(s.start_date.slice(5))}~`}${s.start_date < date && s.period === 'day' ? ' <span class="chip yellow">지난 계획</span>' : ''}</td>
+        <td class="nowrap">${esc(s.bom_snapshot?.product_code || '—')}</td><td><b>${esc(s.product)}</b>${s.spec ? ` <span class="small muted">${esc(s.spec)}</span>` : ''}</td><td>${esc(unit)}</td>
+        <td class="r">${fmtNum(s.qty)}</td><td class="r">${fmtNum(s.actual_qty)}</td><td class="r ${left <= 0 ? 'green-text' : ''}"><b>${left <= 0 ? '완료' : fmtNum(left)}</b></td>
+        <td class="r"><input type="number" min="0" step="any" inputmode="decimal" data-fa-qty placeholder="${left > 0 ? fmtNum(left) : ''}" aria-label="${esc(s.product)} 양품수량"${canEnter ? '' : ' disabled'}></td>
+        <td><input data-fa-note maxlength="200" aria-label="${esc(s.product)} 비고"${canEnter ? '' : ' disabled'}></td>
+        <td class="nowrap">${canEnter ? '<button type="button" class="btn small primary" data-fa-save>저장</button> ' : ''}<button type="button" class="btn small" data-fa-detail>상세</button></td></tr>`; }).join('')}</tbody></table></div>`;
+    $$('[data-fa-row]', main).forEach(tr => { const s = rows[Number(tr.dataset.faRow)];
+      $('[data-fa-detail]', tr).onclick = () => openProductionActuals(s.id).catch(fail);
+      const q = $('[data-fa-qty]', tr); q.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('[data-fa-save]', tr)?.click(); } });
+      $('[data-fa-save]', tr)?.addEventListener('click', async e => { const btn = e.currentTarget; btn.disabled = true; try { if (await save(s, tr)) await load(); } finally { btn.disabled = false; } }); });
+  };
+  // 투입 자재 LOT: 먼저 들어온 LOT부터 필요량만큼(상세 창의 자동 채우기와 같은 방식). 모자라면 물어 본다.
+  const lotInputs = async (s, qty) => {
+    const info = await api('GET', `/api/schedules/${s.id}/lot-materials`).catch(() => null), out = [], short = [];
+    for (const m of info?.materials || []) { let need = Math.round(qty * m.per * 1000) / 1000; for (const l of m.lots.filter(l => l.balance > 0)) { if (need <= 0) break; const take = Math.min(need, l.balance); out.push({ item: m.item, unit: m.unit, lot: l.lot, qty: Math.round(take * 1000) / 1000 }); need = Math.round((need - take) * 1000) / 1000; } if (need > 0) short.push(`${m.item} ${fmtNum(need)}${m.unit}`); }
+    return { out, short };
+  };
+  const save = async (s, tr, quiet = false) => {
+    const qty = Number($('[data-fa-qty]', tr).value); if (!(qty > 0)) { if (!quiet) { $('[data-fa-qty]', tr).focus(); toast('양품수량을 넣으세요.', 'err'); } return false; }
+    const date = form.elements.date.value, last = end(s), pd = date < s.start_date ? s.start_date : date > last ? last : date;
+    const { out, short } = await lotInputs(s, qty);
+    if (short.length && !await confirmBox(`${s.product}: 투입 자재 LOT 재고가 모자랍니다(${short.join(', ')}). 있는 만큼만 넣고 저장할까요?`)) return false;
+    try {
+      const r = await api('POST', `/api/schedules/${s.id}/actuals`, { production_date: pd, qty, note: $('[data-fa-note]', tr).value, inputs: out, request_id: crypto.randomUUID() });
+      toast(`${s.product} 양품 ${fmtNum(qty)} 저장 · LOT ${r.lot || '—'}${pd !== date ? ` (생산일 ${pd})` : ''}`); return true;
+    } catch (error) { fail(error); return false; }
+  };
+  $('#faSaveAll', main)?.addEventListener('click', async e => {
+    const todo = $$('[data-fa-row]', main).filter(tr => Number($('[data-fa-qty]', tr).value) > 0); if (!todo.length) return toast('양품수량을 넣은 줄이 없습니다.', 'err');
+    e.currentTarget.disabled = true; let ok = 0;
+    for (const tr of todo) if (await save(rows[Number(tr.dataset.faRow)], tr, true)) ok++;
+    e.currentTarget.disabled = false; toast(`${ok}/${todo.length}줄을 저장했습니다.`); await load();
+  });
+  $$('[data-fa-move]', main).forEach(b => b.onclick = () => { const step = Number(b.dataset.faMove), d = step ? addDays(form.elements.date.value, step) : todayStr(); form.elements.date.value = d > todayStr() ? todayStr() : d; load().catch(fail); });
+  form.elements.date.addEventListener('change', () => load().catch(fail)); form.elements.late.addEventListener('change', () => load().catch(fail));
+  let t = null; form.elements.q.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => load().catch(fail), 200); });
+  await load();
+}
