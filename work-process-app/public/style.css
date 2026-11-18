@@ -2482,3 +2482,29 @@ table.fa-grid tr.fa-done td { color: var(--muted); } table.fa-grid tr.fa-late td
 table.fp-grid tbody td.fp-cell.wait { background: #f7b6ae !important; color: #6b170e; }
 table.fp-grid tbody td.fp-cell.ok { background: #6fd796 !important; color: #08391b; }
 table.fp-grid tbody td.fp-cat { background: var(--panel) !important; }
+
+/* 15.202 출하지시: 휴대폰에서는 칸마다 상자가 아니라 한 건 = 3줄 그리드(품목·수량 / 거래처·지시일·상태 / LOT·보류). 규격은 품목 옆, 수주·전표·품목코드는 숨김 */
+.si-m-only { display: none; }
+@media (max-width: 600px) {
+  table.si-table, table.si-table tbody { display: block; width: 100%; }
+  table.si-table thead { display: none; }
+  table.si-table tbody tr { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; grid-template-areas: "chk item qty" "chk meta st" "chk lot act"; gap: 2px 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  table.si-table tbody tr.si-batched { box-shadow: inset 3px 0 0 #2f6fdb; }
+  table.si-table tbody td { display: block; padding: 0 !important; border: 0 !important; background: transparent !important; min-width: 0; text-align: left; }
+  table.si-table td::before { display: none !important; content: none !important; }
+  table.si-table td.si-c-chk { grid-area: chk; align-self: start; padding-top: 2px !important; }
+  table.si-table td.si-c-item { grid-area: item; font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; }
+  table.si-table td.si-c-qty { grid-area: qty; text-align: right; font-size: 15px; white-space: nowrap; }
+  table.si-table td.si-c-cust { grid-area: meta; font-size: 13px; color: var(--text-2, var(--muted)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  table.si-table td.si-c-date { display: none; }
+  table.si-table td.si-c-st { grid-area: st; text-align: right; font-size: 12px; white-space: nowrap; }
+  table.si-table td.si-c-st .si-batch-tag { display: inline-flex; gap: 4px; align-items: center; margin-left: 4px; }
+  table.si-table td.si-c-st .si-batch-tag .chip { padding: 0 5px; font-size: 11px; }
+  table.si-table td.si-c-lot { grid-area: lot; } table.si-table td.si-c-lot input { width: 100%; height: 34px; min-height: 34px; padding: 4px 8px; font-size: 14px; }
+  table.si-table td.si-c-act { grid-area: act; } table.si-table td.si-c-act .btn { min-height: 34px; }
+  table.si-table td.si-c-spec, table.si-table td.si-c-unit, table.si-table td.si-c-ref, table.si-table .si-m-hide { display: none !important; }
+  table.si-table .si-m-only { display: inline; }
+  table.si-table input[type=checkbox] { width: 22px; height: 22px; }
+}
+@media (max-width: 600px) { .table-wrap:has(> table.si-table) .gr-gear, .table-wrap:has(> table.si-table) .gr-rz { display: none !important; } }
+@media (max-width: 600px) { #siBar { display: flex; flex-wrap: wrap; gap: 6px; } #siBar .btn { white-space: nowrap; flex: 1 1 auto; } }
