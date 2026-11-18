@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.218';
+const APP_VERSION = '15.219';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -1362,11 +1362,14 @@ const PHONE_GRID = [
   ['#stockList', { a: ['품목명'], b: ['현재고'], c: ['품목코드', '분류', ['안전재고', '안전'], ['최근 변동', '변동']], d: [''] }],
   ['#shList', { a: ['품목명'], b: ['수량'], c: ['거래처', '출고일', ['LOT', 'LOT']], d: [''] }],
   ['#rcsList', { a: ['품목'], b: ['입고일'], c: ['입고번호', '거래처', ['줄', '줄']], d: [''] }],
+  ['#workList', { a: ['샘플명', '제품명', '상품명', '타겟제품'], b: ['판정', '상태'], c: ['접수번호', '검사구분', '고객사', ['완료희망일', '희망']], d: ['상태'] }], // 15.219 분석·VOC·개발·샘플 리스트
+  ['#taxList', { k: [''], a: ['거래처'], b: ['합계'], c: ['문서상태', ['작성일자', '작성'], '품목', '구분'] }], // 15.219 세금계산서 목록
+  ['#mrList', { a: ['품목 · 수량'], b: ['진행'], c: ['업체 · 주문번호', ['출고 희망', '출고']], d: [''] }], // 15.219 생산의뢰
   ['#scBills', { a: ['거래처'], b: ['합계금액'], c: ['전표번호', ['매출', '매출'], ['매입', '매입'], ['세액', '세액']] }], // 15.218 매출·매입 달력 납품전표 목록
   ['#scItems', { a: ['제품명'], b: ['금액'], c: ['제품코드', '규격', ['수량', '수량'], ['단가', '단가']] }], // 15.218 세부품목내역
   ['#billList', { k: [''], a: ['거래처'], b: ['합계'], c: ['전표번호', ['전표 일자', '일자'], ['명세서 일자', '일자'], '상태', '세금계산서'], d: [] }], // 15.215 매출·매입전표 목록
-  ['#poList', { a: ['품목명'], b: ['수량'], c: ['거래처', '입고상태', ['납기일', '납기'], ['입고', '입고'], ['잔량', '잔량'], ['구매의뢰번호', '의뢰']], d: [''] }], // 15.212
-  ['#rcList', { k: [''], a: ['품목명'], b: ['발주수량'], c: ['거래처', '상태', ['실입고', '실입고'], ['납기일', '납기'], ['구매의뢰번호', '의뢰']], d: ['사진·검수'] }], // 15.212
+  ['#poList', { a: ['품목명'], b: ['수량'], c: ['거래처', '입고상태', ['납기일', '납기']], d: [''] }], // 15.212 (15.219 2줄로: 입고·잔량·의뢰번호는 상세에)
+  ['#rcList', { k: [''], a: ['품목명'], b: ['발주수량'], c: ['거래처', '상태', ['납기일', '납기']], d: ['사진·검수'] }], // 15.212 (15.219 2줄로)
   ['.mr-needs', { a: ['품목'], b: ['생산 필요'], c: ['규격·사이즈', ['의뢰', '의뢰'], ['생산', '생산'], ['계획 안 됨', '미계획']] }], // 15.210
   ['#faList', { a: ['품목명'], b: ['잔량'], c: ['계획일', ['계획수량', '계획'], ['실적 누계', '실적']], d: ['양품수량', '비고', ''] }],
 ];
@@ -1544,6 +1547,23 @@ function foldOptionalFields() {
   });
 }
 new MutationObserver(foldOptionalFields).observe(document.body, { childList: true, subtree: true });
+// 15.219 휴대폰 입력 표(품목 줄): 입력칸이 많은 줄은 필수·값 있는 칸만 보이고 나머지는 「추가 입력 n ▾」로 접음(줄마다)
+function foldLineInputs() {
+  if (!matchMedia('(max-width: 600px)').matches) return;
+  $$('#main form table.m-grid tbody tr:not([data-lf])').forEach(tr => {
+    const cells = [...tr.children].filter(td => td.classList.contains('m-d') && td.querySelector('input:not([type=checkbox]):not([type=hidden]), select, textarea'));
+    if (cells.length < 5) return;
+    tr.dataset.lf = '1';
+    const opt = cells.filter(td => ![...td.querySelectorAll('input, select, textarea')].some(i => i.required || (i.value && i.value !== i.defaultValue) || (i.tagName === 'SELECT' && i.selectedIndex > 0)));
+    if (opt.length < 2) return;
+    opt.forEach(td => td.classList.add('m-opt'));
+    const host = tr.querySelector('td.m-a') || cells[0], btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'm-opt-btn'; btn.textContent = `추가 입력 ${opt.length} ▾`;
+    btn.onclick = () => { const on = tr.classList.toggle('m-opt-open'); btn.textContent = on ? '추가 입력 접기 ▴' : `추가 입력 ${opt.length} ▾`; };
+    host.append(btn);
+  });
+}
+new MutationObserver(() => foldLineInputs()).observe(document.body, { childList: true, subtree: true });
 // 15.216 모든 조회 양식의 기간(시작·끝 날짜 칸)을 「이름 [◀ | 기간 ▾ | ▶]」 한 덩어리로. 화면이 직접 rangePresets를 부르지 않아도 여기서 붙인다.
 // 조회 전용 양식만(저장 양식에서 고르면 submit이 저장이 되므로 제외). 고르면 조회 단추가 있으면 그 양식을 제출, 없으면 change 이벤트.
 function autoCompactRanges() {
@@ -1578,7 +1598,9 @@ function labelSegGroups() {
     const tag = document.createElement('span'); tag.className = 'seg-label'; tag.textContent = seg.getAttribute('aria-label'); seg.before(tag);
   });
 }
-new MutationObserver(() => { labelGridTables(); labelSegGroups(); pairDateRanges(); filterTools(); }).observe(document.body, { childList: true, subtree: true });
+// 15.219 휴대폰 한 줄 탭: 고른 탭이 보이게 가로 위치 맞춤
+function scrollTabsIntoView() { if (!matchMedia('(max-width: 700px)').matches) return; $$('#main .seg.class-tabs, #main .tax-side, #main .receipt-tabs').forEach(bar => { const on = bar.querySelector('.on, [aria-current], [aria-pressed="true"]'); if (!on || bar.scrollWidth <= bar.clientWidth || bar.dataset.tabX === on.textContent) return; bar.dataset.tabX = on.textContent; bar.scrollLeft = Math.max(0, on.offsetLeft - bar.clientWidth / 2 + on.offsetWidth / 2); }); }
+new MutationObserver(() => { labelGridTables(); labelSegGroups(); pairDateRanges(); filterTools(); scrollTabsIntoView(); }).observe(document.body, { childList: true, subtree: true });
 
 async function pageHome(main) {
   const [d, tasks, alerts] = await Promise.all([api('GET', '/api/dashboard'), api('GET', '/api/my-tasks'), api('GET', '/api/alerts').catch(() => null)]);
@@ -2259,9 +2281,12 @@ async function pageIntake(type) {
   <p class="muted">누구나 의뢰할 수 있습니다. 접수대기 목록에 올라가고, <b>${cfg.mgr}</b>가 승인하면 <a href="${cfg.list}">${cfg.listTitle || cfg.label + '리스트'}</a>에 올라갑니다.
   ${managers ? `<br>지정 승인권자: ${managers.length ? managers.map(u => esc(u.name)).join(', ') : '미지정 · 관리자에게 책임자 지정을 요청하세요.'} (관리자도 승인 가능)` : ''}
   ${mgr ? `<br><span class="tag">${cfg.mgr} 권한</span> 아래 목록에서 바로 승인/반려할 수 있습니다.` : ''}</p>
+  <button type="button" class="btn primary intake-new-btn" data-intake-new>+ 새 ${cfg.intakeTitle || cfg.label + '의뢰'} 작성</button>
   <details class="card" id="reqNewBox" open><summary><h3>새 ${cfg.intakeTitle || cfg.label + '의뢰'} 작성</h3></summary>${requestForm(type)}</details>
   <h2>접수대기 목록</h2>${listControls('intake', { dateLabel: '등록', placeholder: '품목·고객사·입력자·메모', extra: `<label>상태<select name="status"><option value="">전체 접수대기·반려</option><option value="pending">접수대기</option><option value="rejected">반려</option></select></label>${type === 'analysis' ? '<label>검사 구분<select name="category"><option value="">전체 검사</option>' + ['수입검사','의뢰검사','출하검사','공정검사'].map(category => `<option>${category}</option>`).join('') + '</select></label>' : ''}` })}<div id="intakeList"></div>`;
   const filterForm = $('#intakeFilters', main); let queryVersion = 0;
+  main.classList.add('intake-page'); // 15.219 휴대폰: 입력 양식은 접어 두고 목록 먼저(「+ 새 … 작성」으로 열기)
+  { const nb = $('[data-intake-new]', main), label = nb.textContent; nb.onclick = () => { const on = main.classList.toggle('intake-open'); nb.textContent = on ? '입력 양식 닫기 ▴' : label; }; }
   const load = async () => {
     if (!main.isConnected) return;
     const version = ++queryVersion; listLoading(filterForm);
