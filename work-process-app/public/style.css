@@ -2324,3 +2324,7 @@ table.grid.pr-grid .item-lock [data-item-unlock] { min-height: 22px !important; 
 .ar-grid select { min-width: 140px; } .pr-line-default p { margin: 4px 0 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 /* 15.185 숨긴 오류 문구의 「!」 아이콘이 혼자 보이던 것 */
 [hidden].field-error, .field-error[hidden] { display: none !important; }
+
+
+/* 15.186 발주 표: 단가 칸 아래 최근 단가·이력 */
+.lt-grid .lt-hist { margin-top: 2px; white-space: nowrap; font-size: 11.5px; } .lt-grid .lt-hist .link-btn { font-size: 11.5px; }

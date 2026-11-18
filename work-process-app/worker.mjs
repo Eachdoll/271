@@ -679,6 +679,17 @@ function insertPurchaseOrder(record, batchId = '') {
   });
   return { sql: `INSERT INTO purchase_orders(${columns.join(',')}) VALUES(${values.join(',')})`, args };
 }
+// 15.186 품목별 최근 발주 내역: 발주 입력에서 품목을 고르면 그 품목의 최근 발주(일자·거래처·수량·단가)와 최근 단가(같은 거래처 우선)를 보여 준다.
+// 제품코드가 있으면 코드로, 없으면 품목명(공백·대소문자 무시)으로 찾는다. 단가가 비어 있던 발주도 내역에는 나온다.
+route('GET', '/api/po/history', async ({ query }) => {
+  const code = str(query.code, 50), item = str(query.item, 200), vendor = str(query.vendor, 100);
+  if (!code && !item) return { rows: [], last: null, last_vendor: null };
+  const where = code ? 'product_code=?' : "REPLACE(LOWER(item),' ','')=?", arg = code || item.toLowerCase().replace(/ /g, '');
+  const rows = await db.prepare(`SELECT id, req_no, vendor, item, spec, unit, qty, unit_price, recv_status, substr(created_at,1,10) AS po_date, due_date FROM purchase_orders WHERE ${where} ORDER BY created_at DESC, id DESC LIMIT 10`).all(arg);
+  const priced = rows.filter(r => r.unit_price != null);
+  const vkey = vendor ? nameKey(vendor) : '';
+  return { rows, last: priced[0] || null, last_vendor: vkey ? priced.find(r => nameKey(r.vendor) === vkey) || null : null };
+});
 route('GET', '/api/po', async ({ query }) => {
   const where = []; const args = [];
   applyListKeyword(where, args, query.q, ['req_no','vendor','item','note','created_by','recv_by','recv_note']);
