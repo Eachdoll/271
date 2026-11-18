@@ -26,7 +26,7 @@ function itemStockText(bom, map) {
   return rows.map(r => `<span class="${r.stock < 0 ? 'red-text' : r.stock === 0 ? 'muted' : ''}">${fmtNum(r.stock)}${r.unit ? ' ' + esc(r.unit) : ''}</span>`).join('<span class="muted"> · </span>');
 }
 // multi(15.79): 여러 품목을 체크하고 품목마다 LOT 수(행추가)를 정해 한 번에 고른다 → { items: [{ bom, count }], autoLot } 또는 null
-function openItemPicker(catalog, { query = '', title = '품목 찾기', filter = null, multi = false, lots = true, emptyText = '찾는 품목이 없습니다. 창을 닫고 품목명을 직접 입력하세요.' } = {}) {
+function openItemPicker(catalog, { query = '', title = '품목 찾기', filter = null, multi = false, lots = true, autoLotBox = true, emptyText = '찾는 품목이 없습니다. 창을 닫고 품목명을 직접 입력하세요.' } = {}) {
   const all = (filter ? catalog.filter(filter) : catalog).slice();
   const classes = ITEM_CATEGORIES.filter(c => all.some(b => b.item_category === c));
   if (all.some(b => !ITEM_CATEGORIES.includes(b.item_category))) classes.push('미분류');
@@ -44,7 +44,7 @@ function openItemPicker(catalog, { query = '', title = '품목 찾기', filter =
       <p class="small muted" data-ip-count aria-live="polite"></p>
       <div class="table-wrap ip-wrap"><table class="grid ip-table" id="ipTable"><caption class="sr-only">품목 목록</caption><thead><tr>${multi ? '<th scope="col"><span class="sr-only">선택</span></th>' : ''}<th scope="col">코드</th><th scope="col">품목명</th><th scope="col">분류</th><th scope="col">단위</th><th scope="col" class="r">현재고</th><th scope="col">사이즈</th>${multi && lots ? '<th scope="col">LOT 수</th>' : ''}</tr></thead><tbody data-ip-rows></tbody></table></div>
       ${multi ? `<p class="small muted">줄을 누르거나 체크해 여러 품목을 고르고${lots ? ', 품목마다 LOT 수(그 품목 줄을 몇 줄 만들지)를 정하세요' : ''}. 검색·분류를 바꿔도 고른 품목은 유지됩니다.</p>` : ''}
-      <div class="actions">${multi ? `${lots ? '<label class="inline ip-auto"><input type="checkbox" data-ip-auto checked> LOT 자동 번호</label>' : '<span class="ip-auto"></span>'}<span class="small" data-ip-sum aria-live="polite"></span>` : ''}<button type="button" class="btn" data-ip-cancel>취소</button>${multi ? '<button type="button" class="btn primary" data-ip-ok disabled>확인</button>' : ''}</div>`, { wide: true, onClose: () => { if (!done) { done = true; resolve(null); } } });
+      <div class="actions">${multi ? `${lots && autoLotBox ? '<label class="inline ip-auto"><input type="checkbox" data-ip-auto checked> LOT 자동 번호</label>' : '<span class="ip-auto"></span>'}<span class="small" data-ip-sum aria-live="polite"></span>` : ''}<button type="button" class="btn" data-ip-cancel>취소</button>${multi ? '<button type="button" class="btn primary" data-ip-ok disabled>확인</button>' : ''}</div>`, { wide: true, onClose: () => { if (!done) { done = true; resolve(null); } } });
     const el = m.el, q = $('[data-ip-q]', el);
     el.classList.add('ip-modal'); // 15.122 창은 고정 높이, 품목 표만 스크롤
     const words = () => q.value.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean).map(itemPickerKey);

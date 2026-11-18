@@ -62,6 +62,9 @@ test('Operator writes actuals to another user’s existing finished plan only, w
 });
 test('Operator read models expose only relevant catalog and finished plans for the selected day',async()=>{
   const catalog=await operator('GET','/api/operator/catalog');assert.equal(catalog.status,200);assert.equal(catalog.body.units.length,2);
+  // 15.204 POP는 확정 계획만: 대기면 안 나오고, 확정하면 나온다
+  assert.equal((await operator('GET','/api/operator/plans?date='+day)).body.filter(p=>p.id===plan.id).length,0,'waiting plan hidden');
+  await admin('POST','/api/schedules/confirm',{ids:[plan.id]});
   const plans=await operator('GET','/api/operator/plans?date='+day);assert.equal(plans.status,200);assert.equal(plans.body.length,1);assert.equal(plans.body[0].id,plan.id);assert.ok(!('bom_snapshot' in plans.body[0]));
   assert.equal((await operator('GET','/api/operator/plans?date=2026-02-30')).status,400);
   assert.equal((await operator('GET','/api/operator/plans?date=2999-01-01')).status,400);

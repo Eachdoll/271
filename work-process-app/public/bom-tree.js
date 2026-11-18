@@ -137,20 +137,20 @@ async function pageBomSheet(main) {
   const kindOf = b => b.semi_type || (b.item_category === '반제품' || b.kind === 'semi' ? '반제품' : ['제품', '상품', '임가공'].includes(b.item_category) ? '완제품' : '');
   const catsOf = b => b ? [b.cat1, b.cat2].filter(Boolean).join(' › ') : '';
   const useBox = (on, label) => `<span class="bs-use${on ? ' on' : ''}" role="img" aria-label="${esc(label)} ${on ? '사용' : '사용 안 함'}">${on ? '✓' : ''}</span>`;
-  const head = (n, first) => `<thead><tr><th scope="col"><span class="sr-only">펼치기</span></th><th scope="col">${first}코드</th><th scope="col">${first}명</th><th scope="col">품목분류</th><th scope="col">제품분류</th><th scope="col">제품구분</th><th scope="col">단위</th><th scope="col" class="r">소요량</th>${n ? `<th scope="col" class="r">필요량 (${fmtNum(n)})</th>` : ''}<th scope="col">비고</th><th scope="col">사용여부</th><th scope="col"><span class="sr-only">작업</span></th></tr></thead>`;
+  const head = (n, first) => `<thead><tr><th scope="col"><span class="sr-only">펼치기</span></th><th scope="col">${first}코드</th><th scope="col" class="c">NO</th><th scope="col">${first}명</th><th scope="col">품목분류</th><th scope="col">제품분류</th><th scope="col">제품구분</th><th scope="col">단위</th><th scope="col" class="r">소요량</th>${n ? `<th scope="col" class="r">필요량 (${fmtNum(n)})</th>` : ''}<th scope="col">비고</th><th scope="col">사용여부</th><th scope="col"><span class="sr-only">작업</span></th></tr></thead>`;
   const toggle = (key, open, label) => `<button type="button" class="bt-toggle" data-bs-toggle="${esc(key)}" aria-expanded="${open}" aria-label="${esc(label)} ${open ? '접기' : '펼치기'}">${open ? '▾' : '▸'}</button>`;
   const productTable = list => {
-    const n = N(), cols = n ? 12 : 11;
-    const body = list.map(b => {
+    const n = N(), cols = n ? 13 : 12;
+    const body = list.map((b, bi) => {
       const key = 'p' + b.id, open = !collapsed.has(key) || editing === b.id;
       const parent = `<tr class="bt-product${b.active ? '' : ' row-off'}" data-bs-product="${b.id}"><td>${toggle(key, open, b.product + ' 구성자재')}</td>
-        <td class="nowrap"><b>${esc(b.product_code || '—')}</b></td><td><b>${esc(b.product)}</b>${b.spec ? ` <span class="small muted">${esc(b.spec)}</span>` : ''}</td>
+        <td class="nowrap"><b>${esc(b.product_code || '—')}</b></td><td class="c bs-no">${bi + 1}</td><td><b>${esc(b.product)}</b>${b.spec ? ` <span class="small muted">${esc(b.spec)}</span>` : ''}</td>
         <td>${esc(b.item_category)}</td><td>${esc(catsOf(b))}</td><td>${esc(kindOf(b))}</td><td>${esc(b.unit)}</td><td class="r">${fq(b.base_qty)}</td>${n ? `<td class="r bs-need">${fmtNum(n)}</td>` : ''}
         <td class="small">${esc([b.note, bomPackNote(b)].filter(Boolean).join(' · '))}${b.materials.length ? '' : ' <span class="chip red">구성자재 없음</span>'}</td><td>${useBox(b.active, b.product)}</td>
         <td class="nowrap">${editing === b.id ? '' : `<button type="button" class="btn small" data-bs-edit="${b.id}">수정</button>`}</td></tr>`;
       if (editing === b.id) return parent + `<tr class="bs-edit-row"><td></td><td colspan="${cols - 1}">${editorHtml(b)}</td></tr>`;
-      const kids = b.materials.length ? b.materials.map(m => { const c = cat.get(partnerKey(m.item)); return `<tr class="bt-mat" data-bs-of="${key}"${open ? '' : ' hidden'}><td></td>
-        <td class="nowrap bt-indent">${c ? esc(c.product_code || '—') : '<span class="muted small">미등록</span>'}</td><td class="bt-indent">${esc(m.item)}</td>
+      const kids = b.materials.length ? b.materials.map((m, mi) => { const c = cat.get(partnerKey(m.item)); return `<tr class="bt-mat" data-bs-of="${key}"${open ? '' : ' hidden'}><td></td>
+        <td class="nowrap bt-indent">${c ? esc(c.product_code || '—') : '<span class="muted small">미등록</span>'}</td><td class="c small muted">${bi + 1}-${mi + 1}</td><td class="bt-indent">${esc(m.item)}</td>
         <td>${esc(m.item_category)}</td><td>${esc(catsOf(c))}</td><td></td><td>${esc(m.unit)}</td><td class="r"><b>${fq(m.qty)}</b></td>${n ? `<td class="r bs-need">${fmtNum(round(m.qty / b.base_qty * n))}</td>` : ''}
         <td class="small muted">${c ? (c.active ? '' : '자재 품목 사용 중지') : '제품등록에 없는 자재'}</td><td>${c ? useBox(c.active, m.item) : ''}</td><td></td></tr>`; }).join('')
         : `<tr class="bt-mat" data-bs-of="${key}"${open ? '' : ' hidden'}><td></td><td colspan="${cols - 1}" class="bt-indent bs-none">구성자재 없음 — 「수정」에서 넣으세요</td></tr>`;
@@ -169,13 +169,13 @@ async function pageBomSheet(main) {
   const materialTable = list => {
     const groups = materialGroups(list), n = N();
     if (!groups.length) return '<div class="empty">조건에 맞는 자재가 없습니다.</div>';
-    const body = groups.map(g => {
+    const body = groups.map((g, gi) => {
       const key = 'm' + partnerKey(g.item), open = !collapsed.has(key), c = cat.get(partnerKey(g.item)), units = new Set(g.uses.map(u => u.m.unit));
       const total = n && units.size === 1 ? g.uses.reduce((t, u) => t + u.m.qty / u.b.base_qty * n, 0) : null;
-      return `<tr class="bt-product"><td>${toggle(key, open, g.item + ' 쓰는 제품')}</td><td class="nowrap"><b>${esc(codeOf(g.item) || '—')}</b></td><td><b>${esc(g.item)}</b></td>
+      return `<tr class="bt-product"><td>${toggle(key, open, g.item + ' 쓰는 제품')}</td><td class="nowrap"><b>${esc(codeOf(g.item) || '—')}</b></td><td class="c bs-no">${gi + 1}</td><td><b>${esc(g.item)}</b></td>
         <td>${esc(g.cat)}</td><td>${esc(catsOf(c))}</td><td></td><td>${esc([...units].join(', '))}</td><td class="r"></td>${n ? `<td class="r bs-need">${total !== null ? fmtNum(round(total)) : ''}</td>` : ''}
         <td class="small">쓰는 제품 ${g.uses.length}개</td><td>${c ? useBox(c.active, g.item) : ''}</td><td></td></tr>`
-        + g.uses.map(u => `<tr class="bt-mat" data-bs-of="${esc(key)}"${open ? '' : ' hidden'}><td></td><td class="nowrap bt-indent">${esc(u.b.product_code || '—')}</td><td class="bt-indent">${esc(u.b.product)}</td>
+        + g.uses.map((u, ui) => `<tr class="bt-mat" data-bs-of="${esc(key)}"${open ? '' : ' hidden'}><td></td><td class="nowrap bt-indent">${esc(u.b.product_code || '—')}</td><td class="c small muted">${gi + 1}-${ui + 1}</td><td class="bt-indent">${esc(u.b.product)}</td>
         <td>${esc(u.b.item_category)}</td><td>${esc(catsOf(u.b))}</td><td>${esc(kindOf(u.b))}</td><td>${esc(u.m.unit)}</td><td class="r"><b>${fq(u.m.qty)}</b></td>${n ? `<td class="r bs-need">${fmtNum(round(u.m.qty / u.b.base_qty * n))}</td>` : ''}
         <td class="small muted">기준 ${fmtNum(u.b.base_qty)} ${esc(u.b.unit)}당</td><td>${useBox(u.b.active, u.b.product)}</td><td class="nowrap"><button type="button" class="btn small" data-bs-goto="${u.b.id}" title="제품별 보기에서 이 제품 수정">수정</button></td></tr>`).join('');
     }).join('');
