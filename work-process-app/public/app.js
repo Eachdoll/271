@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.190';
+const APP_VERSION = '15.192';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -474,12 +474,21 @@ function fixHeadingLevels() {
   }
 }
 { let queued = false; new MutationObserver(() => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; fixHeadingLevels(); }); }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'data-view', 'open'] }); }
+// 15.191 도움말 단추가 제목 줄 오른쪽 단추(예: 「작업 기록 보기 →」)와 겹치면 그 단추 왼쪽으로 비킨다.
+function helpDodge(main, details) {
+  const sum = $('summary', details); if (!sum || getComputedStyle(details).position !== 'absolute') return;
+  const r = sum.getBoundingClientRect();
+  const hits = [...main.querySelectorAll('a.btn, button.btn, .btn')].filter(e => !details.contains(e) && e.offsetParent).map(e => e.getBoundingClientRect()).filter(b => b.width && b.top < r.bottom + 4 && b.bottom > r.top - 4 && b.left < r.right + 4 && b.right > r.left - 4);
+  if (!hits.length) return;
+  const left = Math.min(...hits.map(b => b.left));
+  details.style.right = `${parseFloat(getComputedStyle(details).right) + (r.right - left) + 8}px`;
+}
 function foldHelp(main) {
   for (const p of main.querySelectorAll(':scope > p.muted, :scope > section > p.muted, #receiptContent > p.muted')) {
     if (p.textContent.trim().length < 80 || p.closest('details')) continue;
     const details = document.createElement('details'); details.className = 'help';
     details.innerHTML = '<summary title="이 화면 설명">도움말</summary>'; p.replaceWith(details); details.append(p); // 15.180 오른쪽 위 단추
-    if (details.parentElement === main) requestAnimationFrame(() => { const h1 = $('h1', main); if (h1 && details.isConnected) details.style.top = `${h1.offsetTop}px`; }); // 제목 줄 높이에(위치 표시와 겹치지 않게)
+    if (details.parentElement === main) requestAnimationFrame(() => { const h1 = $('h1', main); if (h1 && details.isConnected) { details.style.top = `${h1.offsetTop}px`; helpDodge(main, details); } }); // 제목 줄 높이에(위치 표시와 겹치지 않게)
   }
 }
 function applyView(main, route) {
@@ -2223,7 +2232,9 @@ async function pageBoms(main) {
       <td class="bom-memo">${bom.vendor_info ? esc(bom.vendor_info) : '<span class="muted">—</span>'}</td>
       <td class="bom-memo">${bom.note ? esc(bom.note) : '<span class="muted">—</span>'}</td>
       <td class="nowrap"><span class="st-dot${bom.active ? ' on' : ''}">${bom.active ? '사용' : '중지'}</span></td>
-      <td data-card-primary class="bom-actions"><button class="btn small" data-bom-edit="${bom.id}">${bom.is_temp ? '정식 코드로 확정' : '수정'}</button><details class="row-menu"><summary class="btn small" aria-label="${esc(bom.product)} 더보기">더보기 ▾</summary><div class="row-menu-list">${commentButton("bom", bom.id, bom.product)}${bom.is_temp && bom.active ? `<button class="btn small" data-bom-merge="${bom.id}">기존 품목으로 합치기</button>` : ''}${bom.active ? `<button class="btn small" data-bom-disable="${bom.id}">사용 중지</button>` : `<button class="btn small" data-bom-enable="${bom.id}">다시 사용</button>`}<button class="btn small danger" data-bom-delete="${bom.id}">삭제</button></div></details></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">등록된 제품이 없습니다.</div>';
+      <td data-card-primary class="bom-actions"><button class="btn small" data-bom-edit="${bom.id}">${bom.is_temp ? '정식 코드로 확정' : '수정'}</button><details class="row-menu"><summary class="btn small" aria-label="${esc(bom.product)} 더보기">더보기 ▾</summary><div class="row-menu-list">${commentButton("bom", bom.id, bom.product)}${bom.is_temp && bom.active ? `<button class="btn small" data-bom-merge="${bom.id}">기존 품목으로 합치기</button>` : ''}${bom.active ? `<button class="btn small" data-bom-disable="${bom.id}">사용 중지</button>` : `<button class="btn small" data-bom-enable="${bom.id}">다시 사용</button>`}<button class="btn small danger" data-bom-delete="${bom.id}">삭제</button></div></details></td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">${filterForm.elements.q?.value.trim() ? '조건에 맞는 제품이 없습니다.' : '등록된 제품이 없습니다.'}<div data-bom-hidden-hit></div></div>`;
+    // 15.192 「사용」만 보는데 검색어로 찾은 게 없으면, 사용 중지된 품목에 있는지 알려 주고 바로 보게 한다(코드가 이미 쓰인다는 안내와 맞춤).
+    if (!sorted.length && filterForm.elements.q?.value.trim() && filterForm.elements.active.value === '1') api('GET', '/api/boms?' + new URLSearchParams({ ...formObj(filterForm), active: '0', include_archived: '1' })).then(off => { const box = $('[data-bom-hidden-hit]', main); if (!box || version !== queryVersion || !off.length) return; box.innerHTML = `<p class="small">사용 중지된 품목에 ${off.length}건 있습니다: ${off.slice(0, 3).map(b => `<b>${esc(b.product_code || '코드 없음')}</b> ${esc(b.product)}`).join(', ')}${off.length > 3 ? ' …' : ''}</p><button type="button" class="btn small" data-bom-show-off>미사용에서 보기</button>`; $('[data-bom-show-off]', box).onclick = () => $('[data-bom-active="0"]', main)?.click(); }).catch(() => {});
     // 「더보기」 메뉴: 한 번에 하나만, 버튼 아래에 떠서 열린다(표 칸 안에서 펼치면 줄이 커지고 잘리므로 화면 기준 위치).
     $$('#bomList .row-menu', main).forEach(menu => menu.addEventListener('toggle', () => { if (!menu.open) return; $$('#bomList .row-menu[open]', main).forEach(other => { if (other !== menu) other.open = false; }); bomMenuPlace(menu); }));
     if (view === 'tree') {

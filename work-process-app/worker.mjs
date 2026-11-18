@@ -3341,8 +3341,10 @@ async function bomPlacement(body, category, previous = {}, unit = '') {
 const CODE_TABLES = ['purchase_orders', 'shipments', 'semi_records', 'purchase_request_items', 'production_request_lines', 'purchase_bill_lines', 'sales_bill_lines', 'sales_order_lines', 'ship_instructions'];
 async function bomCodeClash(code, id = 0) {
   if (!code) return;
-  const other = await db.prepare("SELECT product, product_code FROM boms WHERE product_code<>'' AND UPPER(product_code)=UPPER(?) AND id<>?").get(code, id);
-  if (other) throw new HttpError(409, `제품코드 ${code}는 「${other.product}」(${other.product_code})에서 이미 쓰고 있습니다.`);
+  const other = await db.prepare("SELECT product, product_code, active, is_temp FROM boms WHERE product_code<>'' AND UPPER(product_code)=UPPER(?) AND id<>?").get(code, id);
+  // 15.192 사용 중지(목록의 「사용」에서 안 보임)·임시 품목이 코드를 쥐고 있으면 그렇다고 알려 준다(어디서 찾을지).
+  if (other && !other.active) throw new HttpError(409, `제품코드 ${code}는 사용 중지된 품목 「${other.product}」에서 쓰고 있습니다. 제품등록 목록의 「미사용」에서 그 품목을 찾아 다시 사용하거나, 그 품목의 코드를 바꾸거나 「완전 삭제」한 뒤 등록하세요.`);
+  if (other) throw new HttpError(409, `제품코드 ${code}는 ${other.is_temp ? '임시 품목 ' : ''}「${other.product}」(${other.product_code})에서 이미 쓰고 있습니다.`);
 }
 async function bomCycleCheck(product, materialsJson, id = 0) {
   const self = nameKey(product), mats = JSON.parse(materialsJson);
