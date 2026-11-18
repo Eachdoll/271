@@ -2666,3 +2666,21 @@ table.si-table input.si-qty, .sb-doc input.sb-qty-in { width: 6.5em; text-align:
   table.m-grid tfoot td { display: block; padding: 0 !important; border: 0 !important; text-align: left; }
   table.m-grid tfoot td.m-a { flex: 1 1 100%; }
 }
+/* 15.211 휴대폰 팝업: 크롬 주소창·아래 막대에 가리지 않게 보이는 화면(dvh) 기준. 긴 팝업은 꽉 차게, × 위 고정, 단추 줄 아래 고정 */
+.modal { max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); }
+.modal.ip-modal { height: min(860px, calc(100dvh - 32px)); }
+@media (max-width: 700px) {
+  .modal-wrap { padding: max(6px, env(safe-area-inset-top)) 6px max(6px, env(safe-area-inset-bottom)); }
+  .modal { max-height: calc(100vh - 12px); max-height: calc(100dvh - 12px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+  .modal.ip-modal { height: calc(100dvh - 12px); }
+  .modal.modal-tall { width: 100% !important; max-width: none !important; padding: 0 14px 0 !important; overscroll-behavior: contain; }
+  .modal.modal-tall > .modal-x { position: sticky; top: 0; z-index: 20; display: block; margin: 0 -14px 0 auto; width: 48px; height: 44px; background: var(--panel); border-radius: 0 0 0 12px; font-size: 30px; line-height: 44px; text-align: center; box-shadow: -2px 2px 8px rgba(0,0,0,.12); }
+  .modal.modal-tall > h3:first-of-type { margin-top: -38px; padding-right: 52px; }
+  .modal.modal-tall > .actions:last-child, .modal.modal-tall > form:last-child > .actions:last-child { position: sticky; bottom: 0; z-index: 19; background: var(--panel); margin: 10px -14px 0; padding: 10px 14px max(10px, env(safe-area-inset-bottom)); box-shadow: 0 -8px 12px -8px rgba(0,0,0,.25); flex-wrap: wrap; }
+  .modal.modal-tall > *:last-child:not(.actions):not(form) { margin-bottom: 14px; }
+}
+/* 15.211 세금계산서 양식: 휴대폰에서도 PC 배율(1000px)로 그려 화면 폭에 맞춰 줄임(zoom) */
+.taxf.taxf-zoomed { width: 1000px; max-width: none; font-size: 13px !important; overflow: visible !important; }
+.taxf.taxf-zoomed .taxf-amt { display: table !important; overflow: visible !important; }
+.taxf.taxf-zoomed .taxf-top h2 { font-size: 26px; letter-spacing: 6px; }
+@media (max-width: 700px) { .modal.taxf-modal > h3 { display: block; font-size: 17px; line-height: 1.4; } .modal.taxf-modal > h3 .small { font-size: 12px; } }
