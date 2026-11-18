@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.210';
+const APP_VERSION = '15.211';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -163,6 +163,18 @@ function syncModalInert() {
   wraps.forEach((w, i) => { w.inert = i < wraps.length - 1; });
 }
 if (typeof MutationObserver !== 'undefined' && document.body) new MutationObserver(() => syncModalInert()).observe(document.body, { childList: true });
+// 15.211 세금계산서 양식(.taxf)은 휴대폰에서도 PC 모양(1000px) 그대로 두고 화면 폭에 맞춰 줄인다(zoom). 글자가 작으면 손가락으로 확대.
+const FIXED_FORM_W = 1000;
+function fitFixedForms(root) {
+  for (const f of root.querySelectorAll('.taxf')) {
+    const host = f.parentElement; if (!host) continue;
+    if (innerWidth > 760) { f.classList.remove('taxf-zoomed'); f.style.zoom = ''; f.style.width = ''; continue; }
+    f.classList.add('taxf-zoomed'); const cs = getComputedStyle(host), w = host.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight); if (!(w > 0)) continue;
+    f.style.zoom = '1'; f.style.width = FIXED_FORM_W + 'px'; const natural = Math.max(FIXED_FORM_W, f.scrollWidth); // 칸 최소 폭 때문에 1000px보다 넓으면 그 폭 그대로
+    f.style.width = natural + 'px'; f.style.zoom = String(Math.min(1, (w - 2) / f.offsetWidth)); // 테두리·안쪽 여백까지 넣은 바깥 폭 기준
+  }
+}
+addEventListener('resize', () => $$('.modal').forEach(fitFixedForms));
 function modal(html, { wide = false, onClose = () => {} } = {}) {
   const wrap = document.createElement('div');
   wrap.className = 'modal-wrap';
@@ -185,6 +197,10 @@ function modal(html, { wide = false, onClose = () => {} } = {}) {
   $('.modal-x', wrap).onclick = close;
   document.addEventListener('keydown', onKey);
   document.body.appendChild(wrap); syncModalInert();
+  { // 15.211 휴대폰: 화면보다 긴 팝업은 보이는 화면에 꽉 차게(닫기 × 위에 고정, 단추 줄 아래 고정). 세금계산서 양식은 PC 배율 그대로 줄여 보이고 손가락으로 확대.
+    const box = $('.modal', wrap), fit = () => { if (!wrap.isConnected) { ro.disconnect(); return; } fitFixedForms(box); box.classList.toggle('modal-tall', innerWidth <= 700 && box.scrollHeight > box.clientHeight + 4); };
+    const ro = new ResizeObserver(() => requestAnimationFrame(fit)); ro.observe(box); requestAnimationFrame(fit);
+  }
   // 포커스를 팝업 안으로: [autofocus] → 첫 입력칸 → 확인 단추(확인 창) → 팝업 자체. 뒤 화면 단추에 포커스가 남아 Enter가 뒤로 가지 않게.
   const dialog = $('.modal', wrap); dialog.tabIndex = -1;
   const first = $('[autofocus]', wrap) || $$('input:not([type=hidden]):not([disabled]),textarea:not([disabled]),select:not([disabled])', wrap).find(el => el.offsetParent !== null) || $('[data-yes]', wrap);
