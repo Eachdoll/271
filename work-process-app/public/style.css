@@ -2331,3 +2331,7 @@ table.grid.pr-grid .item-lock [data-item-unlock] { min-height: 22px !important; 
 
 /* 15.187 발주 단가가 최근 매입 단가와 10% 넘게 다르면 */
 .lt-grid .lt-warn { color: var(--red, #d22030); font-weight: 700; font-size: 11.5px; white-space: nowrap; }
+
+/* 15.188 구매의뢰 판매단가 칸 아래 최근 판매가 */
+table.grid.pr-grid .pr-sale-hist { margin-top: 2px; font-size: 11.5px; white-space: nowrap; text-align: right; } table.grid.pr-grid .pr-sale-hist .link-btn { font-size: 11.5px; }
+table.grid.pr-grid .pr-sale-hist:empty { display: none; }

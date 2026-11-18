@@ -26,7 +26,7 @@ function prItemRow(it = {}) {
     ${cell('unit', `<input data-k="unit" maxlength="20" value="${v('unit')}" placeholder="EA">`)}
     ${cell('qty', `<input data-k="qty" type="number" min="0" step="any" required value="${v('qty')}">`, 'r')}
     ${cell('purchase_price', `<input data-k="purchase_price" type="number" min="0" step="any" value="${v('purchase_price')}">`, 'r')}
-    ${cell('sale_price', `<input data-k="sale_price" type="number" min="0" step="any" value="${v('sale_price')}">`, 'r')}
+    <td class="pr-c-sale_price r"><label class="pr-cell" aria-label="판매단가"><input data-k="sale_price" type="number" min="0" step="any" value="${v('sale_price')}"></label><div class="pr-sale-hist small" data-sale-hist></div></td>
     <td class="r pr-c-amount small" data-amount aria-live="polite"></td>
     ${cell('vendor', `<input data-k="vendor" maxlength="100" list="prVendorList" value="${v('vendor')}" placeholder="매입처">`)}
     ${cell('customer', `<input data-k="customer" maxlength="200" list="prCustomerList" value="${v('customer')}" placeholder="매출처">`)}
@@ -51,6 +51,27 @@ function prResolveStep(st, chain, people) {
   if (st.type === 'user') return people.some(p => p.id === st.user_id) ? st.user_id : null;
   for (const d of chain) { const hit = people.find(p => p.department === d && p.position === st.position); if (hit) return hit.id; }
   return null;
+}
+// 15.188 구매의뢰 판매단가 칸 아래: 최근 판매가(확정 매출전표, 사용고객사가 있으면 그 고객사 먼저)·이력. 판매단가가 비어 있으면 넣어 준다.
+async function prSaleHist(row, k) {
+  const box = $('[data-sale-hist]', row); if (!box) return;
+  const item = k('item').value.trim(), code = k('product_code').value.trim(), customer = k('customer').value.trim();
+  if (!item && !code) { box.innerHTML = ''; return; }
+  const seq = (row.dataset.saleSeq = String(Number(row.dataset.saleSeq || 0) + 1));
+  let h; try { h = await api('GET', '/api/sales/price-history?' + new URLSearchParams({ code, item, customer })); } catch { box.innerHTML = ''; return; }
+  if (row.dataset.saleSeq !== seq || !row.isConnected) return;
+  if (!h.rows.length) { box.innerHTML = '<span class="muted">판매 기록 없음</span>'; return; }
+  const p = h.last_customer || h.last, sp = k('sale_price');
+  if (sp.value === '' || sp.dataset.autoSale) { sp.value = String(p.unit_price); sp.dataset.autoSale = '1'; sp.dispatchEvent(new Event('input', { bubbles: true })); sp.dataset.autoSale = '1'; }
+  box.innerHTML = `<button type="button" class="link-btn" data-sale-open title="최근 판매 내역">최근 판매 ${fmtNum(p.unit_price)}${customer && !h.last_customer ? ' (타 고객사)' : ''} · 이력 ${h.rows.length}</button>${sp.dataset.autoSale ? ' <span class="muted auto">(적용)</span>' : ''}`;
+  $('[data-sale-open]', box).onclick = () => {
+    const m = modal(`<h3>최근 판매 내역 · ${esc(item)}${code ? ` <span class="small muted">${esc(code)}</span>` : ''}</h3>
+      <p class="small"><span class="chip green">확정 매출</span> 매출전표로 확정된 판매 단가입니다. ${h.last_customer ? `${esc(customer)} 최근 <b>${won(h.last_customer.unit_price)}원</b> (${esc(h.last_customer.doc_date)})` : customer ? `${esc(customer)}에 판 기록은 없습니다.` : ''} · 가장 최근 <b>${won(h.last.unit_price)}원</b> (${esc(h.last.doc_date)} · ${esc(h.last.customer)})</p>
+      <div class="table-wrap"><table class="grid keep-table" data-no-reorder data-keep-cols data-no-filter data-no-sort><thead><tr><th>전표 일자</th><th>전표번호</th><th>고객사</th><th>규격</th><th class="r">수량</th><th class="r">판매 단가</th></tr></thead>
+      <tbody>${h.rows.map(r => `<tr><td>${esc(r.doc_date)}</td><td>${esc(r.doc_no)}</td><td>${esc(r.customer)}</td><td>${esc(r.spec || '')}</td><td class="r">${fmtNum(r.qty)} ${esc(r.unit || '')}</td><td class="r"><button type="button" class="btn small" data-use-sale="${r.unit_price}" title="이 단가로">${won(r.unit_price)}</button></td></tr>`).join('')}</tbody></table></div>
+      <p class="small muted">단가를 누르면 이 줄의 판매단가로 넣습니다. 최근 10건까지 보입니다.</p>`, { wide: true });
+    m.el.addEventListener('click', e => { const b = e.target.closest('[data-use-sale]'); if (!b) return; sp.value = b.dataset.useSale; delete sp.dataset.autoSale; sp.dispatchEvent(new Event('input', { bubbles: true })); m.close(); prSaleHist(row, k).catch(() => {}); toast(`판매단가 ${won(Number(b.dataset.useSale))}원을 넣었습니다.`); });
+  };
 }
 async function prForm(host, existing = null, { onDone } = {}) {
   // 공급선은 매입처, 사용고객사는 매출처 목록(구분 없는 거래처는 양쪽)에서 고른다.
@@ -117,7 +138,7 @@ async function prForm(host, existing = null, { onDone } = {}) {
     bindPartnerPicker(k('customer'), null, { type: 'sales', directory: customers }).catch(fail);
     // 15.70 품목 찾기 창으로 고르면 품목명·코드·단위·규격을 등록 정보로 고정한다.
     const choose = async bom => {
-      itemLockApply(row, k, bom, { keepSpec: false }); totals();
+      itemLockApply(row, k, bom, { keepSpec: false }); totals(); prSaleHist(row, k).catch(() => {}); // 15.188 최근 판매가
       if (!bom) return;
       try {
         const stock = await api('GET', `/api/inventory?asof=${todayStr()}&q=${encodeURIComponent(bom.product)}`);
@@ -129,6 +150,10 @@ async function prForm(host, existing = null, { onDone } = {}) {
     const saved = it.bom_id && catalog.find(b => b.id === Number(it.bom_id));
     if (saved) itemLockApply(row, k, saved, { keepSpec: true });
     $('[data-remove-item]', row).onclick = () => { if (items.children.length === 1) return toast('품목은 1개 이상 필요합니다.', 'err'); row.remove(); renumber(); totals(); $('[data-add-item]', form).focus(); };
+    k('item').addEventListener('change', () => { if (!k('bom_id').value) prSaleHist(row, k).catch(() => {}); });
+    k('customer').addEventListener('change', () => prSaleHist(row, k).catch(() => {}));
+    k('sale_price').addEventListener('input', () => { delete k('sale_price').dataset.autoSale; const n = $('[data-sale-hist] .muted.auto', row); n?.remove(); });
+    if (it.item) prSaleHist(row, k).catch(() => {});
     renumber(); totals(); if (focus) k('item').focus();
   };
   (existing ? existing.items : [{}]).forEach(it => addItem(it));

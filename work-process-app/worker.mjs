@@ -681,6 +681,18 @@ function insertPurchaseOrder(record, batchId = '') {
 }
 // 15.186 품목별 최근 발주 내역: 발주 입력에서 품목을 고르면 그 품목의 최근 발주(일자·거래처·수량·단가)와 최근 단가(같은 거래처 우선)를 보여 준다.
 // 제품코드가 있으면 코드로, 없으면 품목명(공백·대소문자 무시)으로 찾는다. 단가가 비어 있던 발주도 내역에는 나온다.
+// 15.188 품목별 최근 판매가(확정 매출전표 줄 단가, 반입 감액 줄 제외). 구매의뢰 작성에서 판매단가 참고용. 고객사를 주면 그 고객사 단가를 먼저.
+// 판매가는 영업·구매 담당(관리자 포함)만 본다.
+route('GET', '/api/sales/price-history', async ({ user, query }) => {
+  if (!hasRole(user, 'sales') && !hasRole(user, 'purchase')) throw new HttpError(403, '판매가는 영업·구매 담당자만 볼 수 있습니다.');
+  const code = str(query.code, 50), item = str(query.item, 200), customer = str(query.customer, 200);
+  if (!code && !item) return { rows: [], last: null, last_customer: null };
+  const where = code ? 'l.product_code=?' : "REPLACE(LOWER(l.item),' ','')=?";
+  const rows = await db.prepare(`SELECT l.id, b.bill_no AS doc_no, b.customer, l.item, l.spec, l.unit, l.qty, l.unit_price, b.bill_date AS doc_date FROM sales_bill_lines l JOIN sales_bills b ON b.id=l.bill_id
+    WHERE l.active=1 AND b.status='confirmed' AND l.qty > 0 AND ${where} ORDER BY b.bill_date DESC, l.id DESC LIMIT 10`).all(code || item.toLowerCase().replace(/ /g, ''));
+  const ck = customer ? nameKey(customer) : '';
+  return { rows, last: rows[0] || null, last_customer: ck ? rows.find(r => nameKey(r.customer) === ck) || null : null };
+});
 route('GET', '/api/po/history', async ({ query }) => {
   // 15.187 기준 단가는 확정 매입전표(입고 뒤 정산)의 줄 단가. 매입전표가 없는 품목은 발주서 단가로 대신 보여 준다(basis로 구분).
   const code = str(query.code, 50), item = str(query.item, 200), vendor = str(query.vendor, 100);
