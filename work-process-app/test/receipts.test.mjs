@@ -110,9 +110,9 @@ test('Other receipt lines: one record per LOT with warehouse and location; repla
   assert.equal((await admin('POST', '/api/receipts', body)).status, 409, 'someone else cannot reuse the request id');
   const next = (await staff('GET', `/api/lots/next?prefix=L&date=${today}&count=2`)).body.lots;
   const head = `L${today.slice(2).replace(/-/g, '')}_`;
-  assert.deepEqual(next, [head + '001', head + '002']);
-  await staff('POST', '/api/receipts', { receipt_date: today, vendor: '마스크상사', request_id: rid(), lines: [{ bom_id: mask.id, lot: head + '001', qty: 1 }] });
-  assert.deepEqual((await staff('GET', `/api/lots/next?prefix=L&date=${today}&count=1`)).body.lots, [head + '002']);
+  assert.deepEqual(next, [head + '0001', head + '0002']);
+  await staff('POST', '/api/receipts', { receipt_date: today, vendor: '마스크상사', request_id: rid(), lines: [{ bom_id: mask.id, lot: head + '0001', qty: 1 }] });
+  assert.deepEqual((await staff('GET', `/api/lots/next?prefix=L&date=${today}&count=1`)).body.lots, [head + '0002']);
   // 창고 이름 변경은 기록에도 반영
   assert.equal((await admin('PUT', `/api/warehouses/${w.body.id}`, { name: '5동(본관)' })).status, 200);
   assert.equal((await staff('GET', `/api/receipts/${r.body.id}`)).body.lines[0].warehouse, '5동(본관)');
@@ -165,7 +165,7 @@ test('15.75 review fixes: delete guard, LOT of a correction, cancelled LOT not r
   // 6. LOT 번호: 접두어 정확히·숫자만
   const head = `Q${today.slice(2).replace(/-/g, '')}_`;
   await staff('POST', '/api/receipts', { receipt_date: today, vendor: '점검상사', request_id: rid(), lines: [{ bom_id: mask.id, lot: `q${today.slice(2).replace(/-/g, '')}X950`, qty: 1 }, { bom_id: mask.id, lot: head + '007A', qty: 1 }] });
-  assert.deepEqual((await staff('GET', `/api/lots/next?prefix=Q&date=${today}&count=1`)).body.lots, [head + '001']);
+  assert.deepEqual((await staff('GET', `/api/lots/next?prefix=Q&date=${today}&count=1`)).body.lots, [head + '0001']);
 });
 
 test('15.77 review fixes: quick receive race, editing a received order, PO LOT kept, report dates, LOT totals, dashboard partial', async () => {

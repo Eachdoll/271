@@ -221,7 +221,9 @@ async function stockReorder(lowRows) {
 function parseLotScan(text) {
   const raw = String(text || '').trim(); if (!raw) return null;
   const parts = raw.split('|').map(x => x.trim());
-  return { lot: parts[0], code: parts.length > 1 ? parts[1] : '', receipt: parts[3] || '', raw };
+  // 15.190 입고 라벨은 LOT-서브(R261113_0049-001). 재고는 LOT(R261113_0049) 단위라 뒤 -NNN을 떼어 찾는다. 생산 LOT(P261113-001)는 _가 없어 그대로.
+  const m = /^(.+_\d+)-(\d{3})$/.exec(parts[0]);
+  return { lot: m ? m[1] : parts[0], sub: m ? m[2] : (parts[4] || ''), code: parts.length > 1 ? parts[1] : '', receipt: parts[3] || '', raw };
 }
 async function pageScan(main) {
   main.innerHTML = `<h1>QR 스캔 <span class="dept">물류</span></h1>

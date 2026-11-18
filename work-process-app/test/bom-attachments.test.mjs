@@ -147,12 +147,12 @@ test('15.135 Production actual: material LOT inputs within LOT balance, finished
   const over = await owner('POST', `/api/schedules/${p.id}/actuals`, { production_date: '2026-11-12', qty: 20, request_id: crypto.randomUUID(), inputs: [{ item: '원단', unit: 'kg', lot: 'R261110_001', qty: 4 }] });
   assert.match(over.body.error || '', /남은 수량은 3/);
   const a = await owner('POST', `/api/schedules/${p.id}/actuals`, { production_date: '2026-11-12', qty: 20, request_id: crypto.randomUUID(), inputs: [{ item: '원단', unit: 'kg', lot: 'R261110_001', qty: 3 }, { item: '원단', unit: 'kg', lot: 'R261110_002', qty: 1 }] });
-  assert.equal(a.status, 200, JSON.stringify(a.body)); assert.equal(a.body.lot, 'P261112_001'); assert.equal(a.body.inputs.length, 2);
+  assert.equal(a.status, 200, JSON.stringify(a.body)); assert.equal(a.body.lot, 'P261112-001'); assert.equal(a.body.inputs.length, 2);
   const stock = (await owner('GET', '/api/inventory/lots?q=' + encodeURIComponent('원단'))).body.rows ?? [];
   const after = (await owner('GET', `/api/schedules/${p.id}/lot-materials`)).body.materials.find(m => m.item === '원단').lots;
   assert.deepEqual(after.map(l => [l.lot, l.balance]), [['R261110_002', 9]], 'consumed LOTs leave stock');
   const made = (await owner('GET', '/api/lots/available?item=' + encodeURIComponent('완제품 L'))).body.rows;
-  assert.deepEqual(made.map(l => [l.lot, l.balance]), [['P261112_001', 20]], 'finished LOT enters stock');
+  assert.deepEqual(made.map(l => [l.lot, l.balance]), [['P261112-001', 20]], 'finished LOT enters stock');
   const hist = (await owner('GET', `/api/schedules/${p.id}/actuals`)).body.rows; assert.equal(hist[0].inputs.length, 2);
   void stock;
 });

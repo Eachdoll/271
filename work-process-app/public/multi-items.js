@@ -7,7 +7,7 @@ function lineInfo(row) {
   const snapshot = typeof row.bom_snapshot === 'string' ? JSON.parse(row.bom_snapshot || '{}') : row.bom_snapshot || {};
   const unit = row.unit || data.unit || snapshot.unit || '';
   const code = row.product_code ? (/^TMP-/.test(row.product_code) ? '임시코드 ' : '') + row.product_code : '';
-  const parts = [code, row.spec || data.spec, unit, (row.lot ? row.lot + (row.sub_lot ? ' / ' + row.sub_lot : '') : '') || data.lot_etc || (row.type === 'voc' ? data.lot : '')].filter(Boolean);
+  const parts = [code, row.spec || data.spec, unit, (row.lot ? row.lot + (row.sub_lot ? '-' + row.sub_lot : '') : '') || data.lot_etc || (row.type === 'voc' ? data.lot : '')].filter(Boolean);
   if (row.type && row.type !== 'voc' && (row.qty ?? data.qty) != null) parts.push('수량 ' + fmtNum(row.qty ?? data.qty));
   // 15.42: 내부 묶음 번호는 화면 글자에서 빼고 마우스를 올렸을 때(title)만 보인다.
   const batchTitle = row.batch_id ? ` title="묶음 ${esc(row.batch_id.slice(-8))}"` : '';
