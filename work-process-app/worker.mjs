@@ -6221,7 +6221,7 @@ route('POST', '/api/purchase-requests/:id/items/:itemId/order-closed', async ({ 
 });
 
 // ── 대시보드 ──
-route('GET', '/api/dashboard', async () => {
+route('GET', '/api/dashboard', async ({ user }) => {
   const c = async (sql, ...a) => (await db.prepare(sql).get(...a)).c;
   const reqCounts = {};
   for (const t of Object.keys(REQUEST_TYPES)) {
@@ -6238,6 +6238,24 @@ route('GET', '/api/dashboard', async () => {
     actualChangesPending: (await c("SELECT COUNT(*) c FROM production_actual_changes WHERE status='pending'")),
     receiptChangesPending: (await c("SELECT COUNT(*) c FROM receipt_qty_changes WHERE status='pending'")),
     stock: await stockAlerts().catch(error => { console.error('Dashboard stock alerts: ' + error.message); return null; }),
+    // 15.215 영업: 건수는 누구나, 금액은 영업 담당·관리자만
+    sales: await (async () => {
+      const month = t.slice(0, 7), canMoney = hasRole(user, 'sales');
+      const out = {
+        ordersOpen: await c("SELECT COUNT(*) c FROM sales_orders WHERE status='open'"),
+        ordersToday: await c("SELECT COUNT(*) c FROM sales_orders WHERE status!='cancelled' AND order_date=?", t),
+        shipPending: await c("SELECT COUNT(*) c FROM ship_instructions WHERE status='pending'"),
+        shipHeld: await c("SELECT COUNT(*) c FROM ship_instructions WHERE status='pending' AND held=1"),
+        billsMonth: await c("SELECT COUNT(*) c FROM sales_bills WHERE status='confirmed' AND substr(bill_date,1,7)=?", month),
+        untaxed: await c("SELECT COUNT(*) c FROM sales_bills b WHERE b.status='confirmed' AND b.total>0 AND NOT EXISTS(SELECT 1 FROM tax_invoice_bills x WHERE x.bill_id=b.id AND x.active=1)"),
+        canMoney,
+      };
+      if (canMoney) {
+        out.salesMonth = (await db.prepare("SELECT COALESCE(SUM(total),0) c FROM sales_bills WHERE status='confirmed' AND substr(bill_date,1,7)=?").get(month)).c;
+        out.paidMonth = (await db.prepare("SELECT COALESCE(SUM(amount),0) c FROM sales_payments WHERE status='confirmed' AND kind='payment' AND substr(pay_date,1,7)=?").get(month)).c;
+      }
+      return out;
+    })().catch(error => { console.error('Dashboard sales: ' + error.message); return null; }),
   };
 });
 
