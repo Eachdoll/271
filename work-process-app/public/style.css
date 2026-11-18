@@ -2811,3 +2811,10 @@ form.list-filters > label.rp-moved, .toolbar > label.rp-moved { display: none !i
   form.list-filters.lf-pc-fold:not(.show-all) > label:has(> select):not(:has(input:not([type=hidden]))) { display: none; }
 }
 @media (min-width: 701px) { form.list-filters.lf-pc-fold:not(.show-all) > .seg, form.list-filters.lf-pc-fold:not(.show-all) > .seg-label { display: none; } }
+/* 15.218 휴대폰 출하지시: PC용 앞 열 고정(gr-freeze)이 그리드 칸을 겹치게 하던 것 끔, 수량 칸 폭 */
+@media (max-width: 600px) { table.si-table.gr-freeze > * > tr > *, table.si-table > * > tr > * { position: static !important; left: auto !important; box-shadow: none !important; } table.si-table td.si-c-item { overflow: hidden; } table.si-table input.si-qty { width: 4.6em; } }
+@media (max-width: 600px) {
+  table.m-grid.sc-table tr.sc-row.on > td { background: transparent !important; }
+  table.m-grid.sc-table tr.sc-row.on { background: #fde3c8; box-shadow: inset 3px 0 0 #e8590c; }
+  table.si-table td.si-c-item { white-space: normal !important; overflow: visible; }
+}
