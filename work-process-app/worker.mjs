@@ -682,13 +682,18 @@ function insertPurchaseOrder(record, batchId = '') {
 // 15.186 품목별 최근 발주 내역: 발주 입력에서 품목을 고르면 그 품목의 최근 발주(일자·거래처·수량·단가)와 최근 단가(같은 거래처 우선)를 보여 준다.
 // 제품코드가 있으면 코드로, 없으면 품목명(공백·대소문자 무시)으로 찾는다. 단가가 비어 있던 발주도 내역에는 나온다.
 route('GET', '/api/po/history', async ({ query }) => {
+  // 15.187 기준 단가는 확정 매입전표(입고 뒤 정산)의 줄 단가. 매입전표가 없는 품목은 발주서 단가로 대신 보여 준다(basis로 구분).
   const code = str(query.code, 50), item = str(query.item, 200), vendor = str(query.vendor, 100);
-  if (!code && !item) return { rows: [], last: null, last_vendor: null };
-  const where = code ? 'product_code=?' : "REPLACE(LOWER(item),' ','')=?", arg = code || item.toLowerCase().replace(/ /g, '');
-  const rows = await db.prepare(`SELECT id, req_no, vendor, item, spec, unit, qty, unit_price, recv_status, substr(created_at,1,10) AS po_date, due_date FROM purchase_orders WHERE ${where} ORDER BY created_at DESC, id DESC LIMIT 10`).all(arg);
-  const priced = rows.filter(r => r.unit_price != null);
-  const vkey = vendor ? nameKey(vendor) : '';
-  return { rows, last: priced[0] || null, last_vendor: vkey ? priced.find(r => nameKey(r.vendor) === vkey) || null : null };
+  if (!code && !item) return { basis: 'bill', rows: [], last: null, last_vendor: null };
+  const key = item.toLowerCase().replace(/ /g, ''), vkey = vendor ? nameKey(vendor) : '';
+  const lineWhere = code ? 'l.product_code=?' : "REPLACE(LOWER(l.item),' ','')=?";
+  const bills = await db.prepare(`SELECT l.id, b.bill_no AS doc_no, b.vendor, l.item, l.spec, l.unit, l.qty, l.unit_price, b.bill_date AS doc_date, l.req_no FROM purchase_bill_lines l JOIN purchase_bills b ON b.id=l.bill_id
+    WHERE l.active=1 AND b.status='confirmed' AND ${lineWhere} ORDER BY b.bill_date DESC, l.id DESC LIMIT 10`).all(code || key);
+  const pick = rows => ({ last: rows.find(r => r.unit_price != null) || null, last_vendor: vkey ? rows.find(r => r.unit_price != null && nameKey(r.vendor) === vkey) || null : null });
+  if (bills.length) return { basis: 'bill', rows: bills, ...pick(bills) };
+  const poWhere = code ? 'product_code=?' : "REPLACE(LOWER(item),' ','')=?";
+  const pos = await db.prepare(`SELECT id, req_no AS doc_no, vendor, item, spec, unit, qty, unit_price, substr(created_at,1,10) AS doc_date, req_no, recv_status FROM purchase_orders WHERE ${poWhere} ORDER BY created_at DESC, id DESC LIMIT 10`).all(code || key);
+  return { basis: 'po', rows: pos, ...pick(pos) };
 });
 route('GET', '/api/po', async ({ query }) => {
   const where = []; const args = [];

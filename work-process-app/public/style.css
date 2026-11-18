@@ -2328,3 +2328,6 @@ table.grid.pr-grid .item-lock [data-item-unlock] { min-height: 22px !important; 
 
 /* 15.186 발주 표: 단가 칸 아래 최근 단가·이력 */
 .lt-grid .lt-hist { margin-top: 2px; white-space: nowrap; font-size: 11.5px; } .lt-grid .lt-hist .link-btn { font-size: 11.5px; }
+
+/* 15.187 발주 단가가 최근 매입 단가와 10% 넘게 다르면 */
+.lt-grid .lt-warn { color: var(--red, #d22030); font-weight: 700; font-size: 11.5px; white-space: nowrap; }

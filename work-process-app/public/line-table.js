@@ -134,6 +134,7 @@ async function installLineTable(legacy, entity) {
     lines[i][k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     if (k === 'price') lines[i].priceTouched = true;
     if (k === 'qty' || k === 'price') { const a = amount(lines[i]); const cell = $(`[data-lt-amount="${i}"]`, box); if (cell) cell.textContent = a == null ? '' : won(a); }
+    if (k === 'price' && entity === 'purchase_order') { lines[i].priceFromHist = false; const td = e.target.closest('td'); td?.querySelectorAll('.lt-hist, .lt-warn').forEach(x => x.remove()); td?.insertAdjacentHTML('beforeend', ltHistNote(lines[i], i)); } // 15.187 단가 바꾸면 경고 다시
     if (['qty', 'price', 'unit'].includes(k)) totals();
   };
   box.addEventListener('input', sync); box.addEventListener('change', sync);
@@ -164,6 +165,7 @@ async function installLineTable(legacy, entity) {
     event.preventDefault(); if (busy || draft.busy || loading) return;
     let items;
     if (!saved) { try { items = lineTableItems(lines, entity); } catch (error) { return toast(error.message, 'err'); } }
+    if (!saved && entity === 'purchase_order') { const w = lines.map(l => [l, ltDeviation(l)]).filter(([, d]) => d != null).map(([l, d]) => `${l.item} ${fmtNum(Number(l.price))}원(최근 ${ltBasis(l)} ${fmtNum(ltRef(l).unit_price)}원, ${d > 0 ? '+' : ''}${Math.round(d * 100)}%)`); if (w.length && !await confirmBox(`최근 단가와 10% 넘게 다른 품목이 있습니다: ${w.join(' / ')}. 이 단가로 발주할까요?`)) return; } // 15.187
     if (!saved && entity === 'shipment') { const w = lotPickers.map(p => p?.check()).filter(Boolean); if (w.length && !await confirmBox(`LOT 확인: ${w.join(' / ')}. 그래도 등록할까요?`)) return; LOT_CACHE.clear(); }
     busy = true; submit.disabled = true; form.inert = true; entryDraft.start();
     try {
@@ -193,20 +195,25 @@ async function installLineTable(legacy, entity) {
   };
 }
 
-// 15.186 발주 단가 칸 아래 작은 글: 최근 발주 단가(같은 거래처 우선)와 「이력 n건」 단추, 첫 발주면 그렇게.
+// 15.186·15.187 발주 단가 칸 아래 작은 글: 최근 확정 매입 단가(같은 거래처 우선, 매입전표가 없으면 발주서 단가)와 「이력 n건」,
+// 넣은 단가가 그 단가와 10% 넘게 다르면 경고(빨강, 저장 때 한 번 더 확인). 첫 매입·첫 발주면 그렇게.
+const LT_WARN = 0.1;
+const ltRef = l => l.hist ? (l.hist.last_vendor || l.hist.last) : null;
+const ltBasis = l => l.hist?.basis === 'po' ? '발주' : '매입';
+function ltDeviation(l) { const r = ltRef(l), p = Number(l.price); if (!r || !r.unit_price || l.price === '' || l.price == null || !Number.isFinite(p)) return null; const d = (p - r.unit_price) / r.unit_price; return Math.abs(d) > LT_WARN ? d : null; }
 function ltHistNote(l, i) {
   if (!l.hist) return '';
-  if (!l.hist.rows.length) return '<div class="small muted">첫 발주</div>';
-  const p = l.hist.last_vendor || l.hist.last;
-  return `<div class="small lt-hist"><button type="button" class="link-btn" data-lt-hist="${i}" title="최근 발주 내역 보기">${p ? `최근 ${fmtNum(p.unit_price)}${l.hist.last_vendor ? '' : ' (타 거래처)'}` : '단가 기록 없음'} · 이력 ${l.hist.rows.length}</button>${l.priceFromHist ? ' <span class="muted">(최근 단가 적용)</span>' : ''}</div>`;
+  if (!l.hist.rows.length) return '<div class="small muted">첫 매입</div>';
+  const p = ltRef(l), d = ltDeviation(l);
+  return `<div class="small lt-hist"><button type="button" class="link-btn" data-lt-hist="${i}" title="최근 ${ltBasis(l)} 내역 보기">${p ? `최근 ${ltBasis(l)} ${fmtNum(p.unit_price)}${l.hist.last_vendor ? '' : ' (타 거래처)'}` : '단가 기록 없음'} · 이력 ${l.hist.rows.length}</button>${l.priceFromHist ? ' <span class="muted">(적용)</span>' : ''}</div>${d != null ? `<div class="small lt-warn" role="alert">⚠ 최근 ${ltBasis(l)} 단가보다 ${d > 0 ? '+' : ''}${Math.round(d * 100)}%</div>` : ''}`;
 }
 function ltHistDialog(l, onUse) {
   const h = l.hist; if (!h) return;
-  const RECV_T = { '': '미입고', ok: '입고완료', mismatch: '수량상이', checking: '확인중' };
-  const m = modal(`<h3>최근 발주 내역 · ${esc(l.item)}${l.product_code ? ` <span class="small muted">${esc(l.product_code)}</span>` : ''}</h3>
-    <p class="small">${h.last_vendor ? `같은 거래처 최근 단가 <b>${won(h.last_vendor.unit_price)}원</b> (${esc(h.last_vendor.po_date)} · ${esc(h.last_vendor.vendor)})` : '이 거래처로 발주한 기록은 없습니다.'}${h.last ? ` · 가장 최근 <b>${won(h.last.unit_price)}원</b> (${esc(h.last.po_date)} · ${esc(h.last.vendor)})` : ''}</p>
-    <div class="table-wrap"><table class="grid keep-table" data-no-reorder data-keep-cols data-no-filter data-no-sort><thead><tr><th>발주일</th><th>구매의뢰번호</th><th>거래처</th><th>규격</th><th class="r">수량</th><th class="r">단가</th><th>입고</th></tr></thead>
-    <tbody>${h.rows.map(r => `<tr><td>${esc(r.po_date)}</td><td>${esc(r.req_no)}</td><td>${esc(r.vendor)}</td><td>${esc(r.spec || '')}</td><td class="r">${fmtNum(r.qty)} ${esc(r.unit || '')}</td><td class="r">${r.unit_price != null ? `<button type="button" class="btn small" data-use-price="${r.unit_price}" title="이 단가로 발주">${won(r.unit_price)}</button>` : '<span class="muted">—</span>'}</td><td>${esc(RECV_T[r.recv_status] ?? r.recv_status)}</td></tr>`).join('')}</tbody></table></div>
+  const b = ltBasis(l);
+  const m = modal(`<h3>최근 ${b} 내역 · ${esc(l.item)}${l.product_code ? ` <span class="small muted">${esc(l.product_code)}</span>` : ''}</h3>
+    <p class="small">${h.basis === 'po' ? '<span class="chip yellow">매입전표 없음</span> 확정된 매입전표가 없어 발주서 단가를 보여 줍니다. ' : '<span class="chip green">확정 매입</span> 입고 뒤 매입전표로 확정된 단가입니다. '}${h.last_vendor ? `같은 거래처 최근 <b>${won(h.last_vendor.unit_price)}원</b> (${esc(h.last_vendor.doc_date)} · ${esc(h.last_vendor.vendor)})` : '이 거래처 기록은 없습니다.'}${h.last ? ` · 가장 최근 <b>${won(h.last.unit_price)}원</b> (${esc(h.last.doc_date)} · ${esc(h.last.vendor)})` : ''}</p>
+    <div class="table-wrap"><table class="grid keep-table" data-no-reorder data-keep-cols data-no-filter data-no-sort><thead><tr><th>${h.basis === 'po' ? '발주일' : '전표 일자'}</th><th>${h.basis === 'po' ? '구매의뢰번호' : '전표번호'}</th><th>거래처</th><th>규격</th><th class="r">수량</th><th class="r">단가</th></tr></thead>
+    <tbody>${h.rows.map(r => `<tr><td>${esc(r.doc_date)}</td><td>${esc(r.doc_no)}</td><td>${esc(r.vendor)}</td><td>${esc(r.spec || '')}</td><td class="r">${fmtNum(r.qty)} ${esc(r.unit || '')}</td><td class="r">${r.unit_price != null ? `<button type="button" class="btn small" data-use-price="${r.unit_price}" title="이 단가로 발주">${won(r.unit_price)}</button>` : '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table></div>
     <p class="small muted">단가를 누르면 이 줄의 단가로 넣습니다. 최근 10건까지 보입니다.</p>`, { wide: true });
-  m.el.addEventListener('click', e => { const b = e.target.closest('[data-use-price]'); if (!b) return; onUse(Number(b.dataset.usePrice)); m.close(); toast(`단가 ${won(Number(b.dataset.usePrice))}원을 넣었습니다.`); });
+  m.el.addEventListener('click', e => { const bt = e.target.closest('[data-use-price]'); if (!bt) return; onUse(Number(bt.dataset.usePrice)); m.close(); toast(`단가 ${won(Number(bt.dataset.usePrice))}원을 넣었습니다.`); });
 }
