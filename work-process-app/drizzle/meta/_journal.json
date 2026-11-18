@@ -407,6 +407,13 @@
       "when": 1796900013000,
       "tag": "0057_schedule_confirm",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "6",
+      "when": 1796986413000,
+      "tag": "0058_bom_inspect_skip",
+      "breakpoints": true
     }
   ]
 }

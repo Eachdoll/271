@@ -2561,3 +2561,93 @@ table.fp-grid tbody td.fp-cat { background: var(--panel) !important; }
   table.m-grid tbody td.m-d:last-child::-webkit-scrollbar { display: none; }
   table.m-grid tbody td.m-d:last-child > * { flex: 0 0 auto; }
 }
+
+/* 15.205 출하지시(묶음): 목록은 묶음 머리 줄 + 품목 줄, 지시서는 휴대폰에서 안 깨지게(머리 정보 2칸, 품목 3줄 그리드) */
+table.sbl-table tr.sbl-head > th { text-align: left; background: #eef3fb; border-top: 2px solid #2f6fdb; padding: 8px 10px; cursor: pointer; }
+.sbl-h1 { display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; } .sbl-title { font-weight: 800; } .sbl-no { font-weight: 700; } .sbl-open { margin-left: auto; }
+.sbl-h2 { font-size: 12.5px; font-weight: 400; color: var(--text-2, var(--muted)); margin-top: 2px; }
+table.sbl-table tr.sbl-line td.sbl-item { padding-left: 20px; }
+.sb-doc h2 small { font-size: .55em; letter-spacing: 0; }
+.sb-m-only { display: none; }
+@media screen and (max-width: 600px) {
+  table.sbl-table, table.sbl-table tbody { display: block; width: 100%; } table.sbl-table thead { display: none; }
+  table.sbl-table tr.sbl-head { display: block; } table.sbl-table tr.sbl-head > th { display: block; }
+  table.sbl-table tr.sbl-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "item qty" "cust st"; gap: 2px 8px; padding: 7px 12px 7px 18px; border-bottom: 1px solid var(--line); }
+  table.sbl-table tr.sbl-line td { display: block; padding: 0 !important; border: 0 !important; background: transparent !important; min-width: 0; }
+  table.sbl-table td.sbl-item { grid-area: item; overflow-wrap: anywhere; } table.sbl-table td.sbl-qty { grid-area: qty; white-space: nowrap; text-align: right; }
+  table.sbl-table td.sbl-cust { grid-area: cust; color: var(--text-2, var(--muted)); } table.sbl-table td.sbl-st { grid-area: st; text-align: right; white-space: nowrap; }
+  .table-wrap:has(> table.sbl-table) .gr-gear { display: none !important; }
+  /* 지시서 한 장 */
+  .sb-doc { padding: 12px !important; }
+  .sb-doc .po-doc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .sb-doc .po-doc-head img { width: 110px; height: auto; } .sb-doc .po-doc-head h2 { font-size: 22px; letter-spacing: .05em; white-space: nowrap; margin: 0; }
+  .sb-doc table.po-info, .sb-doc table.po-info tbody { display: block; width: 100%; }
+  .sb-doc table.po-info tr { display: grid; grid-template-columns: 6.5em minmax(0, 1fr); }
+  .sb-doc table.po-info th, .sb-doc table.po-info td { display: block; padding: 6px 8px; overflow-wrap: anywhere; word-break: keep-all; }
+  .sb-doc table.po-info td[colspan] { grid-column: 2; }
+  .sb-doc table.sb-items, .sb-doc table.sb-items tbody, .sb-doc table.sb-items tfoot { display: block; width: 100%; }
+  .sb-doc table.sb-items thead { display: none; }
+  .sb-doc table.sb-items tr.sb-cust { display: block; } .sb-doc table.sb-items tr.sb-cust > th { display: block; text-align: left; font-size: 16px; padding: 8px 10px; }
+  .sb-doc table.sb-items tr.sb-line { display: grid; grid-template-columns: 2em minmax(0, 1fr) auto; grid-template-areas: "no item qty" "no ref ref" "no lot st"; gap: 3px 8px; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+  .sb-doc table.sb-items tr.sb-line td { display: block; padding: 0 !important; border: 0 !important; min-width: 0; }
+  .sb-doc td.sb-no { grid-area: no; align-self: start; color: var(--muted); } .sb-doc td.sb-item { grid-area: item; overflow-wrap: anywhere; font-size: 15px; }
+  .sb-doc td.sb-qty { grid-area: qty; text-align: right; white-space: nowrap; font-size: 15px; } .sb-doc td.sb-ref { grid-area: ref; font-size: 12px; }
+  .sb-doc td.sb-ref .muted { display: inline; margin-left: 4px; }
+  .sb-doc td.sb-lot { grid-area: lot; } .sb-doc td.sb-lot input { width: 100%; height: 36px; min-height: 36px; }
+  .sb-doc td.sb-st { grid-area: st; text-align: right; white-space: nowrap; align-self: center; }
+  .sb-doc td.sb-spec, .sb-doc td.sb-unit, .sb-doc td.sb-check { display: none !important; }
+  .sb-doc .sb-m-only { display: inline; }
+  .sb-doc table.sb-items tfoot tr { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 8px 6px; } .sb-doc table.sb-items tfoot th, .sb-doc table.sb-items tfoot td { display: inline; border: 0 !important; padding: 0 !important; }
+  .sb-doc .sb-sign { grid-template-columns: repeat(3, 1fr); font-size: 12px; }
+  .modal:has(.sb-doc) .actions { flex-wrap: wrap; gap: 6px; } .modal:has(.sb-doc) .actions .btn { flex: 1 1 auto; }
+}
+@media screen and (max-width: 600px) {
+  .sb-doc table.sb-items tr.sb-line td.sb-item { width: auto !important; max-width: none !important; white-space: normal !important; word-break: normal; }
+  .sb-doc td.sb-item .po-code { display: inline; margin-left: 6px; font-size: 12px; }
+  .sb-doc td.sb-lot input { min-width: 0 !important; width: 100% !important; max-width: 100%; box-sizing: border-box; }
+  .sb-doc td.sb-lot { overflow: hidden; }
+  .sb-doc td.sb-st .btn { min-height: 30px; padding: 3px 9px; font-size: 12.5px; }
+  .sb-doc table.sb-items tr.sb-line { grid-template-columns: 1.6em minmax(0, 1fr) auto; }
+}
+@media screen and (max-width: 600px) {
+  .sb-doc table.sb-items tr.sb-line { grid-template-areas: "no item qty" "no ref st" "no lot lot"; grid-template-columns: 1.6em minmax(0, 1fr) auto; }
+  .sb-doc td.sb-st { display: flex !important; align-items: center; justify-content: flex-end; gap: 4px; }
+  .sb-doc td.sb-ref { align-self: center; }
+}
+@media screen and (max-width: 600px) {
+  .sb-doc table.sb-items tr.sb-line { grid-template-areas: "no item item" "no ref qty" "no lot st"; }
+  .sb-doc td.sb-qty { align-self: center; }
+  .sb-doc td.sb-lot > *, .sb-doc td.sb-lot input { width: 100% !important; max-width: 100% !important; min-width: 0 !important; }
+  .sb-doc table.po-info th { width: auto !important; min-width: 0 !important; border: 1px solid var(--line) !important; background: var(--bg, #f4f6f9); }
+  .modal:has(.sb-doc) > h3.po-print-title { font-size: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding-right: 36px; }
+}
+@media screen and (max-width: 600px) {
+  .sb-doc table.sb-items tr.sb-line { grid-template-areas: "no item item" "no qty st" "no ref ref" "no lot lot"; grid-template-columns: 1.6em minmax(0, 1fr) auto; }
+  .sb-doc td.sb-qty { text-align: left; font-size: 17px; }
+  .sb-doc td.sb-lot input { box-sizing: border-box !important; }
+}
+@media screen and (max-width: 600px) { .sb-doc table.sb-items td.sb-lot { width: auto !important; } .sb-doc table.sb-items td.sb-qty.r { text-align: left !important; } }
+@media screen and (max-width: 600px) { table.sbl-table td, table.sbl-table th { position: static !important; box-shadow: none !important; } table.sbl-table tr.sbl-head > th, table.sbl-table .sbl-h2 { white-space: normal !important; overflow-wrap: anywhere; } }
+#siBar[hidden] { display: none !important; } /* 15.205 휴대폰 flex 규칙이 hidden을 덮지 않게 */
+
+/* 15.206 거래처를 품목 앞에: 묶음 목록(PC 첫 칸·휴대폰 첫 줄) · 출하지시 휴대폰 첫 줄 */
+table.sbl-table tr.sbl-line td.sbl-cust { padding-left: 20px; white-space: nowrap; } table.sbl-table tr.sbl-line td.sbl-item { padding-left: 8px; }
+@media screen and (max-width: 600px) {
+  table.sbl-table tr.sbl-line { grid-template-areas: "cust st" "item qty"; }
+  table.sbl-table td.sbl-cust { color: var(--text); font-size: 14px; padding-left: 0 !important; }
+  table.sbl-table td.sbl-item { font-size: 13.5px; padding-left: 0 !important; }
+  table.si-table tbody tr { grid-template-areas: "chk meta st" "chk item qty" "chk lot act"; }
+  table.si-table td.si-c-cust { color: var(--text); font-weight: 700; font-size: 14px; }
+  table.si-table td.si-c-cust .si-m-only { font-weight: 400; color: var(--muted); }
+  table.si-table td.si-c-item { font-size: 14.5px; }
+  table.si-table td.si-c-item b { font-weight: 600; }
+}
+
+/* 15.207 검사 제외: 리스트에서 회색 */
+table.grid tbody tr.row-exempt > td { color: var(--muted); background: rgba(0,0,0,.035); }
+table.grid tbody tr.row-exempt > td b { color: var(--muted); font-weight: 600; }
+fieldset.inspect-skip { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
+
+/* 15.208 출하 수량 입력(지시 수량보다 적게 = 일부 출하) */
+table.si-table input.si-qty, .sb-doc input.sb-qty-in { width: 6.5em; text-align: right; font-weight: 700; }
+@media screen and (max-width: 600px) { table.si-table input.si-qty { width: 5.5em; height: 30px; min-height: 30px; padding: 2px 6px; } .sb-doc input.sb-qty-in { width: 6em; height: 34px; min-height: 34px; } }

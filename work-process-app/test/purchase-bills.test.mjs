@@ -721,3 +721,23 @@ test('15.169 Integrity: stale tax edit rejected, reverse edit history, quote ver
   const rs = await Promise.all([admin('POST', '/api/notes', { ...body, request_id: rid() }), admin('POST', '/api/notes', { ...body, request_id: rid() })]);
   assert.deepEqual(rs.map(r => r.status).sort(), [200, 409]);
 });
+
+test('15.207 Inspection exempt items: receipt QC request completes as exempt; manual 출하검사 completes on approval', async () => {
+  const ex = (await admin('POST', '/api/boms', { product: '제외원단', product_code: 'EX-1', item_category: '원자재', kind: 'finished', base_qty: 1, unit: 'M', materials: [], skip_incoming: true })).body;
+  assert.equal(ex.skip_incoming, 1);
+  const normal = (await admin('POST', '/api/boms', { product: '보통원단', product_code: 'EX-2', item_category: '원자재', kind: 'finished', base_qty: 1, unit: 'M', materials: [] })).body;
+  const rc = (await staff('POST', '/api/receipts', { receipt_date: today, vendor: '제외상사', request_id: rid(), lines: [{ bom_id: ex.id, qty: 5 }, { bom_id: normal.id, qty: 5 }] })).body;
+  assert.equal(rc.lines.length, 2);
+  const reqs = sqlite.prepare("SELECT title,status,approver_name,json_extract(data,'$.exempt') AS ex FROM requests WHERE source_type='other_receipt' AND title IN ('제외원단','보통원단') ORDER BY title").all();
+  assert.deepEqual(reqs.map(r => [r.title, r.status, r.ex]), [['보통원단', 'waiting', 0], ['제외원단', 'done', 1]]);
+  assert.equal(reqs[1].approver_name, '검사 제외(제품등록)');
+  const hist = (await admin('GET', '/api/inspections?result=exempt')).body.rows; assert.ok(hist.some(r => r.title === '제외원단' && r.result === 'exempt'));
+  // 출하검사 제외: 수동 의뢰는 승인할 때 완료
+  const fg = (await admin('POST', '/api/boms', { product: '제외상품', product_code: 'EX-G', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  assert.equal((await admin('PUT', `/api/boms/${fg.id}`, { product: '제외상품', product_code: 'EX-G', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [], skip_outgoing: true })).body.skip_outgoing, 1);
+  const q = (await staff('POST', '/api/requests', { type: 'analysis', title: '제외상품', category: '출하검사', data: { product_code: 'EX-G' } })).body;
+  const ap = (await admin('POST', `/api/requests/${q.id}/approve`)).body;
+  assert.equal(ap.status, 'done'); assert.equal(ap.data.exempt, 1);
+  const q2 = (await staff('POST', '/api/requests', { type: 'analysis', title: '제외상품', category: '수입검사' })).body;
+  assert.equal((await admin('POST', `/api/requests/${q2.id}/approve`)).body.status, 'waiting', 'only the exempted kind');
+});

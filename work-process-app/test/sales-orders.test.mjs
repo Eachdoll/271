@@ -251,7 +251,7 @@ test('15.132 Ship batches: bundle pending instructions, no double bundle, remove
   assert.equal(bt.status, 200, JSON.stringify(bt.body)); assert.match(bt.body.batch_no, /^DO-\d{6}-01$/);
   assert.equal(bt.body.lines.length, 2); assert.equal(bt.body.state, 'open'); assert.equal(bt.body.customers, '세흥상사');
   assert.equal((await seller('POST', '/api/ship-batches', { ids, request_id: token })).body.duplicate, true);
-  assert.match((await staff('POST', '/api/ship-batches', { ids: [ids[0]], request_id: rid() })).body.error, /이미 출고지시서/);
+  assert.match((await staff('POST', '/api/ship-batches', { ids: [ids[0]], request_id: rid() })).body.error, /이미 묶음 출하지시/);
   const listed = (await staff('GET', '/api/ship-instructions')).body.rows.find(r => r.id === ids[0]); assert.equal(listed.batch_no, bt.body.batch_no);
   assert.equal((await staff('GET', '/api/ship-instructions?batch=none')).body.rows.some(r => ids.includes(r.id)), false);
   const rm = (await staff('POST', `/api/ship-batches/${bt.body.id}/remove`, { ids: [ids[1]] })).body; assert.equal(rm.lines.length, 1);
@@ -328,4 +328,22 @@ test('15.163 Quotes: create (USD, cents), list/search, edit with history, cancel
   const c = (await seller('POST', `/api/quotes/${q.body.id}/cancel`, {})).body; assert.equal(c.status, 'cancelled');
   assert.match((await seller('PUT', `/api/quotes/${q.body.id}`, body)).body.error, /취소된/);
   assert.equal((await seller('GET', '/api/quotes?from=2026-05-01&to=2026-05-31')).body.rows.length, 0, 'cancelled hidden by default');
+});
+
+test('15.208 Ship less than instructed: ships that qty, splits the bill line, leaves the rest pending', async () => {
+  await admin('POST', '/api/vendors', { name: '부분상사', is_sales: true });
+  const so = (await seller('POST', '/api/sales-orders', { customer: '부분상사', order_date: today, request_id: rid(), lines: [{ bom_id: glove.id, qty: 10, unit_price: 333 }] })).body;
+  const b = (await seller('POST', '/api/sales-bills', { customer: '부분상사', bill_date: today, request_id: rid(), lines: [{ source_type: 'order', order_line_id: so.lines[0].id, qty: 10 }] })).body;
+  const ins = (await staff('GET', '/api/ship-instructions?batch=none')).body.rows.find(r => r.bill_no === b.bill_no);
+  assert.match((await staff('POST', '/api/ship-instructions/ship', { ids: [ins.id], qtys: { [ins.id]: 12 } })).body.error, /지시 수량 10보다 많습니다/);
+  const r = await staff('POST', '/api/ship-instructions/ship', { ids: [ins.id], qtys: { [ins.id]: 6 }, ship_date: today });
+  assert.equal(r.status, 200, JSON.stringify(r.body)); assert.equal(r.body.partial, 1);
+  const shipped = sqlite.prepare("SELECT qty FROM shipments WHERE batch_id=?").get(`si:${ins.id}`); assert.equal(shipped.qty, 6);
+  const rest = (await staff('GET', '/api/ship-instructions?status=pending')).body.rows.filter(x => x.bill_no === b.bill_no);
+  assert.equal(rest.length, 1); assert.equal(rest[0].qty, 4, 'remainder stays pending');
+  const after = (await seller('GET', `/api/sales-bills/${b.id}`)).body;
+  assert.deepEqual([after.supply_total, after.vat_total], [3330, 333], 'bill total unchanged');
+  assert.deepEqual(after.lines.filter(l => l.active !== 0).map(l => l.qty).sort((x, y) => x - y), [4, 6]);
+  const full = await staff('POST', '/api/ship-instructions/ship', { ids: [rest[0].id], qtys: { [rest[0].id]: 4 }, ship_date: today });
+  assert.equal(full.body.partial, 0, 'full qty is not a split');
 });
