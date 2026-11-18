@@ -2412,3 +2412,20 @@ table.bs-table tr.bs-edit-row > td { background: var(--accent-soft); padding: 10
 .bs-editor .bs-ed-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 8px; }
 .bs-editor .bs-ed-head input[name=base_qty] { width: 7em; }
 .bs-editor .actions { display: flex; align-items: center; gap: 6px; } .bs-editor .actions .grow { flex: 1; }
+
+/* 15.197 BOM 소요량 하이라키: BOM 트리와 같은 모양(부모 줄 바탕, └ 선) */
+table.bs-table.bom-tree tr.bt-product > td { border-top: 1px solid var(--line); }
+table.bs-table.bom-tree tr.bs-edit-row > td { background: var(--accent-soft); }
+table.bs-table.bom-tree td.bs-none { color: var(--danger, #c0392b); }
+table.bs-table.bom-tree input[type=checkbox][disabled] { opacity: 1; accent-color: var(--text); }
+
+/* 15.197 BOM 소요량 트리 다듬기: 부모 줄 바탕·굵게, 자식 줄 흰 바탕 + └ 들여쓰기, 사용여부 체크 표시 */
+table.bs-table.bom-tree tbody tr.bt-product > td { background: var(--accent-soft, #eef4ff); }
+table.bs-table.bom-tree tbody tr.bt-mat > td { background: var(--panel); }
+table.bs-table.bom-tree tbody tr.bt-mat > td.bt-indent { padding-left: 30px !important; position: relative; }
+table.bs-table.bom-tree tbody tr.bt-mat > td.bt-indent + td.bt-indent { padding-left: 30px !important; }
+table.bs-table.bom-tree tbody tr.bt-mat > td:nth-child(2)::before { content: ""; position: absolute; left: 12px; top: 0; bottom: 50%; width: 12px; border-left: 1px solid var(--muted); border-bottom: 1px solid var(--muted); }
+table.bs-table.bom-tree .bt-toggle { font-size: 15px; line-height: 1; width: 24px; height: 24px; border: 0; background: transparent; cursor: pointer; color: var(--text); }
+table.bs-table.bom-tree td:first-child { width: 32px; text-align: center; }
+.bs-use { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border: 1.5px solid var(--muted); border-radius: 3px; font-size: 12px; font-weight: 700; line-height: 1; }
+.bs-use.on { background: var(--text); border-color: var(--text); color: var(--panel); }
