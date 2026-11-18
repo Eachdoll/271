@@ -106,7 +106,7 @@ function rpGuess(from, to) {
 // 15.89 한 줄로 접음: 「◀ [이번 달 ▾] ▶」. 가운데를 누르면 일·주·월 / 분기 / 반기·년 세 열로 펼쳐 고른다(휴대폰에서 버튼 세 줄이 지저분하던 문제).
 const RP_GROUPS = [['일·주·월', [['today', '오늘'], ['yesterday', '어제'], ['week', '이번 주'], ['lastweek', '지난 주'], ['month', '이번 달'], ['lastmonth', '지난 달']]], ['분기', [['q1', '1분기'], ['q2', '2분기'], ['q3', '3분기'], ['q4', '4분기']]], ['반기·년', [['h1', '상반기'], ['h2', '하반기'], ['year', '금년'], ['lastyear', '작년']]]];
 const RP_LABEL = Object.fromEntries(RP_GROUPS.flatMap(([, items]) => items));
-function rangePresets(fromInput, toInput, { place = null, onPick = () => {} } = {}) {
+function rangePresets(fromInput, toInput, { place = null, onPick = () => {}, compact: wantCompact = false } = {}) {
   const box = document.createElement('div'); box.className = 'range-presets'; box.setAttribute('role', 'group'); box.setAttribute('aria-label', '기간 빠른 선택');
   box.innerHTML = `<button type="button" class="btn small rp-arrow" data-rp="prev" aria-label="이전 기간">◀</button><button type="button" class="btn small rp-toggle" data-rp-toggle aria-expanded="false" aria-haspopup="true"><span data-rp-label></span> ▾</button><button type="button" class="btn small rp-arrow" data-rp="next" aria-label="다음 기간">▶</button>
     <div class="rp-panel" data-rp-panel hidden>${RP_GROUPS.map(([title, items]) => `<div class="rp-col"><div class="rp-col-title">${title}</div>${items.map(([k, l]) => `<button type="button" class="btn small" data-rp="${k}">${l}</button>`).join('')}</div>`).join('')}</div>`;
@@ -133,16 +133,16 @@ function rangePresets(fromInput, toInput, { place = null, onPick = () => {} } = 
   const outside = e => { if (!box.isConnected) return cleanup(); if (!panel.hidden && !box.contains(e.target)) open(false); };
   const esc = e => { if (e.key === 'Escape' && !panel.hidden) { open(false); toggle.focus(); e.stopPropagation(); } };
   document.addEventListener('click', outside, true); document.addEventListener('keydown', esc, true); window.addEventListener('hashchange', cleanup);
-  [fromInput, toInput].forEach(i => i.addEventListener('change', () => { unit = ''; picked = ''; $$('[data-rp]', panel).forEach(x => x.classList.remove('on')); setLabel(); }));
+  [fromInput, toInput].forEach(i => i.addEventListener('change', () => { unit = ''; sync(); })); // 15.216 손으로 넣어도 「지난 달」 등과 같으면 그 이름으로
   sync();
   setTimeout(sync, 0); // 만든 바로 뒤 화면 코드가 저장된 조건으로 날짜를 채우는 경우
   fromInput.form?.addEventListener('submit', sync, true);
   box.sync = sync;
   // 15.216 조회 줄 간소화: 날짜 칸 두 개(시작 ~ 끝)를 펼침 상자 아래 「직접 입력」으로 옮기고, 조회 줄에는 「이름 [◀ | 기간 ▾ | ▶]」 한 덩어리만.
-  const compact = !place && fromInput.closest('form.list-filters, form.toolbar, .toolbar') && fromInput.closest('label');
+  const compact = !place && (wantCompact || fromInput.closest('form.list-filters, form.toolbar, .toolbar')) && fromInput.closest('label, .rs-f');
   if (compact) {
-    const fromLabel = fromInput.closest('label'), toLabel = toInput.closest('label');
-    const name = ([...fromLabel.childNodes].find(n => n.nodeType === 3 && n.nodeValue.trim())?.nodeValue || '').replace(/시작일?$|부터$/, '').trim() || '기간';
+    const fromLabel = fromInput.closest('label, .rs-f'), toLabel = toInput.closest('label, .rs-f');
+    const name = ([...fromLabel.childNodes].find(n => n.nodeType === 3 && n.nodeValue.trim())?.nodeValue || fromLabel.querySelector('.rs-f-l')?.textContent || '').replace(/시작일?$|부터$/, '').trim() || '기간';
     box.classList.add('rp-compact'); box.setAttribute('aria-label', name);
     box.prepend(Object.assign(document.createElement('span'), { className: 'rp-name', textContent: name }));
     const custom = document.createElement('div'); custom.className = 'rp-custom';
@@ -154,7 +154,8 @@ function rangePresets(fromInput, toInput, { place = null, onPick = () => {} } = 
     // 필수 기간이 비어 있으면(브라우저 확인) 상자를 열어 칸이 보이게
     [fromInput, toInput].forEach(i => i.addEventListener('invalid', () => open(true)));
     // 직접 입력도 빠른 선택처럼 바로 조회(시작 ≤ 끝이거나 한쪽만 넣었을 때)
-    [fromInput, toInput].forEach(i => i.addEventListener('change', () => { if (!fromInput.value || !toInput.value || fromInput.value <= toInput.value) onPick({ from: fromInput.value, to: toInput.value, unit: '' }); }));
+    let firing = false; // onPick이 다시 change를 보내도 되풀이하지 않게
+    [fromInput, toInput].forEach(i => i.addEventListener('change', () => { if (firing) return; if (!fromInput.value || !toInput.value || fromInput.value <= toInput.value) { firing = true; try { onPick({ from: fromInput.value, to: toInput.value, unit: '' }); } finally { firing = false; } } }));
     sync();
   } else (place || toInput.closest('label') || fromInput.closest('form') || fromInput.parentElement)[place ? 'append' : toInput.closest('label') ? 'after' : 'append'](box);
   return box;

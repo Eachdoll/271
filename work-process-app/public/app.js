@@ -1523,6 +1523,20 @@ function foldOptionalFields() {
   });
 }
 new MutationObserver(foldOptionalFields).observe(document.body, { childList: true, subtree: true });
+// 15.216 모든 조회 양식의 기간(시작·끝 날짜 칸)을 「이름 [◀ | 기간 ▾ | ▶]」 한 덩어리로. 화면이 직접 rangePresets를 부르지 않아도 여기서 붙인다.
+// 조회 전용 양식만(저장 양식에서 고르면 submit이 저장이 되므로 제외). 고르면 조회 단추가 있으면 그 양식을 제출, 없으면 change 이벤트.
+function autoCompactRanges() {
+  if (typeof rangePresets !== 'function') return;
+  $$('#main form, .modal form').forEach(form => {
+    if (form.dataset.rpAuto || !form.matches('.list-filters, .toolbar, [data-read-only], .filters, .rs-filter, .report-filters') || form.querySelector('.rp-compact')) return;
+    const from = form.querySelector('input[type=date][name=from]'), to = form.querySelector('input[type=date][name=to]');
+    if (!from || !to || from.closest('.rp-custom') || !from.closest('label, .rs-f')) return;
+    form.dataset.rpAuto = '1'; // 한 번만(다시 그려도 반복하지 않게)
+    form.querySelectorAll('.range-presets:not(.rp-compact)').forEach(old => { old.hidden = true; old.classList.add('rp-replaced'); });
+    rangePresets(from, to, { compact: true, onPick: () => { const go = form.querySelector('button[type=submit], button.primary:not([type=button]), button.lf-go'); if (go && !go.disabled && form.requestSubmit) form.requestSubmit(go.type === 'submit' ? go : undefined); else to.dispatchEvent(new Event('change', { bubbles: true })); } });
+  });
+}
+new MutationObserver(() => autoCompactRanges()).observe(document.body, { childList: true, subtree: true });
 function pairDateRanges() {
   $$('form.list-filters > label:not([data-paired])').forEach(l => {
     l.dataset.paired = '1';

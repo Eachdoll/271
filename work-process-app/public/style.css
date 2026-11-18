@@ -2803,3 +2803,5 @@ table.fp-grid .fp-m-code { display: none; }
 .rp-custom-row input[type=date] { min-height: 34px; flex: 1 1 130px; min-width: 0; }
 form.list-filters > label.rp-moved, .toolbar > label.rp-moved { display: none !important; }
 @media (max-width: 600px) { .range-presets.rp-compact .rp-name { display: none; } }
+.range-presets.rp-replaced { display: none !important; }
+.rs-filter .rs-f.rp-moved { display: none !important; }
