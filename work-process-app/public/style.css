@@ -2395,3 +2395,20 @@ label.semi-pick input[data-semi-pick] { width: 100%; }
 
 /* 15.194 올리기 창: 파일 고르기 단추 안에 브라우저 기본 파일 칸이 보이지 않게 */
 label.btn > input[type=file][hidden] { display: none !important; }
+
+/* 15.195 올리기 창: 「이미 있는 품목코드는 고치기」는 한 줄 따로 */
+.modal .imp-update { margin: 4px 0 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--accent-soft); }
+
+/* 15.196 BOM 소요량 */
+.bs-tools input[name=q] { width: 16em; } .bs-tools input[name=calc] { width: 9em; }
+table.bs-table td { vertical-align: middle; }
+table.bs-table tr.bs-first > td { border-top: 2px solid var(--line); }
+table.bs-table td[rowspan] { background: var(--panel); }
+table.bs-table td.bs-code b { font-variant-numeric: tabular-nums; }
+table.bs-table td.bs-name { min-width: 12em; word-break: keep-all; overflow-wrap: anywhere; }
+table.bs-table td.bs-none { color: var(--danger, #c0392b); font-size: 13px; }
+table.bs-table td.bs-need { color: var(--accent); font-weight: 600; }
+table.bs-table tr.bs-edit-row > td { background: var(--accent-soft); padding: 10px 12px; }
+.bs-editor .bs-ed-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 8px; }
+.bs-editor .bs-ed-head input[name=base_qty] { width: 7em; }
+.bs-editor .actions { display: flex; align-items: center; gap: 6px; } .bs-editor .actions .grow { flex: 1; }
