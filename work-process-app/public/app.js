@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.208';
+const APP_VERSION = '15.209';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -93,6 +93,8 @@ function showInputAuthors() {
 }
 new MutationObserver(showInputAuthors).observe(document.body, { childList: true, subtree: true });
 
+// 15.209 폼이 열려 있는 동안 같은 등록 요청 번호(응답을 못 받아 다시 눌러도 한 건). 저장되면 dataset.rid를 지워 새 번호.
+function formToken(form) { if (!form.dataset.rid) form.dataset.rid = crypto.randomUUID(); return form.dataset.rid; }
 async function api(method, url, body) {
   const res = await fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined, credentials: 'same-origin' });
   const data = await res.json().catch(() => ({}));
@@ -1885,7 +1887,7 @@ async function pageOtherReceipts(main, { entry = true } = {}) {
   $('#otherNew').onsubmit = async event => {
     event.preventDefault(); if (otherDraft.busy) return; const button = $('button.primary', event.target); button.disabled = true;
     try {
-      const value = formObj(event.target); const saved = await api('POST', '/api/other-receipts', value); const photoSaved = await saveNewAttachments('other_receipt', saved, otherDraft, event.target);
+      const value = formObj(event.target); const saved = await api('POST', '/api/other-receipts', { ...value, request_id: formToken(event.target) }); delete event.target.dataset.rid; const photoSaved = await saveNewAttachments('other_receipt', saved, otherDraft, event.target);
       event.target.reset(); otherDraft.reset(); filterForm.reset(); $('#otherFrom').value = monthStart(value.received_date); $('#otherTo').value = value.received_date;
       $('#otherQ').value = ''; $('#otherCategory').value = ''; if (photoSaved) toast('기타입고와 분석리스트에 등록했습니다.'); await load();
     } catch (error) { fail(error); } finally { button.disabled = false; }
@@ -2601,8 +2603,8 @@ async function pageSchedule(kind) {
   const step = (n) => { base = view === 'day' ? addDays(base, n) : view === 'week' ? addDays(base, 7 * n) : addMonths(base, n); load(); };
   $('#prev').onclick = () => step(-1); $('#next').onclick = () => step(1); $('#today').onclick = () => { base = todayStr(); load(); };
   $('#scNew').onsubmit = async (e) => {
-    e.preventDefault(); const v = formObj(e.target);
-    try { await api('POST', '/api/schedules', { ...v, kind }); toast(`${PERIOD[v.period]} 일정을 등록했습니다.`); e.target.qty.value = ''; e.target.note.value = ''; if (!v.bom_id) e.target.product.value = ''; previewBom(); base = v.start_date; load(); } catch (err) { fail(err); }
+    e.preventDefault(); const v = formObj(e.target); const button = $('button.primary', e.target); if (button?.disabled) return; if (button) button.disabled = true; // 15.209 두 번 눌러도 한 건
+    try { await api('POST', '/api/schedules', { ...v, kind, request_id: formToken(e.target) }); delete e.target.dataset.rid; toast(`${PERIOD[v.period]} 일정을 등록했습니다.`); e.target.qty.value = ''; e.target.note.value = ''; if (!v.bom_id) e.target.product.value = ''; previewBom(); base = v.start_date; load(); } catch (err) { fail(err); } finally { if (button) button.disabled = false; }
   };
   await load();
 }
@@ -2651,7 +2653,7 @@ async function pageShip(main) {
   const shLot = bindLotPicker($('#shNew').elements.lot, () => $('#shNew').elements.item.value, () => $('#shNew').elements.qty.value);
   $('#shNew').onsubmit = async (e) => {
     e.preventDefault(); if (shipDraft.busy) return; const lotWarn = shLot?.check(); if (lotWarn && !await confirmBox(`${lotWarn}. 그래도 등록할까요?`)) return; LOT_CACHE.clear(); const v = formObj(e.target); const button = $('button.primary', e.target); button.disabled = true;
-    try { const saved = await api('POST', '/api/shipments', v); const photoSaved = await saveNewAttachments('shipment', saved, shipDraft, e.target); shipDraft.reset(); e.target.inspection_status.value = 'unchecked'; e.target.inspection_note.value = ''; ['item', 'qty', 'customer', 'note', 'lot'].forEach((k) => (e.target[k].value = '')); if (photoSaved) toast('출하를 등록했습니다.'); if (v.ship_date < $('#shFrom').value || v.ship_date > $('#shTo').value) { $('#shFrom').value = $('#shTo').value = v.ship_date; } load(); } catch (err) { fail(err); } finally { button.disabled = false; }
+    try { const saved = await api('POST', '/api/shipments', { ...v, request_id: formToken(e.target) }); delete e.target.dataset.rid; const photoSaved = await saveNewAttachments('shipment', saved, shipDraft, e.target); shipDraft.reset(); e.target.inspection_status.value = 'unchecked'; e.target.inspection_note.value = ''; ['item', 'qty', 'customer', 'note', 'lot'].forEach((k) => (e.target[k].value = '')); if (photoSaved) toast('출하를 등록했습니다.'); if (v.ship_date < $('#shFrom').value || v.ship_date > $('#shTo').value) { $('#shFrom').value = $('#shTo').value = v.ship_date; } load(); } catch (err) { fail(err); } finally { button.disabled = false; }
   };
   bindListControls(filterForm, load);
   $('#shToday').onclick = () => { $('#shFrom').value = $('#shTo').value = todayStr(); load().catch(fail); };

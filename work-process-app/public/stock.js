@@ -257,7 +257,7 @@ async function pageScan(main) {
         e.preventDefault(); const v = formObj(f); const button = f.querySelector('button.primary'); button.disabled = true;
         try {
           const bom = boms.find(b => b.product.replace(/\s+/g, '').toLowerCase() === r.item.replace(/\s+/g, '').toLowerCase());
-          await api('POST', '/api/shipments', { ship_date: v.ship_date, item: r.item, ...(bom ? { bom_id: bom.id } : {}), qty: v.qty, unit: r.unit, customer: v.customer, lot: r.lot, note: 'QR 스캔 출하' });
+          await api('POST', '/api/shipments', { ship_date: v.ship_date, item: r.item, ...(bom ? { bom_id: bom.id } : {}), qty: v.qty, unit: r.unit, customer: v.customer, lot: r.lot, note: 'QR 스캔 출하', request_id: formToken(f) }); delete f.dataset.rid;
           toast(`${r.item} LOT ${r.lot} ${fmtNum(v.qty)}${r.unit} 출하를 기록했습니다.`); addLog(`${r.lot} — 출하 ${fmtNum(v.qty)}${r.unit} → ${v.customer}`); await show(text);
         } catch (error) { fail(error); } finally { button.disabled = false; }
       };

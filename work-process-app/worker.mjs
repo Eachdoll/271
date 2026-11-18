@@ -1072,7 +1072,8 @@ route('POST', '/api/warehouses', async ({ user, body }) => {
   if (!canAdjustStock(user)) throw new HttpError(403, '창고는 물류팀장·관리자가 등록합니다.');
   const f = warehouseFields(body);
   if (await db.prepare('SELECT 1 FROM warehouses WHERE name=?').get(f.name)) throw new HttpError(409, '같은 이름의 창고가 있습니다.');
-  const r = await db.prepare('INSERT INTO warehouses(name,locations,sort) VALUES(?,?,?)').run(f.name, f.locations, f.sort);
+  let r; try { r = await db.prepare('INSERT INTO warehouses(name,locations,sort) VALUES(?,?,?)').run(f.name, f.locations, f.sort); }
+  catch (error) { if (/UNIQUE/i.test(String(error && error.message))) throw new HttpError(409, '같은 이름의 창고가 있습니다.'); throw error; } // 15.209
   return mustGet('warehouses', r.lastInsertRowid);
 });
 // 15.104 창고 삭제: 그 창고 이름으로 저장된 입고 LOT·기타입고가 하나도 없을 때만. 있으면 사용 중지로 안내.
@@ -1092,12 +1093,19 @@ route('PUT', '/api/warehouses/:id', async ({ user, params, body }) => {
   const row = await mustGet('warehouses', params.id), f = warehouseFields({ name: row.name, locations: row.locations, sort: row.sort, ...body });
   const clash = await db.prepare('SELECT id FROM warehouses WHERE name=?').get(f.name); if (clash && clash.id !== row.id) throw new HttpError(409, '같은 이름의 창고가 있습니다.');
   const active = body.active === undefined ? row.active : body.active ? 1 : 0;
+  { // 15.209 입고·이동 기록이 있는 위치는 목록에서 지우지 못함(그 위치 재고가 「없는 위치」가 됨)
+    const keep = new Set(f.locations ? f.locations.split(',') : []), gone = (row.locations ? row.locations.split(',') : []).filter(x => !keep.has(x));
+    for (const loc of gone) {
+      const used = await db.prepare("SELECT (SELECT COUNT(*) FROM po_receipt_lots WHERE warehouse=? AND location=?) + (SELECT COUNT(*) FROM other_receipts WHERE warehouse=? AND location=?) + (SELECT COUNT(*) FROM stock_transfers WHERE to_warehouse=? AND to_location=? AND status='confirmed') AS n").get(row.name, loc, row.name, loc, row.name, loc);
+      if (used.n) throw new HttpError(409, `${row.name} ${loc}: 입고·이동 기록 ${used.n}건이 있는 위치라 지울 수 없습니다. 재고를 다른 위치로 옮긴 뒤 지우세요.`);
+    }
+  }
   // 이름을 바꾸면 기록에 남은 창고 이름도 함께 바꾼다(위치는 그대로).
-  await db.batch([
+  try { await db.batch([
     { sql: 'UPDATE warehouses SET name=?,locations=?,sort=?,active=? WHERE id=?', args: [f.name, f.locations, f.sort, active, row.id] },
     { sql: 'UPDATE po_receipt_lots SET warehouse=? WHERE warehouse=?', args: [f.name, row.name] },
     { sql: 'UPDATE other_receipts SET warehouse=? WHERE warehouse=?', args: [f.name, row.name] },
-  ]);
+  ]); } catch (error) { if (/UNIQUE/i.test(String(error && error.message))) throw new HttpError(409, '같은 이름의 창고가 있습니다.'); throw error; }
   return mustGet('warehouses', row.id);
 });
 
@@ -2013,6 +2021,8 @@ async function returnLinesFrom(side, party, input, excludeId = 0) {
   }
   return lines;
 }
+const returnQtyGuards = (side, lines) => [...new Set(lines.filter(l => l.source_id).map(l => l.source_id))].map(sid => ({ // 15.209 동시에 넣어도 원래 수량을 넘지 않게
+  sql: `SELECT json('conflict') WHERE (SELECT COALESCE(SUM(x.qty),0) FROM stock_return_lines x JOIN stock_returns r ON r.id=x.return_id WHERE r.status='confirmed' AND x.source_type=? AND x.source_id=?) > (SELECT qty FROM ${side === 'in' ? 'sales_bill_lines' : 'purchase_bill_lines'} WHERE id=?) + 0.000001`, args: [RET[side].source, sid, sid] }));
 route('POST', '/api/returns', async ({ user, body }) => {
   const side = body.side === 'out' ? 'out' : body.side === 'in' ? 'in' : null; if (!side) throw bad('반입·반출을 고르세요.');
   const c = RET[side]; c.need(user);
@@ -2035,6 +2045,7 @@ route('POST', '/api/returns', async ({ user, body }) => {
     args: [rp, rp, rp, side, date, party, process, amount ? settle : 'offset', taxType, supply, vat, total, note, token, user.name, user.id] }];
   for (const l of lines) cmds.push({ sql: `INSERT INTO stock_return_lines(return_id,bom_id,product_code,item,spec,unit,item_category,qty,unit_price,supply,vat,reason,lot,source_type,source_id,note) VALUES(${RID},?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     args: [token, l.bom_id, l.product_code, l.item, l.spec, l.unit, l.item_category, l.qty, l.unit_price, l.supply, l.vat, l.reason, l.lot, l.source_type, l.source_id, l.note] });
+  cmds.push(...returnQtyGuards(side, lines));
   const NO = `(SELECT return_no FROM stock_returns WHERE request_id=?)`;
   if (amount) {
     const btok = token + ':bill', bp = `${side === 'in' ? 'SB' : 'PB'}-${ymd}-`, BID = `(SELECT id FROM ${side === 'in' ? 'sales_bills' : 'purchase_bills'} WHERE request_id=?)`;
@@ -2059,7 +2070,7 @@ route('POST', '/api/returns', async ({ user, body }) => {
     }
   }
   try { await db.batch(cmds); }
-  catch (error) { const saved = await db.prepare('SELECT * FROM stock_returns WHERE request_id=?').get(token); if (saved) return { ...await returnDetail(saved), duplicate: true }; throw error; }
+  catch (error) { const saved = await db.prepare('SELECT * FROM stock_returns WHERE request_id=?').get(token); if (saved) return { ...await returnDetail(saved), duplicate: true }; if (isGuardError(error)) throw new HttpError(409, `그 사이 같은 전표 줄에 다른 ${c.label}이 들어가 원래 수량을 넘습니다. 새로 불러와 수량을 확인하세요.`); throw error; }
   return returnDetail(await db.prepare('SELECT * FROM stock_returns WHERE request_id=?').get(token));
 });
 // 15.147 반입·반출 고치기: 같은 전표번호를 그대로 두고 일자·처리구분·금액처리·부가세·비고와 줄을 바꾼다.
@@ -2124,6 +2135,7 @@ route('PUT', '/api/returns/:id', async ({ user, params, body }) => {
   if (note !== r.note) diff.push('비고');
   if (!diff.length) return returnDetail(r);
   cmds.push(docChange('return', r.id, diff.join(' · '), user));
+  cmds.push(...returnQtyGuards(side, lines)); // 15.209
   try { await db.batch(cmds); } catch (error) { if (isGuardError(error)) throw new HttpError(409, '그 사이 전표가 바뀌었습니다. 새로 불러오세요.'); throw error; }
   return returnDetail(await mustGet('stock_returns', r.id));
 });
@@ -3400,7 +3412,8 @@ route('POST', '/api/boms', async ({ user, body }) => {
   if (semiType && !fields[1]) throw bad('커팅/융착·세탁에서 고를 품목은 제품코드가 필요합니다.');
   await bomCodeClash(fields[1]); await bomCycleCheck(fields[0], fields[5]);
   const spec = str(body.spec, 100);
-  const result = await db.prepare('INSERT INTO boms(product,product_code,kind,base_qty,unit,materials,note,active,item_category,created_by,cat1,cat2,cat3,semi_type,semi_unit,pack_qty) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(...fields, user.name, ...cats, semiType, semiUnit, packQty);
+  const result = await db.prepare('INSERT INTO boms(product,product_code,kind,base_qty,unit,materials,note,active,item_category,created_by,cat1,cat2,cat3,semi_type,semi_unit,pack_qty) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE ?=\'\' OR NOT EXISTS(SELECT 1 FROM boms WHERE product_code<>\'\' AND UPPER(product_code)=UPPER(?))').run(...fields, user.name, ...cats, semiType, semiUnit, packQty, fields[1], fields[1]);
+  if (!result.changes) { await bomCodeClash(fields[1]); throw new HttpError(409, `제품코드 ${fields[1]}가 그 사이 다른 품목에 등록되었습니다.`); } // 15.209 동시 등록
   if (spec) await db.prepare('UPDATE boms SET spec=? WHERE id=?').run(spec, result.lastInsertRowid);
   const vendorInfo = str(body.vendor_info, 500); if (vendorInfo) await db.prepare('UPDATE boms SET vendor_info=? WHERE id=?').run(vendorInfo, result.lastInsertRowid); // 15.190
   if (body.skip_incoming !== undefined || body.skip_outgoing !== undefined) await db.prepare('UPDATE boms SET skip_incoming=?,skip_outgoing=? WHERE id=?').run(isChecked(body.skip_incoming) ? 1 : 0, isChecked(body.skip_outgoing) ? 1 : 0, result.lastInsertRowid); // 15.207
@@ -3731,9 +3744,11 @@ route('GET', '/api/schedules', async ({ query }) => {
     ) ${where.length ? 'AND ' + where.join(' AND ') : ''} ORDER BY start_date, period, id`).all(...args)).map(decodeSchedule);
 });
 route('POST', '/api/schedules', async ({ user, body }) => {
+  const token = reqToken(body); { const old = await replayed('schedules', token, user); if (old) return { ...decodeSchedule(old), duplicate: true }; } // 15.209
   const f = await schedFields(body);
-  const r = await db.prepare('INSERT INTO schedules(kind,period,start_date,product,qty,note,created_by,bom_id,bom_snapshot) VALUES(?,?,?,?,?,?,?,?,?)').run(f.kind, f.period, f.start_date, f.product, f.qty, f.note, user.name, f.bom_id, f.bom_snapshot);
-  return decodeSchedule(await mustGet('schedules', r.lastInsertRowid));
+  const r = await onceInsert('schedules', token, user, async () => (await db.prepare('INSERT INTO schedules(kind,period,start_date,product,qty,note,created_by,bom_id,bom_snapshot,request_id) VALUES(?,?,?,?,?,?,?,?,?,?)').run(f.kind, f.period, f.start_date, f.product, f.qty, f.note, user.name, f.bom_id, f.bom_snapshot, token)).lastInsertRowid);
+  if (r.duplicate) return { ...decodeSchedule(r.row), duplicate: true };
+  return decodeSchedule(await mustGet('schedules', r.id));
 });
 route('PUT', '/api/schedules/:id', async ({ user, params, body }) => {
   const row = (await mustGet('schedules', params.id)); if (!canModify(user, row) && !hasRole(user, 'production')) throw new HttpError(403, '등록자 또는 생산 담당자만 수정할 수 있습니다.');
@@ -3798,13 +3813,27 @@ route('GET', '/api/other-receipts', async ({ query }) => {
   applyInspectionFilter(where, args, query, 'other_receipt', 'other_receipts');
   return await db.prepare(`SELECT other_receipts.*, (SELECT receipt_no FROM receipts WHERE id=other_receipts.receipt_id) AS receipt_no, ${attachmentSummary('other_receipt','other_receipts')}, COALESCE((SELECT m.result FROM requests q JOIN inspection_measurements m ON m.request_id=q.id WHERE q.source_type='other_receipt' AND q.source_id=other_receipts.id LIMIT 1), (SELECT 'exempt' FROM requests q WHERE q.source_type='other_receipt' AND q.source_id=other_receipts.id AND json_extract(q.data,'$.exempt')=1 LIMIT 1)) AS qc_result FROM other_receipts ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY received_date DESC, id DESC`).all(...args);
 });
+// 15.209 요청 번호: 같은 등록 요청(응답을 못 받아 다시 누름 등)을 두 번 보내도 한 건. 없으면 예전처럼 그냥 저장.
+const reqToken = body => { const t = body.request_id === undefined || body.request_id === null || body.request_id === '' ? null : String(body.request_id); if (t !== null && !/^[a-zA-Z0-9-]{16,80}$/.test(t)) throw bad('등록 요청 번호를 확인하세요.'); return t; };
+async function replayed(table, token, user) {
+  if (!token) return null; const old = await db.prepare(`SELECT * FROM ${table} WHERE request_id=?`).get(token); if (!old) return null;
+  if (old.created_by !== user.name) throw new HttpError(409, '이미 사용된 등록 요청입니다. 새로 열어 등록하세요.'); return old;
+}
+async function onceInsert(table, token, user, run) {
+  const old = await replayed(table, token, user); if (old) return { row: old, duplicate: true };
+  try { return { id: await run() }; }
+  catch (error) { if (token && /UNIQUE/i.test(String(error && error.message))) { const again = await replayed(table, token, user); if (again) return { row: again, duplicate: true }; } throw error; }
+}
 route('POST', '/api/other-receipts', async ({ user, body }) => {
+  const token = reqToken(body);
+  { const old = await replayed('other_receipts', token, user); if (old) return { ...old, duplicate: true }; }
   const fields = await otherReceiptFields(body); await ensureVendor(fields[4], user, 'purchase');
-  const results = await db.batch([
-    { sql: 'INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,bom_id,bom_snapshot,created_by) VALUES(?,?,?,?,?,?,?,?,?)', args: [...fields, user.name] },
+  const r = await onceInsert('other_receipts', token, user, async () => (await db.batch([
+    { sql: 'INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,bom_id,bom_snapshot,created_by,request_id) VALUES(?,?,?,?,?,?,?,?,?,?)', args: [...fields, user.name, token] },
     receiptAnalysisQuery('other_receipt', null, user),
-  ]);
-  return await mustGet('other_receipts', results[0].meta.last_row_id);
+  ]))[0].meta.last_row_id);
+  if (r.duplicate) return { ...r.row, duplicate: true };
+  return await mustGet('other_receipts', r.id);
 });
 route('PUT', '/api/other-receipts/:id', async ({ user, params, body }) => {
   const row = await mustGet('other_receipts', params.id);
@@ -3837,10 +3866,12 @@ route('GET', '/api/shipments', async ({ query }) => {
   return (await db.prepare(`SELECT shipments.*, ${attachmentSummary('shipment','shipments')} FROM shipments WHERE ${where.join(' AND ')} ORDER BY ship_date DESC, id DESC`).all(...args));
 });
 route('POST', '/api/shipments', async ({ user, body }) => {
+  const token = reqToken(body); { const old = await replayed('shipments', token, user); if (old) return { ...old, duplicate: true }; } // 15.209
   if (body.bom_id) body.item = (await catalogItem(user, body)).product;
   const f = shipFields(body); const entry = await catalogItem(user, body); await checkShipLot(entry.product, f[5]); await ensureVendor(f[3], user, 'sales');
-  const r = (await db.prepare('INSERT INTO shipments(ship_date,item,qty,customer,note,lot,created_by,product_code,unit) VALUES(?,?,?,?,?,?,?,?,?)').run(f[0], entry.product, ...f.slice(2), user.name, entry.product_code, str(body.unit, 20) || entry.unit));
-  return (await mustGet('shipments', r.lastInsertRowid));
+  const r = await onceInsert('shipments', token, user, async () => (await db.prepare('INSERT INTO shipments(ship_date,item,qty,customer,note,lot,created_by,product_code,unit,request_id) VALUES(?,?,?,?,?,?,?,?,?,?)').run(f[0], entry.product, ...f.slice(2), user.name, entry.product_code, str(body.unit, 20) || entry.unit, token)).lastInsertRowid);
+  if (r.duplicate) return { ...r.row, duplicate: true };
+  return (await mustGet('shipments', r.id));
 });
 route('PUT', '/api/shipments/:id', async ({ user, params, body }) => {
   const row = (await mustGet('shipments', params.id)); if (!canModify(user, row) && !hasRole(user, 'logistics')) throw new HttpError(403, '등록자 또는 물류 담당자만 수정할 수 있습니다.');
@@ -4680,14 +4711,22 @@ route('POST', '/api/stock-transfers', async ({ user, body }) => {
   const wh = await db.prepare('SELECT * FROM warehouses WHERE name=? AND active=1').get(toWh); if (!wh) throw bad(`사용 중인 창고가 아닙니다: ${toWh}`);
   const locs = wh.locations ? wh.locations.split(',') : []; if (toLoc && locs.length && !locs.includes(toLoc)) throw bad(`${toWh} 창고에 없는 위치입니다: ${toLoc}`);
   const to = `${toWh} ${toLoc}`.trim(); if (to === from) throw bad('같은 위치로는 옮길 수 없습니다.');
+  const seen = (await db.prepare('SELECT COALESCE(MAX(id),0) AS m FROM stock_transfers').get()).m; // 15.209 동시 이동 가드
   const here = (await lotPlaceStock(item, unit, lot, date)).find(p => p.place === from);
   if (!here || here.qty < qty - 1e-9) throw bad(`${from || '위치 미지정'}에 이 LOT가 ${stockRound(here?.qty || 0)}${unit}만 있습니다(${date} 기준).`);
   // 그 날짜 이후 이 위치에서 나간 이동이 있으면 지금 잔량으로도 확인(나중 날짜 이동과 겹쳐 모자라지 않게)
   const cur = (await lotPlaceStock(item, unit, lot)).find(p => p.place === from);
   if (!cur || cur.qty < qty - 1e-9) throw bad(`${from || '위치 미지정'}의 이 LOT 현재 잔량(${stockRound(cur?.qty || 0)}${unit})보다 많이 옮길 수 없습니다.`);
-  const r = await db.prepare('INSERT INTO stock_transfers(transfer_date,item,unit,lot,qty,from_place,to_warehouse,to_location,to_place,note,created_by,created_by_id,request_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)')
-    .run(date, item, unit, lot, qty, from, toWh, toLoc, to, str(body.note, 200), user.name, user.id, key || null);
-  return mustGet('stock_transfers', r.lastInsertRowid);
+  let r;
+  try { [r] = await db.batch([
+    { sql: 'INSERT INTO stock_transfers(transfer_date,item,unit,lot,qty,from_place,to_warehouse,to_location,to_place,note,created_by,created_by_id,request_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)', args: [date, item, unit, lot, qty, from, toWh, toLoc, to, str(body.note, 200), user.name, user.id, key || null] },
+    { sql: "SELECT json('conflict') WHERE (SELECT COUNT(*) FROM stock_transfers WHERE id>? AND status='confirmed' AND item=? AND unit=? AND lot=? AND from_place=?) > 1", args: [seen, item, unit, lot, from] },
+  ]); }
+  catch (error) {
+    if (key) { const old = await db.prepare('SELECT * FROM stock_transfers WHERE request_id=?').get(key); if (old && old.created_by_id === user.id) return old; }
+    if (isGuardError(error)) throw new HttpError(409, `그 사이 같은 LOT(${lot})가 ${from || '위치 미지정'}에서 옮겨졌습니다. 새로 불러와 남은 수량을 확인하세요.`); throw error;
+  }
+  return mustGet('stock_transfers', r.meta.last_row_id);
 });
 route('GET', '/api/stock-transfers', async ({ query }) => {
   const where = [], args = []; applyListDates(where, args, query, 'transfer_date');
@@ -4774,7 +4813,8 @@ route('POST', '/api/inventory/adjustments', async ({ user, body }) => {
     qty = Number(body.qty); if (body.qty === '' || body.qty == null || !Number.isFinite(qty) || qty === 0) throw bad('조정 수량을 입력하세요. (감소는 음수)');
     if (kind === 'opening' && qty < 0) throw bad('기초재고는 0보다 커야 합니다.');
   }
-  const r = await db.prepare('INSERT INTO stock_adjustments(adj_date,item,spec,unit,qty,kind,counted_qty,reason,request_id,created_by_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(date, item, spec, unit, qty, kind, counted, reason, key, user.id, user.name);
+  let r; try { r = await db.prepare('INSERT INTO stock_adjustments(adj_date,item,spec,unit,qty,kind,counted_qty,reason,request_id,created_by_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(date, item, spec, unit, qty, kind, counted, reason, key, user.id, user.name); }
+  catch (error) { if (/UNIQUE/i.test(String(error && error.message))) { const again = await db.prepare('SELECT * FROM stock_adjustments WHERE request_id=?').get(key); if (again && again.created_by_id === user.id) return again; throw new HttpError(409, '이미 사용된 요청 번호입니다.'); } throw error; } // 15.209
   return db.prepare('SELECT * FROM stock_adjustments WHERE id=?').get(r.lastInsertRowid);
 });
 route('PUT', '/api/inventory/levels', async ({ user, body }) => {
