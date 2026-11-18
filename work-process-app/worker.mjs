@@ -4768,8 +4768,12 @@ route('POST', '/api/import/vendors', async ({ user, body }) => {
 route('POST', '/api/import/items', async ({ user, body }) => {
   requireAdmin(user);
   const rows = importRows(body.rows);
-  const have = await db.prepare('SELECT product, product_code FROM boms').all();
+  const have = await db.prepare('SELECT * FROM boms').all();
   const names = new Set(have.map(b => nameKey(b.product))), codes = new Set(have.map(b => String(b.product_code || '').toUpperCase()).filter(Boolean));
+  // 15.195 일괄 수정: 「이미 있는 품목코드는 고치기」를 켜면 같은 코드(대소문자 무시) 품목의 품목명·분류(그리고 값이 있는 단위·규격·세부 분류·비고)를 바꾼다.
+  const updateMode = body.update_existing === true || body.update_existing === 1 || body.update_existing === '1';
+  const byCode = new Map(have.filter(b => b.product_code).map(b => [String(b.product_code).toUpperCase(), b])), nameOwner = new Map(have.map(b => [nameKey(b.product), b.id]));
+  let added = 0, updated = 0;
   const seenName = new Map(), seenCode = new Map(), results = [], cmds = [];
   for (const [i, r] of rows.entries()) {
     try {
@@ -4777,6 +4781,29 @@ route('POST', '/api/import/items', async ({ user, body }) => {
       const category = String(r.item_category ?? '').trim();
       if (!category) throw bad(`분류를 넣으세요(${ITEM_CATEGORIES.join('·')}).`);
       if (!ITEM_CATEGORIES.includes(category)) throw bad(`분류 「${category}」는 없습니다. ${ITEM_CATEGORIES.join('·')} 중 하나로 넣으세요.`);
+      const before = updateMode ? byCode.get(String(r.product_code ?? '').trim().toUpperCase()) : null;
+      if (before) {
+        const product = reqStr(r.product, '품목명', 200), key = nameKey(product), code = before.product_code;
+        if (nameOwner.has(key) && nameOwner.get(key) !== before.id) throw bad(`품목명 「${product}」는 다른 품목에서 쓰고 있습니다.`);
+        if (seenName.has(key)) throw bad(`${seenName.get(key)}번째 줄과 품목명이 겹칩니다.`);
+        if (seenCode.has(code.toUpperCase())) throw bad(`${seenCode.get(code.toUpperCase())}번째 줄과 제품코드가 겹칩니다.`);
+        const given = k => String(r[k] ?? '').trim();
+        const unit = given('unit') ? str(r.unit, 20) : before.unit, spec = given('spec') ? str(r.spec, 100) : before.spec || '', note = given('note') ? str(r.note, 500) : before.note || '';
+        const catsGiven = ['cat1', 'cat2', 'cat3'].some(given), sameClass = category === before.item_category;
+        const place = { ...(catsGiven ? { cat1: str(r.cat1, 50), cat2: str(r.cat2, 50), cat3: str(r.cat3, 50) } : sameClass ? {} : { cat1: '', cat2: '', cat3: '' }) };
+        const { cats, semiType } = await bomPlacement(place, category, before, unit);
+        const next = { product, item_category: category, unit, spec, note, cat1: cats[0], cat2: cats[1], cat3: cats[2] };
+        const changed = Object.keys(next).filter(k => String(next[k] ?? '') !== String(before[k] ?? ''));
+        seenName.set(key, i + 1); seenCode.set(code.toUpperCase(), i + 1);
+        if (changed.length) {
+          const LABEL = { product: '품목명', item_category: '분류', unit: '단위', spec: '규격', note: '비고', cat1: '1차 분류', cat2: '2차 분류', cat3: '3차 분류' };
+          cmds.push({ sql: "UPDATE boms SET product=?,item_category=?,kind=?,unit=?,spec=?,note=?,cat1=?,cat2=?,cat3=?,semi_type=?,is_temp=0,updated_at=datetime('now','+9 hours') WHERE id=?", args: [product, category, category === '반제품' ? 'semi' : before.kind === 'semi' && category !== '반제품' ? 'finished' : before.kind, unit, spec, note, ...cats, category === '반제품' || before.semi_type ? semiType || before.semi_type || '' : '', before.id] });
+          if (product !== before.product) cmds.push(...await bomFollowRename(before, product, code));
+          updated++;
+          results.push({ row: i + 1, action: 'update', product, product_code: code, item_category: category, note: changed.map(k => `${LABEL[k]} ${before[k] || '(빈칸)'} → ${next[k] || '(빈칸)'}`).join(' · ') });
+        } else results.push({ row: i + 1, action: 'same', product, product_code: code, item_category: category });
+        continue;
+      }
       const body1 = { product: r.product, product_code: r.product_code, item_category: category === '제품' ? '상품' : category, kind: category === '반제품' ? 'semi' : 'finished', base_qty: 1, unit: String(r.unit ?? '').trim() || 'EA', materials: [], note: r.note, cat1: str(r.cat1, 50), cat2: str(r.cat2, 50), cat3: str(r.cat3, 50) };
       const fields = bomFields(body1); fields[8] = category; body1.item_category = category; // 제품은 구성자재 검사만 건너뛴다
       const { cats } = await bomPlacement(body1, fields[8], {}, fields[4]);
@@ -4784,15 +4811,16 @@ route('POST', '/api/import/items', async ({ user, body }) => {
       if (/^TMP-/i.test(code)) throw bad('임시 코드(TMP-)는 쓸 수 없습니다.');
       if (names.has(key)) throw bad('같은 이름의 품목이 이미 있습니다.');
       if (seenName.has(key)) throw bad(`${seenName.get(key)}번째 줄과 품목명이 겹칩니다.`);
-      if (code && codes.has(code)) throw bad(`제품코드 ${fields[1]}는 이미 쓰고 있습니다.`);
+      if (code && codes.has(code)) throw bad(`제품코드 ${fields[1]}는 이미 쓰고 있습니다.${updateMode ? '' : ' 고치려면 「이미 있는 품목코드는 고치기」를 켜세요.'}`);
       if (code && seenCode.has(code)) throw bad(`${seenCode.get(code)}번째 줄과 제품코드가 겹칩니다.`);
       seenName.set(key, i + 1); if (code) seenCode.set(code, i + 1);
       const spec = str(r.spec, 100);
       cmds.push({ sql: 'INSERT INTO boms(product,product_code,kind,base_qty,unit,materials,note,active,item_category,created_by,cat1,cat2,cat3,semi_type,semi_unit,pack_qty,spec) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', args: [...fields, user.name, ...cats, '', '', null, spec] });
-      results.push({ row: i + 1, product: fields[0], product_code: fields[1], item_category: category, unit: fields[4], spec });
+      added++; results.push({ row: i + 1, action: 'add', product: fields[0], product_code: fields[1], item_category: category, unit: fields[4], spec });
     } catch (error) { if (!(error instanceof HttpError)) throw error; results.push({ row: i + 1, product: String(r.product ?? ''), error: error.message }); }
   }
-  return importFinish(body, results, cmds, '품목');
+  if (!body.dry_run && !cmds.length && !results.some(r => r.error)) return { dry_run: false, total: results.length, ok: results.length, errors: [], inserted: 0, added: 0, updated: 0, rows: results };
+  return { ...await importFinish(body, results, cmds, '품목'), added, updated };
 });
 
 // ── 15.120 부서별 리포트: 위 = 공통, 아래 = 부서(영업·구매·생산·품질·개발·물류). 모든 직원이 본다. ──

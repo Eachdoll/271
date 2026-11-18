@@ -2395,3 +2395,6 @@ label.semi-pick input[data-semi-pick] { width: 100%; }
 
 /* 15.194 올리기 창: 파일 고르기 단추 안에 브라우저 기본 파일 칸이 보이지 않게 */
 label.btn > input[type=file][hidden] { display: none !important; }
+
+/* 15.195 올리기 창: 「이미 있는 품목코드는 고치기」는 한 줄 따로 */
+.modal .imp-update { margin: 4px 0 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--accent-soft); }

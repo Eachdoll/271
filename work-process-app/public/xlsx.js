@@ -221,10 +221,11 @@ function decodeCsv(buf) {
   try { return new TextDecoder('utf-8', { fatal: true }).decode(buf); }
   catch { try { return new TextDecoder('euc-kr').decode(buf); } catch { return new TextDecoder('utf-8').decode(buf); } }
 }
-function importDialog({ title, endpoint, columns, sample, help = '', after = null, csvCols = 0 }) {
+function importDialog({ title, endpoint, columns, sample, help = '', after = null, csvCols = 0, updateLabel = '' }) {
   const m = modal(`<h3>${esc(title)}</h3>
     <p class="small muted">첫 줄은 머리글(칸 이름)입니다. 칸 순서는 상관없고, 이름이 맞는 칸만 읽습니다. 한 번에 500줄까지. ${help}</p>
     <div class="actions wrap" style="justify-content:flex-start"><label class="btn">파일 고르기 (.xlsx · .csv)<input type="file" accept=".xlsx,.csv,.txt" data-imp-file hidden></label>${csvCols ? '<button type="button" class="btn" data-imp-csv>CSV 양식</button>' : ''}<button type="button" class="btn" data-imp-sample>엑셀 양식</button><span class="small muted" data-imp-name></span></div>
+    ${updateLabel ? `<div class="imp-update"><label class="inline"><input type="checkbox" data-imp-update> ${esc(updateLabel)}</label></div>` : ''}
     <label>또는 엑셀에서 복사해 붙여넣기<textarea data-imp-paste rows="4" placeholder="${esc(columns.map(c => c[1]).join('\t'))}"></textarea></label>
     <div data-imp-result></div>
     <div class="actions"><button type="button" class="btn" data-close>닫기</button><button type="button" class="btn" data-imp-check>검사</button><button type="button" class="btn primary" data-imp-go disabled>넣기</button></div>`, { wide: true });
@@ -244,14 +245,16 @@ function importDialog({ title, endpoint, columns, sample, help = '', after = nul
     catch (error) { result.innerHTML = `<p class="red-text">${esc(error.message)}</p>`; rows = []; }
   };
   $('[data-imp-paste]', m.el).oninput = e => setTable(readDelimited(e.target.value));
+  $('[data-imp-update]', m.el)?.addEventListener('change', () => { checked = false; go.disabled = true; result.querySelector('.table-wrap')?.remove(); }); // 바꾸면 다시 검사
   const send = async dry => {
     if (!rows.length) return toast('올릴 줄이 없습니다. 파일을 고르거나 붙여넣으세요.', 'err');
-    const r = await api('POST', endpoint, { rows, dry_run: dry });
-    if (!dry && !r.errors.length) { toast(`${r.inserted}줄을 넣었습니다.`); m.close(); await after?.(); return; }
+    const upd = !!$('[data-imp-update]', m.el)?.checked;
+    const r = await api('POST', endpoint, { rows, dry_run: dry, ...(upd ? { update_existing: true } : {}) });
+    if (!dry && !r.errors.length) { toast(r.updated !== undefined ? `새로 등록 ${r.added || 0} · 고침 ${r.updated || 0}${r.total - (r.added || 0) - (r.updated || 0) ? ` · 변경 없음 ${r.total - (r.added || 0) - (r.updated || 0)}` : ''}` : `${r.inserted}줄을 넣었습니다.`); m.close(); await after?.(); return; }
     // 15.194 결과 표에는 파일에 값이 있는 칸만(코드·품명·분류만 올리면 빈 칸 6개가 늘어서지 않게).
     const cols = columns.filter((c, i) => i < 2 || rows.some(row => String(row[c[0]] ?? '').trim())), keys = cols.map(c => c[0]);
     result.innerHTML = `<p class="small"><b>${r.total}줄</b> 중 정상 ${r.ok}${r.errors.length ? ` · <span class="red-text">오류 ${r.errors.length} — 고쳐서 다시 올리세요(오류가 있으면 하나도 넣지 않습니다)</span>` : ' · 모두 정상, 「넣기」를 누르세요'}</p>
-      <div class="table-wrap"><table class="grid" data-keep-cols data-no-sort><thead><tr><th>줄</th><th>검사</th>${cols.map(c => `<th class="nowrap">${esc(c[1])}</th>`).join('')}</tr></thead><tbody>${rows.map((row, i) => { const res = r.rows?.[i] || r.errors.find(x => x.row === i + 1); return `<tr${res?.error ? ' class="row-err"' : ''}><td>${i + 1}</td><td class="${res?.error ? 'red-text' : 'small muted'}" style="min-width:14em">${esc(res?.error || '정상')}</td>${keys.map(k => `<td class="nowrap">${esc(row[k])}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div>`;
+      <div class="table-wrap"><table class="grid" data-keep-cols data-no-sort><thead><tr><th>줄</th><th>검사</th>${cols.map(c => `<th class="nowrap">${esc(c[1])}</th>`).join('')}</tr></thead><tbody>${rows.map((row, i) => { const res = r.rows?.[i] || r.errors.find(x => x.row === i + 1); return `<tr${res?.error ? ' class="row-err"' : ''}><td>${i + 1}</td><td class="${res?.error ? 'red-text' : 'small muted'}" style="min-width:14em">${res?.error ? esc(res.error) : res?.action === 'update' ? `<span class="chip green">고침</span> ${esc(res.note || '')}` : res?.action === 'same' ? '변경 없음' : res?.action === 'add' ? '새로 등록' : '정상'}</td>${keys.map(k => `<td class="nowrap">${esc(row[k])}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div>`;
     checked = dry && !r.errors.length; go.disabled = !checked;
   };
   $('[data-imp-check]', m.el).onclick = () => send(true).catch(fail);

@@ -281,6 +281,16 @@ test('15.113 Excel import: dry run checks every row, errors block the whole batc
   const p = (await admin('GET', '/api/boms?q=10-007')).body[0]; assert.equal(p.item_category, '제품'); assert.equal(p.unit, 'EA'); assert.deepEqual(p.materials, []);
   assert.equal((await admin('POST', '/api/import/items', { rows: [{ product: '라벨', product_code: 'LB-1', item_category: '부자재', unit: 'EA', spec: '소' }] })).body.inserted, 1);
   assert.equal((await admin('GET', '/api/boms?q=LB-1')).body[0].spec, '소');
+  // 15.195 일괄 수정: 끄면 코드 겹침 오류, 켜면 같은 코드 품목의 품목명·분류를 고치고(값 없는 칸은 그대로), 같으면 변경 없음, 새 코드는 새로 등록
+  const upRows = [{ product_code: '10-007', product: 'CF-707 인쇄 50P 5.5X6.5', item_category: '상품' }, { product_code: 'lb-1', product: '라벨', item_category: '부자재' }, { product_code: 'N-9', product: '새 품목', item_category: '원자재' }];
+  assert.match((await admin('POST', '/api/import/items', { rows: upRows, dry_run: true })).body.errors[0].error, /고치기/);
+  const up = (await admin('POST', '/api/import/items', { rows: upRows, update_existing: true })).body;
+  assert.equal(up.updated, 1); assert.equal(up.added, 1);
+  assert.deepEqual((await admin('POST', '/api/import/items', { rows: upRows, update_existing: true, dry_run: true })).body.rows.map(r => r.action), ['same', 'same', 'same'], 'second run changes nothing');
+  const q = (await admin('GET', '/api/boms?q=10-007')).body[0]; assert.equal(q.product, 'CF-707 인쇄 50P 5.5X6.5'); assert.equal(q.item_category, '상품'); assert.equal(q.unit, 'EA');
+  assert.equal((await admin('GET', '/api/boms?q=LB-1')).body[0].spec, '소', 'empty columns keep old values');
+  const clash = (await admin('POST', '/api/import/items', { rows: [{ product_code: 'LB-1', product: '새 품목', item_category: '부자재' }], update_existing: true, dry_run: true })).body;
+  assert.match(clash.errors[0].error, /다른 품목에서 쓰고/);
 });
 
 test('15.114 Warehouse moves keep item stock, check place balance and roles; reorder info nets open orders', async () => {
