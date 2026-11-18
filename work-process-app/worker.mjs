@@ -5574,7 +5574,7 @@ route('GET', '/api/ship-instructions', async ({ query }) => {
   else if (status) { if (!['pending', 'shipped', 'cancelled'].includes(status)) throw bad('상태를 확인하세요.'); where.push('i.status=?'); args.push(status); if (status === 'pending') where.push('i.held=0'); }
   applyListDates(where, args, query, 'i.ship_date');
   if (query.customer) { where.push(`${customerKey('i.customer')}=?`); args.push(nameKey(str(query.customer, 100))); }
-  if (query.batch === 'none') where.push('sbt.id IS NULL'); // 15.132 아직 출고지시서에 안 묶인 것만
+  if (query.batch === 'none') where.push('sbt.id IS NULL'); // 15.132 아직 묶음 출하지시에 안 묶인 것만
   applyListKeyword(where, args, query.q, ['i.item', 'i.product_code', 'i.customer', 'i.note', 'o.customer_po', 'o.note', 'o.order_no', 'sbt.batch_no']);
   const rows = await db.prepare(`SELECT i.*, b.bill_no, o.order_no, o.customer_po, s.lot AS shipped_lot, sbt.batch_no, sbt.id AS open_batch_id, sbt.plan_date AS batch_plan_date FROM ship_instructions i JOIN sales_bills b ON b.id=i.bill_id LEFT JOIN ship_batches sbt ON sbt.id=i.batch_id AND sbt.status='open'
     LEFT JOIN sales_order_lines ol ON ol.id=i.order_line_id LEFT JOIN sales_orders o ON o.id=ol.order_id LEFT JOIN shipments s ON s.id=i.shipment_id
@@ -5622,7 +5622,7 @@ route('POST', '/api/ship-instructions/:id/hold', async ({ user, params, body }) 
   if (!r.changes) throw new HttpError(409, '그 사이 지시가 처리되었습니다. 새로 불러오세요.');
   return mustGet('ship_instructions', ins.id);
 });
-// ── 15.132 출고지시서(묶음): 대기 중인 출하지시 여러 줄을 한 장(DO-YYMMDD-NN)으로 묶어 피킹표로 출력하고 한 번에 출하 처리한다.
+// ── 15.132 출하지시(묶음): 대기 중인 출하지시 여러 줄을 한 장(DO-YYMMDD-NN)으로 묶어 피킹표로 출력하고 한 번에 출하 처리한다.
 // 한 지시는 진행 중인 묶음 하나에만(batch_id). 묶음 풀기(cancelled)는 남은 대기 지시만 놓아 준다. 완료 여부는 지시 상태로 계산.
 const canBatch = user => hasRole(user, 'logistics') || hasRole(user, 'sales');
 const BATCH_STATS = `(SELECT COUNT(*) FROM ship_instructions i WHERE i.batch_id=sb.id) AS lines,
@@ -5632,14 +5632,14 @@ const BATCH_STATS = `(SELECT COUNT(*) FROM ship_instructions i WHERE i.batch_id=
 const batchState = b => b.status === 'cancelled' ? 'cancelled' : b.pending > 0 ? (b.shipped > 0 ? 'partial' : 'open') : 'done';
 async function batchDetail(id) {
   const b = await db.prepare(`SELECT sb.*, ${BATCH_STATS} FROM ship_batches sb WHERE sb.id=?`).get(id);
-  if (!b) throw new HttpError(404, '출고지시서를 찾을 수 없습니다.');
+  if (!b) throw new HttpError(404, '묶음 출하지시를 찾을 수 없습니다.');
   const lines = await db.prepare(`SELECT i.*, bl.bill_no, o.order_no, o.customer_po, s.lot AS shipped_lot, s.ship_date AS shipped_date
     FROM ship_instructions i JOIN sales_bills bl ON bl.id=i.bill_id LEFT JOIN sales_order_lines ol ON ol.id=i.order_line_id LEFT JOIN sales_orders o ON o.id=ol.order_id LEFT JOIN shipments s ON s.id=i.shipment_id
     WHERE i.batch_id=? ORDER BY i.customer, i.item, i.id`).all(b.id);
   return { ...b, state: batchState(b), lines };
 }
 route('POST', '/api/ship-batches', async ({ user, body }) => {
-  if (!canBatch(user)) throw new HttpError(403, '출고지시서는 물류·영업 담당자가 만듭니다.');
+  if (!canBatch(user)) throw new HttpError(403, '묶음 출하지시는 물류·영업 담당자가 만듭니다.');
   const key = str(body.request_id, 80);
   if (key) { const old = await db.prepare('SELECT id FROM ship_batches WHERE request_id=?').get(key); if (old) return { ...await batchDetail(old.id), duplicate: true }; }
   const ids = Array.isArray(body.ids) ? [...new Set(body.ids.map(Number))] : [];
@@ -5651,7 +5651,7 @@ route('POST', '/api/ship-batches', async ({ user, body }) => {
   for (const id of ids) {
     const i = await db.prepare('SELECT i.*, b.batch_no FROM ship_instructions i LEFT JOIN ship_batches b ON b.id=i.batch_id AND b.status=\'open\' WHERE i.id=?').get(id);
     if (!i || i.status !== 'pending') throw new HttpError(409, '이미 출하됐거나 취소된 지시가 있습니다. 새로 불러오세요.');
-    if (i.batch_no) throw new HttpError(409, `${i.item}(${i.customer}): 이미 출고지시서 ${i.batch_no}에 묶여 있습니다.`);
+    if (i.batch_no) throw new HttpError(409, `${i.item}(${i.customer}): 이미 묶음 출하지시 ${i.batch_no}에 묶여 있습니다.`);
     const raw = qtys[id]; if (raw === undefined || raw === null || raw === '') continue;
     const q = stockRound(Number(raw));
     if (!Number.isFinite(q) || q <= 0) throw bad(`${i.item}(${i.customer}): 묶을 수량을 0보다 크게 넣으세요.`);
@@ -5673,10 +5673,10 @@ route('POST', '/api/ship-batches', async ({ user, body }) => {
     { sql: "UPDATE ship_instructions SET qty=? WHERE id=? AND status='pending' AND qty=?", args: [q, i.id, i.qty] }, RC_GUARD,
     { sql: `INSERT INTO ship_instructions(bill_id,bill_line_id,order_line_id,customer,bom_id,product_code,item,spec,unit,qty,ship_date,note,created_by,held,hold_note,held_by,held_at)
       SELECT bill_id,(SELECT MAX(id) FROM sales_bill_lines WHERE bill_id=?),order_line_id,customer,bom_id,product_code,item,spec,unit,?,ship_date,note,created_by,held,hold_note,held_by,held_at FROM ship_instructions WHERE id=?`, args: [bill.id, rest, i.id] },
-    docChange('sales_bill', bill.id, `출고지시서 묶음으로 줄 나눔: ${i.item} ${stockRound(i.qty)} → ${q}(묶음) + ${rest}(출하 대기)`, user));
+    docChange('sales_bill', bill.id, `출하지시 묶음으로 줄 나눔: ${i.item} ${stockRound(i.qty)} → ${q}(묶음) + ${rest}(출하 대기)`, user));
   for (const id of ids) cmds.push({ sql: `UPDATE ship_instructions SET batch_id=${BID} WHERE id=? AND status='pending' AND (batch_id IS NULL OR batch_id IN (SELECT id FROM ship_batches WHERE status='cancelled'))`, args: [token, id] }, RC_GUARD);
   try { await db.batch(cmds); }
-  catch (error) { if (isGuardError(error) || /UNIQUE/i.test(String(error?.message))) throw new HttpError(409, '그 사이 다른 출고지시서에 묶였거나 출하된 지시가 있습니다. 새로 불러오세요.'); throw error; }
+  catch (error) { if (isGuardError(error) || /UNIQUE/i.test(String(error?.message))) throw new HttpError(409, '그 사이 다른 묶음 출하지시에 묶였거나 출하된 지시가 있습니다. 새로 불러오세요.'); throw error; }
   return batchDetail((await db.prepare('SELECT id FROM ship_batches WHERE request_id=?').get(token)).id);
 });
 route('GET', '/api/ship-batches', async ({ query }) => {
@@ -5687,13 +5687,18 @@ route('GET', '/api/ship-batches', async ({ query }) => {
   let rows = await db.prepare(`SELECT sb.*, ${BATCH_STATS} FROM ship_batches sb ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY sb.plan_date DESC, sb.id DESC LIMIT 301`).all(...args);
   rows = rows.map(b => ({ ...b, state: batchState(b) }));
   if (query.state) rows = rows.filter(b => query.state === 'todo' ? ['open', 'partial'].includes(b.state) : b.state === query.state);
+  // 15.205 묶음 목록에 품목 줄도(items=1): 「출하지시(묶음) DO-… 」 아래 품목을 바로 보이게
+  if (query.items === '1' && rows.length) {
+    const ids = rows.slice(0, 300).map(b => b.id), lines = await db.prepare(`SELECT i.id, i.batch_id, i.item, i.spec, i.qty, i.unit, i.customer, i.status, i.held, i.product_code, s.lot AS shipped_lot FROM ship_instructions i LEFT JOIN shipments s ON s.id=i.shipment_id WHERE i.batch_id IN (${ids.map(() => '?').join(',')}) ORDER BY i.customer, i.item, i.id`).all(...ids);
+    for (const b of rows) b.items = lines.filter(l => l.batch_id === b.id);
+  }
   return { rows: rows.slice(0, 300), more: rows.length > 300 };
 });
 route('GET', '/api/ship-batches/:id', async ({ params }) => batchDetail(Number(params.id)));
 // 묶음에서 빼기(대기 중인 줄만) · 묶음 풀기(남은 대기 줄을 모두 놓아 주고 cancelled)
 route('POST', '/api/ship-batches/:id/remove', async ({ user, params, body }) => {
-  if (!canBatch(user)) throw new HttpError(403, '출고지시서는 물류·영업 담당자가 고칩니다.');
-  const b = await mustGet('ship_batches', params.id); if (b.status !== 'open') throw bad('풀린 출고지시서입니다.');
+  if (!canBatch(user)) throw new HttpError(403, '묶음 출하지시는 물류·영업 담당자가 고칩니다.');
+  const b = await mustGet('ship_batches', params.id); if (b.status !== 'open') throw bad('풀린 묶음 출하지시입니다.');
   const ids = Array.isArray(body.ids) ? [...new Set(body.ids.map(Number))] : [];
   if (!ids.length || ids.some(id => !Number.isSafeInteger(id) || id <= 0)) throw bad('뺄 줄을 고르세요.');
   try { await db.batch(ids.flatMap(id => [{ sql: "UPDATE ship_instructions SET batch_id=NULL WHERE id=? AND batch_id=? AND status='pending'", args: [id, b.id] }, RC_GUARD])); }
@@ -5701,8 +5706,8 @@ route('POST', '/api/ship-batches/:id/remove', async ({ user, params, body }) => 
   return batchDetail(b.id);
 });
 route('POST', '/api/ship-batches/:id/cancel', async ({ user, params }) => {
-  if (!canBatch(user)) throw new HttpError(403, '출고지시서는 물류·영업 담당자가 고칩니다.');
-  const b = await mustGet('ship_batches', params.id); if (b.status !== 'open') throw bad('이미 풀린 출고지시서입니다.');
+  if (!canBatch(user)) throw new HttpError(403, '묶음 출하지시는 물류·영업 담당자가 고칩니다.');
+  const b = await mustGet('ship_batches', params.id); if (b.status !== 'open') throw bad('이미 풀린 묶음 출하지시입니다.');
   await db.batch([
     { sql: "UPDATE ship_batches SET status='cancelled',cancelled_by=?,cancelled_at=? WHERE id=? AND status='open'", args: [user.name, now(), b.id] }, RC_GUARD,
     { sql: "UPDATE ship_instructions SET batch_id=NULL WHERE batch_id=? AND status='pending'", args: [b.id] },

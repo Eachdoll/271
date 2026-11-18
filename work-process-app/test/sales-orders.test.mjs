@@ -251,7 +251,7 @@ test('15.132 Ship batches: bundle pending instructions, no double bundle, remove
   assert.equal(bt.status, 200, JSON.stringify(bt.body)); assert.match(bt.body.batch_no, /^DO-\d{6}-01$/);
   assert.equal(bt.body.lines.length, 2); assert.equal(bt.body.state, 'open'); assert.equal(bt.body.customers, '세흥상사');
   assert.equal((await seller('POST', '/api/ship-batches', { ids, request_id: token })).body.duplicate, true);
-  assert.match((await staff('POST', '/api/ship-batches', { ids: [ids[0]], request_id: rid() })).body.error, /이미 출고지시서/);
+  assert.match((await staff('POST', '/api/ship-batches', { ids: [ids[0]], request_id: rid() })).body.error, /이미 묶음 출하지시/);
   const listed = (await staff('GET', '/api/ship-instructions')).body.rows.find(r => r.id === ids[0]); assert.equal(listed.batch_no, bt.body.batch_no);
   assert.equal((await staff('GET', '/api/ship-instructions?batch=none')).body.rows.some(r => ids.includes(r.id)), false);
   const rm = (await staff('POST', `/api/ship-batches/${bt.body.id}/remove`, { ids: [ids[1]] })).body; assert.equal(rm.lines.length, 1);
