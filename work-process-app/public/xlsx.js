@@ -116,7 +116,7 @@ function rangePresets(fromInput, toInput, { place = null, onPick = () => {} } = 
   const short = s => !s ? '' : s.slice(0, 4) === thisYear ? s.slice(5).replace('-', '/') : `${s.slice(2, 4)}.${s.slice(5).replace('-', '/')}`;
   const detect = () => { picked = ''; if (rpGuess(fromInput.value, toInput.value)) for (const k of Object.keys(RP_LABEL)) { const r = rpRange(k, fromInput.value); if (r && r.from === fromInput.value && r.to === toInput.value) { picked = k; break; } } $$('[data-rp]', panel).forEach(x => x.classList.toggle('on', x.dataset.rp === picked)); };
   const sync = () => { detect(); setLabel(); };
-  const setLabel = () => { labelEl.textContent = picked ? RP_LABEL[picked] : fromInput.value || toInput.value ? `${short(fromInput.value)} ~ ${short(toInput.value)}` : '기간 선택'; };
+  const setLabel = () => { labelEl.textContent = picked ? RP_LABEL[picked] : fromInput.value || toInput.value ? `${short(fromInput.value)} ~ ${short(toInput.value)}` : (box.classList.contains('rp-compact') ? '전체 기간' : '기간 선택'); };
   const open = on => { panel.hidden = !on; toggle.setAttribute('aria-expanded', String(on)); box.classList.toggle('open', on); };
   box.addEventListener('click', e => {
     if (e.target.closest('[data-rp-toggle]')) { open(panel.hidden); return; }
@@ -138,7 +138,25 @@ function rangePresets(fromInput, toInput, { place = null, onPick = () => {} } = 
   setTimeout(sync, 0); // 만든 바로 뒤 화면 코드가 저장된 조건으로 날짜를 채우는 경우
   fromInput.form?.addEventListener('submit', sync, true);
   box.sync = sync;
-  (place || toInput.closest('label') || fromInput.closest('form') || fromInput.parentElement)[place ? 'append' : toInput.closest('label') ? 'after' : 'append'](box);
+  // 15.216 조회 줄 간소화: 날짜 칸 두 개(시작 ~ 끝)를 펼침 상자 아래 「직접 입력」으로 옮기고, 조회 줄에는 「이름 [◀ | 기간 ▾ | ▶]」 한 덩어리만.
+  const compact = !place && fromInput.closest('form.list-filters, form.toolbar, .toolbar') && fromInput.closest('label');
+  if (compact) {
+    const fromLabel = fromInput.closest('label'), toLabel = toInput.closest('label');
+    const name = ([...fromLabel.childNodes].find(n => n.nodeType === 3 && n.nodeValue.trim())?.nodeValue || '').replace(/시작일?$|부터$/, '').trim() || '기간';
+    box.classList.add('rp-compact'); box.setAttribute('aria-label', name);
+    box.prepend(Object.assign(document.createElement('span'), { className: 'rp-name', textContent: name }));
+    const custom = document.createElement('div'); custom.className = 'rp-custom';
+    custom.innerHTML = '<div class="rp-col-title">직접 입력</div><div class="rp-custom-row"></div>';
+    const row = $('.rp-custom-row', custom); row.append(fromInput, Object.assign(document.createElement('span'), { className: 'muted', textContent: '~' }), toInput);
+    fromInput.setAttribute('aria-label', name + ' 시작'); toInput.setAttribute('aria-label', name + ' 끝');
+    panel.append(custom);
+    fromLabel.before(box); fromLabel.hidden = true; fromLabel.classList.add('rp-moved'); if (toLabel && toLabel !== fromLabel) { toLabel.hidden = true; toLabel.classList.add('rp-moved'); }
+    // 필수 기간이 비어 있으면(브라우저 확인) 상자를 열어 칸이 보이게
+    [fromInput, toInput].forEach(i => i.addEventListener('invalid', () => open(true)));
+    // 직접 입력도 빠른 선택처럼 바로 조회(시작 ≤ 끝이거나 한쪽만 넣었을 때)
+    [fromInput, toInput].forEach(i => i.addEventListener('change', () => { if (!fromInput.value || !toInput.value || fromInput.value <= toInput.value) onPick({ from: fromInput.value, to: toInput.value, unit: '' }); }));
+    sync();
+  } else (place || toInput.closest('label') || fromInput.closest('form') || fromInput.parentElement)[place ? 'append' : toInput.closest('label') ? 'after' : 'append'](box);
   return box;
 }
 

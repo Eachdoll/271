@@ -2790,3 +2790,16 @@ table.fp-grid .fp-m-code { display: none; }
 .dm-hero > small { font-size: 12.5px; color: var(--muted); }
 @media (max-width: 700px) { .dash-overview { grid-template-columns: 1fr; } }
 @media (max-width: 600px) { table.m-grid tr.m-sum > td { border: 0 !important; background: transparent !important; box-shadow: none !important; } }
+
+/* 15.216 조회 줄 기간: 「이름 [◀ | 기간 ▾ | ▶]」 한 덩어리, 날짜 직접 입력은 펼침 상자 아래 */
+.range-presets.rp-compact { gap: 0; align-self: center; }
+.range-presets.rp-compact .rp-name { font-size: 13px; font-weight: 600; color: var(--muted); margin-right: 8px; white-space: nowrap; }
+.range-presets.rp-compact > .btn.small { border-radius: 0; margin-left: -1px; min-height: 34px; }
+.range-presets.rp-compact > .rp-arrow:first-of-type { border-radius: 6px 0 0 6px; margin-left: 0; }
+.range-presets.rp-compact > .rp-arrow:last-of-type { border-radius: 0 6px 6px 0; }
+.range-presets.rp-compact .rp-toggle { min-width: 10.5em; }
+.rp-custom { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 10px; }
+.rp-custom-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.rp-custom-row input[type=date] { min-height: 34px; flex: 1 1 130px; min-width: 0; }
+form.list-filters > label.rp-moved, .toolbar > label.rp-moved { display: none !important; }
+@media (max-width: 600px) { .range-presets.rp-compact .rp-name { display: none; } }
