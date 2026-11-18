@@ -2533,6 +2533,9 @@ async function purchaseInvItems(inv, bills) {
     per.push({ b, lines: lines.map((l, k) => ({ date: b.bill_date, item: l.item, spec: [l.spec, l.unit].filter(Boolean).join(' '), qty: l.qty, unit_price: l.unit_price, supply: l.supply, vat: vats[k], note: l.note || '' })) });
   }
   const all = per.flatMap(p => p.lines);
+  // 15.201 품목이 여러 줄이면(여러 전표 묶음 포함) 「첫 품목 외 n종」 한 줄로 합산(공급가액·세액 = 담긴 전표 합계). 양식에서 고칠 수 있다.
+  if (all.length > 1) return [{ date: inv.write_date || bills.map(b => b.bill_date).sort().pop(), item: `${all[0].item} 외 ${all.length - 1}종`, spec: '', qty: null, unit_price: null,
+    supply: all.reduce((t, l) => t + Number(l.supply || 0), 0), vat: all.reduce((t, l) => t + Number(l.vat || 0), 0), note: bills.length > 1 ? `${bills[0].bill_no} 외 ${bills.length - 1}건` : '' }];
   if (all.length <= PTAX_MAX_ITEMS) return all;
   return per.map(({ b, lines }) => ({ date: b.bill_date, item: itemLabel(lines[0]?.item, lines.length), spec: '', qty: null, unit_price: null, supply: b.supply_total, vat: b.vat_total, note: b.bill_no }));
 }
