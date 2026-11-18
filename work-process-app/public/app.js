@@ -1163,12 +1163,16 @@ function grMove(table, order) { // order: 머리글 이름 순서. 이름 없는
   $$('.xf-btn', table.tHead).forEach(b => { b.dataset.xfCol = String(b.closest('th').cellIndex); });
   if (typeof XF !== 'undefined' && XF.has(table)) { XF.delete(table); xfApply(table); }
 }
-function grWidths(table, widths) {
+function grWidths(table, widths, dragging = '') {
   const head = [...table.tHead.rows[0].cells];
-  if (!widths || !Object.keys(widths).length) { table.classList.remove('gr-fixed'); table.style.width = ''; head.forEach(th => { th.style.width = ''; }); return; }
-  const shown = th => getComputedStyle(th).display !== 'none'; // 빈 칸이라 숨긴 열은 너비 합에서 뺀다
+  if (!widths || !Object.keys(widths).length) { table.classList.remove('gr-fixed'); table.style.width = ''; head.forEach(th => { th.style.width = ''; th.classList.remove('gr-flex'); }); return; }
+  const shown = th => getComputedStyle(th).display !== 'none' && !th.classList.contains('gr-hidden'); // 숨긴 열은 너비 합에서 뺀다
   const cur = head.map(th => th.getBoundingClientRect().width);
   head.forEach((th, i) => { if (!shown(th)) { th.style.width = ''; return; } const w = widths[grName(th) || `#${i}`]; th.style.width = `${Math.max(40, Math.round(w || cur[i] || 80))}px`; });
+  // 15.181 열을 줄여 표가 화면보다 좁아지면 오른쪽이 하얗게 비던 것: 늘어나는 열 하나(비고·메모 → 품목 → 마지막 이름 칸, 끌고 있는 열은 빼고)가 남는 폭을 채운다
+  const named = head.filter(th => shown(th) && grName(th) && grName(th) !== dragging);
+  const flex = named.find(th => /^(비고|메모|줄 비고)$/.test(grName(th))) || named.find(th => th.classList.contains('item-col')) || named.at(-1);
+  head.forEach(th => th.classList.toggle('gr-flex', th === flex));
   table.classList.add('gr-fixed'); table.style.width = `${head.filter(shown).reduce((t, th) => t + parseFloat(th.style.width), 0)}px`;
 }
 // 15.180 ⚙ 열 설정: 표 오른쪽 위 작은 단추 → 보일 열 체크·열 배치 초기화(너비·순서·숨김). 저장은 열 너비·순서와 같은 곳.
@@ -1223,7 +1227,7 @@ document.addEventListener('pointerdown', e => {
   const widths = Object.fromEntries(head.map((c, i) => [grName(c) || `#${i}`, Math.round(c.getBoundingClientRect().width)]).filter(([, w]) => w > 0));
   const key = grName(th) || `#${th.cellIndex}`, w0 = widths[key];
   let moved = false; document.body.classList.add('gr-resizing');
-  const mv = ev => { if (!moved && Math.abs(ev.clientX - x0) < 3) return; moved = true; widths[key] = Math.max(40, Math.round(w0 + ev.clientX - x0)); grWidths(table, widths); };
+  const mv = ev => { if (!moved && Math.abs(ev.clientX - x0) < 3) return; moved = true; widths[key] = Math.max(40, Math.round(w0 + ev.clientX - x0)); grWidths(table, widths, key); };
   const up = () => { document.removeEventListener('pointermove', mv); document.removeEventListener('pointerup', up); document.body.classList.remove('gr-resizing');
     if (!moved) return; grNoClick = true; setTimeout(() => { grNoClick = false; }, 0); // 손을 뗄 때 생기는 click이 정렬로 가지 않게
     const st = grRead(k); st.widths = widths; grWrite(k, st); grReset(table); };

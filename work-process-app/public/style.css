@@ -2191,7 +2191,9 @@ input[type=date][name=asof] { min-width: 9.6em; }
 .table-wrap.has-gear { position: relative; }
 .gr-gear { position: absolute; right: 2px; top: 2px; z-index: 3; width: 24px; height: 24px; min-height: 0; padding: 0; border: 1px solid var(--line); background: var(--panel); color: var(--text-2, var(--muted)); font-size: 13px; line-height: 1; cursor: pointer; border-radius: 4px !important; opacity: .75; }
 .gr-gear:hover, .gr-gear:focus-visible { opacity: 1; color: var(--ns-pill, var(--accent)); }
-.table-wrap.has-gear table.grid > thead > tr > th:last-child { padding-right: 30px; }
+/* 15.181 마지막 머리글에 여백(30px)을 넣던 것이 표를 3~4px 넓혀 모든 표에 가로 스크롤바가 생기던 원인 → 여백 대신 ⚙는 표에 마우스를 올릴 때만 또렷하게 */
+.table-wrap.has-gear > .gr-gear { opacity: 0; transition: opacity .15s; } .table-wrap.has-gear:hover > .gr-gear, .table-wrap.has-gear > .gr-gear:focus-visible { opacity: .9; }
+@media (hover: none) { .table-wrap.has-gear > .gr-gear { opacity: .6; } }
 .gr-pop { position: absolute; z-index: 60; width: 260px; } .gr-pop .gr-cols { display: grid; gap: 2px; max-height: 50vh; overflow: auto; margin: 8px 0; } .gr-pop .gr-cols label { font-weight: 400; color: var(--text); display: flex; gap: 6px; align-items: center; }
 table.grid .gr-hidden { display: none !important; }
 /* 조회 조건 접기·초기화 */
@@ -2232,3 +2234,13 @@ table.grid td .chip.green { color: var(--green, #027a4a); } table.grid td .chip.
 .partner-results tbody tr.ip-active > td, .ip-table tbody tr.ip-active > td { outline: 0 !important; background: var(--accent-soft, rgba(49, 130, 246, .10)) !important; }
 .ip-table tbody tr.ip-active { outline: 0 !important; }
 .partner-results tbody tr.ip-active > td:first-child, .ip-table tbody tr.ip-active > td:first-child { box-shadow: inset 4px 0 0 var(--ns-pill, var(--accent)); }
+/* 15.181 줄인 표: 화면 폭까지 채우고(min-width 100%) 남는 폭은 「늘어나는 열」(gr-flex)이 받는다 */
+table.grid.gr-fixed { min-width: 100%; }
+table.grid.gr-fixed > thead > tr > th.gr-flex { width: auto !important; }
+
+/* 15.181 거래처 찾기 칸: 옆 입력칸과 같은 높이 줄(위로 4px 떠 있던 것)·테두리 색 맞춤·입력칸과 단추 사이 겹선 없앰 */
+label > .partner-picker { margin-top: 4px; }
+.partner-picker > .btn.partner-find { border-color: var(--field-line, #b8c1cf) !important; border-left: 0 !important; background: var(--field-bg, var(--panel)); }
+.partner-picker > input:focus + .btn.partner-find { border-color: var(--accent) !important; }
+/* 15.181 마지막 열의 너비 손잡이가 표 밖으로 4px 나가 모든 표에 가로 스크롤바가 생기던 것 */
+table.grid > thead > tr > th:last-child > .gr-rz { right: 0; width: 6px; }
