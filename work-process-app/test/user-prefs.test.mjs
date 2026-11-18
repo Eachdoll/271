@@ -55,6 +55,8 @@ test('15.220 design skin is saved per person and validated', async () => {
   assert.equal((await staff('GET', '/api/me')).body.user.ui.skin, 'christmas');
   assert.equal((await admin('GET', '/api/me')).body.user.ui.skin, undefined, 'another person keeps the default');
   assert.equal((await staff('PUT', '/api/me/prefs', { skin: 'neon' })).status, 400);
+  assert.equal((await staff('PUT', '/api/me/prefs', { skin: 'ribbon' })).body.skin, 'ribbon'); // 15.222
+  assert.equal((await staff('GET', '/api/me')).body.user.ui.skin, 'ribbon');
   assert.equal((await staff('PUT', '/api/me/prefs', { skin: 'default' })).body.skin, 'default');
   assert.ok(Array.isArray((await staff('GET', '/api/me')).body.user.ui.favorites), 'other prefs stay');
 });
