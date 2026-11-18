@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.181';
+const APP_VERSION = '15.182';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -1252,6 +1252,31 @@ document.addEventListener('drop', e => {
   order.splice(names.indexOf(from) < names.indexOf(to) ? at + 1 : at, 0, from); // 오른쪽으로 끌면 놓은 칸 뒤, 왼쪽이면 앞
   grMove(table, order); const st = grRead(table.dataset.grKey); st.order = order; grWrite(table.dataset.grKey, st); grReset(table);
 });
+// ── 15.182 IMK mall식 표: (1) 가로로 넘치는 표는 체크 칸 + 첫 번째 이름 칸을 왼쪽에 고정(오른쪽 굵은 선),
+// (2) 칸을 누르면 그 칸에 파란 테두리(엑셀 칸 커서), 방향키로 칸 이동·Esc로 해제. 입력칸·단추·링크는 원래대로 동작.
+function gridFreeze(table) {
+  const wrap = table.closest('.table-wrap'); if (!wrap || !table.isConnected || table.tHead?.rows.length !== 1) return;
+  const over = wrap.scrollWidth > wrap.clientWidth + 2; table.classList.toggle('gr-freeze', over); if (!over) return;
+  const head = [...table.tHead.rows[0].cells], pick = head[0]?.querySelector('input[type=checkbox]') || !head[0]?.textContent.trim();
+  const n = pick ? 2 : 1, w0 = head[0].getBoundingClientRect().width;
+  table.style.setProperty('--fz1', `${Math.round(w0)}px`); table.dataset.freeze = String(n);
+  for (const tr of table.querySelectorAll(':scope > tbody > tr, :scope > tfoot > tr')) tr.classList.toggle('fz-skip', [...tr.cells].some(c => c.colSpan > 1)); // 합계·묶음 줄(칸 합침)은 고정하지 않음
+}
+let cellOn = null;
+const setCell = td => { cellOn?.classList.remove('cell-on'); cellOn = td || null; if (td) { td.classList.add('cell-on'); td.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }); } };
+document.addEventListener('click', e => {
+  const td = e.target.closest?.('#main table.grid > tbody > tr > td');
+  if (!td || td.closest('.bom-tree, .sc-cal')) { if (!e.target.closest?.('#main table.grid')) setCell(null); return; }
+  setCell(td);
+}, true);
+document.addEventListener('keydown', e => {
+  if (!cellOn || !cellOn.isConnected || e.target.closest?.('input, select, textarea, [contenteditable], .modal-wrap')) return;
+  const tr = cellOn.parentElement, i = cellOn.cellIndex; let next = null;
+  if (e.key === 'ArrowRight') next = cellOn.nextElementSibling; else if (e.key === 'ArrowLeft') next = cellOn.previousElementSibling;
+  else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { let r = tr; do { r = e.key === 'ArrowDown' ? r.nextElementSibling : r.previousElementSibling; } while (r && (r.hidden || r.cells.length <= i)); next = r?.cells[i] || null; }
+  else if (e.key === 'Escape') { setCell(null); return; } else return;
+  if (next) { e.preventDefault(); setCell(next); }
+});
 function labelGridTables() {
   $$('table.grid:not([data-labeled])').forEach(table => {
     table.dataset.labeled = 'true';
@@ -1271,6 +1296,7 @@ function labelGridTables() {
     });
     gridLayout(table); // 15.173 열 너비·순서(빈 열 숨긴 뒤)
     if (rows.length > 15 && !table.closest('.modal-wrap')) table.closest('.table-wrap')?.classList.add('tw-fill'); // 15.180 긴 목록: 머리글 고정
+    requestAnimationFrame(() => gridFreeze(table)); // 15.182 가로로 길면 앞 열 고정
     if (!table.classList.contains('as-cards')) return;
     let secondary = 0;
     rows.forEach(tr => [...tr.children].forEach(td => {
