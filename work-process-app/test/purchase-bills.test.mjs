@@ -270,10 +270,15 @@ test('15.113 Excel import: dry run checks every row, errors block the whole batc
   assert.equal(done.inserted, 2);
   const list = (await buyer('GET', '/api/vendors?q=엑셀')).body;
   assert.deepEqual(list.map(v => [v.name, v.code.startsWith('C') ? 'auto' : v.code, v.is_purchase, v.is_sales, v.biz_no]).sort(), [['엑셀무역', 'auto', 0, 1, ''], ['엑셀상사', 'X-1', 1, 0, '123-45-67890']]);
-  // 품목: 관리자만, 제품은 거절, 코드 겹침(대소문자)
+  // 품목: 관리자만, 코드 겹침(대소문자)
   assert.equal((await buyer('POST', '/api/import/items', { rows: [{ product: 'a', item_category: '원자재', unit: 'KG' }] })).status, 403);
   const items = (await admin('POST', '/api/import/items', { rows: [{ product: '원사', product_code: 'mk-1', item_category: '원자재', unit: 'KG' }, { product: '완제품', item_category: '제품', unit: 'BOX' }, { product: '라벨', product_code: 'LB-1', item_category: '부자재', unit: 'EA', spec: '소' }], dry_run: true })).body;
-  assert.equal(items.ok, 1); assert.match(items.errors[0].error, /MK-1|mk-1/i); assert.match(items.errors[1].error, /제품은 구성자재/);
+  // 15.194: 제품도 구성자재 없이 등록 가능(코드·이름·분류만). 분류 누락·잘못된 분류는 오류. 단위를 비우면 EA.
+  assert.equal(items.ok, 2); assert.match(items.errors[0].error, /MK-1|mk-1/i);
+  const csv = (await admin('POST', '/api/import/items', { rows: [{ product_code: '10-007', product: 'CF-707 (인쇄)(50P)(5.5X6.5)', item_category: '제품' }, { product_code: 'X-1', product: '분류없음', item_category: '' }, { product_code: 'X-2', product: '틀린분류', item_category: '완제품' }], dry_run: true })).body;
+  assert.equal(csv.ok, 1); assert.match(csv.errors[0].error, /분류를 넣으세요/); assert.match(csv.errors[1].error, /「완제품」는 없습니다/);
+  assert.equal((await admin('POST', '/api/import/items', { rows: [csv.rows[0] && { product_code: '10-007', product: 'CF-707 (인쇄)(50P)(5.5X6.5)', item_category: '제품' }] })).body.inserted, 1);
+  const p = (await admin('GET', '/api/boms?q=10-007')).body[0]; assert.equal(p.item_category, '제품'); assert.equal(p.unit, 'EA'); assert.deepEqual(p.materials, []);
   assert.equal((await admin('POST', '/api/import/items', { rows: [{ product: '라벨', product_code: 'LB-1', item_category: '부자재', unit: 'EA', spec: '소' }] })).body.inserted, 1);
   assert.equal((await admin('GET', '/api/boms?q=LB-1')).body[0].spec, '소');
 });

@@ -216,10 +216,15 @@ function importMap(table, columns) {
   return { rows: body, matched: columns.filter((_, i) => index[i] >= 0).map(c => c[1]), missing: columns.filter((_, i) => index[i] < 0).map(c => c[1]) };
 }
 // 올리기 창: 파일 고르기·붙여넣기 → 검사(dry_run) → 줄별 결과 → 넣기. 오류가 하나라도 있으면 넣지 않는다.
-function importDialog({ title, endpoint, columns, sample, help = '', after = null }) {
+// 15.194 CSV 글자 인코딩: UTF-8(BOM 있든 없든)이 아니면 한글 엑셀이 저장하는 EUC-KR(CP949)로 읽는다.
+function decodeCsv(buf) {
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+  catch { try { return new TextDecoder('euc-kr').decode(buf); } catch { return new TextDecoder('utf-8').decode(buf); } }
+}
+function importDialog({ title, endpoint, columns, sample, help = '', after = null, csvCols = 0 }) {
   const m = modal(`<h3>${esc(title)}</h3>
     <p class="small muted">첫 줄은 머리글(칸 이름)입니다. 칸 순서는 상관없고, 이름이 맞는 칸만 읽습니다. 한 번에 500줄까지. ${help}</p>
-    <div class="actions wrap" style="justify-content:flex-start"><label class="btn">파일 고르기 (.xlsx · .csv)<input type="file" accept=".xlsx,.csv,.txt" data-imp-file hidden></label><button type="button" class="btn" data-imp-sample>양식 내려받기</button><span class="small muted" data-imp-name></span></div>
+    <div class="actions wrap" style="justify-content:flex-start"><label class="btn">파일 고르기 (.xlsx · .csv)<input type="file" accept=".xlsx,.csv,.txt" data-imp-file hidden></label>${csvCols ? '<button type="button" class="btn" data-imp-csv>CSV 양식</button>' : ''}<button type="button" class="btn" data-imp-sample>엑셀 양식</button><span class="small muted" data-imp-name></span></div>
     <label>또는 엑셀에서 복사해 붙여넣기<textarea data-imp-paste rows="4" placeholder="${esc(columns.map(c => c[1]).join('\t'))}"></textarea></label>
     <div data-imp-result></div>
     <div class="actions"><button type="button" class="btn" data-close>닫기</button><button type="button" class="btn" data-imp-check>검사</button><button type="button" class="btn primary" data-imp-go disabled>넣기</button></div>`, { wide: true });
@@ -227,13 +232,15 @@ function importDialog({ title, endpoint, columns, sample, help = '', after = nul
   const result = $('[data-imp-result]', m.el), go = $('[data-imp-go]', m.el);
   const setTable = table => {
     const r = importMap(table, columns); rows = r.rows; checked = false; go.disabled = true;
-    result.innerHTML = `<p class="small">${rows.length}줄 읽음 · 읽은 칸: ${esc(r.matched.join(', ') || '없음')}${r.missing.length ? ` · <span class="muted">없는 칸: ${esc(r.missing.join(', '))}</span>` : ''}</p>`;
+    result.innerHTML = `<p class="small">${rows.length}줄 읽음 · 읽은 칸: ${esc(r.matched.join(', ') || '없음')}${r.missing.length ? ` · <span class="muted">비워 둔 칸: ${esc(r.missing.join(', '))}</span>` : ''}</p>`;
   };
   $('[data-close]', m.el).onclick = m.close;
   $('[data-imp-sample]', m.el).onclick = () => xlsxDownload(`${title}_양식.xlsx`, { sheet: '양식', columns: columns.map(c => ({ label: c[1], type: 'text' })), rows: sample.map(x => columns.map(c => x[c[0]] ?? '')) });
+  // CSV 양식: 꼭 필요한 앞쪽 칸만(엑셀에서 바로 열리게 UTF-8 BOM).
+  if (csvCols) $('[data-imp-csv]', m.el).onclick = () => { const cols = columns.slice(0, csvCols), q = v => /[",\n]/.test(v) ? `"${String(v).replace(/"/g, '""')}"` : String(v); const text = '\ufeff' + [cols.map(c => c[1]), ...sample.map(x => cols.map(c => x[c[0]] ?? ''))].map(r => r.map(q).join(',')).join('\r\n') + '\r\n'; const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' })); a.download = `${title}_양식.csv`.replace(/[\\/:*?"<>|]/g, ''); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); };
   $('[data-imp-file]', m.el).onchange = async e => {
     const file = e.target.files[0]; if (!file) return; $('[data-imp-name]', m.el).textContent = file.name;
-    try { setTable(/\.xlsx$/i.test(file.name) ? await readXlsx(await file.arrayBuffer()) : readDelimited(await file.text())); }
+    try { setTable(/\.xlsx$/i.test(file.name) ? await readXlsx(await file.arrayBuffer()) : readDelimited(decodeCsv(await file.arrayBuffer()))); }
     catch (error) { result.innerHTML = `<p class="red-text">${esc(error.message)}</p>`; rows = []; }
   };
   $('[data-imp-paste]', m.el).oninput = e => setTable(readDelimited(e.target.value));
@@ -241,9 +248,10 @@ function importDialog({ title, endpoint, columns, sample, help = '', after = nul
     if (!rows.length) return toast('올릴 줄이 없습니다. 파일을 고르거나 붙여넣으세요.', 'err');
     const r = await api('POST', endpoint, { rows, dry_run: dry });
     if (!dry && !r.errors.length) { toast(`${r.inserted}줄을 넣었습니다.`); m.close(); await after?.(); return; }
-    const keys = columns.map(c => c[0]);
+    // 15.194 결과 표에는 파일에 값이 있는 칸만(코드·품명·분류만 올리면 빈 칸 6개가 늘어서지 않게).
+    const cols = columns.filter((c, i) => i < 2 || rows.some(row => String(row[c[0]] ?? '').trim())), keys = cols.map(c => c[0]);
     result.innerHTML = `<p class="small"><b>${r.total}줄</b> 중 정상 ${r.ok}${r.errors.length ? ` · <span class="red-text">오류 ${r.errors.length} — 고쳐서 다시 올리세요(오류가 있으면 하나도 넣지 않습니다)</span>` : ' · 모두 정상, 「넣기」를 누르세요'}</p>
-      <div class="table-wrap"><table class="grid" data-keep-cols data-no-sort><thead><tr><th>줄</th><th>검사</th>${columns.map(c => `<th class="nowrap">${esc(c[1])}</th>`).join('')}</tr></thead><tbody>${rows.map((row, i) => { const res = r.rows?.[i] || r.errors.find(x => x.row === i + 1); return `<tr${res?.error ? ' class="row-err"' : ''}><td>${i + 1}</td><td class="${res?.error ? 'red-text' : 'small muted'}" style="min-width:14em">${esc(res?.error || '정상')}</td>${keys.map(k => `<td class="nowrap">${esc(row[k])}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div>`;
+      <div class="table-wrap"><table class="grid" data-keep-cols data-no-sort><thead><tr><th>줄</th><th>검사</th>${cols.map(c => `<th class="nowrap">${esc(c[1])}</th>`).join('')}</tr></thead><tbody>${rows.map((row, i) => { const res = r.rows?.[i] || r.errors.find(x => x.row === i + 1); return `<tr${res?.error ? ' class="row-err"' : ''}><td>${i + 1}</td><td class="${res?.error ? 'red-text' : 'small muted'}" style="min-width:14em">${esc(res?.error || '정상')}</td>${keys.map(k => `<td class="nowrap">${esc(row[k])}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div>`;
     checked = dry && !r.errors.length; go.disabled = !checked;
   };
   $('[data-imp-check]', m.el).onclick = () => send(true).catch(fail);

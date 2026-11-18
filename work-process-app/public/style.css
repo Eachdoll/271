@@ -2392,3 +2392,6 @@ fieldset.pick-field > legend { font-size: 13px; font-weight: 600; padding: 0 4px
 
 /* 15.191 세탁·커팅 입력: 제품코드·품명 한 칸 */
 label.semi-pick input[data-semi-pick] { width: 100%; }
+
+/* 15.194 올리기 창: 파일 고르기 단추 안에 브라우저 기본 파일 칸이 보이지 않게 */
+label.btn > input[type=file][hidden] { display: none !important; }
