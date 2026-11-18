@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.190';
+const APP_VERSION = '15.191';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -474,12 +474,21 @@ function fixHeadingLevels() {
   }
 }
 { let queued = false; new MutationObserver(() => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; fixHeadingLevels(); }); }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'data-view', 'open'] }); }
+// 15.191 도움말 단추가 제목 줄 오른쪽 단추(예: 「작업 기록 보기 →」)와 겹치면 그 단추 왼쪽으로 비킨다.
+function helpDodge(main, details) {
+  const sum = $('summary', details); if (!sum || getComputedStyle(details).position !== 'absolute') return;
+  const r = sum.getBoundingClientRect();
+  const hits = [...main.querySelectorAll('a.btn, button.btn, .btn')].filter(e => !details.contains(e) && e.offsetParent).map(e => e.getBoundingClientRect()).filter(b => b.width && b.top < r.bottom + 4 && b.bottom > r.top - 4 && b.left < r.right + 4 && b.right > r.left - 4);
+  if (!hits.length) return;
+  const left = Math.min(...hits.map(b => b.left));
+  details.style.right = `${parseFloat(getComputedStyle(details).right) + (r.right - left) + 8}px`;
+}
 function foldHelp(main) {
   for (const p of main.querySelectorAll(':scope > p.muted, :scope > section > p.muted, #receiptContent > p.muted')) {
     if (p.textContent.trim().length < 80 || p.closest('details')) continue;
     const details = document.createElement('details'); details.className = 'help';
     details.innerHTML = '<summary title="이 화면 설명">도움말</summary>'; p.replaceWith(details); details.append(p); // 15.180 오른쪽 위 단추
-    if (details.parentElement === main) requestAnimationFrame(() => { const h1 = $('h1', main); if (h1 && details.isConnected) details.style.top = `${h1.offsetTop}px`; }); // 제목 줄 높이에(위치 표시와 겹치지 않게)
+    if (details.parentElement === main) requestAnimationFrame(() => { const h1 = $('h1', main); if (h1 && details.isConnected) { details.style.top = `${h1.offsetTop}px`; helpDodge(main, details); } }); // 제목 줄 높이에(위치 표시와 겹치지 않게)
   }
 }
 function applyView(main, route) {

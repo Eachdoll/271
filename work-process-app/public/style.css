@@ -2389,3 +2389,6 @@ fieldset.pick-field > legend { font-size: 13px; font-weight: 600; padding: 0 4px
 .loc-chip .loc-x:hover { color: var(--danger, #c00); background: var(--panel); }
 .loc-editor input[data-loc-input] { flex: 1 1 8em; min-width: 7em; width: auto; }
 .loc-field { display: flex; flex-direction: column; gap: 4px; } .loc-field .loc-label { font-weight: 600; font-size: 13px; }
+
+/* 15.191 세탁·커팅 입력: 제품코드·품명 한 칸 */
+label.semi-pick input[data-semi-pick] { width: 100%; }
