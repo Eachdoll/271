@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.211';
+const APP_VERSION = '15.214';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -130,11 +130,11 @@ function formObj(form) {
   return o;
 }
 function listControls(prefix, { placeholder = '검색어 입력', dateLabel = '', dateFold = '', from = '', to = '', requiredDates = false, extra = '' } = {}) {
-  const dates = dateLabel ? `<label>${dateLabel} 시작일<input type="date" name="from" id="${prefix}From" value="${from}" ${requiredDates ? 'required' : ''}></label><label>${dateLabel} 종료일<input type="date" name="to" id="${prefix}To" value="${to}" ${requiredDates ? 'required' : ''}></label>` : '';
+  const dates = dateLabel ? `<label>${dateLabel}일<input type="date" name="from" id="${prefix}From" value="${from}" ${requiredDates ? 'required' : ''} aria-label="${dateLabel}일 시작"></label><label>~<input type="date" name="to" id="${prefix}To" value="${to}" ${requiredDates ? 'required' : ''} aria-label="${dateLabel}일 끝"></label>` : ''; // 15.214 다른 조회 줄처럼 「○○일 시작 ~ 끝」 한 칸
   // dateFold: an optional period, folded away after the keyword and other filters (opens when a date is set).
   return `<form id="${prefix}Filters" class="toolbar list-filters" data-read-only="true">
-    ${dateFold ? '' : dates}<label class="list-search">키워드 검색<input type="search" name="q" id="${prefix}Q" maxlength="200" placeholder="${esc(placeholder)}"></label>${extra}${dateFold ? `<details class="date-fold" ${from || to ? 'open' : ''}><summary>${dateFold}</summary><div class="date-fold-body">${dates}</div></details>` : ''}
-    <button type="submit" class="btn primary">검색</button><button type="button" class="btn" data-clear-filters>초기화</button><span class="small muted" id="${prefix}Count" data-list-count role="status"></span></form>`;
+    ${dates}<label class="list-search">키워드 검색<input type="search" name="q" id="${prefix}Q" maxlength="200" placeholder="${esc(placeholder)}"></label>${extra}
+    <button type="button" class="btn icon-reset" data-clear-filters title="조건 초기화" aria-label="조건 초기화">↻</button><button type="submit" class="btn primary">조회</button><span class="small muted" id="${prefix}Count" data-list-count role="status"></span></form>`; // 15.214 조회 줄 통일(dateFold는 예전 호출 호환용)
 }
 function listInspectionSelect() { return `<label>검수 상태<select name="inspection_status"><option value="">전체 검수</option>${Object.entries(INSPECTION).map(([key, label]) => `<option value="${key}">${label}</option>`).join('')}</select></label>`; }
 function bindListControls(form, load, reset = () => {}) {
@@ -151,6 +151,8 @@ function bindListControls(form, load, reset = () => {}) {
     else input.onchange = run;
   });
   $('[data-clear-filters]', form).onclick = () => { form.reset(); reset(); run(); };
+  // 15.214 기간이 있는 조회 줄은 모두 「◀ 기간 선택 ▶」(매출전표 등과 같은 모양)
+  if (form.elements.from?.type === 'date' && form.elements.to?.type === 'date' && !form.querySelector('.range-presets') && typeof rangePresets === 'function') rangePresets(form.elements.from, form.elements.to, { onPick: run });
 }
 function listLoading(form) { $('[data-list-count]', form).textContent = '조회 중…'; }
 function listCount(form, count) { $('[data-list-count]', form).textContent = `${count}건 조회`; }
@@ -369,7 +371,7 @@ const NAV = [
     { sub: '발주', items: [['#/purchase/po', '발주 관리']] },
     { sub: '매입전표', items: [['#/purchase/bills', '매입전표 관리'], ['#/purchase/calendar', '매입 달력'], ['#/purchase/returns', '반출(반품) 관리'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/closing', '매입 마감']] },
     { sub: '샘플(상품)', items: [['#/purchase/sample/list', '상품 샘플리스트']] },
-    { sub: '세탁', items: [['#/purchase/laundry/new', '불량·폐기 입력'], ['#/purchase/laundry', '불량·폐기 목록'], ['#/purchase/laundry-reports', '세탁 검수·성적서']] },
+    { sub: '세탁', items: [['#/purchase/laundry', '불량·폐기 관리'], ['#/purchase/laundry-reports', '세탁 검수·성적서']] },
   ] },
   // 15.164 경리: 매입·매출 세금계산서, 매입·매출 거래처별 장부, 대금(입금·지급·원장·연령표)을 한곳에. 화면 주소는 그대로라 볼 수 있는 사람(영업·구매 메뉴 권한)도 그대로이고, 권한 없는 화면은 메뉴에서 빠진다.
   { group: '경리', items: [
@@ -379,25 +381,25 @@ const NAV = [
   ] },
   { group: '품질', items: [
     ['#/quality/inspections', '수입·출하 검사 이력'],
-    { sub: '분석', items: [['#/quality/request', '분석의뢰'], ['#/quality/list', '분석리스트']] },
-    { sub: 'VOC', items: [['#/quality/voc/request', 'VOC 접수'], ['#/quality/voc/list', 'VOC 처리목록']] },
+    ['#/quality/list', '분석 관리'],
+    ['#/quality/voc/list', 'VOC 관리'],
   ] },
-  { group: '개발', items: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
+  { group: '개발', items: [['#/dev/list', '개발 관리']] },
   { group: '생산', items: [
     { sub: '샘플(제품)', items: [['#/prod/list', '제품 샘플리스트']] },
     ['#/prod/orders', '생산의뢰 접수'],
     { sub: '완제품 생산', items: [['#/prod/finished/plan', '완제품 계획생산 접수·관리'], ['#/prod/finished', '완제품 실적 입력']] },
-    { sub: '반제품 생산', items: [['#/prod/semi/new', '반제품 생산계획 입력'], ['#/prod/semi', '반제품 생산일정']] },
-    { sub: '커팅/융착', items: [['#/prod/semi/cut/new', '커팅/융착 작업 입력'], ['#/prod/semi/cut', '커팅/융착 작업 기록']] },
-    { sub: '세탁(호기별)', items: [['#/prod/semi/wash/new', '세탁 작업 입력'], ['#/prod/semi/wash', '세탁 작업 기록']] },
+    { sub: '반제품 생산', items: [['#/prod/semi', '반제품 생산 관리'], ['#/prod/semi/cut', '커팅/융착 작업 관리'], ['#/prod/semi/wash', '세탁(호기별) 작업 관리']] },
   ] },
   { group: '물류', items: [
-    { sub: '입고', items: [['#/logistics/receipt/new', '입고 입력'], ['#/logistics/receive', '입고목록'], ['#/logistics/receipts', '입고증 목록']] },
-    { sub: '출하', items: [['#/logistics/ship-orders', '출하지시'], ['#/logistics/ship/new', '출하 입력'], ['#/logistics/ship', '출하 목록']] },
+    ['#/logistics/receive', '입고 관리'],
+    { sub: '출하', items: [['#/logistics/ship-orders', '출하지시'], ['#/logistics/ship', '출하 관리']] },
     ['#/logistics/stock', '재고 현황'],
     ['#/logistics/scan', 'QR 스캔'],
   ] },
 ];
+// 15.213 하위 묶음에 화면이 하나뿐이면(견적 > 견적서 관리 등) 묶음 없이 바로 화면 링크로
+for (const g of NAV) g.items = g.items.map(i => !Array.isArray(i) && i.items.length === 1 ? i.items[0] : i);
 // ── 메뉴 열람 권한(15.59) ── ME.menus가 null이면 전체, 배열이면 그 업무 묶음만 메뉴에 보이고 주소로 들어와도 막는다.
 // 홈·리포트·내 정보·관리자 화면은 묶음에 속하지 않아 항상 열린다(관리자 화면은 관리자만).
 const MENU_GROUP_LABELS = [['sales', '영업'], ['purchase', '구매'], ['quality', '품질'], ['dev', '개발'], ['production', '생산'], ['logistics', '물류'], ['master', '기준 정보 (거래처·검사규격)']];
@@ -686,8 +688,18 @@ const MANAGE = {
   '#/sales/book': { title: '매출 거래처별 장부', tabs: [['#/sales/book', '전표별 장부'], ['#/sales/ledger', '품목 줄별 원장']] },
   '#/purchase/book': { title: '매입 거래처별 장부', tabs: [['#/purchase/book', '전표별 장부'], ['#/purchase/ledger', '품목 줄별 원장']] },
   '#/admin/users': { title: '회원 관리', tabs: [['#/admin/users', '회원 정보'], ['#/admin/users/roles', '사용 권한'], ['#/admin/users/menus', '메뉴 보기']] },
+  // 15.213 입력·목록 메뉴 통일
+  '#/logistics/receive': { title: '입고 관리', tabs: [['#/logistics/receive', '입고목록'], ['#/logistics/receipt/new', '입고 입력'], ['#/logistics/receipts', '입고증 목록']] },
+  '#/logistics/ship': { title: '출하 관리', tabs: [['#/logistics/ship', '출하 목록'], ['#/logistics/ship/new', '출하 입력']] },
+  '#/purchase/laundry': { title: '불량·폐기 관리', tabs: [['#/purchase/laundry', '불량·폐기 목록'], ['#/purchase/laundry/new', '불량·폐기 입력']] },
+  '#/prod/semi': { title: '반제품 생산 관리', tabs: [['#/prod/semi', '생산일정'], ['#/prod/semi/new', '생산계획 입력']] },
+  '#/prod/semi/cut': { title: '커팅/융착 작업 관리', tabs: [['#/prod/semi/cut', '작업 기록'], ['#/prod/semi/cut/new', '작업 입력']] },
+  '#/prod/semi/wash': { title: '세탁(호기별) 작업 관리', tabs: [['#/prod/semi/wash', '작업 기록'], ['#/prod/semi/wash/new', '작업 입력']] },
+  '#/quality/list': { title: '분석 관리', tabs: [['#/quality/list', '분석리스트'], ['#/quality/request', '분석의뢰']] },
+  '#/quality/voc/list': { title: 'VOC 관리', tabs: [['#/quality/voc/list', 'VOC 처리목록'], ['#/quality/voc/request', 'VOC 접수']] },
+  '#/dev/list': { title: '개발 관리', tabs: [['#/dev/list', '개발리스트'], ['#/dev/request', '개발의뢰']] },
 };
-const ROUTE_ALIAS = { '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users' };
+const ROUTE_ALIAS = { '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users', '#/logistics/receipt/new': '#/logistics/receive', '#/logistics/receipts': '#/logistics/receive', '#/logistics/ship/new': '#/logistics/ship', '#/purchase/laundry/new': '#/purchase/laundry', '#/prod/semi/new': '#/prod/semi', '#/prod/semi/cut/new': '#/prod/semi/cut', '#/prod/semi/wash/new': '#/prod/semi/wash', '#/quality/request': '#/quality/list', '#/quality/voc/request': '#/quality/voc/list', '#/dev/request': '#/dev/list' };
 const navRoute = r => ROUTE_ALIAS[String(r || '#/').split('?')[0]] || String(r || '#/').split('?')[0];
 function managedTabs(main, route) {
   const m = MANAGE[navRoute(route)], h1 = $('h1', main); if (!m || !h1 || $('.manage-tabs', main)) return;
@@ -695,6 +707,35 @@ function managedTabs(main, route) {
   if (t) t.nodeValue = /수정|고치기/.test(t.nodeValue) ? `${m.title} · ${t.nodeValue.trim()} ` : m.title + ' '; else h1.prepend(m.title + ' '); // 15.178 고치는 중 표시 유지
   const anchor = h1.nextElementSibling?.matches('.tax-side, .class-tabs.tax-side') ? h1.nextElementSibling : h1; // 15.180 매출/매입 탭 아래 둘째 줄
   anchor.insertAdjacentHTML('afterend', `<nav class="manage-tabs${anchor !== h1 ? ' sub' : ''}" aria-label="${esc(m.title)}">${m.tabs.filter(([h]) => canSeeRoute(h)).map(([h, l]) => `<a href="${h}" class="${h === route ? 'on' : ''}"${h === route ? ' aria-current="page"' : ''}>${esc(l)}</a>`).join('')}</nav>`);
+}
+// 15.213 메뉴 찾기: 화면 이름 일부를 치면 「부서 › 묶음 › 화면」 목록이 뜨고, Enter·누르면 그 화면으로.
+function bindNavFind() {
+  const box = $('.nav-search'), input = $('#navFind'), list = $('.nav-find-list'); if (!input) return;
+  const all = () => $$('.side a[href^="#/"]').filter(a => !a.closest('.nav-search, .nav-fav')).map(a => {
+    const path = [a.closest('.nav-group')?.querySelector('.nav-title')?.textContent.trim(), a.closest('.nav-sub')?.querySelector('summary')?.textContent.trim()].filter(Boolean);
+    return { href: a.getAttribute('href'), label: [...a.childNodes].filter(n => !(n.classList && n.classList.contains('nav-star'))).map(n => n.textContent).join('').trim(), path };
+  }).filter((x, i, arr) => arr.findIndex(y => y.href === x.href) === i);
+  let hits = [], at = 0;
+  const go = h => { input.value = ''; list.hidden = true; document.body.classList.remove('nav-open'); location.hash = h; };
+  const show = () => {
+    const q = input.value.replace(/\s+/g, '').toLowerCase(); if (!q) { list.hidden = true; return; }
+    hits = all().filter(x => (x.path.join('') + x.label).replace(/\s+/g, '').toLowerCase().includes(q)).slice(0, 12); at = 0;
+    list.innerHTML = hits.length ? hits.map((x, i) => `<a href="${esc(x.href)}" class="${i === at ? 'on' : ''}" data-i="${i}"><b>${esc(x.label)}</b><span>${esc(x.path.join(' › '))}</span></a>`).join('') : '<div class="small muted">찾는 메뉴가 없습니다.</div>';
+    list.hidden = false;
+  };
+  input.addEventListener('input', show);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { input.value = ''; list.hidden = true; return; }
+    if (!hits.length || list.hidden) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); at = (at + (e.key === 'ArrowDown' ? 1 : hits.length - 1)) % hits.length; $$('a', list).forEach((a, i) => a.classList.toggle('on', i === at)); }
+    if (e.key === 'Enter') { e.preventDefault(); go(hits[at].href); }
+  });
+  list.addEventListener('click', e => { const a = e.target.closest('a[href]'); if (a) { e.preventDefault(); go(a.getAttribute('href')); } });
+  if (!bindNavFind.once) { bindNavFind.once = true; // 문서 이벤트는 한 번만(화면마다 메뉴를 다시 그려도 쌓이지 않게). 누른 단추 글자가 바뀌어 떨어져도 경로로 판단.
+    document.addEventListener('click', e => { const path = e.composedPath(); if (!path.some(n => n.classList?.contains('nav-search'))) $$('.nav-find-list').forEach(l => { l.hidden = true; }); if (!path.some(n => n.classList?.contains('prefs-menu'))) $$('.prefs-menu[open]').forEach(d => { d.open = false; }); }); }
+  // 화면 설정: 언어·화면 모드·메뉴 위치·밀도 단추를 「⚙ 화면 설정」 안으로 모은다(theme.js·i18n.js가 머리줄에 넣는 단추를 옮김)
+  const gather = () => { const pop = $('.who .prefs-pop'); if (!pop) return; $$('.who > .lang-select, .who > .theme-toggle').forEach(x => pop.append(x)); };
+  gather(); new MutationObserver(gather).observe($('.who'), { childList: true });
 }
 async function managedPage(main, route, fn) { await fn(main); managedTabs(main, route); }
 function shell() {
@@ -718,10 +759,10 @@ function shell() {
   <header class="top">
     <button class="menu-btn" aria-label="메뉴">☰</button>
     <a href="#/" class="brand"><img class="brand-logo" src="/assets/seoulsemi-logo-blue.png" alt="SEOUL SEMITECH"> <span class="brand-text">서울세미텍 시스템</span><span class="app-version">버전 ${APP_VERSION}</span></a>
-    <div class="who"><a href="#/me" title="내 정보">${esc(ME.name)}${ME.is_admin ? ' <span class="tag">관리자</span>' : ''}${roles ? ` <span class="tag soft">${esc(roles)}</span>` : ''}</a>
+    <div class="who"><details class="prefs-menu"><summary class="btn small" title="언어·화면 모드·메뉴 위치·화면 밀도">⚙ 화면 설정</summary><div class="prefs-pop"></div></details><a href="#/me" title="내 정보">${esc(ME.name)}${ME.is_admin ? ' <span class="tag">관리자</span>' : ''}${roles ? ` <span class="tag soft">${esc(roles)}</span>` : ''}</a>
       <button class="btn small" id="logout">로그아웃</button></div>
   </header>
-  <div class="layout"><nav class="side">${nav}<div class="side-account"><a href="#/me">내 정보</a><button type="button" class="btn small" id="logoutSide">로그아웃</button></div></nav><main id="main"></main></div>
+  <div class="layout"><nav class="side"><div class="nav-search" role="search"><input type="search" id="navFind" placeholder="메뉴 찾기" aria-label="메뉴 찾기" autocomplete="off"><div class="nav-find-list" hidden></div></div>${nav}<div class="side-account"><a href="#/me">내 정보</a><button type="button" class="btn small" id="logoutSide">로그아웃</button></div></nav><main id="main"></main></div>
   <nav class="tabbar" aria-label="빠른 이동">
     <a href="#/" class="${cur === '#/' ? 'active' : ''}"><svg class="tab-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg><span>홈</span></a>
     <a href="#/tasks" class="${cur === '#/tasks' ? 'active' : ''}"><svg class="tab-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/></svg><span>할 일</span><b class="tab-badge" data-task-badge hidden></b></a>
@@ -729,6 +770,7 @@ function shell() {
     <button type="button" class="tab-menu" aria-label="전체 메뉴 열기"><svg class="tab-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>메뉴</span></button>
   </nav>`;
   const logout = async () => { await api('POST', '/api/auth/logout'); uxClearUser(); ME = null; render(); };
+  bindNavFind();
   $('#logout').onclick = logout; $('#logoutSide').onclick = logout;
   $('.menu-btn').onclick = () => document.body.classList.toggle('nav-open');
   $('.tab-menu').onclick = () => document.body.classList.toggle('nav-open');
@@ -773,10 +815,12 @@ function pageTabs(main, route) {
   if (path !== '#/' && label && PAGES[path]) { if (!tabs.some(t => t.href === path)) tabs.push({ href: path, label }); writeTabs(tabs); tabs = readTabs(); }
   const PIN = '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="M10 1l5 5-2 1-3 3 .5 3.5L9 15l-3-3-4 4-1-1 4-4-3-3 1.5-1.5L7 7l3-3z" fill="currentColor"/></svg>';
   const bar = document.createElement('nav'); bar.className = 'page-tabs'; bar.setAttribute('aria-label', '연 화면');
-  bar.innerHTML = `<a href="#/" class="pt-tab pt-home${path === '#/' ? ' on' : ''}">HOME</a>${tabs.map(t => `<span class="pt-tab${t.href === path ? ' on' : ''}"><a href="${esc(t.href)}">${PIN}<span>${esc(t.label)}</span></a><button type="button" class="pt-x" data-tab-close="${esc(t.href)}" aria-label="${esc(t.label)} 탭 닫기" title="닫기">×</button></span>`).join('')}${tabs.length > 1 ? '<button type="button" class="pt-clear" data-tab-clear title="다른 탭 모두 닫기" aria-label="다른 탭 모두 닫기">≡×</button>' : ''}`;
+  bar.innerHTML = `<a href="#/" class="pt-tab pt-home${path === '#/' ? ' on' : ''}">HOME</a>${tabs.map(t => `<span class="pt-tab${t.href === path ? ' on' : ''}"><a href="${esc(t.href)}">${PIN}<span>${esc(t.label)}</span></a><button type="button" class="pt-x" data-tab-close="${esc(t.href)}" aria-label="${esc(t.label)} 탭 닫기" title="닫기">×</button></span>`).join('')}${tabs.length > 1 ? '<button type="button" class="pt-clear" data-tab-clear title="다른 탭 모두 닫기" aria-label="다른 탭 모두 닫기">다른 탭 닫기</button>' : ''}`;
   main.prepend(bar);
+  // 15.212 탭이 많아 가로로 넘치면 지금 화면 탭이 가운데 보이게
+  requestAnimationFrame(() => { const on = bar.querySelector('.pt-tab.on'); if (on && bar.scrollWidth > bar.clientWidth) bar.scrollLeft = Math.max(0, on.offsetLeft - bar.clientWidth / 2 + on.offsetWidth / 2); });
   const code = path.replace(/^#\/?/, '').split('/').filter(Boolean).join('-').toUpperCase() || 'HOME'; // 15.180 화면 코드(문의할 때)
-  if (trail.length && h1) h1.insertAdjacentHTML('beforebegin', `<div class="crumbs" aria-label="위치"><a href="#/" aria-label="홈">⌂</a>${trail.map(t => ` <span>›</span> ${esc(t)}`).join('')} <span class="screen-code" title="화면 코드 — 문의할 때 알려 주세요">[${esc(code)}]</span></div>`);
+  if (trail.length && h1) h1.insertAdjacentHTML('beforebegin', `<div class="crumbs" aria-label="위치"><a href="#/" aria-label="홈">⌂</a>${trail.map(t => ` <span>›</span> ${esc(t)}`).join('')}${ME?.is_admin ? ` <span class="screen-code" title="화면 코드 — 문의할 때 알려 주세요">[${esc(code)}]</span>` : ''}</div>`); // 15.213 화면 코드는 관리자만
   bar.addEventListener('click', e => {
     const x = e.target.closest('[data-tab-close]'), all = e.target.closest('[data-tab-clear]'); if (!x && !all) return;
     e.preventDefault();
@@ -799,6 +843,7 @@ async function render() {
   refreshNavBadges();
   const page = canSeeRoute(route) ? PAGES[location.hash || '#/'] || pageHome : pageNoMenu;
   try { await page($('#main')); if (page === pageHome || page === pageTasks) applyMenuAccess($('#main')); if (page !== pageNoMenu) favoriteTools($('#main'), route); applyView($('#main'), route); foldHelp($('#main')); erpEntryBar($('#main'), route); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  try { managedTabs($('#main'), route.split('?')[0]); } catch { /* 15.213 */ }
   try { pageTabs($('#main'), route); } catch { /* 탭은 편의 기능 */ }
   uxAfterRender(route);
 }
@@ -1316,6 +1361,8 @@ const PHONE_GRID = [
   ['#stockList', { a: ['품목명'], b: ['현재고'], c: ['품목코드', '분류', ['안전재고', '안전'], ['최근 변동', '변동']], d: [''] }],
   ['#shList', { a: ['품목명'], b: ['수량'], c: ['거래처', '출고일', ['LOT', 'LOT']], d: [''] }],
   ['#rcsList', { a: ['품목'], b: ['입고일'], c: ['입고번호', '거래처', ['줄', '줄']], d: [''] }],
+  ['#poList', { a: ['품목명'], b: ['수량'], c: ['거래처', '입고상태', ['납기일', '납기'], ['입고', '입고'], ['잔량', '잔량'], ['구매의뢰번호', '의뢰']], d: [''] }], // 15.212
+  ['#rcList', { k: [''], a: ['품목명'], b: ['발주수량'], c: ['거래처', '상태', ['실입고', '실입고'], ['납기일', '납기'], ['구매의뢰번호', '의뢰']], d: ['사진·검수'] }], // 15.212
   ['.mr-needs', { a: ['품목'], b: ['생산 필요'], c: ['규격·사이즈', ['의뢰', '의뢰'], ['생산', '생산'], ['계획 안 됨', '미계획']] }], // 15.210
   ['#faList', { a: ['품목명'], b: ['잔량'], c: ['계획일', ['계획수량', '계획'], ['실적 누계', '실적']], d: ['양품수량', '비고', ''] }],
 ];
@@ -1441,7 +1488,8 @@ function filterTools() {
   $$('#main form.list-filters:not([data-ft])').forEach(f => {
     f.dataset.ft = '1';
     const submit = f.querySelector(':scope > button.primary:not(.filter-toggle), :scope > .actions > button.primary, :scope button.btn.primary[type=submit], :scope > button.btn.primary');
-    const hasReset = [...f.querySelectorAll('button')].some(b => /초기화/.test(b.textContent));
+    const own = [...f.querySelectorAll('button')].find(b => b.matches('[data-clear-filters]') || /초기화/.test(b.textContent)), hasReset = !!own;
+    if (submit && own && own.parentElement === f && submit.parentElement === f) { own.className = 'btn lf-reset'; own.textContent = '↺'; const grp = document.createElement('span'); grp.className = 'lf-actions'; submit.before(grp); grp.append(own, submit); } // 15.214 조회 줄 통일: 초기화는 ↺, 조회와 한 덩어리
     if (submit && !hasReset && submit.parentElement === f) {
       const rb = document.createElement('button'); rb.type = 'button'; rb.className = 'btn lf-reset'; rb.title = '조건 초기화'; rb.setAttribute('aria-label', '조건 초기화'); rb.textContent = '↺';
       rb.onclick = () => { f.reset(); f.requestSubmit ? f.requestSubmit() : f.dispatchEvent(new Event('submit', { cancelable: true })); };
@@ -1450,12 +1498,28 @@ function filterTools() {
     if (submit) submit.classList.add('lf-go');
     const key = 'wpa:lf-fold:' + navRoute(location.hash), fold = document.createElement('button');
     fold.type = 'button'; fold.className = 'lf-fold'; fold.title = '조회 조건 접기·펴기';
-    const set = shut => { f.classList.toggle('lf-folded', shut); fold.textContent = shut ? '▾ 조회 조건' : '–'; fold.setAttribute('aria-expanded', String(!shut)); };
+    const set = shut => { f.classList.toggle('lf-folded', shut); fold.textContent = shut ? '▾ 조회 조건 펴기' : '▴ 조건 접기'; fold.setAttribute('aria-expanded', String(!shut)); };
     let shut = false; try { shut = localStorage.getItem(key) === '1'; } catch { /* */ }
     set(shut); fold.onclick = () => { shut = !f.classList.contains('lf-folded'); set(shut); try { if (shut) localStorage.setItem(key, '1'); else localStorage.removeItem(key); } catch { /* */ } };
     f.after(fold);
   });
 }
+// 15.214 휴대폰 긴 입력 화면: 「(선택)」 칸이 둘 이상인 입력 묶음은 그 칸들을 「선택 입력 n개 ▾」로 접어 필수 칸이 먼저 보이게(값이 있으면 펼침).
+function foldOptionalFields() {
+  if (!matchMedia('(max-width: 600px)').matches) return;
+  $$('#main form:not(.list-filters):not([data-read-only]) .form-grid:not([data-opt-folded])').forEach(grid => {
+    if (!grid.querySelector('[data-fx-mark]')) return; // form-ux.js가 필수·(선택) 표시를 붙인 뒤에 판단
+    grid.dataset.optFolded = '1';
+    if (grid.closest('.modal, .line-table, table')) return;
+    const opt = [...grid.children].filter(el => el.matches('label, .field, fieldset, .radio-group') && /\(선택\)/.test(el.querySelector(':scope > .hint, :scope > .opt, :scope > span, :scope > legend')?.textContent || [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.nodeValue).join('')) && !el.querySelector('[required]'));
+    if (opt.length < 2) return;
+    const box = document.createElement('details'); box.className = 'opt-fold span3';
+    box.innerHTML = `<summary>선택 입력 ${opt.length}개 <span class="small muted">(${opt.map(el => (el.childNodes[0]?.nodeValue || el.querySelector('legend')?.textContent || '').trim()).filter(Boolean).slice(0, 3).join('·')}${opt.length > 3 ? ' …' : ''})</span></summary><div class="opt-fold-body"></div>`;
+    opt.at(-1).after(box); $('.opt-fold-body', box).append(...opt);
+    if (opt.some(el => [...el.querySelectorAll('input, select, textarea')].some(i => i.type === 'checkbox' || i.type === 'radio' ? i.checked && !i.defaultChecked : i.value && i.value !== i.defaultValue))) box.open = true;
+  });
+}
+new MutationObserver(foldOptionalFields).observe(document.body, { childList: true, subtree: true });
 function pairDateRanges() {
   $$('form.list-filters > label:not([data-paired])').forEach(l => {
     l.dataset.paired = '1';
@@ -1467,7 +1531,16 @@ function pairDateRanges() {
     end.setAttribute('aria-label', (prev.childNodes[0]?.nodeValue || '').trim() + ' 끝'); prev.classList.add('lf-period'); l.remove();
   });
 }
-new MutationObserver(() => { labelGridTables(); pairDateRanges(); filterTools(); }).observe(document.body, { childList: true, subtree: true });
+// 15.212 같은 줄에 버튼 묶음(.seg)이 둘 이상이면 묶음마다 이름표(aria-label)를 앞에 보여 준다(「전체」가 여러 번 나와 헷갈리지 않게).
+function labelSegGroups() {
+  $$('.seg[aria-label]:not([data-seg-labeled])').forEach(seg => {
+    seg.dataset.segLabeled = '1';
+    const sibs = [...seg.parentElement.children].filter(x => x.classList.contains('seg'));
+    if (sibs.length < 2 && !seg.parentElement.closest('.seg-row')) return;
+    const tag = document.createElement('span'); tag.className = 'seg-label'; tag.textContent = seg.getAttribute('aria-label'); seg.before(tag);
+  });
+}
+new MutationObserver(() => { labelGridTables(); labelSegGroups(); pairDateRanges(); filterTools(); }).observe(document.body, { childList: true, subtree: true });
 
 async function pageHome(main) {
   const [d, tasks, alerts] = await Promise.all([api('GET', '/api/dashboard'), api('GET', '/api/my-tasks'), api('GET', '/api/alerts').catch(() => null)]);
@@ -1641,8 +1714,10 @@ function receiptChangeText(c, po = {}) { return c.action === 'qty' ? `실입고 
 function receiptChangeInfo(po) {
   const c = pendingReceipt(po);
   if (c) return `<div class="small"><span class="chip yellow">승인 대기</span> ${receiptChangeText(c, po)} · ${esc(c.reason)} · ${esc(c.requested_by)}</div>${receiptChangeButtons(c)}`;
-  return ['ok', 'mismatch'].includes(po.recv_status) ? `<div class="small"><button class="btn small" data-receipt-qty="${po.id}">수량 수정 요청</button> <button class="btn small danger" data-receipt-revert="${po.id}">입고 취소 요청</button></div>` : '';
+  return po.__menu ? '' : ['ok', 'mismatch'].includes(po.recv_status) ? `<div class="small"><button class="btn small" data-receipt-qty="${po.id}">수량 수정 요청</button> <button class="btn small danger" data-receipt-revert="${po.id}">입고 취소 요청</button></div>` : '';
 }
+// 15.212 줄 「더보기」에 넣을 입고 수정·취소 요청(승인 대기 중이면 없음)
+function receiptActions(po) { return !pendingReceipt(po) && ['ok', 'mismatch'].includes(po.recv_status) ? [`<button class="btn small" data-receipt-qty="${po.id}">수량 수정 요청</button>`, `<button class="btn small danger" data-receipt-revert="${po.id}">입고 취소 요청</button>`] : []; }
 function receiptChangeButtons(c) {
   return `${canApproveReceipt() ? `<button class="btn small primary" data-rchange-approve="${c.id}">승인</button> <button class="btn small danger" data-rchange-reject="${c.id}">반려</button>` : ''}${c.requested_by_id === ME.id ? ` <button class="btn small" data-rchange-cancel="${c.id}">요청 철회</button>` : ''}`;
 }
@@ -1697,10 +1772,10 @@ async function pagePO(main) {
       <thead><tr><th>구매의뢰번호</th><th>거래처</th><th>품목명</th><th class="r">수량</th><th class="r">입고</th><th class="r">전표</th><th class="r">잔량</th><th>입고상태</th><th>납기일</th><th>분류</th><th>COA 요청</th><th>비고</th><th>입력자</th><th></th></tr></thead>
       <tbody>${rows.map((p) => `<tr class="${rowClass(p)}">
         <td>${esc(p.req_no)}</td><td>${esc(p.vendor)}</td><td>${esc(p.item)}${lineInfo(p)}${internalNoteChip(p)}</td><td class="r">${fmtNum(p.qty)}</td>${poProgressCells(p)}
-        <td>${recvChip(p)}${p.recv_note ? `<div class="small muted">${esc(p.recv_note)}</div>` : ''}</td>
+        <td>${recvChip({ ...p, __menu: 1 })}${p.recv_note ? `<div class="small muted">${esc(p.recv_note)}</div>` : ''}</td>
         <td class="${p.recv_status !== 'ok' && p.due_date < t ? 'overdue' : ''}">${esc(p.due_date)}</td><td>${esc(p.item_category || '미분류')}</td><td>${coaChip(p.coa_requested)}</td>
         <td>${esc(p.note)}</td><td class="small muted">${esc(p.created_by)}</td>
-        <td class="nowrap">${commentButton("purchase_order", p.id, p.item)} <button class="btn small" data-po-print="${p.id}" title="같은 구매의뢰번호·거래처의 발주를 한 장으로">발주서</button> <button class="btn small" data-edit="${p.id}">수정</button> <button class="btn small danger" data-del="${p.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>`
+        <td class="nowrap row-acts"><button class="btn small" data-edit="${p.id}">수정</button>${rowMenu(p.item, [`<button class="btn small" data-po-print="${p.id}" title="같은 구매의뢰번호·거래처의 발주를 한 장으로">발주서</button>`, commentButton("purchase_order", p.id, p.item), ...receiptActions(p), `<button class="btn small danger" data-del="${p.id}">삭제</button>`])}</td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">등록된 발주가 없습니다.</div>';
     if (rows.length) { const priced = rows.filter(r => r.unit_price != null && r.unit_price !== ''); $('#poList').insertAdjacentHTML('beforeend', sumLine([['합계', esc(`${rows.length}건`)], ['수량', esc(unitTotals(rows, r => r.qty, r => r.unit))], ['발주 금액', esc(`${won(priced.reduce((t, r) => t + billTruncC(r.qty * r.unit_price), 0))}원`)], ['단가 없음', rows.length - priced.length ? esc(`${rows.length - priced.length}건`) : '']])); }
     bindReceiptChanges($('#poList'), rows, load);
@@ -1803,14 +1878,14 @@ async function pageReceive(main) {
         <td>${esc(p.req_no)}</td><td>${esc(p.vendor)}</td><td>${esc(p.item)}${lineInfo(p)}${internalNoteChip(p)}</td><td>${esc(p.item_category || '미분류')}</td><td>${coaChip(p.coa_requested)}</td><td class="r">${fmtNum(p.qty)}</td>
         <td class="r">${p.recv_status ? fmtNum(p.recv_qty) : ''}</td>
         <td class="${p.recv_status !== 'ok' && p.due_date < t ? 'overdue' : ''}">${esc(p.due_date)}</td>
-        <td>${recvChip(p)}${qcChip(p)}${p.recv_note ? `<div class="small muted">${esc(p.recv_note)}</div>` : ''}</td>
-        <td class="small muted">${esc(p.created_by || '기존 기록: 미기록')}</td><td class="small muted">${esc(p.recv_by || '')}${p.recv_at ? '<br>' + esc(p.recv_at.slice(5, 16)) : ''}</td><td>${commentButton("purchase_order", p.id, p.item)} <button class="btn small" data-receipt-photo="${p.id}">사진·이상 여부</button>${inspectionBadge(p)}</td></tr>`).join('')}</tbody></table></div>`
+        <td>${recvChip({ ...p, __menu: 1 })}${qcChip(p)}${p.recv_note ? `<div class="small muted">${esc(p.recv_note)}</div>` : ''}</td>
+        <td class="small muted">${esc(p.created_by || '기존 기록: 미기록')}</td><td class="small muted">${esc(p.recv_by || '')}${p.recv_at ? '<br>' + esc(p.recv_at.slice(5, 16)) : ''}</td><td class="row-acts"><button class="btn small" data-receipt-photo="${p.id}">사진·이상 여부</button>${inspectionBadge(p)}${rowMenu(p.item, [commentButton("purchase_order", p.id, p.item), ...receiptActions(p)])}</td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">해당하는 발주가 없습니다.</div>';
     if (rows.length) $('#rcList').insertAdjacentHTML('beforeend', sumLine([['합계', esc(`${rows.length}건`)], ['발주수량', esc(unitTotals(rows, r => r.qty, r => r.unit))], ['실입고', (got => got.length ? esc(unitTotals(got, r => r.recv_qty ?? r.qty, r => r.unit)) : '')(rows.filter(r => ['ok', 'mismatch'].includes(r.recv_status)))]]));
     const all = $('#rcAll'); if (all) all.onchange = () => { $$('.rc-check').forEach((c) => (c.checked = all.checked)); updateCount(); };
     $$('.rc-check').forEach((c) => (c.onchange = updateCount));
     // 행 클릭으로도 체크
-    $$('#rcList tbody tr').forEach((tr) => (tr.onclick = (e) => { if (!e.target.closest('input,button')) { const c = $('.rc-check', tr); c.checked = !c.checked; updateCount(); } }));
+    $$('#rcList tbody tr').forEach((tr) => (tr.onclick = (e) => { if (!e.target.closest('input,button,summary,details')) { const c = $('.rc-check', tr); c.checked = !c.checked; updateCount(); } }));
     bindReceiptChanges($('#rcList'), rows, load);
     renderReceiptChanges($('#receiptChanges')).then(() => bindReceiptChanges($('#receiptChanges'), rows, load)).catch(fail);
     $$('#rcList [data-receipt-photo]').forEach(button => button.onclick = () => openAttachments('purchase_order', Number(button.dataset.receiptPhoto), rows.find(row => row.id === Number(button.dataset.receiptPhoto)).item));
@@ -2191,8 +2266,8 @@ async function pageWorkList(type) {
   <h1>${cfg.listTitle || cfg.label + '리스트'} <span class="dept">${cfg.dept}</span></h1>
   <p class="muted">${type === 'analysis' ? '승인된 분석의뢰와 입고에서 자동 등록된 수입검사 목록입니다.' : `승인된 ${cfg.label}의뢰 목록입니다.`} ${mgr ? '상태 칸에서 바로 대기/진행/완료를 바꿀 수 있습니다.' : `상태 변경은 ${cfg.mgr}가 합니다.`} 행을 누르면 의뢰서를 봅니다.</p>
   <div class="toolbar">
-    <div class="seg" id="stSeg">${['', 'waiting', 'progress', 'done'].map((s) => `<button data-s="${s}" class="${s === status ? 'on' : ''}">${s ? STATUS[s] : '전체'}</button>`).join('')}</div>
-    ${type === 'analysis' ? `<div class="seg" id="catSeg">${['', '수입검사', '의뢰검사', '출하검사', '공정검사'].map((c) => `<button data-c="${c}" class="${c === category ? 'on' : ''}">${c || '전체 검사'}</button>`).join('')}</div>
+    <div class="seg" id="stSeg" role="group" aria-label="상태">${['', 'waiting', 'progress', 'done'].map((s) => `<button data-s="${s}" class="${s === status ? 'on' : ''}">${s ? STATUS[s] : '전체'}</button>`).join('')}</div>
+    ${type === 'analysis' ? `<div class="seg" id="catSeg" role="group" aria-label="검사구분">${['', '수입검사', '의뢰검사', '출하검사', '공정검사'].map((c) => `<button data-c="${c}" class="${c === category ? 'on' : ''}">${c || '전체 검사'}</button>`).join('')}</div>
     <div class="seg" id="qcSeg" role="group" aria-label="판정">${[['', '전체 판정'], ['pass', '합격'], ['fail', '불합격'], ['pending', '검사 대기']].map(([v, l]) => `<button type="button" data-qc="${v}" class="${v === '' ? 'on' : ''}" aria-pressed="${v === ''}">${l}</button>`).join('')}</div>` : ''}
   </div>
   <div id="workCounts" class="counts"></div>
@@ -2248,10 +2323,14 @@ function bomForm(bom = {}) {
 // 15.77 제품등록 「더보기」 메뉴: 문서 수준 이벤트는 여기서 한 번만 등록한다(화면을 다시 열어도 쌓이지 않게).
 // 버튼 아래에 화면 기준으로 띄우고, 스크롤·창 크기 변경에는 위치만 다시 맞추며(버튼이 화면 밖이면 닫음), 바깥 클릭·Esc로 닫는다.
 function bomMenuPlace(menu) { const list = $('.row-menu-list', menu), r = $('summary', menu).getBoundingClientRect(); list.style.top = Math.min(r.bottom + 4, innerHeight - list.offsetHeight - 8) + 'px'; list.style.right = Math.max(8, innerWidth - r.right) + 'px'; }
-function bomMenuFollow() { $$('#bomList .row-menu[open]').forEach(m => { const r = $('summary', m).getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight) m.open = false; else bomMenuPlace(m); }); }
+function bomMenuFollow() { $$('.row-menu[open]').forEach(m => { const r = $('summary', m).getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight) m.open = false; else bomMenuPlace(m); }); }
 addEventListener('scroll', bomMenuFollow, true); addEventListener('resize', bomMenuFollow);
-document.addEventListener('click', e => { if (!e.target.closest('#bomList .row-menu')) $$('#bomList .row-menu[open]').forEach(m => { m.open = false; }); });
-document.addEventListener('keydown', e => { if (e.key !== 'Escape' || $('.modal-wrap')) return; const open = $$('#bomList .row-menu[open]'); open.forEach(m => { m.open = false; }); if (open.length) $('summary', open[0]).focus(); });
+// 15.212 모든 목록의 「더보기」: 한 번에 하나만 열고 버튼 아래에 띄움. 메뉴 안 단추를 누르면 닫힘.
+document.addEventListener('toggle', e => { const menu = e.target; if (!(menu instanceof HTMLDetailsElement) || !menu.classList.contains('row-menu') || !menu.open) return; $$('.row-menu[open]').forEach(other => { if (other !== menu) other.open = false; }); bomMenuPlace(menu); }, true);
+document.addEventListener('click', e => { const inMenu = e.target.closest('.row-menu'); if (inMenu && e.target.closest('.row-menu-list button, .row-menu-list a')) { setTimeout(() => { inMenu.open = false; }); return; } if (!inMenu) $$('.row-menu[open]').forEach(m => { m.open = false; }); });
+document.addEventListener('keydown', e => { if (e.key !== 'Escape' || $('.modal-wrap')) return; const open = $$('.row-menu[open]'); open.forEach(m => { m.open = false; }); if (open.length) $('summary', open[0]).focus(); });
+// 줄 단추 묶음: 자주 쓰는 것만 밖에, 나머지(삭제·취소 같은 위험한 것 포함)는 「더보기」 안에.
+function rowMenu(label, items) { const list = items.filter(Boolean).join(''); return list ? `<details class="row-menu"><summary class="btn small" aria-label="${esc(label)} 더보기">더보기 ▾</summary><div class="row-menu-list">${list}</div></details>` : ''; }
 async function pageBoms(main) {
   if (!ME.is_admin) { main.innerHTML = '<div class="empty">관리자만 BOM을 관리할 수 있습니다.</div>'; return; }
   main.innerHTML = '<h1>제품등록</h1><p class="muted">품목을 원자재·부자재·반제품·제품·상품으로 나누고, 미리 만든 1차·2차·3차 세부 분류에서 골라 등록합니다. 발주·출하·생산·기타입고에서 이 품목코드를 불러옵니다.</p><div class="actions wrap" style="justify-content:flex-start"><button class="btn primary" id="newBom">새 제품 등록</button><button class="btn" id="bomImport" title="품목코드·품목명·분류를 CSV·엑셀로 한 번에 등록하거나 고치기">CSV·엑셀 일괄 등록·수정</button><button class="btn" id="catManage">분류 관리</button><a class="btn" href="#/admin/bom-sheet" title="제품별 구성자재·소요량을 한 표로 보고 고치기">BOM 소요량</a></div><div class="seg class-tabs" id="bomClassTabs" role="group" aria-label="품목 분류">' + ['', ...ITEM_CATEGORIES].map(c => `<button type="button" data-class-tab="${c}">${c || '전체'}</button>`).join('') + '</div><div class="bom-view-bar"><div class="seg" id="bomViewTabs" role="group" aria-label="보기"><button type="button" data-bom-view="list">목록</button><button type="button" data-bom-view="tree">BOM 트리</button></div><div class="seg" id="bomActiveTabs" role="group" aria-label="사용 여부"><button type="button" data-bom-active="1">사용</button><button type="button" data-bom-active="0">미사용</button><button type="button" data-bom-active="">전체</button></div></div><div class="sub-tabs" id="bomSubTabs" role="group" aria-label="세부 분류" hidden></div>' + listControls('bom', { placeholder: '품목명·코드·입력자·메모', extra: `<label class="dup-filter">분류<select name="item_category" id="bomCategory">${categoryOptions('', true)}</select></label><label class="dup-filter">사용 상태<select name="active"><option value="">전체 사용 상태</option><option value="1">사용 중</option><option value="0">사용 중지</option></select></label><label>코드 상태<select name="temp"><option value="">전체</option><option value="only">임시 코드만 (정리 필요)</option></select></label>` }) + '<div id="bomList"></div>';
@@ -2310,7 +2389,7 @@ async function pageBoms(main) {
     // 15.192 「사용」만 보는데 검색어로 찾은 게 없으면, 사용 중지된 품목에 있는지 알려 주고 바로 보게 한다(코드가 이미 쓰인다는 안내와 맞춤).
     if (!sorted.length && filterForm.elements.q?.value.trim() && filterForm.elements.active.value === '1') api('GET', '/api/boms?' + new URLSearchParams({ ...formObj(filterForm), active: '0', include_archived: '1' })).then(off => { const box = $('[data-bom-hidden-hit]', main); if (!box || version !== queryVersion || !off.length) return; box.innerHTML = `<p class="small">사용 중지된 품목에 ${off.length}건 있습니다: ${off.slice(0, 3).map(b => `<b>${esc(b.product_code || '코드 없음')}</b> ${esc(b.product)}`).join(', ')}${off.length > 3 ? ' …' : ''}</p><button type="button" class="btn small" data-bom-show-off>미사용에서 보기</button>`; $('[data-bom-show-off]', box).onclick = () => $('[data-bom-active="0"]', main)?.click(); }).catch(() => {});
     // 「더보기」 메뉴: 한 번에 하나만, 버튼 아래에 떠서 열린다(표 칸 안에서 펼치면 줄이 커지고 잘리므로 화면 기준 위치).
-    $$('#bomList .row-menu', main).forEach(menu => menu.addEventListener('toggle', () => { if (!menu.open) return; $$('#bomList .row-menu[open]', main).forEach(other => { if (other !== menu) other.open = false; }); bomMenuPlace(menu); }));
+    // 「더보기」 메뉴 열기·위치는 공용 처리(15.212)
     if (view === 'tree') {
       // 코드·역조회는 조건과 상관없이 전체 품목에서 찾는다.
       const everything = await api('GET', '/api/boms?include_archived=1').catch(() => all);

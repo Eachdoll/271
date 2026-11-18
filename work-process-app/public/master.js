@@ -197,7 +197,7 @@ async function pageVendors(main) {
     ${vendorTypeChecks()}</div>
     <div class="actions"><button type="button" class="btn" id="vendorImport" title="거래처를 엑셀로 여러 곳 한 번에 등록">엑셀 올리기</button>${ME.is_admin ? '<button type="button" class="btn" id="vendorFillCodes" title="코드가 비어 있는 거래처에 C0001부터 번호를 붙입니다">빈 코드 자동 채우기</button>' : ''}<button class="btn primary">등록</button></div></form>
   <div class="seg class-tabs" id="vendorTypeTabs" role="group" aria-label="거래처 구분"></div>
-  <form id="vendorFilters" class="toolbar list-filters" data-read-only="true"><label class="list-search">검색<input type="search" name="q" maxlength="200" placeholder="거래처·코드·담당자·연락처"></label><button type="submit" class="btn primary">검색</button><span class="small muted" id="vendorCount"></span></form>
+  <form id="vendorFilters" class="toolbar list-filters" data-read-only="true"><label class="list-search">검색<input type="search" name="q" maxlength="200" placeholder="거래처·코드·담당자·연락처"></label><button type="submit" class="btn primary">조회</button><span class="small muted" id="vendorCount"></span></form>
   <div id="vendorList"></div>`;
   const filters = $('#vendorFilters', main); let version = 0;
   $('#vendorImport', main).onclick = () => importDialog({ title: '거래처 엑셀 올리기', endpoint: '/api/import/vendors', after: () => load(),
@@ -220,7 +220,7 @@ async function pageVendors(main) {
     $('#vendorList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>코드</th><th>거래처</th><th>구분</th><th>운송비 조건</th><th>담당자</th><th>연락처</th><th>등록</th><th></th></tr></thead><tbody>${rows.map((v, i) => `<tr>
       <td class="nowrap">${esc(v.code || '')}</td><td data-card-primary><b>${esc(v.name)}</b>${v.biz_no ? `<div class="small muted">${esc(v.biz_no)}</div>` : ''}</td><td>${vendorTypeChips(v)}</td><td class="small">${v.is_purchase || v.freight_terms?.length ? freightSummary(v.freight_terms) : '<span class="muted">—</span>'}</td><td>${esc(v.contact_name) || '<span class="muted">미등록</span>'}</td><td>${v.phone ? `<a href="tel:${esc(v.phone.replace(/[^0-9+]/g, ''))}">${esc(v.phone)}</a>` : '<span class="muted">미등록</span>'}</td>
       <td class="small muted">${esc(v.created_by || '')}${v.updated_by ? ` · 수정 ${esc(v.updated_by)}` : ''}</td>
-      <td class="nowrap"><button class="btn small" data-vendor-recent="${i}">최근 매입</button> <button class="btn small" data-vendor-freight="${i}">운송비 조건</button> <button class="btn small" data-vendor-tax="${i}">사업자 정보</button> <button class="btn small" data-vendor-edit="${i}">수정</button>${ME.is_admin || v.created_by === ME.name ? ` <button class="btn small danger" data-vendor-del="${i}">삭제</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
+      <td class="nowrap row-acts"><button class="btn small" data-vendor-edit="${i}">수정</button>${rowMenu(v.name, [`<button class="btn small" data-vendor-recent="${i}">최근 매입</button>`, `<button class="btn small" data-vendor-freight="${i}">운송비 조건</button>`, `<button class="btn small" data-vendor-tax="${i}">사업자 정보</button>`, ME.is_admin || v.created_by === ME.name ? `<button class="btn small danger" data-vendor-del="${i}">삭제</button>` : ''])}</td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">등록된 거래처가 없습니다.</div>';
     $$('[data-vendor-edit]', main).forEach(button => button.onclick = async () => {
       const v = rows[button.dataset.vendorEdit]; const values = await promptBox('거래처 수정', fields(v)); if (!values) return;
