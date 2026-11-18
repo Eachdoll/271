@@ -2335,3 +2335,21 @@ table.grid.pr-grid .item-lock [data-item-unlock] { min-height: 22px !important; 
 /* 15.188 구매의뢰 판매단가 칸 아래 최근 판매가 */
 table.grid.pr-grid .pr-sale-hist { margin-top: 2px; font-size: 11.5px; white-space: nowrap; text-align: right; } table.grid.pr-grid .pr-sale-hist .link-btn { font-size: 11.5px; }
 table.grid.pr-grid .pr-sale-hist:empty { display: none; }
+/* ── 15.189 점검 결과 고침 ── */
+/* 조회 줄(이름이 칸 왼쪽인 한 줄): 글·검색 칸이 자기 라벨보다 넓어져 옆 칸 위에 겹치던 것 → 칸은 라벨 안 남는 폭만 */
+@media (min-width: 821px) {
+  :root[data-density="compact"] body:not(.operator-mode) #main form.list-filters > label:not(.lf-check):not(.check):not(.inline) > input:not([type=date]):not([type=checkbox]):not([type=radio]) { flex: 1 1 auto; width: auto; min-width: 6em; }
+  :root[data-density="compact"] body:not(.operator-mode) #main form.list-filters > label:not(.lf-check):not(.check):not(.inline) { flex: 0 1 auto; }
+  :root[data-density="compact"] body:not(.operator-mode) #main form.list-filters > label.grow, :root[data-density="compact"] body:not(.operator-mode) #main form.list-filters > label.lf-q, :root[data-density="compact"] body:not(.operator-mode) #main form.list-filters > label.list-search { flex: 1 1 260px; }
+}
+/* 한 줄 도구(일간·주간·월간 | ◀ ▶ 오늘 | 계획표·달력 | 엑셀): 작은 단추와 탭 단추 높이를 맞춤 */
+:root[data-density="compact"] body:not(.operator-mode) #main .toolbar .btn.small, :root[data-density="compact"] body:not(.operator-mode) #main .toolbar .seg button { min-height: 32px; height: 32px; padding-top: 0; padding-bottom: 0; }
+:root[data-density="compact"] body:not(.operator-mode) #main .toolbar:not(:has(> label)) { align-items: center; }
+/* 단추 글자는 꺾지 않고 줄 전체가 다음 줄로 */
+@media (min-width: 601px) { .result-bar .btn, .bulk-bar .btn, .toolbar .btn, #main .actions .btn, .actionbar .btn { white-space: nowrap; } }
+@media (max-width: 600px) { .actionbar { flex-wrap: wrap; } .sc-table td.nowrap, .sc-table th { white-space: normal; word-break: break-all; } .sc-card .table-wrap { overflow-x: auto; } .sc-card table.grid > * > tr > * { padding-left: 3px !important; padding-right: 3px !important; font-size: 12px; } }
+/* 휴대폰: 작은 표(카드로 바꾸지 않는 표)가 몇십 px 넘치던 것 → 칸 여백·글자 조금 줄임 */
+@media (max-width: 600px) { table.grid.keep-table > * > tr > * { padding: 4px 5px !important; font-size: 12.5px; } table.grid.keep-table { font-size: 12.5px; } }
+/* 15.189 구매의뢰 상세 팝업: 품목 칸이 많아 팝업 폭이 모자라던 것 → 이 팝업만 화면 폭까지 넓힘, 짧은 머리글은 꺾지 않음 */
+.modal:has(table.pr-items) { max-width: min(1320px, 96vw) !important; width: min(1320px, 96vw); }
+.modal table.grid > thead > tr > th:not(.th-long) { white-space: nowrap; }
