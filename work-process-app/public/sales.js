@@ -11,33 +11,55 @@ async function prDirectory() { return api('GET', '/api/directory'); }
 function prPerson(u) { return `${esc(u.name)}${u.position ? ` <span class="muted">${esc(u.position)}</span>` : ''}`; }
 
 // ── 작성·수정 양식 ──
+// 15.184 품목 입력을 아이마켓처럼 표(그리드)로: 한 품목 = 한 줄, 칸 안에 바로 입력. 칸 이름(data-k)·계산·품목 찾기·고정은 그대로.
+const PR_COLS = [['item', '품목명 *'], ['product_code', '제품코드'], ['spec', '규격'], ['unit', '단위'], ['qty', '수량 *'], ['purchase_price', '매입단가'], ['sale_price', '판매단가'], ['amount', '금액'], ['vendor', '공급선'], ['customer', '사용고객사'], ['delivery_qty', '납품예정수량'], ['due_text', '입고요청일'], ['stock_qty', '현재고'], ['monthly_usage', '월사용량']];
+function prItemTable() {
+  return `<div class="table-wrap pr-grid-wrap"><table class="grid pr-grid" data-no-reorder data-keep-cols data-no-filter data-no-sort><thead><tr><th class="c">No</th>${PR_COLS.map(([k, l]) => `<th class="${['qty', 'purchase_price', 'sale_price', 'amount'].includes(k) ? 'r' : ''}">${esc(l)}</th>`).join('')}<th></th></tr></thead><tbody data-items></tbody></table></div>`;
+}
 function prItemRow(it = {}) {
   const v = key => esc(it[key] ?? '');
-  return `<fieldset class="pr-item"><legend></legend><input type="hidden" data-k="bom_id" value="${v('bom_id')}">
-    <div class="form-grid">
-      <div class="span2 item-pick"><div class="item-field"><label>품목명 *<input data-k="item" required maxlength="200" value="${v('item')}" placeholder="품목명 직접 입력 · Enter로 등록 품목 찾기" autocomplete="off"></label><button type="button" class="btn" data-item-find>품목 찾기</button></div><div class="item-lock" data-item-lock></div></div>
-      <label>제품코드<input data-k="product_code" maxlength="50" value="${v('product_code')}"></label>
-      <label>규격<input data-k="spec" maxlength="200" value="${v('spec')}" placeholder="예: 34Φ*200"></label>
-      <label>단위<input data-k="unit" maxlength="20" value="${v('unit')}" placeholder="예: SET, BOX"></label>
-      <label>수량 *<input data-k="qty" type="number" min="0" step="any" required value="${v('qty')}"></label>
-      <label>매입단가<input data-k="purchase_price" type="number" min="0" step="any" value="${v('purchase_price')}"></label>
-      <label>판매단가<input data-k="sale_price" type="number" min="0" step="any" value="${v('sale_price')}"></label>
-      <label>공급선<input data-k="vendor" maxlength="100" list="prVendorList" value="${v('vendor')}" placeholder="매입 거래처"></label>
-      <label>납품예정수량<input data-k="delivery_qty" maxlength="50" value="${v('delivery_qty')}" placeholder="비우면 전량 · 분할 시 예: 1차 50"></label>
-      <label>사용고객사<input data-k="customer" maxlength="200" list="prCustomerList" value="${v('customer')}" placeholder="매출처에서 고르거나 입력"></label>
-      <label>현재고<input data-k="stock_qty" maxlength="50" value="${v('stock_qty')}" placeholder="품목을 고르면 자동"></label>
-      <label>입고요청일<input data-k="due_text" maxlength="50" value="${v('due_text')}" placeholder="예: ASAP 또는 2026-12-01"></label>
-      <label>월사용량<input data-k="monthly_usage" maxlength="50" value="${v('monthly_usage')}"></label>
-    </div>
-    <p class="pr-amount small" data-amount aria-live="polite"></p>
-    <div class="actions"><button type="button" class="btn small danger" data-remove-item>품목 삭제</button></div></fieldset>`;
+  const cell = (k, html, cls = '') => `<td class="pr-c-${k} ${cls}"><label class="pr-cell" aria-label="${esc((PR_COLS.find(c => c[0] === k) || [, k])[1].replace(' *', ''))}">${html}</label></td>`;
+  return `<tr class="pr-item"><td class="c pr-no" data-no></td>
+    <td class="pr-c-item"><input type="hidden" data-k="bom_id" value="${v('bom_id')}"><div class="item-pick"><div class="item-field"><label class="pr-cell" aria-label="품목명"><input data-k="item" required maxlength="200" value="${v('item')}" placeholder="품목명 · Enter로 찾기" autocomplete="off"></label><button type="button" class="btn small" data-item-find title="등록 품목 찾기">찾기</button></div><div class="item-lock small" data-item-lock></div></div></td>
+    ${cell('product_code', `<input data-k="product_code" maxlength="50" value="${v('product_code')}">`)}
+    ${cell('spec', `<input data-k="spec" maxlength="200" value="${v('spec')}" placeholder="예: 34Φ*200">`)}
+    ${cell('unit', `<input data-k="unit" maxlength="20" value="${v('unit')}" placeholder="EA">`)}
+    ${cell('qty', `<input data-k="qty" type="number" min="0" step="any" required value="${v('qty')}">`, 'r')}
+    ${cell('purchase_price', `<input data-k="purchase_price" type="number" min="0" step="any" value="${v('purchase_price')}">`, 'r')}
+    ${cell('sale_price', `<input data-k="sale_price" type="number" min="0" step="any" value="${v('sale_price')}">`, 'r')}
+    <td class="r pr-c-amount small" data-amount aria-live="polite"></td>
+    ${cell('vendor', `<input data-k="vendor" maxlength="100" list="prVendorList" value="${v('vendor')}" placeholder="매입처">`)}
+    ${cell('customer', `<input data-k="customer" maxlength="200" list="prCustomerList" value="${v('customer')}" placeholder="매출처">`)}
+    ${cell('delivery_qty', `<input data-k="delivery_qty" maxlength="50" value="${v('delivery_qty')}" placeholder="전량">`)}
+    ${cell('due_text', `<input data-k="due_text" maxlength="50" value="${v('due_text')}" placeholder="ASAP">`)}
+    ${cell('stock_qty', `<input data-k="stock_qty" maxlength="50" value="${v('stock_qty')}" placeholder="자동">`)}
+    ${cell('monthly_usage', `<input data-k="monthly_usage" maxlength="50" value="${v('monthly_usage')}">`)}
+    <td class="c"><button type="button" class="btn small danger" data-remove-item title="품목 삭제">삭제</button></td></tr>`;
+}
+// 15.185 조직도: 부서 → 상위 부서 순서(이름 목록), 결재자 고르기 묶음, 기본 규칙 고르기·직급 단계 풀기
+function prDeptChain(depts, name) { const out = []; let d = depts.find(x => x.name === name); for (let i = 0; d && i < 20; i++) { out.push(d.name); d = d.parent_id ? depts.find(x => x.id === d.parent_id) : null; } return out; }
+function prPeopleGroups(people, chain, org) {
+  const rank = n => { const i = (org.positions || []).findIndex(p => p.name === n); return i < 0 ? 999 : i; };
+  const sort = list => [...list].sort((a, b) => rank(a.position) - rank(b.position) || a.name.localeCompare(b.name, 'ko'));
+  const groups = chain.map((d, i) => ({ label: i === 0 ? `내 부서 · ${d}` : `상위 부서 · ${d}`, people: sort(people.filter(p => p.department === d)) })).filter(g => g.people.length);
+  const rest = people.filter(p => !chain.includes(p.department));
+  const byDept = new Map(); rest.forEach(p => { const k = p.department || '부서 미지정'; byDept.set(k, [...(byDept.get(k) || []), p]); });
+  return [...groups, ...[...byDept].map(([d, list]) => ({ label: d, people: sort(list) }))];
+}
+function prPickRule(list, position) { return (list || []).find(r => r.when_position && r.when_position === position) || (list || []).find(r => !r.when_position) || null; }
+function prResolveStep(st, chain, people) {
+  if (st.type === 'user') return people.some(p => p.id === st.user_id) ? st.user_id : null;
+  for (const d of chain) { const hit = people.find(p => p.department === d && p.position === st.position); if (hit) return hit.id; }
+  return null;
 }
 async function prForm(host, existing = null, { onDone } = {}) {
   // 공급선은 매입처, 사용고객사는 매출처 목록(구분 없는 거래처는 양쪽)에서 고른다.
-  const [people, catalog, vendors, customers] = await Promise.all([prDirectory(), api('GET', '/api/boms?temp=1').catch(() => []), api('GET', '/api/vendors?type=purchase').catch(() => []), api('GET', '/api/vendors?type=sales').catch(() => [])]);
+  const [people, catalog, vendors, customers, org, rules] = await Promise.all([prDirectory(), api('GET', '/api/boms?temp=1').catch(() => []), api('GET', '/api/vendors?type=purchase').catch(() => []), api('GET', '/api/vendors?type=sales').catch(() => []), api('GET', '/api/org').catch(() => ({ departments: [], positions: [] })), api('GET', '/api/approval-rules').catch(() => ({ purchase_request: [] }))]);
   const line = { approve: [], agree: [], cc: [] };
   if (existing) for (const l of existing.lines) line[l.kind].push(l.user_id);
   const others = people.filter(p => p.id !== (existing ? existing.author_id : ME.id));
+  const authorDept = existing ? existing.department : ME.department, authorPos = existing ? existing.author_position : ME.position;
+  const chain = prDeptChain(org.departments, authorDept), groups = prPeopleGroups(others, chain, org); // 15.185 내 부서 → 상위 부서 → 그 밖
   host.innerHTML = `<form class="stack pr-form" data-no-author>
     <p class="pr-requester"><span class="muted">의뢰부서</span> <b>${esc((existing ? existing.department : ME.department) || '부서 미지정')}</b> <span class="muted">요청자</span> <b>${esc(existing ? existing.author_name : ME.name)}</b> <span>${esc((existing ? existing.author_position : ME.position) || '')}</span></p>
     ${!(existing ? existing.department : ME.department) ? '<p class="small muted">부서가 지정되지 않았습니다. 관리자에게 요청하세요(관리 › 조직 구성).</p>' : ''}
@@ -45,15 +67,16 @@ async function prForm(host, existing = null, { onDone } = {}) {
       <label>작성일 *<input name="doc_date" type="date" required value="${esc(existing ? existing.doc_date : todayStr())}"></label>
       <label>제목<input name="title" maxlength="200" value="${esc(existing ? existing.title : '')}" placeholder="예: 핸드롤러 구매의뢰"></label>
     </div>
-    <section class="pr-section"><h3>구매 의뢰 품목</h3><div data-items></div>
+    <section class="pr-section"><h3>구매 의뢰 품목 <span class="small muted">칸에 바로 입력 · 품목명에서 Enter로 등록 품목 찾기 · Tab으로 옆 칸</span></h3>${prItemTable()}
       <div class="actions" style="justify-content:flex-start"><button type="button" class="btn" data-add-item>+ 품목 추가</button></div>
       <div class="pr-freight" data-freight></div>
       <p class="pr-totals" data-totals aria-live="polite"></p></section>
     <label>비고<textarea name="note" rows="2" maxlength="2000">${esc(existing ? existing.note : '')}</textarea></label>
     <section class="pr-section"><h3>결재선</h3>
+      <div class="pr-line-default" data-line-default></div>
       <p class="small muted"><span>기안은 요청자(작성자)로 자동 표시됩니다.</span><br><span>결재자가 순서대로 승인한 뒤 합의자가 순서대로 확인합니다. 참조자는 열람만 합니다.</span></p>
       <div class="pr-line-groups">${Object.entries(PR_GROUP).map(([kind, label]) => `<div class="pr-line-group" data-group="${kind}"><label>${label}${kind === 'approve' ? ' *' : ''}
-        <span class="pr-line-pick"><select data-pick="${kind}" data-no-mark aria-label="${label}에 넣을 사람"><option value="">사람 선택</option>${others.map(p => `<option value="${p.id}">${esc(p.name)}${p.position ? ' · ' + esc(p.position) : ''}${p.department ? ' · ' + esc(p.department) : ''}</option>`).join('')}</select>
+        <span class="pr-line-pick"><select data-pick="${kind}" data-no-mark aria-label="${label}에 넣을 사람"><option value="">사람 선택</option>${groups.map(g => `<optgroup label="${esc(g.label)}">${g.people.map(p => `<option value="${p.id}">${esc(p.name)}${p.position ? ' · ' + esc(p.position) : ''}${p.department ? ' · ' + esc(p.department) : ''}</option>`).join('')}</optgroup>`).join('')}</select>
         <button type="button" class="btn small" data-add-line="${kind}">추가</button></span></label><ol class="pr-line-list" data-list="${kind}"></ol></div>`).join('')}</div>
       <p class="field-error" data-line-error hidden></p></section>
     ${existing ? '' : photoPicker()}
@@ -61,9 +84,9 @@ async function prForm(host, existing = null, { onDone } = {}) {
   </form>
   <datalist id="prVendorList">${vendors.map(vd => `<option value="${esc(vd.name)}">`).join('')}</datalist>
   <datalist id="prCustomerList">${customers.map(vd => `<option value="${esc(vd.name)}">`).join('')}</datalist>`;
-  const form = $('form', host), items = $('[data-items]', form), draft = existing ? null : bindPhotoDraft(form);
+  const form = $('form', host), items = $('[data-items]', form) /* 15.184 표의 tbody */, draft = existing ? null : bindPhotoDraft(form);
   const byId = id => people.find(p => p.id === id) || { name: '(없는 사용자)' };
-  const renumber = () => [...items.children].forEach((row, i) => { $('legend', row).textContent = `품목 ${i + 1}`; $('[data-remove-item]', row).setAttribute('aria-label', `품목 ${i + 1} 삭제`); });
+  const renumber = () => [...items.children].forEach((row, i) => { $('[data-no]', row).textContent = String(i + 1); $('[data-remove-item]', row).setAttribute('aria-label', `품목 ${i + 1} 삭제`); });
   // 15.69 운송비: 공급선(매입처)별로 그 거래처의 운송비 조건으로 기본값을 계산하고, 손으로 고친 값은 그대로 둔다. 이익 = 판매 - 매입 - 운송비.
   const freightVal = {}; for (const [vendor, fee] of Object.entries(existing?.freight || {})) freightVal[vendor] = { value: String(fee), dirty: true };
   const freightBox = $('[data-freight]', form);
@@ -75,7 +98,7 @@ async function prForm(host, existing = null, { onDone } = {}) {
     for (const row of items.children) {
       const n = key => Number($(`[data-k="${key}"]`, row).value || 0), qty = n('qty'), b = n('purchase_price') * qty, s = n('sale_price') * qty;
       buy += b; sale += s;
-      $('[data-amount]', row).textContent = qty ? `매입금액 ${prMoney(b)} · 판매금액 ${prMoney(s)} · 이익 ${prProfit(s, b)}` : '';
+      $('[data-amount]', row).innerHTML = qty ? `<div>매입 ${prMoney(b)}</div><div class="muted">판매 ${prMoney(s)}</div>` : ''; $('[data-amount]', row).title = qty ? `이익 ${prProfit(s, b)}` : '';
       const vendor = $('[data-k="vendor"]', row).value.trim(); if (vendor) { const g = byVendor.get(vendor) || { amount: 0, lines: 0 }; g.amount += b; g.lines++; byVendor.set(vendor, g); }
     }
     freightBox.innerHTML = byVendor.size ? `<h4>운송비 <span class="small muted">(공급선별 · 거래처 관리의 조건으로 자동 계산, 고칠 수 있음)</span></h4>${[...byVendor].map(([vendor, g]) => {
@@ -126,6 +149,18 @@ async function prForm(host, existing = null, { onDone } = {}) {
     if (!id) { select.focus(); return toast('추가할 사람을 고르세요.', 'err'); }
     line[kind].push(id); select.value = ''; drawLines(); select.focus();
   });
+  // 15.185 결재선 기본값: 관리 › 결재선 설정의 규칙(작성자 직급)으로 채운다. 직급 단계는 작성자 부서부터 상위 부서로 올라가며 그 직급인 사람.
+  const applyDefault = (announce) => {
+    const r = prPickRule(rules.purchase_request, authorPos), box = $('[data-line-default]', form);
+    if (!r) { box.innerHTML = rules.purchase_request.length ? '<p class="small muted">작성자 직급에 맞는 결재선 기본값이 없습니다. 직접 고르세요.</p>' : ''; return false; }
+    const miss = []; for (const kind of Object.keys(line)) line[kind] = [];
+    for (const kind of ['approve', 'agree', 'cc']) for (const st of r[kind] || []) { const id = prResolveStep(st, chain, others); if (id && !Object.values(line).some(l => l.includes(id))) line[kind].push(id); else if (!id) miss.push(st.type === 'position' ? st.position : '지정한 사람'); }
+    box.innerHTML = `<p class="small"><span class="chip green">기본 결재선</span> ${esc(r.when_position ? `작성자 직급 「${r.when_position}」` : '모든 직급')} 규칙으로 채웠습니다. 바꿔도 됩니다. ${miss.length ? `<span class="red-text">찾지 못한 단계: ${esc(miss.join(', '))}(부서·상위 부서에 그 직급인 사람이 없음)</span>` : ''} <button type="button" class="btn small" data-line-reset>기본값 다시 불러오기</button></p>`;
+    $('[data-line-reset]', box).onclick = () => { applyDefault(true); drawLines(); };
+    if (announce) toast('결재선 기본값을 다시 불러왔습니다.');
+    return true;
+  };
+  if (!existing) applyDefault(false);
   drawLines();
   // 15.62: 새 의뢰서 입력 초안(이 탭): 머리·품목 줄·결재선. 사진은 다시 첨부한다.
   const entryDraft = existing ? null : bindEntryDraft(form, 'purchase-request:new', {

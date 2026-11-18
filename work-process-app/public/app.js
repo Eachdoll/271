@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.183';
+const APP_VERSION = '15.185';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -434,7 +434,7 @@ function applyMenuAccess(main) {
 }
 // 관리 메뉴(15.38): 거래처·검사규격 같은 기준 정보는 업무 메뉴가 아닌 관리 묶음에 둔다. 주소는 그대로다.
 const NAV_MANAGE = [['#/purchase/vendors', '거래처 관리'], ['#/purchase/prices', '단가표'], ['#/quality/specs', '검사규격 설정']];
-const NAV_ADMIN = [['#/admin/users', '회원 관리'], ['#/admin', '관리자 설정'], ['#/admin/org', '조직 구성'], ['#/admin/bom', '제품등록']]; // 15.175 회원 관리 분리
+const NAV_ADMIN = [['#/admin/users', '회원 관리'], ['#/admin', '관리자 설정'], ['#/admin/org', '조직 구성'], ['#/admin/approval', '결재선 설정'], ['#/admin/bom', '제품등록']]; // 15.175 회원 관리 분리
 // Entry and list screens built from one page: the page renders both parts and the view hides one.
 // key: route → [page route, view, title, other route, link label]
 const VIEW_SPLIT = {
@@ -619,6 +619,7 @@ const PAGES = {
   '#/admin/users/roles': main => managedPage(main, '#/admin/users/roles', m => pageMembers(m, 'roles')), // 사용 권한
   '#/admin/users/menus': main => managedPage(main, '#/admin/users/menus', m => pageMembers(m, 'menus')), // 메뉴 보기
   '#/admin/org': pageOrg,
+  '#/admin/approval': main => pageApprovalRules(main), // 15.185 결재선 기본값
   '#/admin/bom': pageBoms,
   '#/me': pageMe,
   '#/tasks': pageTasks,

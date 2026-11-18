@@ -194,3 +194,36 @@ async function pageMembers(main, tab) {
   if (nf) nf.onsubmit = async e => { e.preventDefault(); try { const made = await api('POST', '/api/admin/users', { ...formObj(nf), roles: [] }); toast(`${made.name} 계정을 만들었습니다. 사용 권한·메뉴 보기를 정하세요.`); nf.reset(); await load(); } catch (err) { fail(err); } };
   await load();
 }
+
+// ── 15.185 결재선 설정(관리 › 결재선 설정): 문서별 「작성자 직급 → 결재·합의·참조」 기본값. 단계는 직급(작성자 부서→상위 부서에서 찾음) 또는 특정 사람.
+async function pageApprovalRules(main) {
+  if (!ME.is_admin) { main.innerHTML = '<h1>결재선 설정</h1><div class="empty">관리자만 볼 수 있습니다.</div>'; return; }
+  const [rules, org, people] = await Promise.all([api('GET', '/api/approval-rules'), api('GET', '/api/org'), api('GET', '/api/directory')]);
+  let list = JSON.parse(JSON.stringify(rules.purchase_request || []));
+  const KIND = { approve: '결재', agree: '합의', cc: '참조' }, posNames = (org.positions || []).map(p => p.name);
+  const stepText = st => st.type === 'position' ? `${st.position}(직급)` : (people.find(p => p.id === st.user_id)?.name || '없는 사람') + (people.find(p => p.id === st.user_id)?.position ? ` ${people.find(p => p.id === st.user_id).position}` : '');
+  const adder = (i, kind) => `<select data-add="${i}:${kind}" aria-label="${KIND[kind]} 단계 추가"><option value="">+ ${KIND[kind]} 추가</option><optgroup label="직급(작성자 부서→상위 부서에서 찾음)">${posNames.map(n => `<option value="p:${esc(n)}">${esc(n)}</option>`).join('')}</optgroup><optgroup label="특정 사람">${people.map(p => `<option value="u:${p.id}">${esc(p.name)}${p.position ? ' · ' + esc(p.position) : ''}${p.department ? ' · ' + esc(p.department) : ''}</option>`).join('')}</optgroup></select>`;
+  const draw = () => {
+    $('#ruleList', main).innerHTML = list.length ? `<div class="table-wrap"><table class="grid ar-grid" data-no-reorder data-no-sort data-no-filter><thead><tr><th>작성자 직급</th><th>결재(순서대로)</th><th>합의</th><th>참조</th><th></th></tr></thead><tbody>${list.map((r, i) => `<tr>
+      <td><select data-when="${i}" aria-label="작성자 직급"><option value="">모든 직급(기본)</option>${posNames.map(n => `<option${r.when_position === n ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></td>
+      ${['approve', 'agree', 'cc'].map(kind => `<td><ol class="ar-steps">${(r[kind] || []).map((st, j) => `<li><span>${esc(stepText(st))}</span><button type="button" class="btn small" data-del="${i}:${kind}:${j}" aria-label="빼기">×</button></li>`).join('')}</ol>${adder(i, kind)}</td>`).join('')}
+      <td><button type="button" class="btn small danger" data-rm="${i}">규칙 삭제</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">규칙이 없습니다. 「+ 규칙 추가」로 만드세요.</div>';
+  };
+  main.innerHTML = `<h1>결재선 설정</h1>
+    <p class="muted">문서를 새로 쓸 때 결재선을 자동으로 채울 기본값입니다. 작성자 직급마다 규칙을 두고(없으면 「모든 직급」 규칙), 단계는 <b>직급</b>(작성자 부서부터 상위 부서로 올라가며 그 직급인 사람을 찾음) 또는 <b>특정 사람</b>으로 정합니다. 작성자는 채워진 결재선을 바꿀 수 있습니다.</p>
+    <div class="seg class-tabs" role="tablist"><a role="tab" class="on" aria-selected="true">구매의뢰</a></div>
+    <p class="small muted">예) 작성자 「사원」 → 결재 「주임」 → 「대리」, 합의 「구매팀장(특정 사람)」</p>
+    <div id="ruleList"></div>
+    <div class="actions" style="justify-content:flex-start"><button type="button" class="btn" data-new>+ 규칙 추가</button><button type="button" class="btn primary" data-save>저장</button></div>`;
+  draw();
+  main.addEventListener('change', e => {
+    const w = e.target.closest('[data-when]'); if (w) { list[Number(w.dataset.when)].when_position = w.value; return; }
+    const ad = e.target.closest('[data-add]'); if (ad && ad.value) { const [i, kind] = ad.dataset.add.split(':'), v = ad.value; const st = v.startsWith('p:') ? { type: 'position', position: v.slice(2) } : { type: 'user', user_id: Number(v.slice(2)) }; (list[Number(i)][kind] ||= []).push(st); draw(); }
+  });
+  main.addEventListener('click', async e => {
+    const d = e.target.closest('[data-del]'); if (d) { const [i, kind, j] = d.dataset.del.split(':'); list[Number(i)][kind].splice(Number(j), 1); draw(); return; }
+    const rm = e.target.closest('[data-rm]'); if (rm) { list.splice(Number(rm.dataset.rm), 1); draw(); return; }
+    if (e.target.closest('[data-new]')) { list.push({ when_position: '', approve: [], agree: [], cc: [] }); draw(); return; }
+    if (e.target.closest('[data-save]')) { try { const saved = await api('PUT', '/api/approval-rules', { purchase_request: list }); list = saved.purchase_request; draw(); toast('결재선 설정을 저장했습니다.'); } catch (err) { fail(err); } }
+  });
+}

@@ -5783,6 +5783,26 @@ async function prDetail(row, user) {
     can_order: !!(user && row.status === 'approved' && hasRole(user, 'purchase') && items.some(it => !it.po_id && !it.order_closed)),
   };
 }
+// 15.185 결재선 기본값: 문서 종류별로 「작성자 직급 → 결재·합의·참조 단계」를 미리 정해 둔다. 단계는 직급(작성자 부서→상위 부서에서 찾음) 또는 특정 사람.
+// 화면은 새 문서를 쓸 때 이 규칙으로 결재선을 채워 줄 뿐이고, 상신할 때는 지금처럼 고른 사람으로 검사한다.
+const APPROVAL_DOCS = ['purchase_request'];
+function validApprovalRules(body) {
+  const out = {};
+  for (const doc of APPROVAL_DOCS) {
+    const list = body?.[doc] ?? []; if (!Array.isArray(list) || list.length > 30) throw bad('결재선 규칙은 문서마다 30개까지입니다.');
+    out[doc] = list.map(rule => {
+      if (!rule || typeof rule !== 'object') throw bad('결재선 규칙을 확인하세요.');
+      const steps = kind => { const s = rule[kind] ?? []; if (!Array.isArray(s) || s.length > 8) throw bad('단계는 8개까지입니다.');
+        return s.map(st => { if (st?.type === 'position') return { type: 'position', position: reqStr(st.position, '직급', 30) }; if (st?.type === 'user' && Number.isSafeInteger(Number(st.user_id)) && Number(st.user_id) > 0) return { type: 'user', user_id: Number(st.user_id) }; throw bad('단계는 직급 또는 사람으로 고르세요.'); }); };
+      const r = { when_position: str(rule.when_position, 30), approve: steps('approve'), agree: steps('agree'), cc: steps('cc') };
+      if (!r.approve.length) throw bad('결재 단계를 1개 이상 넣으세요.');
+      return r;
+    });
+  }
+  return out;
+}
+route('GET', '/api/approval-rules', async () => { const raw = await getSetting('approval_rules'); try { return { purchase_request: [], ...(raw ? JSON.parse(raw) : {}) }; } catch { return { purchase_request: [] }; } });
+route('PUT', '/api/approval-rules', async ({ user, body }) => { requireAdmin(user); const v = validApprovalRules(body); await setSetting('approval_rules', JSON.stringify(v)); return v; });
 route('GET', '/api/directory', async () => (await db.prepare("SELECT id,name,position,department FROM users WHERE approval_status='approved' ORDER BY name").all()));
 route('GET', '/api/purchase-requests', async ({ user, query }) => {
   const where = [], args = [];
