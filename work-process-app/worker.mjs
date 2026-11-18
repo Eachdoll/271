@@ -127,7 +127,7 @@ async function baseMenus(u, departments = null) { // 15.179 departments를 넘�
 // 사람별 화면 설정(15.62): 자주 쓰는 화면(★)과 목록 조건(상태·구분 같은 선택값). settings 표의 'prefs:<id>' 한 줄에 둔다(마이그레이션 없음).
 async function userPrefs(id) {
   const row = await db.prepare('SELECT value FROM settings WHERE key=?').get('prefs:' + id);
-  try { const v = row ? JSON.parse(row.value) : {}; return { favorites: Array.isArray(v.favorites) ? v.favorites : [], filters: v.filters && typeof v.filters === 'object' ? v.filters : {} }; } catch { return { favorites: [], filters: {} }; }
+  try { const v = row ? JSON.parse(row.value) : {}; return { favorites: Array.isArray(v.favorites) ? v.favorites : [], filters: v.filters && typeof v.filters === 'object' ? v.filters : {}, ...(['default', 'christmas'].includes(v.skin) ? { skin: v.skin } : {}) }; } catch { return { favorites: [], filters: {} }; } // 15.220 skin
 }
 function cleanPrefs(body, prior) {
   const out = { ...prior };
@@ -152,6 +152,11 @@ function cleanPrefs(body, prior) {
     out.filters = filters;
   }
   if (JSON.stringify(out).length > 30000) throw bad('저장할 화면 설정이 너무 큽니다.');
+  if (body.skin !== undefined) { // 15.220 디자인 스킨(사용자별)
+    const skin = String(body.skin || 'default');
+    if (!['default', 'christmas'].includes(skin)) throw bad('디자인 스킨을 확인하세요.');
+    out.skin = skin;
+  }
   return out;
 }
 async function meUser(u) { return { ...publicUser(u), menus: await effectiveMenus(u), ui: await userPrefs(u.id) }; }

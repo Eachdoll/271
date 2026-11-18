@@ -24,6 +24,16 @@ function applyDensity(mode) {
   document.documentElement.setAttribute('data-density', mode);
   for (const b of document.querySelectorAll('.density-toggle')) { b.innerHTML = `<span class="theme-icon" aria-hidden="true">${mode === 'compact' ? '☰' : '≡'}</span> <span>${DENSITY_LABEL[mode]}</span>`; b.title = '화면 밀도(촘촘 ↔ 보통)'; b.setAttribute('aria-label', `화면 밀도: ${DENSITY_LABEL[mode]}`); }
 }
+// 15.220 디자인 스킨(사용자별): 기본 · 크리스마스. <html data-skin="christmas">. 계정 설정(ME.ui.skin)에 저장, 이 기기에도 기억(첫 화면 깜빡임 없이).
+const SKIN_KEY = 'wpa:skin', SKINS = [['default', '기본'], ['christmas', '🎄 크리스마스']];
+function skinMode() { try { const v = localStorage.getItem(SKIN_KEY); return SKINS.some(([k]) => k === v) ? v : 'default'; } catch { return 'default'; } }
+function applySkin(skin, { save = false } = {}) {
+  const v = SKINS.some(([k]) => k === skin) ? skin : 'default';
+  if (v === 'default') document.documentElement.removeAttribute('data-skin'); else document.documentElement.setAttribute('data-skin', v);
+  try { localStorage.setItem(SKIN_KEY, v); } catch { /* 이 화면에만 */ }
+  for (const s of document.querySelectorAll('.skin-select')) s.value = v;
+  if (save && typeof api === 'function' && typeof ME !== 'undefined' && ME) api('PUT', '/api/me/prefs', { skin: v }).then(p => { if (ME) ME.ui = p; }).catch(() => {});
+}
 function themeMode() { try { const v = localStorage.getItem(THEME_KEY); return THEME_MODES.includes(v) ? v : 'auto'; } catch { return 'auto'; } }
 function applyTheme(mode) {
   const root = document.documentElement;
@@ -32,7 +42,7 @@ function applyTheme(mode) {
 }
 (function themeStart() {
   if (typeof document === 'undefined' || !document.documentElement) return;
-  applyTheme(themeMode()); applyNavLayout(navLayout()); applyDensity(densityMode());
+  applyTheme(themeMode()); applyNavLayout(navLayout()); applyDensity(densityMode()); applySkin(skinMode());
   const place = () => {
     for (const found of document.querySelectorAll('.who, .auth-card, .side')) {
       const host = found.classList.contains('side') ? (found.querySelector(':scope > .side-prefs') || found.insertAdjacentElement('afterbegin', Object.assign(document.createElement('div'), { className: 'side-prefs' }))) : found;
@@ -50,6 +60,15 @@ function applyTheme(mode) {
         const db = document.createElement('button'); db.type = 'button'; db.className = 'btn small theme-toggle density-toggle';
         db.onclick = () => { const next = densityMode() === 'compact' ? 'normal' : 'compact'; try { localStorage.setItem(DENSITY_KEY, next); } catch { /* 이 화면에만 */ } applyDensity(next); };
         nb.after(db); applyDensity(densityMode());
+      }
+      // 디자인 스킨 고르기(머리줄 「화면 설정」 상자·휴대폰 메뉴 위)
+      if ((host.classList.contains('who') && document.querySelector('.side')) || host.classList.contains('side-prefs')) {
+        if (!host.querySelector('.skin-select')) {
+          const sk = document.createElement('select'); sk.className = 'skin-select'; sk.setAttribute('aria-label', '디자인 스킨'); sk.title = '디자인 스킨(사용자별)';
+          sk.innerHTML = SKINS.map(([k, l]) => `<option value="${k}">스킨: ${l}</option>`).join('');
+          sk.value = skinMode(); sk.onchange = () => applySkin(sk.value, { save: true });
+          host.append(sk);
+        }
       }
     }
   };

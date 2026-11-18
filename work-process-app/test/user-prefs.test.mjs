@@ -49,3 +49,12 @@ test('Bad settings are refused; deleting a user removes their settings', async (
   assert.equal((await admin('DELETE', `/api/admin/users/${id}`)).status, 200);
   assert.equal(sqlite.prepare('SELECT 1 FROM settings WHERE key=?').get('prefs:' + id), undefined);
 });
+
+test('15.220 design skin is saved per person and validated', async () => {
+  assert.equal((await staff('PUT', '/api/me/prefs', { skin: 'christmas' })).body.skin, 'christmas');
+  assert.equal((await staff('GET', '/api/me')).body.user.ui.skin, 'christmas');
+  assert.equal((await admin('GET', '/api/me')).body.user.ui.skin, undefined, 'another person keeps the default');
+  assert.equal((await staff('PUT', '/api/me/prefs', { skin: 'neon' })).status, 400);
+  assert.equal((await staff('PUT', '/api/me/prefs', { skin: 'default' })).body.skin, 'default');
+  assert.ok(Array.isArray((await staff('GET', '/api/me')).body.user.ui.favorites), 'other prefs stay');
+});

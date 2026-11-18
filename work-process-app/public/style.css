@@ -2863,3 +2863,40 @@ form.list-filters > label.rp-moved, .toolbar > label.rp-moved { display: none !i
   table.m-grid .m-opt-btn { display: inline-flex; align-items: center; min-height: 32px; margin-top: 4px; padding: 2px 10px; border: 1px dashed var(--line); border-radius: 6px; background: var(--panel); color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; }
 }
 @media (max-width: 600px) { .rs-page table.rs-acc { min-width: 0; } }
+
+/* ───────── 15.220 디자인 스킨: 크리스마스 ───────── */
+.skin-select { min-height: 32px; border-radius: 6px; padding: 2px 8px; font: inherit; font-size: 13px; }
+:root[data-skin="christmas"] {
+  --ns-navy: #0f4d2f; --ns-navy-2: #17643f; --ns-pill: #c62828;
+  --accent: #c62828; --accent-soft: #fdeceb; --accent-ink: #b71c1c;
+  --btn-primary: #c62828; --btn-primary-hover: #a91f1f;
+  --erp-head: #e9f4ec; --erp-head-ink: #0f4d2f; --erp-head-line: #c3dfcb;
+  --row-hover: #fff4ef; --xmas-gold: #e0b341;
+}
+@media (prefers-color-scheme: dark) { :root[data-skin="christmas"]:not([data-theme="light"]) { --ns-navy: #0b3a23; --ns-navy-2: #12502f; --ns-pill: #e05656; --accent: #ef6b6b; --accent-soft: #3a1f22; --btn-primary: #c43a3a; --btn-primary-hover: #a92f2f; --erp-head: #1d3327; --erp-head-ink: #b9e3c7; --erp-head-line: #2b4a37; --row-hover: #2a2224; } }
+:root[data-skin="christmas"][data-theme="dark"] { --ns-navy: #0b3a23; --ns-navy-2: #12502f; --ns-pill: #e05656; --accent: #ef6b6b; --accent-soft: #3a1f22; --btn-primary: #c43a3a; --btn-primary-hover: #a92f2f; --erp-head: #1d3327; --erp-head-ink: #b9e3c7; --erp-head-line: #2b4a37; --row-hover: #2a2224; }
+/* 머리줄: 소나무색 + 내리는 눈 + 아래 장식 줄(빨강·초록·금색 전구) */
+:root[data-skin="christmas"] .top { position: sticky; overflow: hidden; background: linear-gradient(180deg, #0f4d2f 0%, #0b3d25 100%); }
+:root[data-skin="christmas"] .top::before { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: .75;
+  background-image: radial-gradient(2px 2px at 20px 30px, #fff 50%, transparent 51%), radial-gradient(1.5px 1.5px at 80px 10px, #fff 50%, transparent 51%), radial-gradient(2.5px 2.5px at 150px 40px, #fff 50%, transparent 51%), radial-gradient(1.5px 1.5px at 210px 20px, #fff 50%, transparent 51%), radial-gradient(2px 2px at 260px 45px, #fff 50%, transparent 51%);
+  background-size: 300px 56px; animation: xmas-snow 9s linear infinite; }
+:root[data-skin="christmas"] .top::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; pointer-events: none;
+  background: repeating-linear-gradient(90deg, #d32f2f 0 14px, #f4f4f4 14px 18px, #2e7d32 18px 32px, #f4f4f4 32px 36px, #e0b341 36px 50px, #f4f4f4 50px 54px); }
+:root[data-skin="christmas"] .top > * { position: relative; z-index: 1; }
+@keyframes xmas-snow { from { background-position: 0 -56px; } to { background-position: 40px 56px; } }
+@media (prefers-reduced-motion: reduce) { :root[data-skin="christmas"] .top::before { animation: none; } }
+:root[data-skin="christmas"] .brand-text::after { content: ' 🎄'; }
+/* 메뉴·탭·버튼 */
+:root[data-skin="christmas"] .nav-group .nav-title[aria-expanded="true"], :root[data-skin="christmas"] .nav-group.drop > .nav-title { color: #fff; background: #c62828; }
+:root[data-skin="christmas"] .manage-tabs a.on { background: #c62828; }
+:root[data-skin="christmas"] form.list-filters .btn.primary, :root[data-skin="christmas"] form.list-filters button.primary { background: var(--ns-navy); border-color: var(--ns-navy); }
+:root[data-skin="christmas"] .btn.primary:not(:disabled) { box-shadow: inset 0 -2px 0 rgba(0,0,0,.15); }
+:root[data-skin="christmas"] table.grid { border-top-color: #c62828; }
+/* 대시보드: 제목에 산타·카드에 눈 쌓인 윗선 */
+:root[data-skin="christmas"] .dash-head h1::after { content: ' 🎅'; }
+:root[data-skin="christmas"] .dm-card { border-top-width: 5px; box-shadow: inset 0 3px 0 rgba(255,255,255,.9); }
+:root[data-skin="christmas"] .dash-section > h2::before { content: '❄ '; color: #8fb8d8; }
+:root[data-skin="christmas"] .tasks h2::before { content: '🎁 '; }
+/* 바닥: 아주 옅은 눈송이 무늬 */
+:root[data-skin="christmas"] body { background-image: radial-gradient(1.5px 1.5px at 30px 40px, rgba(15,77,47,.07) 50%, transparent 51%), radial-gradient(2px 2px at 120px 160px, rgba(198,40,40,.05) 50%, transparent 51%); background-size: 220px 220px; }
+@media print { :root[data-skin="christmas"] .top::before, :root[data-skin="christmas"] .top::after { display: none; } :root[data-skin="christmas"] .brand-text::after, :root[data-skin="christmas"] .dash-head h1::after { content: none; } }
