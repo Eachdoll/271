@@ -1080,3 +1080,5 @@ INVITE_CODE=local-test-code npm start
 - 15.218 휴대폰 고침: ① 매출·매입 달력 납품전표 목록(#scBills)·세부품목내역(#scItems)이 휴대폰에서 거래처가 한 글자씩 꺾이고 합계금액이 오른쪽으로 잘리던 것 → 그리드(PHONE_GRID), 고른 줄은 줄 전체 색 ② 출하지시(si-table)가 PC용 앞 열 고정(gr-freeze sticky)을 휴대폰에서도 써서 품목·수량·단위가 겹치던 것 → 휴대폰에서 고정 끔, 품목명 줄바꿈.
 
 - 15.219 휴대폰 개선 10건: ① 입고현황(rs-acc) 휴대폰은 이름·합계금액 두 칸만 그림(건수·수량은 이름 아래 작게, 예전 min-width 560px 풂) ② 세탁 성적서 누적 행렬 → 의류(부위)별 목록(lrPhoneList) ③ 리포트 차트 휴대폰은 좁은 폭으로 그림 ④ 매출·매입 달력 「◀ 연·월 ▶ 오늘」 한 줄 ⑤ 탭 줄(class-tabs·tax-side·receipt-tabs) 한 줄 가로 밀기 + 고른 탭 보이게 ⑥ 세금계산서 단추 「발행 + 더보기」 ⑦ 분석·VOC·개발 리스트·세금계산서·생산의뢰 목록 PHONE_GRID, 발주·입고 2줄로 줄임, 품목 칸 「규격·단위」 단추 숨김 ⑧ 의뢰 화면(분석·VOC·개발·샘플) 휴대폰은 입력 양식 접고 「+ 새 … 작성」(목록 먼저) ⑨ 입력 표 품목 줄: 입력칸 5개 이상이면 필수·값 있는 칸만, 나머지 「추가 입력 n ▾」(foldLineInputs) ⑩ 칩 12px.
+
+- 15.220 디자인 스킨(사용자별): 계정 설정(/api/me/prefs skin: default|christmas, userPrefs가 돌려줌)에 저장, 이 기기에도 기억(wpa:skin, 첫 화면 깜빡임 없이 <html data-skin>). 고르기는 머리줄 「⚙ 화면 설정」 상자와 휴대폰 메뉴 위(theme.js skin-select). 크리스마스 스킨: 색 변수(--ns-navy 소나무색·--accent/--btn-primary 빨강·표 머리 초록)만 바꾸고 머리줄 내리는 눈(움직임 줄이기 설정이면 멈춤)·전구 장식 줄·🎄🎅🎁❄ 장식, 인쇄에는 장식 없음. 새 스킨은 SKINS·cleanPrefs·userPrefs 목록에 이름을 넣고 :root[data-skin=…] 변수만 정하면 됨.
