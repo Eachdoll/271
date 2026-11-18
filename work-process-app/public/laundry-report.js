@@ -18,6 +18,12 @@ function lrGrid(form, section, values, editable) {
     <tbody>${LR_META.sizes.map((size) => `<tr><th>${esc(form.size_labels[size] || size)}</th>${cols.map((col) => cell(col, size)).join('')}</tr>`).join('')}</tbody>
     <tfoot><tr><th>계</th>${cols.map((col) => `<td data-lr-total="${esc(lrKey(section, col.g.key, col.part, ''))}">${fmtNum(total(col))}</td>`).join('')}</tr></tfoot></table>`;
 }
+// 15.219 휴대폰: 사이즈×의류 행렬 대신 의류(부위)마다 한 줄 「S 3 · M 5 · 계 8」 목록(값 있는 것만)
+function lrPhoneList(form, section, values) {
+  const cols = form.garments.flatMap((g) => (section === 'wash' ? [''] : g.parts).map((part) => ({ g, part })));
+  const rows = cols.map((col) => { const per = LR_META.sizes.map((size) => [form.size_labels[size] || size, values.get(lrKey(section, col.g.key, col.part, size)) || 0]).filter(([, q]) => q); return { name: [col.g.group, col.g.label, col.part].filter(Boolean).join(' · '), per, total: per.reduce((t, [, q]) => t + q, 0) }; }).filter((r) => r.total);
+  return `<div class="lr-mlist">${rows.length ? rows.map((r) => `<div class="lr-mrow"><b>${esc(r.name)}</b><span>${r.per.map(([s, q]) => `${esc(s)} ${fmtNum(q)}`).join(' · ')}</span><em>계 ${fmtNum(r.total)}</em></div>`).join('') : '<p class="small muted">기록 없음</p>'}</div>`;
+}
 const lrValues = (lines) => new Map((lines || []).map((l) => [lrKey(l.section, l.garment, l.part, l.size), l.qty]));
 const lrFormTotal = (form, values) => [...values].reduce((sum, [key, qty]) => sum + (form.garments.some((g) => g.key === key.split('|')[1]) ? qty : 0), 0);
 
@@ -183,7 +189,7 @@ async function pageLaundryReports(main) {
         <td>${LR_META.forms.filter((form) => r.summary[form.key + '_total']).map((form) => `<button class="btn small" data-cert="${r.id}|${form.key}">${esc(form.label)}</button>`).join(' ')}</td></tr>`).join('')}</tbody>
       <tfoot><tr><th colspan="2">합계 (${rows.length}회)</th>${garments.map((g) => `<td>${fmtNum(sum((r) => r.summary.wash[g.key]))}</td>`).join('')}<td><b>${fmtNum(sum((r) => r.summary.wash_total))}</b></td><td>${fmtNum(sum((r) => r.summary.discard_total))}</td>${money ? moneyCells({ vendor_cost: sum((r) => r.summary.vendor_cost), customer_amount: sum((r) => r.summary.customer_amount), profit: sum((r) => r.summary.profit), discard_amount: sum((r) => r.summary.discard_amount) }) : ''}<td colspan="2"></td></tr></tfoot></table>` : '<p class="muted">이 기간에 등록된 검수 기록이 없습니다.</p>';
     const matrix = new Map(Object.entries(data.matrix));
-    $('#lrMatrixBody', main).innerHTML = LR_META.forms.map((form) => `<h4>${esc(form.label)} · 세탁</h4><div class="table-wrap">${lrGrid(form, 'wash', matrix, false)}</div><h4>${esc(form.label)} · 폐기</h4><div class="table-wrap">${lrGrid(form, 'discard', matrix, false)}</div>`).join('');
+    $('#lrMatrixBody', main).innerHTML = LR_META.forms.map((form) => `<h4>${esc(form.label)} · 세탁</h4><div class="table-wrap lr-m-table">${lrGrid(form, 'wash', matrix, false)}</div>${lrPhoneList(form, 'wash', matrix)}<h4>${esc(form.label)} · 폐기</h4><div class="table-wrap lr-m-table">${lrGrid(form, 'discard', matrix, false)}</div>${lrPhoneList(form, 'discard', matrix)}`).join('');
     $$('[data-open]', main).forEach((a) => (a.onclick = (e) => { e.preventDefault(); lrEditor(Number(a.dataset.open), load); }));
     $$('#lrList [data-cert]', main).forEach((b) => (b.onclick = async () => { const [id, key] = b.dataset.cert.split('|'); try { lrCertificate(await api('GET', '/api/laundry-reports/' + id), LR_META.forms.find((form) => form.key === key)); } catch (err) { fail(err); } }));
   };

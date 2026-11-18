@@ -2811,3 +2811,55 @@ form.list-filters > label.rp-moved, .toolbar > label.rp-moved { display: none !i
   form.list-filters.lf-pc-fold:not(.show-all) > label:has(> select):not(:has(input:not([type=hidden]))) { display: none; }
 }
 @media (min-width: 701px) { form.list-filters.lf-pc-fold:not(.show-all) > .seg, form.list-filters.lf-pc-fold:not(.show-all) > .seg-label { display: none; } }
+/* 15.218 휴대폰 출하지시: PC용 앞 열 고정(gr-freeze)이 그리드 칸을 겹치게 하던 것 끔, 수량 칸 폭 */
+@media (max-width: 600px) { table.si-table.gr-freeze > * > tr > *, table.si-table > * > tr > * { position: static !important; left: auto !important; box-shadow: none !important; } table.si-table td.si-c-item { overflow: hidden; } table.si-table input.si-qty { width: 4.6em; } }
+@media (max-width: 600px) {
+  table.m-grid.sc-table tr.sc-row.on > td { background: transparent !important; }
+  table.m-grid.sc-table tr.sc-row.on { background: #fde3c8; box-shadow: inset 3px 0 0 #e8590c; }
+  table.si-table td.si-c-item { white-space: normal !important; overflow: visible; }
+}
+
+/* 15.219 휴대폰: 입고현황(납품현황) 집계 표는 이름·합계금액 두 칸(bills.js가 휴대폰이면 두 칸만 그림) */
+@media (max-width: 600px) {
+  .rs-page .rs-acc col.rs-c-m { width: 116px; }
+  .rs-page .rs-acc > tbody > tr.rs-v > td:first-child { white-space: normal; }
+  .rs-page .rs-acc > tbody > tr.rs-v > td { height: auto; padding: 8px 10px; }
+  .rs-page .rs-acc tr.rs-v-detail > td > * { max-width: 100%; overflow-x: auto; }
+}
+/* 15.219 휴대폰: 세탁 성적서 누적 행렬 → 의류별 목록 */
+.lr-mlist { display: none; }
+@media (max-width: 600px) {
+  .table-wrap.lr-m-table { display: none; }
+  .lr-mlist { display: block; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+  .lr-mrow { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 9px 12px; border-top: 1px solid var(--line); }
+  .lr-mrow:first-child { border-top: 0; }
+  .lr-mrow b { font-size: 14px; } .lr-mrow em { font-style: normal; font-weight: 800; text-align: right; }
+  .lr-mrow span { grid-column: 1 / -1; font-size: 13px; color: var(--muted); }
+  .lr-mlist > p { padding: 10px 12px; margin: 0; }
+}
+/* 15.219 휴대폰 매출·매입 달력: 「◀ 연·월 ▶ 오늘」 한 줄 */
+@media (max-width: 700px) { form.sc-bar > .sc-month { display: flex !important; flex-wrap: nowrap; align-items: center; gap: 4px; width: 100%; order: 40; } form.sc-bar > .sc-month > input { flex: 1 1 auto; min-width: 0; width: auto; } form.sc-bar > .sc-month > .btn { flex: 0 0 auto; min-width: 40px; padding-left: 8px; padding-right: 8px; } }
+/* 15.219 휴대폰: 탭 줄은 꺾지 않고 가로로 밀어 보는 한 줄 */
+@media (max-width: 700px) { #main .seg.class-tabs, #main .tax-side, #main .receipt-tabs { display: flex; flex-wrap: nowrap; overflow-x: auto; max-width: 100%; scrollbar-width: none; } #main .seg.class-tabs > *, #main .tax-side > *, #main .receipt-tabs > * { flex: 0 0 auto; white-space: nowrap; } }
+/* 15.219 휴대폰 세금계산서: 「발행」만 밖에, 나머지 단추는 「더보기」 */
+.tax-more-toggle { display: none; }
+@media (max-width: 700px) { .tax-actions .tax-more-toggle { display: inline-flex; } .tax-actions:not(.show-more) > .btn:not(#taxIssue):not(.tax-more-toggle) { display: none; } }
+
+/* 15.219 휴대폰 의뢰 화면: 입력 양식은 「+ 새 … 작성」을 눌러야 펼침(목록 먼저) */
+.intake-new-btn { display: none; }
+@media (max-width: 700px) {
+  .intake-page .intake-new-btn { display: flex; width: 100%; justify-content: center; margin: 6px 0 12px; }
+  .intake-page:not(.intake-open) > .multi-form, .intake-page:not(.intake-open) > form.multi-form, .intake-page:not(.intake-open) > #reqNewBox, .intake-page:not(.intake-open) > .entry-bar { display: none !important; }
+}
+/* 15.219 휴대폰 그리드: 품목 칸의 「규격·단위」 고치기 단추는 숨김(PC·상세에서), 분류 칩 등 작은 글자 12px 이상 */
+@media (max-width: 600px) {
+  table.m-grid td.m-a .line-info .btn { display: none; }
+  #main .chip { font-size: 12px; }
+}
+/* 15.219 휴대폰 입력 표: 선택 칸 접기, 입고현황 숨긴 칸 폭 없애기 */
+.m-opt-btn { display: none; }
+@media (max-width: 600px) {
+  table.m-grid tbody tr:not(.m-opt-open) > td.m-opt { display: none !important; }
+  table.m-grid .m-opt-btn { display: inline-flex; align-items: center; min-height: 32px; margin-top: 4px; padding: 2px 10px; border: 1px dashed var(--line); border-radius: 6px; background: var(--panel); color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; }
+}
+@media (max-width: 600px) { .rs-page table.rs-acc { min-width: 0; } }
