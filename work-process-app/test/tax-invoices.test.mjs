@@ -110,3 +110,18 @@ test('15.84 review fixes: tax info needs sales/purchase, cancel refuses an invoi
   assert.equal((await seller('POST', `/api/sales-bills/${b.id}/cancel`, { reason: 'x' })).status, 409);
   assert.equal(sqlite.prepare('SELECT status FROM sales_bills WHERE id=?').get(b.id).status, 'confirmed');
 });
+
+test('15.198 single invoice: many lines become one "first 외 n종" line; state filter draft', async () => {
+  const s1 = (await staff('POST', '/api/shipments', { ship_date: first, item: 'NX-707W(삼성)', qty: 10, customer: '네이버스토어', unit: 'BOX' })).body;
+  const s2 = (await staff('POST', '/api/shipments', { ship_date: first, item: 'NX-808D', qty: 5, customer: '네이버스토어', unit: 'BOX' })).body;
+  const s3 = (await staff('POST', '/api/shipments', { ship_date: first, item: '방진복', qty: 2, customer: '네이버스토어', unit: '벌' })).body;
+  const b = (await seller('POST', '/api/sales-bills', { customer: '네이버스토어', bill_date: first, request_id: rid(), lines: [s1, s2, s3].map((s, i) => ({ source_type: 'ship', source_id: s.id, unit_price: 1000 * (i + 1) })) })).body;
+  const inv = (await seller('POST', '/api/tax-invoices', { kind: 'single', bill_ids: [b.id], request_id: rid() })).body.rows[0];
+  const d = (await seller('GET', `/api/tax-invoices/${inv.id}`)).body;
+  assert.equal(d.items.length, 1); assert.equal(d.items[0].item, 'NX-707W(삼성) 외 2종');
+  assert.equal(d.items[0].supply, d.supply_total); assert.equal(d.items[0].vat, d.vat_total);
+  const one = await bill('네이버스토어', '단품', 1, 500); const inv1 = (await seller('POST', '/api/tax-invoices', { kind: 'single', bill_ids: [one.id], request_id: rid() })).body.rows[0];
+  assert.equal((await seller('GET', `/api/tax-invoices/${inv1.id}`)).body.items[0].item, '단품', 'single line keeps its own name');
+  const drafts = (await seller('GET', `/api/tax-invoices?from=${first}&to=${today}&state=draft`)).body.rows;
+  assert.ok(drafts.length >= 2 && drafts.every(r => ['draft', 'failed'].includes(r.status)));
+});

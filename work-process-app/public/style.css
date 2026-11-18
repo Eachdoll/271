@@ -2429,3 +2429,7 @@ table.bs-table.bom-tree .bt-toggle { font-size: 15px; line-height: 1; width: 24p
 table.bs-table.bom-tree td:first-child { width: 32px; text-align: center; }
 .bs-use { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border: 1.5px solid var(--muted); border-radius: 3px; font-size: 12px; font-weight: 700; line-height: 1; }
 .bs-use.on { background: var(--text); border-color: var(--text); color: var(--panel); }
+
+/* 15.198 전표 목록: 줄을 누르면 전표 창 */
+table.bill-list tbody tr.row-open { cursor: pointer; }
+table.bill-list tbody tr.row-open:hover > td { background: var(--accent-soft); }
