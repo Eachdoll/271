@@ -2436,7 +2436,9 @@ route('POST', '/api/tax-invoices', async ({ user, body }) => {
       const lines = await db.prepare('SELECT * FROM sales_bill_lines WHERE bill_id=? ORDER BY id').all(b.id);
       const v = await vendorByName(b.customer), uid = crypto.randomUUID();
       const writeDate = body.write_date ? dateStr(body.write_date, '작성일자') : b.bill_date;
-      const items = lines.map(l => ({ date: b.bill_date, item: l.item, spec: l.spec, qty: l.qty, unit_price: l.unit_price, supply: l.supply, vat: l.vat, note: l.note }));
+      // 15.198 품목이 여러 줄이면 「첫 품목 외 n종」 한 줄로 합산(전표 합계). 양식 창에서 고칠 수 있다.
+      const items = lines.length > 1 ? [{ date: b.bill_date, item: `${lines[0].item} 외 ${lines.length - 1}종`, spec: '', qty: null, unit_price: null, supply: lines.reduce((t, l) => t + l.supply, 0), vat: lines.reduce((t, l) => t + l.vat, 0), note: '' }]
+        : lines.map(l => ({ date: b.bill_date, item: l.item, spec: l.spec, qty: l.qty, unit_price: l.unit_price, supply: l.supply, vat: l.vat, note: l.note }));
       cmds.push(invoiceRow(v, { kind: 'single', customer: b.customer, writeDate, charge, email1: taxEmail(v?.tax_email, '이메일 1'), email2: taxEmail(v?.tax_email2, '이메일 2'), note, items, bills: [b], uid, token, user }), ...linkBill(uid, b.id));
       made.push(uid);
     }
@@ -2665,7 +2667,7 @@ route('GET', '/api/tax-invoices', async ({ user, query }) => {
   // 15.138 발행구분·문서(세금계산서/계산서)·수신·국세청 상태
   if (query.issue_type) { if (!['normal', 'reverse'].includes(query.issue_type)) throw bad('발행구분을 확인하세요.'); where.push('issue_type=?'); args.push(query.issue_type); }
   if (query.doc === 'tax' || query.doc === 'free') { where.push('doc_type=?'); args.push(query.doc); }
-  const STATE_WHERE = { unconfirmed: "status IN ('issued','sent') AND recv_status=''", confirmed: "recv_status='confirmed'", rejected: "recv_status='rejected'", nts_pending: "status IN ('draft','queued','issued','failed')", nts_sent: "status='sent'" };
+  const STATE_WHERE = { draft: "status IN ('draft','failed')", unconfirmed: "status IN ('issued','sent') AND recv_status=''", confirmed: "recv_status='confirmed'", rejected: "recv_status='rejected'", nts_pending: "status IN ('draft','queued','issued','failed')", nts_sent: "status='sent'" };
   if (query.state) { if (!STATE_WHERE[query.state]) throw bad('상태를 확인하세요.'); where.push(STATE_WHERE[query.state]); }
   if (query.category) { const f = invHasCat(SALES_INV_LINES('t.invoice_id=tax_invoices.id'), taxCategory(query.category)); where.push(f.sql); args.push(f.arg); } // 15.127
   const by_category = query.status === 'cancelled' ? [] : await invCatTotals(SALES_INV_LINES, `SELECT id FROM tax_invoices WHERE ${where.join(' AND ')}`, args);

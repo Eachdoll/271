@@ -159,13 +159,23 @@ function billSheet(bill, after = null) {
       ${catSummary(billCatTotals(bill.lines))}
       ${bill.note ? `<div class="po-memo"><b>비고</b><div class="po-memo-body">${esc(bill.note)}</div></div>` : ''}
       ${bill.status === 'cancelled' ? `<p><b>취소</b> ${esc(bill.cancelled_by || '')} · ${esc(String(bill.cancelled_at || '').slice(0, 16))} · ${esc(bill.cancel_reason)}</p>` : ''}
-      ${bill.return_ref ? `<p class="small"><span class="chip red">반출</span> 반출 <button type="button" class="link-btn" data-bill-ret="${bill.return_ref.id}">${esc(bill.return_ref.return_no)}</button>에서 자동으로 만든 전표입니다. 고치거나 취소는 그 반출에서 합니다.</p>` : ''}${bill.invoice ? `<p class="small">매입 세금계산서 ${esc(bill.invoice.invoice_no)}에 담김 — 고치려면 계산서를 먼저 취소하세요.</p>` : ''}${(bill.changes || []).length ? `<div class="doc-changes small muted"><b>고친 이력</b> ${bill.changes.map(c => `${esc(String(c.changed_at).slice(5, 16))} ${esc(c.changed_by)} · ${esc(c.summary)}`).join(' / ')}</div>` : ''}
+      ${bill.return_ref ? `<p class="small"><span class="chip red">반출</span> 반출 <button type="button" class="link-btn" data-bill-ret="${bill.return_ref.id}">${esc(bill.return_ref.return_no)}</button>에서 자동으로 만든 전표입니다. 고치거나 취소는 그 반출에서 합니다.</p>` : ''}${bill.invoice ? `<p class="small">매입 세금계산서 <button type="button" class="link-btn" data-ptax-open="${bill.invoice.id}">${esc(bill.invoice.invoice_no)}</button>에 담김 — 고치려면 계산서를 먼저 취소하세요.</p>` : ''}${(bill.changes || []).length ? `<div class="doc-changes small muted"><b>고친 이력</b> ${bill.changes.map(c => `${esc(String(c.changed_at).slice(5, 16))} ${esc(c.changed_by)} · ${esc(c.summary)}`).join(' / ')}</div>` : ''}
     </section>
-    <div class="actions"><button class="btn" data-close>닫기</button>${bill.status === 'confirmed' && !bill.closed && !bill.invoice && !bill.return_ref ? '<button class="btn" data-bill-edit>수정</button>' : ''}${bill.status === 'confirmed' && !bill.closed && !bill.return_ref ? '<button class="btn danger" data-bill-cancel>전표 취소</button>' : ''}<button class="btn primary" data-print>인쇄 · PDF 저장</button></div>`, { wide: true });
+    <div class="actions"><button class="btn" data-close>닫기</button>${bill.status === 'confirmed' && !bill.invoice && !bill.return_ref && hasRole('purchase') ? '<button class="btn" data-bill-ptax title="이 전표로 받은 세금계산서를 등록하고 양식에서 승인번호·품목을 넣습니다">세금계산서 입력</button>' : ''}${bill.status === 'confirmed' && !bill.closed && !bill.invoice && !bill.return_ref ? '<button class="btn" data-bill-edit>수정</button>' : ''}${bill.status === 'confirmed' && !bill.closed && !bill.return_ref ? '<button class="btn danger" data-bill-cancel>전표 취소</button>' : ''}<button class="btn primary" data-print>인쇄 · PDF 저장</button></div>`, { wide: true });
   m.el.parentElement.classList.add('lr-cert-wrap');
   $('[data-close]', m.el).onclick = m.close;
   $('[data-print]', m.el).onclick = () => rcPrint(`매입전표_${bill.bill_no}`);
   $('[data-bill-ret]', m.el)?.addEventListener('click', async e => { try { returnSheet(await api('GET', '/api/returns/' + e.currentTarget.dataset.billRet)); } catch (error) { fail(error); } });
+  // 15.198 매입전표에서 바로 세금계산서 입력: 받은 계산서로 등록(작성일자 = 전표 일자)하고 양식 창을 고치는 상태로 연다(승인번호·품목·일자).
+  $('[data-ptax-open]', m.el)?.addEventListener('click', e => purchaseTaxView(Number(e.currentTarget.dataset.ptaxOpen), after).catch(fail));
+  $('[data-bill-ptax]', m.el)?.addEventListener('click', async e => {
+    const btn = e.currentTarget; if (btn.disabled) return; btn.disabled = true;
+    try {
+      const r = await api('POST', '/api/purchase-tax-invoices', { vendor: bill.vendor, bill_ids: [bill.id], write_date: bill.bill_date, request_id: crypto.randomUUID() });
+      m.close(); await after?.(); await purchaseTaxView(r.id, after, true);
+      toast(`${r.invoice_no} 매입 세금계산서를 만들었습니다. 승인번호·품목을 확인하고 「저장」하세요.`);
+    } catch (error) { fail(error); btn.disabled = false; }
+  });
   $('[data-bill-edit]', m.el)?.addEventListener('click', () => billEditWindow('purchase', bill, async next => { m.close(); billSheet(next, after); await after?.(); }));
   const cancel = $('[data-bill-cancel]', m.el);
   if (cancel) cancel.onclick = async () => {
@@ -200,7 +210,7 @@ async function pageBillList(main) {
     rows = next ? rows.concat(data.rows) : data.rows; page = data.page; $('#billMore', main).hidden = !data.more;
     const live = rows.filter(r => r.status === 'confirmed');
     $('#billSummary', main).innerHTML = resultCount(rows.length, data.more, `확정 합계 ${won(live.reduce((t, r) => t + r.total, 0))}원`) + catSummary(data.by_category, '분류별'); // 15.180 결과 줄
-    $('#billList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid bill-list"><thead><tr><th class="pick-cell"><input type="checkbox" data-bulk-all aria-label="등록할 수 있는 전표 모두 고르기"></th><th>전표번호</th><th>명세서 일자</th><th>거래처</th><th>명세서 번호</th><th class="r">줄</th><th class="r">공급가액</th><th class="r">부가세</th><th class="r">합계</th><th>상태</th><th>세금계산서</th><th>입력</th></tr></thead>${billMonthBody(rows, 6, 3, r => `<tr class="${r.status === 'cancelled' ? 'row-off' : ''}"><td class="pick-cell">${r.status === 'confirmed' && !r.invoice ? `<input type="checkbox" data-bulk-pick="${r.id}" aria-label="${esc(r.bill_no)} 고르기">` : `<input type="checkbox" disabled title="${r.invoice ? '이미 세금계산서에 담김' : '취소된 전표'}" aria-label="${esc(r.bill_no)} 고를 수 없음">`}</td><td data-card-primary><button type="button" class="link-btn" data-bill-open="${r.id}">${esc(r.bill_no)}</button></td><td>${esc(r.bill_date)}</td><td>${esc(r.vendor)} <span class="cell-chips">${r.return_ref ? `<button type="button" class="chip red ret-chip" data-list-ret="${esc(r.return_ref.split('|')[1])}" title="반출 전표 보기">반출 ${esc(r.return_ref.split('|')[0])}</button> ` : ''}${catChips(r.categories)}</span></td><td>${esc(r.statement_no || '')}</td><td class="r">${fmtNum(r.line_count)}</td><td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b>${r.statement_total != null && r.statement_total !== r.total ? '<div class="small red-text">명세서 차이</div>' : ''}</td><td>${r.status === 'confirmed' ? '<span class="chip green">확정</span>' : '<span class="chip">취소</span>'}</td><td>${r.invoice ? `<span class="chip green">받음</span><div class="small muted">${esc(r.invoice.split('|')[1] || r.invoice.split('|')[0])}</div>` : r.status === 'confirmed' ? '<span class="small muted">안 받음</span>' : ''}</td><td class="small muted">${esc(r.created_by)}</td></tr>`)}</table></div>` : '<div class="empty">조건에 맞는 매입전표가 없습니다.</div>';
+    $('#billList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid bill-list"><thead><tr><th class="pick-cell"><input type="checkbox" data-bulk-all aria-label="등록할 수 있는 전표 모두 고르기"></th><th>전표번호</th><th>명세서 일자</th><th>거래처</th><th>명세서 번호</th><th class="r">줄</th><th class="r">공급가액</th><th class="r">부가세</th><th class="r">합계</th><th>상태</th><th>세금계산서</th><th>입력</th></tr></thead>${billMonthBody(rows, 6, 3, r => `<tr class="row-open${r.status === 'cancelled' ? ' row-off' : ''}" data-row-bill="${r.id}" title="줄을 누르면 전표를 엽니다"><td class="pick-cell">${r.status === 'confirmed' && !r.invoice ? `<input type="checkbox" data-bulk-pick="${r.id}" aria-label="${esc(r.bill_no)} 고르기">` : `<input type="checkbox" disabled title="${r.invoice ? '이미 세금계산서에 담김' : '취소된 전표'}" aria-label="${esc(r.bill_no)} 고를 수 없음">`}</td><td data-card-primary><button type="button" class="link-btn" data-bill-open="${r.id}">${esc(r.bill_no)}</button></td><td>${esc(r.bill_date)}</td><td>${esc(r.vendor)} <span class="cell-chips">${r.return_ref ? `<button type="button" class="chip red ret-chip" data-list-ret="${esc(r.return_ref.split('|')[1])}" title="반출 전표 보기">반출 ${esc(r.return_ref.split('|')[0])}</button> ` : ''}${catChips(r.categories)}</span></td><td>${esc(r.statement_no || '')}</td><td class="r">${fmtNum(r.line_count)}</td><td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b>${r.statement_total != null && r.statement_total !== r.total ? '<div class="small red-text">명세서 차이</div>' : ''}</td><td>${r.status === 'confirmed' ? '<span class="chip green">확정</span>' : '<span class="chip">취소</span>'}</td><td>${r.invoice ? `<span class="chip green">받음</span><div class="small muted">${esc(r.invoice.split('|')[1] || r.invoice.split('|')[0])}</div>` : r.status === 'confirmed' ? '<span class="small muted">안 받음</span>' : ''}</td><td class="small muted">${esc(r.created_by)}</td></tr>`)}</table></div>` : '<div class="empty">조건에 맞는 매입전표가 없습니다.</div>';
   };
   rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
   $('[data-xlsx]', main).onclick = () => billLinesExcel('purchase', { from: form.elements.from.value, to: form.elements.to.value, party: form.elements.vendor.value.trim() }).catch(fail);
@@ -208,6 +218,8 @@ async function pageBillList(main) {
   $('#billMore', main).onclick = () => load(true).catch(fail);
   bulkPicks(main, () => rows, 'purchase', () => load());
   $('#billList', main).addEventListener('click', async e => { const rr = e.target.closest('[data-list-ret]'); if (rr) { try { returnSheet(await api('GET', '/api/returns/' + rr.dataset.listRet), () => load()); } catch (error) { fail(error); } } });
+  // 15.198 전표번호가 아닌 줄 어디를 눌러도 전표 창(체크칸·단추·링크는 제외)
+  $('#billList', main).addEventListener('click', async e => { if (e.target.closest('input, button, a, label, select, textarea, [data-bill-open], [data-inv-open], [data-list-ret], .xf-pop')) return; const tr = e.target.closest('tr[data-row-bill]'); if (!tr || getSelection().toString()) return; try { billSheet(await api('GET', '/api/purchase-bills/' + tr.dataset.rowBill), () => load()); } catch (error) { fail(error); } });
   $('#billList', main).addEventListener('click', async e => { const b = e.target.closest('[data-bill-open]'); if (!b) return; try { billSheet(await api('GET', '/api/purchase-bills/' + b.dataset.billOpen), () => load()); } catch (error) { fail(error); } });
   let preset = null; try { preset = JSON.parse(sessionStorage.getItem('wpa:bill-filter') || 'null'); sessionStorage.removeItem('wpa:bill-filter'); } catch { preset = null; }
   if (preset) for (const [k, v] of Object.entries(preset)) if (form.elements[k]) form.elements[k].value = v;
@@ -513,7 +525,11 @@ async function bulkSalesTax(bills, reload) {
   if (!v) return;
   try {
     const r = await api('POST', '/api/tax-invoices', { kind: v.kind === 'merge' ? 'merge' : 'single', bill_ids: bills.map(b => b.id), write_date: v.write_date || undefined, charge: v.charge, request_id: crypto.randomUUID() });
-    toast(`세금계산서 ${r.rows.length}장을 담았습니다(발행 전). 「세금계산서 관리」에서 발행하세요.`);
+    await reload();
+    // 15.198 한 장이면 바로 양식 창, 여러 장이면 알림
+    if (r.rows.length === 1) { taxInvoiceView(await api('GET', '/api/tax-invoices/' + r.rows[0].id), reload); toast(`세금계산서 ${r.rows[0].invoice_no}에 담았습니다. 양식에서 고친 뒤 「저장」하세요.`); }
+    else toast(`세금계산서 ${r.rows.length}장을 담았습니다(발행 전). 「세금계산서 관리」에서 하나씩 열어 고치고 발행하세요.`);
+    return;
   } catch (error) { fail(error); }
   await reload();
 }
