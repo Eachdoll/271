@@ -4773,10 +4773,13 @@ route('POST', '/api/import/items', async ({ user, body }) => {
   const seenName = new Map(), seenCode = new Map(), results = [], cmds = [];
   for (const [i, r] of rows.entries()) {
     try {
+      // 15.194 CSV·엑셀 일괄 등록: 품목코드·품목명·분류만 있어도 된다(단위를 비우면 EA). 제품도 구성자재 없이 먼저 등록하고 BOM은 나중에 수정에서 넣는다.
       const category = String(r.item_category ?? '').trim();
-      if (category === '제품') throw bad('제품은 구성자재(BOM)와 함께 BOM 관리에서 등록하세요. 엑셀로는 원자재·부자재·반제품·상품·임가공을 올립니다.');
-      const body1 = { product: r.product, product_code: r.product_code, item_category: category, kind: category === '반제품' ? 'semi' : 'finished', base_qty: 1, unit: r.unit, materials: [], note: r.note, cat1: str(r.cat1, 50), cat2: str(r.cat2, 50), cat3: str(r.cat3, 50) };
-      const fields = bomFields(body1), { cats } = await bomPlacement(body1, fields[8], {}, fields[4]);
+      if (!category) throw bad(`분류를 넣으세요(${ITEM_CATEGORIES.join('·')}).`);
+      if (!ITEM_CATEGORIES.includes(category)) throw bad(`분류 「${category}」는 없습니다. ${ITEM_CATEGORIES.join('·')} 중 하나로 넣으세요.`);
+      const body1 = { product: r.product, product_code: r.product_code, item_category: category === '제품' ? '상품' : category, kind: category === '반제품' ? 'semi' : 'finished', base_qty: 1, unit: String(r.unit ?? '').trim() || 'EA', materials: [], note: r.note, cat1: str(r.cat1, 50), cat2: str(r.cat2, 50), cat3: str(r.cat3, 50) };
+      const fields = bomFields(body1); fields[8] = category; body1.item_category = category; // 제품은 구성자재 검사만 건너뛴다
+      const { cats } = await bomPlacement(body1, fields[8], {}, fields[4]);
       const key = nameKey(fields[0]), code = fields[1].toUpperCase();
       if (/^TMP-/i.test(code)) throw bad('임시 코드(TMP-)는 쓸 수 없습니다.');
       if (names.has(key)) throw bad('같은 이름의 품목이 이미 있습니다.');
