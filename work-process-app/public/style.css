@@ -2508,3 +2508,56 @@ table.fp-grid tbody td.fp-cat { background: var(--panel) !important; }
 }
 @media (max-width: 600px) { .table-wrap:has(> table.si-table) .gr-gear, .table-wrap:has(> table.si-table) .gr-rz { display: none !important; } }
 @media (max-width: 600px) { #siBar { display: flex; flex-wrap: wrap; gap: 6px; } #siBar .btn { white-space: nowrap; flex: 1 1 auto; } }
+
+/* 15.204 휴대폰 3줄 그리드(m-grid): 재고 현황·출하 목록·입고증 목록·완제품 실적 입력 */
+@media (max-width: 600px) {
+  table.m-grid, table.m-grid tbody { display: block; width: 100%; }
+  table.m-grid thead { display: none; }
+  table.m-grid tbody tr { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 10px; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+  table.m-grid tbody tr::after { content: ''; order: 3; flex-basis: 100%; height: 0; }
+  table.m-grid tbody td { display: block; padding: 0 !important; border: 0 !important; min-width: 0; text-align: left; }
+  table.m-grid td.m-a { order: 1; flex: 1 1 0; font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; }
+  table.m-grid td.m-a div { display: inline; margin-left: 4px; }
+  table.m-grid td.m-b { order: 2; flex: 0 0 auto; margin-left: auto; text-align: right; font-size: 15px; font-weight: 700; white-space: nowrap; }
+  table.m-grid td.m-b br, table.m-grid td.m-b .small { display: none; }
+  table.m-grid td.m-c { order: 4; font-size: 12.5px; color: var(--text-2, var(--muted)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  table.m-grid td.m-c div { display: none; }
+  table.m-grid td.m-c[data-m]::before { content: attr(data-m) ' '; color: var(--muted); }
+  table.m-grid td.m-d { order: 6; flex: 1 1 auto; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 4px; }
+  table.m-grid td.m-d:empty { display: none; }
+  table.m-grid td.m-d input { width: 100%; min-height: 36px; }
+  table.m-grid td.m-c + td.m-d, table.m-grid tr > td.m-d:first-of-type { }
+  table.m-grid td.m-x { display: none !important; }
+  table.m-grid td.m-full { order: 7; flex: 1 1 100%; }
+  .table-wrap:has(> table.m-grid) .gr-gear, .table-wrap:has(> table.m-grid) .gr-rz { display: none !important; }
+  table.m-grid tr.row-red { box-shadow: inset 3px 0 0 #d33; } table.m-grid tr.row-yellow { box-shadow: inset 3px 0 0 #e0a100; }
+}
+@media (max-width: 600px) {
+  table.m-grid tbody td { background: transparent !important; }
+  table.m-grid tbody tr.row-red { background: #fff3f2; } table.m-grid tbody tr.row-yellow { background: #fffaeb; }
+  table.m-grid td.m-empty { display: none !important; }
+  table.m-grid td.m-d .btn, table.m-grid td.m-d .chip, table.m-grid td.m-d summary.btn { min-height: 30px; padding: 3px 9px; font-size: 12.5px; }
+  table.m-grid td.m-d { gap: 4px; }
+}
+@media (max-width: 600px) {
+  table.m-grid tbody td.m-a { white-space: normal !important; }
+  table.m-grid tbody td.m-a > * { white-space: normal !important; }
+  table.m-grid tbody td.m-d { flex: 1 1 28%; }
+  table.m-grid tbody td.m-d:last-child { flex: 0 0 auto; }
+  table.m-grid tbody td.m-d input { min-height: 34px !important; height: 34px; padding: 4px 8px; font-size: 14px; }
+  table.m-grid tbody td.m-d .btn, table.m-grid tbody td.m-d summary.btn, table.m-grid tbody td.m-d button { min-height: 30px !important; height: auto; padding: 3px 9px !important; font-size: 12.5px !important; line-height: 1.3; }
+  table.m-grid tbody td.m-d .chip { font-size: 11.5px; padding: 1px 7px; }
+}
+@media (max-width: 600px) {
+  table.m-grid tbody tr::before { content: ''; order: 5; flex-basis: 100%; height: 0; }
+  table.m-grid tbody td.m-d input:not([type=checkbox]) { height: 36px !important; min-height: 36px !important; padding: 4px 8px !important; font-size: 14px !important; }
+}
+@media (max-width: 600px) {
+  table.m-grid tbody td.m-d:last-child { flex: 1 1 auto; max-width: 100%; }
+}
+@media (max-width: 600px) {
+  table.m-grid tbody td.m-d input:not([type=checkbox]) { min-width: 0 !important; width: 100% !important; }
+  table.m-grid tbody td.m-d:last-child { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  table.m-grid tbody td.m-d:last-child::-webkit-scrollbar { display: none; }
+  table.m-grid tbody td.m-d:last-child > * { flex: 0 0 auto; }
+}

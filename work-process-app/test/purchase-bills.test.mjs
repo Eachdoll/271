@@ -627,7 +627,7 @@ test('15.161 Purchase tax invoice: items from bill lines (freight row), edit ite
   const inv = (await buyer('POST', '/api/purchase-tax-invoices', { request_id: rid(), vendor: '품목상사', write_date: today, bill_ids: [bill.id] })).body;
   const d = (await buyer('GET', `/api/purchase-tax-invoices/${inv.id}`)).body;
   // 15.201 여러 줄(품목 + 운송비)은 「첫 품목 외 n종」 한 줄로 합산
-  assert.deepEqual(d.items.map(i => [i.item, i.qty, i.unit_price, i.supply, i.vat]), [['품목원사 외 1종', null, null, 13000, 1300]], 'one summary line, real item name');
+  assert.deepEqual(d.items.map(i => [i.item, i.qty, i.unit_price, i.supply, i.vat]), [['품목원사', null, null, 13000, 1300]], 'one summary line; freight not counted (15.204)');
   assert.equal(d.items_edited, false);
   const items = [{ date: today, item: '품목원사(받은 계산서 이름)', spec: 'KG', qty: 10, unit_price: 1000, supply: 10000, vat: 1000 }, { date: today, item: '운송비', supply: 3000, vat: 300 }];
   assert.match((await buyer('PUT', `/api/purchase-tax-invoices/${inv.id}`, { items: [{ ...items[0], supply: 9000 }, items[1]] })).body.error, /합계/);

@@ -2377,6 +2377,7 @@ async function invoiceCandidates({ from, to, customer = '' }) {
   if (rows.length > 2000) throw bad('전표가 너무 많습니다. 기간을 좁히세요.');
   return rows;
 }
+const isFreightName = name => /^\s*(운송비|운반비|택배비|배송비)\s*$/.test(String(name || '')); // 15.204 「외 n종」에서 뺄 운송비 줄
 const itemLabel = (first, count) => `${first || ''}${count > 1 ? ` 외 ${count - 1}건` : ''}`;
 route('GET', '/api/tax-invoices/candidates', async ({ user, query }) => {
   requireSales(user);
@@ -2437,7 +2438,8 @@ route('POST', '/api/tax-invoices', async ({ user, body }) => {
       const v = await vendorByName(b.customer), uid = crypto.randomUUID();
       const writeDate = body.write_date ? dateStr(body.write_date, '작성일자') : b.bill_date;
       // 15.198 품목이 여러 줄이면 「첫 품목 외 n종」 한 줄로 합산(전표 합계). 양식 창에서 고칠 수 있다.
-      const items = lines.length > 1 ? [{ date: b.bill_date, item: `${lines[0].item} 외 ${lines.length - 1}종`, spec: '', qty: null, unit_price: null, supply: lines.reduce((t, l) => t + l.supply, 0), vat: lines.reduce((t, l) => t + l.vat, 0), note: '' }]
+      const goods = lines.filter(l => !isFreightName(l.item)), head = goods[0] || lines[0]; // 15.204 운송비 줄은 종 수에서 뺀다
+      const items = lines.length > 1 ? [{ date: b.bill_date, item: `${head.item}${goods.length > 1 ? ` 외 ${goods.length - 1}종` : ''}`, spec: '', qty: null, unit_price: null, supply: lines.reduce((t, l) => t + l.supply, 0), vat: lines.reduce((t, l) => t + l.vat, 0), note: '' }]
         : lines.map(l => ({ date: b.bill_date, item: l.item, spec: l.spec, qty: l.qty, unit_price: l.unit_price, supply: l.supply, vat: l.vat, note: l.note }));
       cmds.push(invoiceRow(v, { kind: 'single', customer: b.customer, writeDate, charge, email1: taxEmail(v?.tax_email, '이메일 1'), email2: taxEmail(v?.tax_email2, '이메일 2'), note, items, bills: [b], uid, token, user }), ...linkBill(uid, b.id));
       made.push(uid);
@@ -2534,7 +2536,8 @@ async function purchaseInvItems(inv, bills) {
   }
   const all = per.flatMap(p => p.lines);
   // 15.201 품목이 여러 줄이면(여러 전표 묶음 포함) 「첫 품목 외 n종」 한 줄로 합산(공급가액·세액 = 담긴 전표 합계). 양식에서 고칠 수 있다.
-  if (all.length > 1) return [{ date: inv.write_date || bills.map(b => b.bill_date).sort().pop(), item: `${all[0].item} 외 ${all.length - 1}종`, spec: '', qty: null, unit_price: null,
+  const goods = all.filter(l => !isFreightName(l.item)), head = goods[0] || all[0]; // 15.204 운송비 줄은 종 수에서 뺀다
+  if (all.length > 1) return [{ date: inv.write_date || bills.map(b => b.bill_date).sort().pop(), item: `${head.item}${goods.length > 1 ? ` 외 ${goods.length - 1}종` : ''}`, spec: '', qty: null, unit_price: null,
     supply: all.reduce((t, l) => t + Number(l.supply || 0), 0), vat: all.reduce((t, l) => t + Number(l.vat || 0), 0), note: bills.length > 1 ? `${bills[0].bill_no} 외 ${bills.length - 1}건` : '' }];
   if (all.length <= PTAX_MAX_ITEMS) return all;
   return per.map(({ b, lines }) => ({ date: b.bill_date, item: itemLabel(lines[0]?.item, lines.length), spec: '', qty: null, unit_price: null, supply: b.supply_total, vat: b.vat_total, note: b.bill_no }));
@@ -3683,7 +3686,7 @@ route('GET', '/api/operator/plans', async ({ query }) => {
   return db.prepare(`SELECT s.id,s.period,s.start_date,s.product,s.spec,s.qty,s.done,
     COALESCE(NULLIF(s.unit,''),json_extract(s.bom_snapshot,'$.unit'),'') AS unit,
     COALESCE((SELECT SUM(a.qty) FROM production_actuals a WHERE a.schedule_id=s.id AND a.voided_at IS NULL),0) AS actual_qty
-    FROM schedules s WHERE s.kind='finished' AND s.start_date<=? AND
+    FROM schedules s WHERE s.kind='finished' AND s.confirmed_at<>'' AND s.start_date<=? AND -- 15.204 확정 계획만(실적 입력 화면과 같게)
     CASE s.period WHEN 'day' THEN s.start_date WHEN 'week' THEN date(s.start_date,'+6 days') ELSE date(s.start_date,'+1 month','-1 day') END>=?
     ORDER BY s.done,s.product,s.id`).all(date,date);
 });
@@ -5142,6 +5145,8 @@ route('GET', '/api/my-tasks', async ({ user }) => {
   }
   // 15.92 출하지시: 영업이 수주로 매출전표를 잡아 내려온, 아직 출하 처리하지 않은 지시(물류)
   if (hasRole(user, 'logistics')) { const count = (await db.prepare("SELECT COUNT(*) c FROM ship_instructions WHERE status='pending' AND held=0").get()).c; if (count) approvals.ship_instructions = { count }; }
+  // 15.204 완제품 계획 확정 대기(대기 상태·미완료): 생산 담당이 「계획생산 접수·관리」에서 확정해야 실적 입력에 나온다.
+  if (hasRole(user, 'production')) { const r = await db.prepare("SELECT COUNT(*) c, MIN(start_date) first FROM schedules WHERE kind='finished' AND confirmed_at='' AND done=0").get(); if (r.c) approvals.plans_waiting = { count: r.c, first: r.first }; }
   if (user.is_admin) approvals.temp_items = { count: (await db.prepare('SELECT COUNT(*) c FROM boms WHERE is_temp=1 AND active=1').get()).c };
   // 생산의뢰: 생산계획에 아직 반영되지 않은 수량이 있는 의뢰(생산 담당·생산팀장·관리자).
   if (hasRole(user, 'production')) {

@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.203';
+const APP_VERSION = '15.204';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -1088,7 +1088,7 @@ function taskTotal(tasks) {
   const add = (count, route) => { if (count && canSeeRoute(route)) n += count; };
   for (const [type, group] of Object.entries(a.requests)) add(group.count, REQ[type].approve || REQ[type].intake);
   add(a.actual_changes?.count, '#/prod/finished'); add(a.receipt_changes?.count, '#/logistics/receive'); add(a.semi_changes?.count, '#/prod/semi');
-  add(a.production_requests?.count, '#/prod/orders'); add(a.purchase_requests?.count, '#/sales/pr'); add(a.purchase_orders_waiting?.count, '#/purchase/po/new');
+  add(a.plans_waiting?.count, '#/prod/finished/plan'); add(a.production_requests?.count, '#/prod/orders'); add(a.purchase_requests?.count, '#/sales/pr'); add(a.purchase_orders_waiting?.count, '#/purchase/po/new');
   return n;
 }
 function taskBadgeCounts(tasks) {
@@ -1103,6 +1103,7 @@ function taskBadgeCounts(tasks) {
   if (a.purchase_requests?.count) counts['#/sales/pr'] = a.purchase_requests.count;
   if (a.purchase_orders_waiting?.count) counts['#/purchase/po/new'] = a.purchase_orders_waiting.count;
   if (a.production_requests?.count) counts['#/prod/orders'] = a.production_requests.count;
+  if (a.plans_waiting?.count) counts['#/prod/finished/plan'] = a.plans_waiting.count; // 15.204 확정 대기
   if (a.ship_instructions?.count) counts['#/logistics/ship-orders'] = a.ship_instructions.count;
   return counts;
 }
@@ -1130,6 +1131,7 @@ function tasksCard(tasks) {
   if (a.actual_changes?.count) todo.push(`<li><a href="${a.actual_changes.finished ? '#/prod/finished' : '#/prod/semi'}"><b>생산실적 수정·취소 승인 대기 ${a.actual_changes.count}건</b></a><div class="small muted">${a.actual_changes.items.map(c => `${esc(c.product)} ${changeSummary(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.actual_changes.count, a.actual_changes.items.length)}</div></li>`);
   if (a.receipt_changes?.count) todo.push(`<li><a href="#/logistics/receive"><b>입고 수량 수정·취소 승인 대기 ${a.receipt_changes.count}건</b></a><div class="small muted">${a.receipt_changes.items.map(c => `${esc(c.item)} ${receiptChangeText(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.receipt_changes.count, a.receipt_changes.items.length)}</div></li>`);
   if (a.semi_changes?.count) todo.push(`<li><a href="${a.semi_changes.cut ? '#/prod/semi/cut' : '#/prod/semi/wash'}"><b>반제품 기록 수정·삭제 승인 대기 ${a.semi_changes.count}건</b></a><div class="small muted">${a.semi_changes.items.map(c => `${semiChangeText(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.semi_changes.count, a.semi_changes.items.length)}</div></li>`);
+  if (a.plans_waiting?.count) todo.push(`<li><a href="#/prod/finished/plan"><b>완제품 계획 확정 대기 ${a.plans_waiting.count}건</b></a><div class="small muted">계획생산 접수·관리에서 확정해야 실적 입력에 나옵니다.${a.plans_waiting.first ? ` 가장 이른 계획 ${esc(a.plans_waiting.first)}` : ''}</div></li>`);
   if (a.production_requests?.count) todo.push(`<li><a href="#/prod/orders"><b>생산의뢰 접수 대기 ${a.production_requests.count}건</b></a><div class="small muted">${a.production_requests.items.map(r => `<button type="button" class="link-btn" data-open-mr="${r.id}">${esc(r.req_no)}</button> ${esc(r.customer)}${r.ship_text || r.ship_date ? ' · 출고 ' + esc(r.ship_text || r.ship_date) : ''}`).join(' / ')}${more(a.production_requests.count, a.production_requests.items.length)}</div></li>`);
   if (a.purchase_requests?.count) todo.push(`<li><a href="#/sales/pr"><b>구매의뢰 결재 차례 ${a.purchase_requests.count}건</b></a><div class="small muted">${a.purchase_requests.items.map(r => `<button type="button" class="link-btn" data-task-pr="${r.id}">${esc(r.doc_no)}</button> ${esc(r.title || r.first_item || '')}${r.item_count > 1 ? ` 외 ${r.item_count - 1}건` : ''} · ${esc(r.author_name)}`).join(' / ')}${more(a.purchase_requests.count, a.purchase_requests.items.length)}</div></li>`);
   if (a.purchase_orders_waiting?.count) todo.push(`<li><a href="#/purchase/po/new"><b>발주 대기 구매의뢰 ${a.purchase_orders_waiting.count}건</b></a><div class="small muted">${a.purchase_orders_waiting.items.map(r => `<button type="button" class="link-btn" data-task-pr="${r.id}">${esc(r.doc_no)}</button> ${esc(r.title || r.first_item || '')} · ${esc(r.author_name)}`).join(' / ')}${more(a.purchase_orders_waiting.count, a.purchase_orders_waiting.items.length)}</div></li>`);
@@ -1140,7 +1142,7 @@ function tasksCard(tasks) {
   for (const c of m.semi_changes || []) mine.push(`<li>${state(c)} <a href="${c.process === 'wash' ? '#/prod/semi/wash' : '#/prod/semi/cut'}">반제품 기록</a> <span class="small">${semiChangeText(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
   for (const r of m.purchase_requests || []) mine.push(`<li>${state(r)} <a href="#/sales/pr">구매의뢰 · ${esc(r.doc_no)} ${esc(r.title || r.first_item || '')}</a>${r.status === 'pending' && r.current_user_name ? ` <span class="small muted">${esc(r.current_user_name)} 결재 차례</span>` : ''}${r.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(r.reject_reason)} (${esc(r.rejected_by || '')}) · 고쳐서 다시 상신하세요.</div>` : ''}</li>`);
   for (const c of m.receipt_changes) mine.push(`<li>${state(c)} <a href="#/logistics/receive">입고 · ${esc(c.item)}</a> <span class="small">${receiptChangeText(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
-  const canApprove = Object.keys(a.requests).length || a.actual_changes || a.receipt_changes || a.semi_changes || a.temp_items || a.purchase_requests || a.production_requests || a.purchase_orders_waiting;
+  const canApprove = Object.keys(a.requests).length || a.actual_changes || a.receipt_changes || a.semi_changes || a.temp_items || a.purchase_requests || a.production_requests || a.purchase_orders_waiting || a.plans_waiting;
   return `<section class="card tasks" aria-labelledby="dashTasks"><h2 id="dashTasks">내가 처리할 일</h2><div class="tasks-grid">
     ${canApprove ? `<section><h3>승인할 일 ${todo.length ? `<span class="chip yellow">${todo.length}</span>` : ''}</h3>${todo.length ? `<ul>${todo.join('')}</ul>` : '<p class="small muted">승인 대기 중인 건이 없습니다.</p>'}</section>` : ''}
     <section><h3>내가 올린 요청 ${mine.length ? `<span class="chip">${mine.length}</span>` : ''}</h3>${mine.length ? `<ul>${mine.join('')}</ul>` : '<p class="small muted">대기 중이거나 최근 반려된 요청이 없습니다.</p>'}</section>
@@ -1290,9 +1292,31 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'Escape') { setCell(null); return; } else return;
   if (next) { e.preventDefault(); setCell(next); }
 });
+// 15.204 휴대폰 3줄 그리드(출하지시 15.202와 같은 모양을 여러 목록에): 칸 이름표 상자(as-cards) 대신
+// 1줄 = 제목(a) + 오른쪽 값(b), 2줄 = 짧은 정보(c, 이름표는 [머리글, 줄임말]일 때만), 3줄 = 입력·단추(d). 나머지 칸(x)은 휴대폰에서 숨김. PC 표는 그대로.
+const PHONE_GRID = [
+  ['#stockList', { a: ['품목명'], b: ['현재고'], c: ['품목코드', '분류', ['안전재고', '안전'], ['최근 변동', '변동']], d: [''] }],
+  ['#shList', { a: ['품목명'], b: ['수량'], c: ['거래처', '출고일', ['LOT', 'LOT']], d: [''] }],
+  ['#rcsList', { a: ['품목'], b: ['입고일'], c: ['입고번호', '거래처', ['줄', '줄']], d: [''] }],
+  ['#faList', { a: ['품목명'], b: ['잔량'], c: ['계획일', ['계획수량', '계획'], ['실적 누계', '실적']], d: ['양품수량', '비고', ''] }],
+];
+function phoneGrid(table, spec) {
+  table.classList.remove('as-cards'); table.classList.add('keep-table', 'm-grid');
+  // 화면에 안 보이는 머리글(.sr-only 「작업」 등)은 빈 머리글('')로 본다(단추 칸).
+  const heads = $$('thead th', table).map(th => [...th.childNodes].filter(x => !(x.classList && x.classList.contains('sr-only'))).map(x => x.textContent).join('').replace(/[☆▾▴▼▲]/g, '').trim());
+  const find = h => { for (const [role, list] of Object.entries(spec)) for (const e of list) { const name = Array.isArray(e) ? e[0] : e; if (name === '' ? h === '' : h === name || h.startsWith(name + ' ')) return [role, Array.isArray(e) ? e[1] : '']; } return ['x', '']; };
+  const roles = heads.map(find);
+  $$('tbody tr', table).forEach(tr => [...tr.children].forEach((td, i) => {
+    if (td.colSpan > 1) { td.classList.add('m-full'); return; }
+    const [role, label] = roles[i] || ['x', '']; td.classList.add('m-' + role); if (label) td.dataset.m = label;
+    if (role === 'c' && /^[\s—-]*$/.test(td.textContent)) td.classList.add('m-empty'); // 빈 칸·「—」는 휴대폰에서 숨김
+    if (role === 'd' && heads[i]) td.querySelectorAll('input:not([type=checkbox]):not([type=radio])').forEach(inp => { if (!inp.dataset.mPh) { inp.dataset.mPh = '1'; inp.placeholder = heads[i] + (inp.placeholder ? ' ' + inp.placeholder : ''); } }); // 휴대폰에선 머리줄이 없으니 칸 이름을 입력칸 안에
+  }));
+}
 function labelGridTables() {
   $$('table.grid:not([data-labeled])').forEach(table => {
     table.dataset.labeled = 'true';
+    const pg = PHONE_GRID.find(([sel]) => table.closest(sel)); if (pg) { phoneGrid(table, pg[1]); return; } // 15.204
     if (!table.classList.contains('keep-table')) table.classList.add('as-cards'); // small numeric tables opt out with keep-table
     const heads = $$('thead th', table).map(th => th.textContent.trim());
     const rows = $$('tbody tr', table);
