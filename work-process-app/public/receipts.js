@@ -1,6 +1,6 @@
 // 15.133 LOT 식별문자(품목 분류별)
 const RC_LOT_PREFIX = { 원자재: 'R', 제품: 'P', 반제품: 'P', 상품: 'G', 부자재: 'S', 소모품: 'C' };
-const lotFull = l => l.lot ? `${l.lot}${l.sub_lot ? ' / ' + l.sub_lot : ''}` : '';
+const lotFull = l => l.lot ? `${l.lot}${l.sub_lot ? '-' + l.sub_lot : ''}` : ''; // 15.190 R261113_0049-001
 // 입고 입력·입고증·창고(15.72): 위에 입고 정보(입고일·거래처·비고), 아래 줄 단위 표(품목·LOT·수량·창고·위치·비고).
 // 발주입고는 거래처의 미입고 발주를 불러와 줄로 담고, 기타입고는 품목 찾기로 담는다. 한 품목의 LOT 여러 개는
 // 「LOT 나누기」, 엑셀 붙여넣기(LOT·수량 두 열), 「LOT 자동 번호」로 입력한다. 저장하면 입고번호(RC-…)로 묶이고 입고증을 연다.
@@ -304,13 +304,13 @@ function receiptSlip(r) {
 }
 function rcPrint(name) { const title = document.title; document.title = name; const wraps = [...document.querySelectorAll('.lr-cert-wrap')], top = wraps.at(-1); wraps.forEach(w => w.classList.toggle('print-skip', w !== top)); document.body.classList.add('printing-cert'); try { window.print(); } finally { wraps.forEach(w => w.classList.remove('print-skip')); document.body.classList.remove('printing-cert'); document.title = title; } }
 
-// LOT 라벨(15.72): 줄마다 한 장(품목·코드·LOT·수량·입고일·거래처·입고번호 + QR). QR 내용은 「LOT|코드|수량 단위|입고번호」.
+// LOT 라벨(15.72): 줄마다 한 장(품목·코드·LOT·수량·입고일·거래처·입고번호 + QR). QR 내용은 「LOT-서브|코드|수량 단위|입고번호」.
 function lotLabels(r) {
   const live = r.lines.filter(l => !l.voided_at);
   const m = modal(`<h3 class="po-print-title">LOT 라벨 <span class="small muted">${esc(r.receipt_no)} · 라벨 ${live.length}개</span></h3>
-    <div class="cert rc-labels">${live.map(l => { const text = [l.lot || '-', l.product_code || l.item, `${l.qty} ${l.unit || ''}`.trim(), r.receipt_no, ...(l.sub_lot ? [l.sub_lot] : [])].join('|'); return `<div class="rc-label">
+    <div class="cert rc-labels">${live.map(l => { const text = [lotFull(l) || '-', l.product_code || l.item, `${l.qty} ${l.unit || ''}`.trim(), r.receipt_no].join('|'); return `<div class="rc-label">
       <div class="rc-label-qr">${qrSvg(text)}</div>
-      <div class="rc-label-body"><b>${esc(l.item)}</b>${l.spec ? ` ${esc(l.spec)}` : ''}<div>${esc(l.product_code || '')}</div><div class="rc-label-lot">LOT ${esc(l.lot || '—')}</div><div>${l.sub_lot ? `<b class="rc-label-sub">${esc(l.sub_lot)}</b> / ` : ''}${fmtNum(l.qty)} ${esc(l.unit || '')} · ${esc(r.receipt_date)}</div><div class="small">${esc(r.vendor)} · ${esc(r.receipt_no)}${l.warehouse ? ' · ' + esc([l.warehouse, l.location].filter(Boolean).join(' ')) : ''}</div></div></div>`; }).join('')}</div>
+      <div class="rc-label-body"><b>${esc(l.item)}</b>${l.spec ? ` ${esc(l.spec)}` : ''}<div>${esc(l.product_code || '')}</div><div class="rc-label-lot">LOT ${esc(lotFull(l) || '—')}</div><div>${fmtNum(l.qty)} ${esc(l.unit || '')} · ${esc(r.receipt_date)}</div><div class="small">${esc(r.vendor)} · ${esc(r.receipt_no)}${l.warehouse ? ' · ' + esc([l.warehouse, l.location].filter(Boolean).join(' ')) : ''}</div></div></div>`; }).join('')}</div>
     <div class="actions"><button class="btn" data-close>닫기</button><button class="btn primary" data-print>라벨 인쇄</button></div>`, { wide: true });
   m.el.parentElement.classList.add('lr-cert-wrap');
   $('[data-close]', m.el).onclick = m.close;
@@ -339,25 +339,46 @@ async function pageReceiptList(main) {
   await load();
 }
 
+// 15.190 창고 위치 편집: 한 창고에 위치(Location)를 여러 개. 칩으로 보이고 ×로 빼며, 입력칸에 쓰고 Enter·쉼표(여러 줄 붙여넣기도)로 더한다.
+function rcLocEditor(value, name) {
+  const list = String(value || '').split(',').map(x => x.trim()).filter(Boolean);
+  return `<div class="loc-editor" data-loc-editor><span class="loc-chips">${list.map(rcLocChip).join('')}</span><input data-loc-input maxlength="50" placeholder="${list.length ? '위치 더하기' : '예: 1층 A-01'}" aria-label="${esc(name)} 위치 추가"><button type="button" class="btn small" data-loc-add>추가</button><span class="small muted" data-loc-count>${list.length ? list.length + '곳' : '위치 없음'}</span></div>`;
+}
+const rcLocChip = x => `<span class="loc-chip" data-loc="${esc(x)}">${esc(x)}<button type="button" class="loc-x" data-loc-del aria-label="${esc(x)} 빼기" title="빼기">×</button></span>`;
+function rcLocValue(scope) { const box = $('[data-loc-editor]', scope); if (!box) return ''; rcLocAdd(box); return $$('[data-loc]', box).map(c => c.dataset.loc).join(','); }
+function rcLocAdd(box, text = null) {
+  const input = $('[data-loc-input]', box), have = new Set($$('[data-loc]', box).map(c => c.dataset.loc));
+  const add = (text ?? input.value).split(/[,\n\t\r]/).map(x => x.trim()).filter(x => x && !have.has(x) && (have.add(x), true));
+  if (add.length) $('.loc-chips', box).insertAdjacentHTML('beforeend', add.map(rcLocChip).join(''));
+  input.value = ''; const n = $$('[data-loc]', box).length; $('[data-loc-count]', box).textContent = n ? n + '곳' : '위치 없음';
+}
+function rcLocBind(box) {
+  const input = $('[data-loc-input]', box);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); rcLocAdd(box); } else if (e.key === 'Backspace' && !input.value) { $$('[data-loc]', box).at(-1)?.remove(); rcLocAdd(box); } });
+  // 엑셀에서 세로로 복사한 여러 위치도 한 번에(한 줄 입력칸은 줄바꿈을 지우므로 붙여넣기 글자를 직접 나눈다).
+  input.addEventListener('paste', e => { const t = e.clipboardData?.getData('text') || ''; if (!/[,\n\t]/.test(t)) return; e.preventDefault(); rcLocAdd(box, input.value + ',' + t); });
+  box.addEventListener('click', e => { if (e.target.closest('[data-loc-add]')) { rcLocAdd(box); input.focus(); } const x = e.target.closest('[data-loc-del]'); if (x) { x.closest('[data-loc]').remove(); rcLocAdd(box); } });
+}
 // 창고·위치 관리(물류팀장·관리자). 입고 기록이 없는 창고는 삭제, 있으면 사용 중지(15.104). 위치는 쉼표·줄바꿈으로 나눠 적는다.
 async function rcWarehouseManager(after) {
   const list = await api('GET', '/api/warehouses?all=1');
-  const m = modal(`<h3>창고·위치 관리</h3><p class="small muted">입고 줄의 창고·위치 선택지입니다. 위치를 비워 두면 그 창고는 위치 없이 씁니다. 이름을 바꾸면 지난 입고 기록의 창고 이름도 바뀝니다.</p>
-    <div class="table-wrap"><table class="grid keep-table"><thead><tr><th>창고</th><th>위치(Location)</th><th>순서</th><th>사용</th><th></th></tr></thead><tbody>${list.map(w => `<tr data-wh="${w.id}"><td><input data-k="name" value="${esc(w.name)}" maxlength="50" aria-label="창고 이름"></td><td><textarea data-k="locations" rows="2" aria-label="${esc(w.name)} 위치">${esc(w.locations.split(',').join(', '))}</textarea></td><td><input data-k="sort" type="number" step="1" value="${w.sort}" aria-label="${esc(w.name)} 순서" style="width:5em"></td><td><input type="checkbox" data-k="active"${w.active ? ' checked' : ''} aria-label="${esc(w.name)} 사용"></td><td class="nowrap"><button type="button" class="btn small" data-wh-save>저장</button> <button type="button" class="btn small danger" data-wh-del title="입고 기록이 없는 창고만 지울 수 있습니다">삭제</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">등록된 창고가 없습니다.</td></tr>'}</tbody></table></div>
-    <form class="form-grid" data-wh-new data-own-errors><label>새 창고 *<input name="name" required maxlength="50" placeholder="예: 5동"></label><label class="span2">위치 <span class="hint">(쉼표로 구분)</span><input name="locations" placeholder="예: 5동 1층, 5동 2층"></label><div class="actions"><button class="btn primary">창고 추가</button></div></form>
+  const m = modal(`<h3>창고·위치 관리</h3><p class="small muted">입고 줄의 창고·위치 선택지입니다. 한 창고에 위치를 여러 개 넣을 수 있습니다(Enter·쉼표로 추가, ×로 빼기). 위치를 비워 두면 그 창고는 위치 없이 씁니다. 이름을 바꾸면 지난 입고 기록의 창고 이름도 바뀝니다.</p>
+    <div class="table-wrap"><table class="grid keep-table"><thead><tr><th>창고</th><th>위치(Location)</th><th>순서</th><th>사용</th><th></th></tr></thead><tbody>${list.map(w => `<tr data-wh="${w.id}"><td><input data-k="name" value="${esc(w.name)}" maxlength="50" aria-label="창고 이름"></td><td>${rcLocEditor(w.locations, w.name)}</td><td><input data-k="sort" type="number" step="1" value="${w.sort}" aria-label="${esc(w.name)} 순서" style="width:5em"></td><td><input type="checkbox" data-k="active"${w.active ? ' checked' : ''} aria-label="${esc(w.name)} 사용"></td><td class="nowrap"><button type="button" class="btn small" data-wh-save>저장</button> <button type="button" class="btn small danger" data-wh-del title="입고 기록이 없는 창고만 지울 수 있습니다">삭제</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">등록된 창고가 없습니다.</td></tr>'}</tbody></table></div>
+    <form class="form-grid" data-wh-new data-own-errors><label>새 창고 *<input name="name" required maxlength="50" placeholder="예: 5동"></label><div class="span2 loc-field"><span class="loc-label">위치(Location) <span class="hint">(여러 개 · Enter나 쉼표로 추가)</span></span>${rcLocEditor('', '새 창고')}</div><div class="actions"><button class="btn primary">창고 추가</button></div></form>
     <div class="actions"><button type="button" class="btn" data-close>닫기</button></div>`, { wide: true });
   const done = async () => { m.close(); await rcLoadWarehouses(true); after?.(); rcWarehouseManager(after); };
   $('[data-close]', m.el).onclick = async () => { m.close(); await rcLoadWarehouses(true); after?.(); };
+  $$('[data-loc-editor]', m.el).forEach(rcLocBind);
   $$('[data-wh-save]', m.el).forEach(b => b.onclick = async () => {
     const tr = b.closest('tr'), val = k => $(`[data-k="${k}"]`, tr);
-    try { await api('PUT', '/api/warehouses/' + tr.dataset.wh, { name: val('name').value, locations: val('locations').value, sort: Number(val('sort').value) || 0, active: val('active').checked }); toast('저장했습니다.'); await done(); } catch (error) { fail(error); }
+    try { await api('PUT', '/api/warehouses/' + tr.dataset.wh, { name: val('name').value, locations: rcLocValue(tr), sort: Number(val('sort').value) || 0, active: val('active').checked }); toast('저장했습니다.'); await done(); } catch (error) { fail(error); }
   });
   $$('[data-wh-del]', m.el).forEach(b => b.onclick = async () => {
     const tr = b.closest('tr'), name = $('[data-k="name"]', tr).value;
     if (!(await confirmBox(`${name} 창고를 지울까요? 이 창고로 기록된 입고가 있으면 지워지지 않습니다.`))) return;
     try { await api('DELETE', '/api/warehouses/' + tr.dataset.wh); toast('창고를 지웠습니다.'); await done(); } catch (error) { fail(error); }
   });
-  $('[data-wh-new]', m.el).onsubmit = async e => { e.preventDefault(); try { await api('POST', '/api/warehouses', formObj(e.target)); toast('창고를 추가했습니다.'); await done(); } catch (error) { fail(error); } };
+  $('[data-wh-new]', m.el).onsubmit = async e => { e.preventDefault(); try { await api('POST', '/api/warehouses', { ...formObj(e.target), locations: rcLocValue(e.target) }); toast('창고를 추가했습니다.'); await done(); } catch (error) { fail(error); } };
 }
 
 // ── QR 코드(15.72, 외부 라이브러리 없이): 바이트 모드 · 오류 정정 M · 버전 1~10 · 마스크는 벌점이 가장 낮은 것 ──

@@ -977,7 +977,8 @@ route('GET', '/api/lots/next', async ({ query }) => {
   const match = "substr(lot,1,length(?))=? AND length(lot)>length(?) AND substr(lot,length(?)+1) NOT GLOB '*[^0-9]*'";
   const used = await db.prepare(`SELECT MAX(n) AS n FROM (SELECT CAST(substr(lot, length(?) + 1) AS INTEGER) AS n FROM po_receipt_lots WHERE ${match} UNION ALL SELECT CAST(substr(lot, length(?) + 1) AS INTEGER) FROM other_receipts WHERE ${match} UNION ALL SELECT CAST(substr(lot, length(?) + 1) AS INTEGER) FROM production_actuals WHERE ${match})`).get(...Array(15).fill(head));
   const start = (used && used.n) || 0;
-  return { lots: Array.from({ length: count }, (_, i) => head + String(start + i + 1).padStart(3, '0')) };
+  // 15.190 입고 LOT 순번 4자리(R261113_0049). 서브 LOT는 화면·라벨에서 -001로 붙는다(R261113_0049-001).
+  return { lots: Array.from({ length: count }, (_, i) => head + String(start + i + 1).padStart(4, '0')) };
 });
 route('GET', '/api/receipts/:id', async ({ params }) => receiptDetail(await mustGet('receipts', params.id)));
 route('POST', '/api/receipts', async ({ user, body }) => {
@@ -3380,6 +3381,7 @@ route('POST', '/api/boms', async ({ user, body }) => {
   const spec = str(body.spec, 100);
   const result = await db.prepare('INSERT INTO boms(product,product_code,kind,base_qty,unit,materials,note,active,item_category,created_by,cat1,cat2,cat3,semi_type,semi_unit,pack_qty) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(...fields, user.name, ...cats, semiType, semiUnit, packQty);
   if (spec) await db.prepare('UPDATE boms SET spec=? WHERE id=?').run(spec, result.lastInsertRowid);
+  const vendorInfo = str(body.vendor_info, 500); if (vendorInfo) await db.prepare('UPDATE boms SET vendor_info=? WHERE id=?').run(vendorInfo, result.lastInsertRowid); // 15.190
   return withSizes(decodeBom(await mustGet('boms', result.lastInsertRowid)));
 });
 route('PUT', '/api/boms/:id', async ({ user, params, body }) => {
@@ -3394,6 +3396,7 @@ route('PUT', '/api/boms/:id', async ({ user, params, body }) => {
     commands.push(...relinkCatalog(before, { id: before.id, product: fields[0], product_code: fields[1] }));
   } else commands.push(...await bomFollowRename(before, fields[0], fields[1]));
   if (body.spec !== undefined) commands.push({ sql: 'UPDATE boms SET spec=? WHERE id=?', args: [str(body.spec, 100), before.id] });
+  if (body.vendor_info !== undefined) commands.push({ sql: 'UPDATE boms SET vendor_info=? WHERE id=?', args: [str(body.vendor_info, 500), before.id] }); // 15.190 업체 정보
   await db.batch(commands);
   return withSizes(decodeBom(await mustGet('boms', params.id)));
 });
@@ -3978,7 +3981,7 @@ route('POST', '/api/schedules/:id/actuals', async ({ user, params, body }) => {
   if (old) { if (!matches(old)) throw new HttpError(409, '이미 사용된 실적 요청 번호입니다.'); return old; }
   // 15.135 투입 자재 LOT: 그 LOT의 남은 수량 안에서만(같은 LOT 여러 줄은 합쳐서 확인).
   const inputs = await actualLotInputs(body.inputs);
-  // 완제품 생산 LOT: 직접 적지 않으면 [식별문자(제품 P·상품 G)][생산일]_[순번] 자동.
+  // 완제품 생산 LOT: 직접 적지 않으면 [식별문자(제품 P·상품 G)][생산일]-[순번] 자동.
   const snap = JSON.parse(schedule.bom_snapshot || '{}');
   const lot = qty > 0 ? (str(body.lot, 100) || await nextProductionLot(lotPrefixOf(snap.item_category || '제품'), date)) : '';
   const cmds = [{ sql: 'INSERT INTO production_actuals(schedule_id,production_date,qty,note,author_id,author_name,request_id,lot) VALUES(?,?,?,?,?,?,?,?)', args: [schedule.id, date, qty, note, user.id, user.name, key, lot] },
@@ -3986,8 +3989,9 @@ route('POST', '/api/schedules/:id/actuals', async ({ user, params, body }) => {
   try { await db.batch(cmds); return actualWithInputs(await db.prepare('SELECT * FROM production_actuals WHERE request_id=?').get(key)); }
   catch (error) { const saved = await db.prepare('SELECT * FROM production_actuals WHERE request_id=?').get(key); if (saved && matches(saved)) return actualWithInputs(saved); throw error; }
 });
+// 15.190 생산 완제품 포장 LOT: [P][생산일]-[순번 3자리] (P261113-001).
 async function nextProductionLot(prefix, date) {
-  const head = `${prefix}${date.slice(2).replace(/-/g, '')}_`;
+  const head = `${prefix}${date.slice(2).replace(/-/g, '')}-`;
   const match = "substr(lot,1,length(?))=? AND length(lot)>length(?) AND substr(lot,length(?)+1) NOT GLOB '*[^0-9]*'";
   const used = await db.prepare(`SELECT MAX(n) AS n FROM (SELECT CAST(substr(lot, length(?) + 1) AS INTEGER) AS n FROM production_actuals WHERE ${match} UNION ALL SELECT CAST(substr(lot, length(?) + 1) AS INTEGER) FROM po_receipt_lots WHERE ${match} UNION ALL SELECT CAST(substr(lot, length(?) + 1) AS INTEGER) FROM other_receipts WHERE ${match})`).get(...Array(15).fill(head));
   return head + String(((used && used.n) || 0) + 1).padStart(3, '0');

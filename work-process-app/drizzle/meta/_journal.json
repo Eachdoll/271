@@ -386,6 +386,13 @@
       "when": 1796640813000,
       "tag": "0054_bill_notes",
       "breakpoints": false
+    },
+    {
+      "idx": 55,
+      "version": "6",
+      "when": 1796727213000,
+      "tag": "0055_bom_vendor_info",
+      "breakpoints": false
     }
   ]
 }

@@ -2335,3 +2335,57 @@ table.grid.pr-grid .item-lock [data-item-unlock] { min-height: 22px !important; 
 /* 15.188 구매의뢰 판매단가 칸 아래 최근 판매가 */
 table.grid.pr-grid .pr-sale-hist { margin-top: 2px; font-size: 11.5px; white-space: nowrap; text-align: right; } table.grid.pr-grid .pr-sale-hist .link-btn { font-size: 11.5px; }
 table.grid.pr-grid .pr-sale-hist:empty { display: none; }
+/* ── 15.189 점검 결과 고침 ── */
+/* 조회 줄(이름이 칸 왼쪽인 한 줄): 글·검색 칸이 자기 라벨보다 넓어져 옆 칸 위에 겹치던 것 → 칸은 라벨 안 남는 폭만 */
+@media (min-width: 821px) {
+  :root[data-density="compact"] body:not(.operator-mode) #main form.list-filters > label:not(.lf-check):not(.check):not(.inline) > input:not([type=date]):not([type=checkbox]):not([type=radio]) { flex: 1 1 auto; width: auto; min-width: 6em; }
+  :root[data-density="compact"] body:not(.operator-mode) #main form.list-filters > label:not(.lf-check):not(.check):not(.inline) { flex: 0 1 auto; }
+  :root[data-density="compact"] body:not(.operator-mode) #main form.list-filters > label.grow, :root[data-density="compact"] body:not(.operator-mode) #main form.list-filters > label.lf-q, :root[data-density="compact"] body:not(.operator-mode) #main form.list-filters > label.list-search { flex: 1 1 260px; }
+}
+/* 한 줄 도구(일간·주간·월간 | ◀ ▶ 오늘 | 계획표·달력 | 엑셀): 작은 단추와 탭 단추 높이를 맞춤 */
+:root[data-density="compact"] body:not(.operator-mode) #main .toolbar .btn.small, :root[data-density="compact"] body:not(.operator-mode) #main .toolbar .seg button { min-height: 32px; height: 32px; padding-top: 0; padding-bottom: 0; }
+:root[data-density="compact"] body:not(.operator-mode) #main .toolbar:not(:has(> label)) { align-items: center; }
+/* 단추 글자는 꺾지 않고 줄 전체가 다음 줄로 */
+@media (min-width: 601px) { .result-bar .btn, .bulk-bar .btn, .toolbar .btn, #main .actions .btn, .actionbar .btn { white-space: nowrap; } }
+@media (max-width: 600px) { .actionbar { flex-wrap: wrap; } .sc-table td.nowrap, .sc-table th { white-space: normal; word-break: break-all; } .sc-card .table-wrap { overflow-x: auto; } .sc-card table.grid > * > tr > * { padding-left: 3px !important; padding-right: 3px !important; font-size: 12px; } }
+/* 휴대폰: 작은 표(카드로 바꾸지 않는 표)가 몇십 px 넘치던 것 → 칸 여백·글자 조금 줄임 */
+@media (max-width: 600px) { table.grid.keep-table > * > tr > * { padding: 4px 5px !important; font-size: 12.5px; } table.grid.keep-table { font-size: 12.5px; } }
+/* 15.189 구매의뢰 상세 팝업: 품목 칸이 많아 팝업 폭이 모자라던 것 → 이 팝업만 화면 폭까지 넓힘, 짧은 머리글은 꺾지 않음 */
+.modal:has(table.pr-items) { max-width: min(1320px, 96vw) !important; width: min(1320px, 96vw); }
+.modal table.grid > thead > tr > th:not(.th-long) { white-space: nowrap; }
+
+/* 15.190 의뢰 양식: 하나만 고르는 칸은 붙은 버튼(세그먼트), 여러 개 고르는 칸은 칸 맞춘 격자 */
+fieldset.pick-field { padding: 6px 10px 8px; }
+fieldset.pick-field > legend { font-size: 13px; font-weight: 600; padding: 0 4px; }
+.seg-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 4px; }
+.opts.seg-pick { display: inline-flex; flex-wrap: wrap; gap: 0; margin: 0; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; background: var(--panel); }
+.opts.seg-pick > label.opt { position: relative; margin: 0; padding: 5px 14px; min-height: 30px; border: 0; border-right: 1px solid var(--line); border-radius: 0; background: transparent; white-space: nowrap; font-size: 13.5px; }
+.opts.seg-pick > label.opt:last-child { border-right: 0; }
+.opts.seg-pick > label.opt > input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.opts.seg-pick > label.opt:hover { background: var(--accent-soft); }
+.opts.seg-pick > label.opt:has(input:checked) { background: var(--accent); color: #fff; font-weight: 600; }
+.opts.seg-pick > label.opt:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -3px; }
+.seg-line > .opt, .seg-line > input.etc { margin: 0; }
+.seg-line input.etc { width: 14em; max-width: 100%; }
+.opts.check-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; margin-top: 4px; }
+.opts.check-grid > label.opt { margin: 0; padding: 5px 8px; min-height: 30px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); font-size: 13.5px; white-space: nowrap; }
+.opts.check-grid > label.opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.opts.check-grid > span.opt { grid-column: span 2; display: flex; align-items: center; gap: 6px; }
+.opts.check-grid > span.opt input.etc { flex: 1; min-width: 0; }
+@media (max-width: 700px) {
+  .opts.seg-pick { display: flex; width: 100%; }
+  .opts.seg-pick > label.opt { flex: 1 1 auto; justify-content: center; min-height: 42px; padding: 8px 10px; border-radius: 0; border-bottom: 1px solid var(--line); }
+  .opts.check-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .opts.check-grid > label.opt { min-height: 42px; border-radius: 8px; }
+}
+/* 15.190 제품등록: 업체 정보·비고 칸, 구성자재 찾기 */
+.bom-table td.bom-memo { max-width: 16em; font-size: 13px; white-space: pre-line; word-break: keep-all; overflow-wrap: anywhere; }
+.mat-pick { display: flex; gap: 4px; align-items: center; } .mat-pick > input { flex: 1; min-width: 10em; }
+/* 15.190 창고 위치 여러 개(칩) */
+.loc-editor { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 16em; }
+.loc-chips { display: contents; }
+.loc-chip { display: inline-flex; align-items: center; gap: 2px; padding: 1px 2px 1px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--accent-soft); font-size: 12.5px; white-space: nowrap; }
+.loc-chip .loc-x { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 5px; border-radius: 999px; }
+.loc-chip .loc-x:hover { color: var(--danger, #c00); background: var(--panel); }
+.loc-editor input[data-loc-input] { flex: 1 1 8em; min-width: 7em; width: auto; }
+.loc-field { display: flex; flex-direction: column; gap: 4px; } .loc-field .loc-label { font-weight: 600; font-size: 13px; }
