@@ -5601,8 +5601,9 @@ route('POST', '/api/ship-instructions/ship', async ({ user, body }) => {
   if (!ids.length || ids.length > 50 || ids.some(id => !Number.isSafeInteger(id) || id <= 0)) throw bad('출하할 지시를 1~50건 고르세요.');
   const date = dateStr(body.ship_date || today(), '출고일'); if (date > today()) throw bad('출고일은 오늘 이전으로 선택하세요.');
   const lots = body.lots && typeof body.lots === 'object' ? body.lots : {};
+  const qtys = body.qtys && typeof body.qtys === 'object' ? body.qtys : {}; // 15.208 재고가 모자라 적게 내보낼 때: 지시 수량보다 적게 → 나머지는 출하 대기로 남음
   const closedCustomers = new Set();
-  const cmds = [];
+  const cmds = []; let partial = 0;
   for (const id of ids) {
     const ins = await db.prepare('SELECT * FROM ship_instructions WHERE id=?').get(id);
     if (!ins || ins.status !== 'pending') throw new HttpError(409, '이미 처리됐거나 취소된 출하지시가 있습니다. 새로 불러오세요.');
@@ -5614,17 +5615,40 @@ route('POST', '/api/ship-instructions/ship', async ({ user, body }) => {
     closedCustomers.add(ins.customer);
     const lot = str(lots[id], 100), tag = `si:${id}`;
     await checkShipLot(ins.item, lot); // 15.150
+    let shipQty = ins.qty;
+    if (qtys[id] !== undefined && qtys[id] !== null && qtys[id] !== '') { const sp = await splitInstructionCmds(ins, qtys[id], user, '출하 수량 줄임(재고 부족 등)'); shipQty = sp.q; if (sp.cmds.length) { cmds.push(...sp.cmds); partial++; } }
     cmds.push(
       { sql: "UPDATE ship_instructions SET status='shipped',processed_by=?,processed_at=? WHERE id=? AND status='pending' AND held=0", args: [user.name, now(), id] }, RC_GUARD,
-      { sql: 'INSERT INTO shipments(ship_date,item,qty,customer,note,lot,created_by,product_code,unit,spec,batch_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)', args: [date, ins.item, ins.qty, ins.customer, ins.note || '', lot, user.name, ins.product_code, ins.unit, ins.spec, tag] },
+      { sql: 'INSERT INTO shipments(ship_date,item,qty,customer,note,lot,created_by,product_code,unit,spec,batch_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)', args: [date, ins.item, shipQty, ins.customer, ins.note || '', lot, user.name, ins.product_code, ins.unit, ins.spec, tag] },
       { sql: 'UPDATE ship_instructions SET shipment_id=(SELECT id FROM shipments WHERE batch_id=?) WHERE id=?', args: [tag, id] },
       { sql: "UPDATE sales_bill_lines SET source_type='ship',source_id=(SELECT id FROM shipments WHERE batch_id=?),ship_date=?,lot=? WHERE id=? AND active=1", args: [tag, date, lot, ins.bill_line_id] }, RC_GUARD,
     );
   }
   try { await db.batch(cmds); }
   catch (error) { if (isGuardError(error)) throw new HttpError(409, '그 사이 출하지시나 매출전표가 바뀌었습니다. 새로 불러오세요.'); throw error; }
-  return { shipped: ids.length };
+  return { shipped: ids.length, partial };
 });
+// 15.208 출하지시 수량 나누기(묶음 15.154와 같은 방식): 지시·전표 줄을 q와 나머지로 나눈다. 나머지는 같은 전표의 새 줄 + 새 출하지시(대기, 묶음 없음).
+// 공급가액·세액은 비율로 나누고 남는 줄에 나머지를 몰아 전표 합계는 그대로. 검증하고 명령들을 돌려준다.
+async function splitInstructionCmds(i, rawQty, user, why) {
+  const q = stockRound(Number(rawQty));
+  if (!Number.isFinite(q) || q <= 0) throw bad(`${i.item}(${i.customer}): 수량을 0보다 크게 넣으세요.`);
+  if (q > Number(i.qty) + 0.000001) throw bad(`${i.item}(${i.customer}): 수량 ${q}이 지시 수량 ${stockRound(i.qty)}보다 많습니다.`);
+  if (q >= Number(i.qty) - 0.000001) return { q: Number(i.qty), cmds: [] };
+  const line = await db.prepare('SELECT * FROM sales_bill_lines WHERE id=?').get(i.bill_line_id), bill = await db.prepare('SELECT * FROM sales_bills WHERE id=?').get(i.bill_id);
+  if (!line || !line.active || !bill || bill.status !== 'confirmed') throw new HttpError(409, `${i.item}: 매출전표가 취소됐거나 바뀌었습니다. 새로 불러오세요.`);
+  if (Math.abs(Number(line.qty) - Number(i.qty)) > 0.000001) throw new HttpError(409, `${i.item}: 전표 수량(${stockRound(line.qty)})과 지시 수량(${stockRound(i.qty)})이 달라 나눌 수 없습니다. 전표를 확인하세요.`);
+  if (await salesClosed(bill.customer, bill.bill_date)) throw bad(closedMessage(bill.customer, bill.bill_date, '수량을 나누세요'));
+  const rest = stockRound(Number(i.qty) - q), supply = Math.round(Number(line.supply) * q / Number(line.qty)), vat = Math.round(Number(line.vat) * q / Number(line.qty));
+  return { q, cmds: [
+    { sql: 'UPDATE sales_bill_lines SET qty=?,supply=?,vat=? WHERE id=? AND active=1 AND qty=? AND supply=? AND vat=?', args: [q, supply, vat, line.id, line.qty, line.supply, line.vat] }, RC_GUARD,
+    { sql: `INSERT INTO sales_bill_lines(bill_id,item_category,source_type,source_id,item,spec,unit,product_code,lot,ship_date,qty,unit_price,supply,vat,note,order_line_id)
+      SELECT bill_id,item_category,source_type,source_id,item,spec,unit,product_code,lot,ship_date,?,unit_price,?,?,note,order_line_id FROM sales_bill_lines WHERE id=?`, args: [rest, Number(line.supply) - supply, Number(line.vat) - vat, line.id] },
+    { sql: "UPDATE ship_instructions SET qty=? WHERE id=? AND status='pending' AND qty=?", args: [q, i.id, i.qty] }, RC_GUARD,
+    { sql: `INSERT INTO ship_instructions(bill_id,bill_line_id,order_line_id,customer,bom_id,product_code,item,spec,unit,qty,ship_date,note,created_by,held,hold_note,held_by,held_at)
+      SELECT bill_id,(SELECT MAX(id) FROM sales_bill_lines WHERE bill_id=?),order_line_id,customer,bom_id,product_code,item,spec,unit,?,ship_date,note,created_by,held,hold_note,held_by,held_at FROM ship_instructions WHERE id=?`, args: [bill.id, rest, i.id] },
+    docChange('sales_bill', bill.id, `${why}: ${i.item} ${stockRound(i.qty)} → ${q} + ${rest}(출하 대기)`, user)] };
+}
 // 15.104 출하지시 보류·해제(물류·영업): 대기 중인 지시만. 보류하면 출하 처리 목록과 배지에서 빠지고 전표·수주 잔량은 그대로.
 route('POST', '/api/ship-instructions/:id/hold', async ({ user, params, body }) => {
   if (!hasRole(user, 'logistics') && !hasRole(user, 'sales')) throw new HttpError(403, '출하지시 보류는 물류·영업 담당자가 합니다.');
