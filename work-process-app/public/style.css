@@ -2629,3 +2629,16 @@ table.sbl-table tr.sbl-line td.sbl-item { padding-left: 20px; }
 @media screen and (max-width: 600px) { .sb-doc table.sb-items td.sb-lot { width: auto !important; } .sb-doc table.sb-items td.sb-qty.r { text-align: left !important; } }
 @media screen and (max-width: 600px) { table.sbl-table td, table.sbl-table th { position: static !important; box-shadow: none !important; } table.sbl-table tr.sbl-head > th, table.sbl-table .sbl-h2 { white-space: normal !important; overflow-wrap: anywhere; } }
 #siBar[hidden] { display: none !important; } /* 15.205 휴대폰 flex 규칙이 hidden을 덮지 않게 */
+
+/* 15.206 거래처를 품목 앞에: 묶음 목록(PC 첫 칸·휴대폰 첫 줄) · 출하지시 휴대폰 첫 줄 */
+table.sbl-table tr.sbl-line td.sbl-cust { padding-left: 20px; white-space: nowrap; } table.sbl-table tr.sbl-line td.sbl-item { padding-left: 8px; }
+@media screen and (max-width: 600px) {
+  table.sbl-table tr.sbl-line { grid-template-areas: "cust st" "item qty"; }
+  table.sbl-table td.sbl-cust { color: var(--text); font-size: 14px; padding-left: 0 !important; }
+  table.sbl-table td.sbl-item { font-size: 13.5px; padding-left: 0 !important; }
+  table.si-table tbody tr { grid-template-areas: "chk meta st" "chk item qty" "chk lot act"; }
+  table.si-table td.si-c-cust { color: var(--text); font-weight: 700; font-size: 14px; }
+  table.si-table td.si-c-cust .si-m-only { font-weight: 400; color: var(--muted); }
+  table.si-table td.si-c-item { font-size: 14.5px; }
+  table.si-table td.si-c-item b { font-weight: 600; }
+}
