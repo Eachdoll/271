@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.214';
+const APP_VERSION = '15.215';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -433,12 +433,13 @@ function applyMenuAccess(main) {
   for (const a of main.querySelectorAll('a[href^="#/"]')) {
     if (canSeeRoute(a.getAttribute('href'))) continue;
     // 카드·표 줄은 통째로, 할 일 줄은 그 줄의 대표 링크(첫 링크)가 막힌 업무일 때만 뺀다(다른 업무의 보조 링크는 글자로 남김).
-    const box = a.closest('.kpi, .progress-table tr'), item = a.closest('.tasks li');
+    const box = a.closest('.kpi, .dm-row, .dm-hero, .progress-table tr'), item = a.closest('.tasks li');
     if (box) { box.remove(); continue; }
     if (item && item.querySelector('a') === a) { item.remove(); continue; }
     const span = document.createElement('span'); span.textContent = a.textContent; a.replaceWith(span);
   }
   main.querySelectorAll('.kpi-group').forEach(g => { if (!g.querySelector('.kpi')) g.remove(); });
+  main.querySelectorAll('.dm-card').forEach(g => { if (!g.querySelector('.dm-row, .dm-hero')) g.remove(); }); // 15.215
   // 할 일 카드: 칸(승인할 일·내가 올린 요청)마다 남은 줄 수로 건수를 고치고, 비면 안내 문구로 바꾼다(카드는 그대로).
   // 확인이 필요한 일(알림) 카드는 줄이 하나도 안 남으면 뺀다.
   main.querySelectorAll('.tasks').forEach(card => {
@@ -1361,6 +1362,7 @@ const PHONE_GRID = [
   ['#stockList', { a: ['품목명'], b: ['현재고'], c: ['품목코드', '분류', ['안전재고', '안전'], ['최근 변동', '변동']], d: [''] }],
   ['#shList', { a: ['품목명'], b: ['수량'], c: ['거래처', '출고일', ['LOT', 'LOT']], d: [''] }],
   ['#rcsList', { a: ['품목'], b: ['입고일'], c: ['입고번호', '거래처', ['줄', '줄']], d: [''] }],
+  ['#billList', { k: [''], a: ['거래처'], b: ['합계'], c: ['전표번호', ['전표 일자', '일자'], ['명세서 일자', '일자'], '상태', '세금계산서'], d: [] }], // 15.215 매출·매입전표 목록
   ['#poList', { a: ['품목명'], b: ['수량'], c: ['거래처', '입고상태', ['납기일', '납기'], ['입고', '입고'], ['잔량', '잔량'], ['구매의뢰번호', '의뢰']], d: [''] }], // 15.212
   ['#rcList', { k: [''], a: ['품목명'], b: ['발주수량'], c: ['거래처', '상태', ['실입고', '실입고'], ['납기일', '납기'], ['구매의뢰번호', '의뢰']], d: ['사진·검수'] }], // 15.212
   ['.mr-needs', { a: ['품목'], b: ['생산 필요'], c: ['규격·사이즈', ['의뢰', '의뢰'], ['생산', '생산'], ['계획 안 됨', '미계획']] }], // 15.210
@@ -1372,11 +1374,12 @@ function phoneGrid(table, spec) {
   const heads = $$('thead th', table).map(th => [...th.childNodes].filter(x => !(x.classList && x.classList.contains('sr-only'))).map(x => x.textContent).join('').replace(/[☆▾▴▼▲]/g, '').trim());
   const find = h => { for (const [role, list] of Object.entries(spec)) for (const e of list) { const name = Array.isArray(e) ? e[0] : e; if (name === '' ? h === '' : h === name || h.startsWith(name + ' ')) return [role, Array.isArray(e) ? e[1] : '']; } return ['x', '']; };
   const roles = spec.roles || heads.map(find); // 15.210 자동 설정은 칸별 역할
-  $$('tfoot tr', table).forEach(tr => { let col = 0; [...tr.children].forEach(td => { const i = col; col += td.colSpan || 1; // 15.210 합계 줄도 같은 칸 역할(합친 칸·첫 칸 = 제목)
+  $$('tfoot tr, tbody tr', table).filter(tr => tr.parentElement.tagName === 'TFOOT' || ([...tr.children].some(td => td.colSpan > 1) && tr.children.length > 1)).forEach(tr => { tr.classList.add('m-sum'); let col = 0; /* 15.215 칸을 합친 소계 줄도 실제 칸 위치로 */ [...tr.children].forEach(td => { const i = col; col += td.colSpan || 1; // 15.210 합계 줄도 같은 칸 역할(합친 칸·첫 칸 = 제목)
+    if (/^[\s—-]*$/.test(td.textContent) && !td.querySelector('input, button')) { td.classList.add('m-x'); return; } // 빈 칸(줄 끝 합친 칸 등)은 숨김
     if (td.colSpan > 1 || i === 0) { td.classList.add('m-a'); return; }
     const [role, label] = roles[i] || ['x', '']; td.classList.add('m-' + (role === 'a' ? 'c' : role === 'k' || role === 'd' ? 'x' : role)); if (label) td.dataset.m = label;
     if (/^[\s—-]*$/.test(td.textContent)) td.classList.add('m-empty'); }); });
-  $$('tbody tr', table).forEach(tr => [...tr.children].forEach((td, i) => {
+  $$('tbody tr:not(.m-sum)', table).forEach(tr => [...tr.children].forEach((td, i) => {
     if (td.colSpan > 1) { td.classList.add('m-full'); return; }
     const [role, label] = roles[i] || ['x', '']; td.classList.add('m-' + role); if (label) td.dataset.m = label;
     if (role === 'c' && /^[\s—-]*$/.test(td.textContent)) td.classList.add('m-empty'); // 빈 칸·「—」는 휴대폰에서 숨김
@@ -1411,7 +1414,7 @@ function autoGridSpec(table) {
 function labelGridTables() {
   $$('table.grid:not([data-labeled])').forEach(table => {
     table.dataset.labeled = 'true';
-    const pg = PHONE_GRID.find(([sel]) => table.closest(sel)); if (pg) { phoneGrid(table, pg[1]); return; } // 15.204
+    const pg = PHONE_GRID.find(([sel]) => table.closest(sel)); if (pg) phoneGrid(table, pg[1]); // 15.204 (15.215 PC 정렬·필터·열 설정은 그대로 이어서)
     if (!table.classList.contains('keep-table') && !table.classList.contains('m-grid')) phoneGrid(table, autoGridSpec(table)); // 15.210 카드 대신 3줄 그리드(keep-table 표는 휴대폰에서도 표 그대로)
     const heads = $$('thead th', table).map(th => th.textContent.trim());
     const rows = $$('tbody tr', table);
@@ -1551,34 +1554,46 @@ async function pageHome(main) {
   const kpi = (href, value, label, tone = '', note = '') => `<a class="kpi ${tone} ${Number(value) === 0 ? 'is-zero' : ''}" href="${href}"><b>${value}</b><span>${label}</span>${note}</a>`;
   const group = (title, tiles) => { const body = tiles.filter(Boolean).join(''); return body ? `<section class="kpi-group" aria-label="${title}"><h3>${title}</h3><div class="kpis">${body}</div></section>` : ''; };
   const num = v => Number(v) === 0 ? '<span class="zero">0</span>' : v;
+  // 15.215 Overview: 부서 카드(위 색 띠) 안에 「이름 ··· 숫자」 줄. 0건은 흐리게, 처리할 것이 있는 줄만 색. 영업은 금액(담당자만) + 수주·출하 대기·계산서.
+  const sa = d.sales;
+  const row = (href, value, label, tone = '', note = '') => `<a class="dm-row ${tone} ${Number(String(value).replace(/,/g, '')) === 0 ? 'is-zero' : ''}" href="${href}"><span class="dm-l">${label}${note ? ` <em>${note}</em>` : ''}</span><b class="dm-v">${value}</b></a>`;
+  const card = (dept, en, ko, href, rows) => { const body = rows.filter(Boolean).join(''); return body ? `<section class="dm-card" data-dept="${dept}" aria-label="${ko}"><h3><a href="${href}"><span class="dm-en">${en}</span><span class="dm-ko">${ko}</span></a></h3>${body}</section>` : ''; };
   main.innerHTML = `
   <div class="dash-head"><h1>대시보드</h1><p class="dash-date"><time datetime="${d.today}">${d.today} (${dow(d.today)})</time></p></div>
   <div class="dash-top">${tasksCard(tasks)}${alertsCard(alerts)}</div>
   ${d.stock === null ? '<p class="small red-text" role="status">재고 경고를 조회하지 못했습니다. 재고 현황을 확인하거나 잠시 후 새로고침해주세요.</p>' : ''}
-  <section class="dash-section" aria-labelledby="dashNow"><h2 id="dashNow">현황 한눈에</h2>
-  <div class="kpi-groups">
-    ${group('구매·물류', [
-      kpi('#/logistics/receive', d.po.none, '미입고 발주', '', d.po.overdue ? `<em class="red">납기경과 ${d.po.overdue}</em>` : ''),
-      kpi('#/logistics/receive', d.po.checking, '입고 확인중', 'yellow'),
-      kpi('#/logistics/receive', d.po.mismatch, '수량상이', 'red'),
-      d.po.partial ? kpi('#/logistics/receive', d.po.partial, '부분 입고 (남음)', 'yellow') : '',
-      d.receiptChangesPending ? kpi('#/logistics/receive', d.receiptChangesPending, '입고 수량 수정 승인대기', 'yellow') : '',
-      kpi('#/logistics/ship', d.shipmentsToday, '오늘 출하'),
+  <section class="dash-section" aria-labelledby="dashNow"><h2 id="dashNow">Overview <span class="dash-sub">부서별 지금 처리할 것</span></h2>
+  <div class="dash-overview">
+    ${card('sales', 'Sales', '영업', '#/sales/orders', [
+      sa && sa.canMoney ? `<a class="dm-hero" href="#/sales/bills"><span>이번 달 매출 <small>(확정 전표 ${fmtNum(sa.billsMonth)}장)</small></span><b>₩ ${won(sa.salesMonth)}</b><small>이번 달 입금 ₩ ${won(sa.paidMonth)}</small></a>` : '',
+      sa ? row('#/sales/orders', sa.ordersOpen, '진행 중 수주', '', sa.ordersToday ? `오늘 ${sa.ordersToday}건` : '') : '',
+      sa ? row('#/logistics/ship-orders', sa.shipPending, '출하 대기 지시', 'yellow', sa.shipHeld ? `보류 ${sa.shipHeld}` : '') : '',
+      sa ? row('#/sales/bills', sa.untaxed, '세금계산서 안 담은 전표', 'yellow') : '',
+      sa && !sa.canMoney ? row('#/sales/bills', sa.billsMonth, '이번 달 확정 전표') : '',
     ])}
-    ${group('재고·생산', [
-      d.stock?.low ? kpi('#/logistics/stock', d.stock.low, '안전재고 미달 품목', 'yellow') : '',
-      d.stock?.negative ? kpi('#/logistics/stock', d.stock.negative, '재고 음수 품목 (기록 확인)', 'red') : '',
-      d.actualChangesPending ? kpi('#/prod/finished', d.actualChangesPending, '생산실적 수정 승인대기', 'yellow') : '',
-      kpi('#/purchase/laundry', fmtNum(d.laundryMonth), '이번달 세탁 폐기'),
+    ${card('logistics', 'Purchasing · Logistics', '구매·물류', '#/logistics/receive', [
+      row('#/logistics/receive', d.po.none, '미입고 발주', '', d.po.overdue ? `<span class="red-text">납기경과 ${d.po.overdue}</span>` : ''),
+      row('#/logistics/receive', d.po.checking, '입고 확인중', 'yellow'),
+      row('#/logistics/receive', d.po.mismatch, '수량상이', 'red'),
+      d.po.partial ? row('#/logistics/receive', d.po.partial, '부분 입고 (남음)', 'yellow') : '',
+      d.receiptChangesPending ? row('#/logistics/receive', d.receiptChangesPending, '입고 수량 수정 승인대기', 'yellow') : '',
+      row('#/logistics/ship', d.shipmentsToday, '오늘 출하'),
     ])}
-    ${group('의뢰 접수 대기', [
-      kpi('#/quality/request', r.analysis.pending, '분석 접수대기'),
-      kpi('#/quality/voc/request', r.voc.pending, 'VOC 승인대기'),
-      kpi('#/dev/request', r.development.pending, '개발 접수대기'),
-      kpi('#/prod/list', r.sample.pending, '샘플 접수대기'),
+    ${card('production', 'Inventory · Production', '재고·생산', '#/logistics/stock', [
+      row('#/prod/finished/plan', d.schedulesToday, '오늘 생산 계획'),
+      d.stock ? row('#/logistics/stock', d.stock.low, '안전재고 미달 품목', 'yellow') : '',
+      d.stock ? row('#/logistics/stock', d.stock.negative, '재고 음수 품목 (기록 확인)', 'red') : '',
+      d.actualChangesPending ? row('#/prod/finished', d.actualChangesPending, '생산실적 수정 승인대기', 'yellow') : '',
+      row('#/purchase/laundry', fmtNum(d.laundryMonth), '이번 달 세탁 폐기'),
+    ])}
+    ${card('quality', 'Requests', '의뢰 접수 대기', '#/quality/list', [
+      row('#/quality/request', r.analysis.pending, '분석 접수대기', 'yellow'),
+      row('#/quality/voc/request', r.voc.pending, 'VOC 승인대기', 'yellow'),
+      row('#/dev/request', r.development.pending, '개발 접수대기', 'yellow'),
+      row('#/prod/list', r.sample.pending, '샘플 접수대기', 'yellow'),
     ])}
   </div></section>
-  <section class="dash-section" aria-labelledby="dashProgress"><h2 id="dashProgress">진행 현황</h2>
+  <section class="dash-section" aria-labelledby="dashProgress"><h2 id="dashProgress">Request Pipeline <span class="dash-sub">의뢰 종류별 진행</span></h2>
   <div class="table-wrap"><table class="grid keep-table progress-table">
     <caption class="sr-only">의뢰 종류별 진행 현황 (건수)</caption>
     <thead><tr><th scope="col">구분</th><th scope="col">접수대기</th><th scope="col">대기</th><th scope="col">진행</th><th scope="col">완료</th></tr></thead>
@@ -1598,7 +1613,7 @@ async function pageHome(main) {
   // 업무 흐름 안내는 넓은 화면에서는 펼치고, 휴대폰에서는 접어 둔다(내용은 그대로, 눌러서 열기).
   const flows = $('[data-flows]', main); if (flows && !matchMedia('(max-width: 700px)').matches) flows.open = true;
   // 15.62: 휴대폰에서는 할 일·알림을 먼저 보도록 「현황 한눈에」「진행 현황」을 접어 둔다(눌러서 열기).
-  if (matchMedia('(max-width: 700px)').matches) for (const id of ['dashNow', 'dashProgress']) {
+  if (matchMedia('(max-width: 700px)').matches) for (const id of ['dashProgress']) { // 15.215 Overview는 휴대폰에서도 펼쳐 둠
     const section = $(`[aria-labelledby="${id}"]`, main), heading = section && $('#' + id, section); if (!section || !heading) continue;
     const fold = document.createElement('details'); fold.className = 'dash-fold';
     const summary = document.createElement('summary'); summary.append(heading); fold.append(summary, ...[...section.childNodes]); section.append(fold);
