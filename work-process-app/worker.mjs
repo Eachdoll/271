@@ -125,7 +125,7 @@ async function baseMenus(u, departments = null) { // 15.179 departments를 넘�
   return list || null;
 }
 // 사람별 화면 설정(15.62): 자주 쓰는 화면(★)과 목록 조건(상태·구분 같은 선택값). settings 표의 'prefs:<id>' 한 줄에 둔다(마이그레이션 없음).
-const SKINS_ALLOWED = ['default', 'christmas', 'ribbon']; // 15.220 디자인 스킨(15.222 핑크 리본)
+const SKINS_ALLOWED = ['default', 'christmas', 'ribbon', 'bunny']; // 15.220 디자인 스킨(15.222 핑크 리본, 15.223 분홍 토끼)
 async function userPrefs(id) {
   const row = await db.prepare('SELECT value FROM settings WHERE key=?').get('prefs:' + id);
   try { const v = row ? JSON.parse(row.value) : {}; return { favorites: Array.isArray(v.favorites) ? v.favorites : [], filters: v.filters && typeof v.filters === 'object' ? v.filters : {}, ...(SKINS_ALLOWED.includes(v.skin) ? { skin: v.skin } : {}) }; } catch { return { favorites: [], filters: {} }; } // 15.220 skin
