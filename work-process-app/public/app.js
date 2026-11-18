@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.182';
+const APP_VERSION = '15.183';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -346,11 +346,11 @@ async function saveNewAttachments(entity, row, draft, form) {
 // 메뉴: 업무 → 하위 메뉴 → 화면. 입력과 목록(조회·검색)은 서로 다른 화면입니다(VIEW_SPLIT).
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
-  { group: '영업', items: [{ sub: '견적', items: [['#/sales/quotes', '견적서 관리']] }, { sub: '수주', items: [['#/sales/orders', '수주 관리']] }, { sub: '매출전표', items: [['#/sales/bills', '매출전표 관리'], ['#/sales/calendar', '매출 달력'], ['#/sales/returns', '반입(반품) 관리'], ['#/sales/delivery-status', '납품현황'], ['#/sales/closing', '매출 마감']] }, { sub: '생산의뢰', items: [['#/sales/mr', '생산의뢰 관리']] }, { sub: '구매의뢰', items: [['#/sales/pr', '구매의뢰 관리']] }] },
+  { group: '영업', items: [{ sub: '견적', items: [['#/sales/quotes', '견적서 관리']] }, { sub: '수주', items: [['#/sales/orders', '수주 관리']] }, { sub: '매출전표', items: [['#/sales/bills', '매출전표 관리'], ['#/sales/calendar', '매출 달력'], ['#/sales/returns', '반입(반품) 관리'], ['#/sales/delivery-status', '납품현황'], ['#/sales/closing', '매출 마감']] }, { sub: '생산의뢰', items: [['#/sales/mr', '생산의뢰 관리']] }, { sub: '구매의뢰', items: [['#/sales/pr', '구매의뢰 관리']] }, { sub: '샘플의뢰', items: [['#/sales/sample/product', '제품 샘플의뢰'], ['#/sales/sample/goods', '상품 샘플의뢰']] }] },
   { group: '구매', items: [
     { sub: '발주', items: [['#/purchase/po', '발주 관리']] },
     { sub: '매입전표', items: [['#/purchase/bills', '매입전표 관리'], ['#/purchase/calendar', '매입 달력'], ['#/purchase/returns', '반출(반품) 관리'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/closing', '매입 마감']] },
-    { sub: '샘플(상품)', items: [['#/purchase/sample/request', '상품 샘플의뢰'], ['#/purchase/sample/list', '상품 샘플리스트']] },
+    { sub: '샘플(상품)', items: [['#/purchase/sample/list', '상품 샘플리스트']] },
     { sub: '세탁', items: [['#/purchase/laundry/new', '불량·폐기 입력'], ['#/purchase/laundry', '불량·폐기 목록'], ['#/purchase/laundry-reports', '세탁 검수·성적서']] },
   ] },
   // 15.164 경리: 매입·매출 세금계산서, 매입·매출 거래처별 장부, 대금(입금·지급·원장·연령표)을 한곳에. 화면 주소는 그대로라 볼 수 있는 사람(영업·구매 메뉴 권한)도 그대로이고, 권한 없는 화면은 메뉴에서 빠진다.
@@ -366,7 +366,7 @@ const NAV = [
   ] },
   { group: '개발', items: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
   { group: '생산', items: [
-    { sub: '샘플(제품)', items: [['#/prod/request', '제품 샘플의뢰'], ['#/prod/list', '제품 샘플리스트']] },
+    { sub: '샘플(제품)', items: [['#/prod/list', '제품 샘플리스트']] },
     ['#/prod/orders', '생산의뢰 접수'],
     { sub: '완제품 생산', items: [['#/prod/finished/new', '완제품 생산계획 입력'], ['#/prod/finished', '완제품 생산일정 · 실적']] },
     { sub: '반제품 생산', items: [['#/prod/semi/new', '반제품 생산계획 입력'], ['#/prod/semi', '반제품 생산일정']] },
@@ -547,7 +547,9 @@ const PAGES = {
   '#/quality/voc/list': () => pageWorkList('voc'),
   '#/dev/request': () => pageIntake('development'),
   '#/dev/list': () => pageWorkList('development'),
-  '#/prod/request': () => pageIntake('sample'),
+  '#/prod/request': () => { location.replace('#/sales/sample/product'); }, // 15.183 영업으로 옮김(예전 즐겨찾기)
+  '#/sales/sample/product': () => pageIntake('sample'), // 15.183 제품 샘플의뢰(영업)
+  '#/sales/sample/goods': () => pageIntake('sample_goods'), // 15.183 상품 샘플의뢰(영업)
   '#/prod/list': () => pageWorkList('sample'),
   '#/prod/finished': () => pageSchedule('finished'),
   '#/prod/finished/new': () => pageSchedule('finished'),
@@ -601,7 +603,7 @@ const PAGES = {
   '#/logistics/scan': main => pageScan(main),
   '#/purchase/vendors': main => pageVendors(main),
   '#/purchase/prices': main => pagePrices(main),
-  '#/purchase/sample/request': () => pageIntake('sample_goods'),
+  '#/purchase/sample/request': () => { location.replace('#/sales/sample/goods'); }, // 15.183 영업으로 옮김
   '#/purchase/sample/list': () => pageWorkList('sample_goods'),
   '#/prod/semi/cut': main => pageSemi(main, 'cut'),
   '#/prod/semi/cut/new': main => pageSemi(main, 'cut'),
@@ -1053,7 +1055,7 @@ function alertsCard(a) {
   const items = []; const more = (count, shown) => count > shown ? ` <span class="small muted">외 ${count - shown}건</span>` : '';
   if (a.overdue_po_count) items.push(`<li><a href="#/logistics/receive"><b>납기가 지난 미입고 발주 ${a.overdue_po_count}건</b></a><ul class="alert-lines small muted">${a.overdue_pos.slice(0, 5).map(p => `<li>${esc(p.due_date)} · ${esc(p.vendor)} · ${esc(p.item)}${p.spec ? ' ' + esc(p.spec) : ''}</li>`).join('')}</ul><div class="small muted">${more(a.overdue_po_count, a.overdue_pos.length)}</div></li>`);
   if (a.overdue_request_count) items.push(`<li><b>완료 희망일이 지난 의뢰 ${a.overdue_request_count}건</b><div class="small muted">${a.overdue_requests.map(r => `<a href="${REQ[r.type] ? (r.status === 'pending' ? REQ[r.type].intake : REQ[r.type].list) : '#/'}">${esc(r.due_date)} ${esc(REQ[r.type]?.label || r.type)} · ${esc(r.title)} (${esc(STATUS[r.status] || r.status)})</a>`).join(' / ')}${more(a.overdue_request_count, a.overdue_requests.length)}</div></li>`);
-  const staleLabel = s => s.kind === 'request' ? [`${REQ[s.type]?.label || s.type} 승인`, REQ[s.type]?.intake || '#/'] : { actual_changes: ['생산실적 수정 승인', '#/prod/finished'], receipt_changes: ['입고 수량 수정 승인', '#/logistics/receive'], semi_changes: ['반제품 기록 수정 승인', '#/prod/semi/cut'] }[s.kind];
+  const staleLabel = s => s.kind === 'request' ? [`${REQ[s.type]?.label || s.type} 승인`, REQ[s.type]?.approve || REQ[s.type]?.intake || '#/'] : { actual_changes: ['생산실적 수정 승인', '#/prod/finished'], receipt_changes: ['입고 수량 수정 승인', '#/logistics/receive'], semi_changes: ['반제품 기록 수정 승인', '#/prod/semi/cut'] }[s.kind];
   for (const s of a.stale_approvals) { const [label, href] = staleLabel(s); items.push(`<li><a href="${href}"><b>${esc(label)} 대기 3일 초과 ${s.count}건</b></a><div class="small muted">가장 오래된 요청 ${esc(String(s.oldest).slice(0, 10))}</div></li>`); }
   if (a.low_yield.length) items.push(`<li><a href="#/reports"><b>최근 7일 수율 목표 미달 ${a.low_yield.length}곳</b></a><div class="small muted">${a.low_yield.slice(0, 5).map(r => `${esc(r.unit_name)}(${r.process === 'cut' ? '커팅/융착' : '세탁'}) <span class="red-text">${r.yield_rate}%</span> / 목표 ${r.target}%`).join(' · ')}</div></li>`);
   if (a.backup && (a.backup.days === null || a.backup.days >= 7)) items.push(`<li><a href="#/admin"><b>${a.backup.days === null ? '전체 백업을 아직 받지 않았습니다' : `마지막 전체 백업이 ${a.backup.days}일 전입니다`}</b></a><div class="small muted">관리자 설정 → 전체 백업 다운로드 (주 1회 이상 권장)</div></li>`);
@@ -1073,14 +1075,14 @@ new MutationObserver(suggestUnits).observe(document.body, { childList: true, sub
 function taskTotal(tasks) {
   const a = tasks.approvals; let n = 0;
   const add = (count, route) => { if (count && canSeeRoute(route)) n += count; };
-  for (const [type, group] of Object.entries(a.requests)) add(group.count, REQ[type].intake);
+  for (const [type, group] of Object.entries(a.requests)) add(group.count, REQ[type].approve || REQ[type].intake);
   add(a.actual_changes?.count, '#/prod/finished'); add(a.receipt_changes?.count, '#/logistics/receive'); add(a.semi_changes?.count, '#/prod/semi');
   add(a.production_requests?.count, '#/prod/orders'); add(a.purchase_requests?.count, '#/sales/pr'); add(a.purchase_orders_waiting?.count, '#/purchase/po/new');
   return n;
 }
 function taskBadgeCounts(tasks) {
   const counts = {}; const a = tasks.approvals;
-  for (const [type, group] of Object.entries(a.requests)) if (group.count) counts[REQ[type].intake] = group.count;
+  for (const [type, group] of Object.entries(a.requests)) if (group.count) counts[REQ[type].approve || REQ[type].intake] = group.count;
   if (a.actual_changes?.finished) counts['#/prod/finished'] = a.actual_changes.finished;
   if (a.actual_changes?.semi) counts['#/prod/semi'] = a.actual_changes.semi;
   if (a.receipt_changes?.count) counts['#/logistics/receive'] = a.receipt_changes.count;
@@ -1113,7 +1115,7 @@ async function refreshNavBadges() {
 function tasksCard(tasks) {
   const a = tasks.approvals, m = tasks.mine; const todo = [], mine = [];
   const more = (count, shown) => count > shown ? ` <span class="small muted">외 ${count - shown}건</span>` : '';
-  for (const [type, group] of Object.entries(a.requests)) if (group.count) todo.push(`<li><a href="${REQ[type].intake}"><b>${esc(REQ[type].label)} 승인 대기 ${group.count}건</b></a><div class="small muted">${group.items.map(r => `${esc(r.title)} · ${esc(r.requester_name)}`).join(' / ')}${more(group.count, group.items.length)}</div></li>`);
+  for (const [type, group] of Object.entries(a.requests)) if (group.count) todo.push(`<li><a href="${REQ[type].approve || REQ[type].intake}"><b>${esc(REQ[type].label)} 승인 대기 ${group.count}건</b></a><div class="small muted">${group.items.map(r => `${esc(r.title)} · ${esc(r.requester_name)}`).join(' / ')}${more(group.count, group.items.length)}</div></li>`);
   if (a.actual_changes?.count) todo.push(`<li><a href="${a.actual_changes.finished ? '#/prod/finished' : '#/prod/semi'}"><b>생산실적 수정·취소 승인 대기 ${a.actual_changes.count}건</b></a><div class="small muted">${a.actual_changes.items.map(c => `${esc(c.product)} ${changeSummary(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.actual_changes.count, a.actual_changes.items.length)}</div></li>`);
   if (a.receipt_changes?.count) todo.push(`<li><a href="#/logistics/receive"><b>입고 수량 수정·취소 승인 대기 ${a.receipt_changes.count}건</b></a><div class="small muted">${a.receipt_changes.items.map(c => `${esc(c.item)} ${receiptChangeText(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.receipt_changes.count, a.receipt_changes.items.length)}</div></li>`);
   if (a.semi_changes?.count) todo.push(`<li><a href="${a.semi_changes.cut ? '#/prod/semi/cut' : '#/prod/semi/wash'}"><b>반제품 기록 수정·삭제 승인 대기 ${a.semi_changes.count}건</b></a><div class="small muted">${a.semi_changes.items.map(c => `${semiChangeText(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.semi_changes.count, a.semi_changes.items.length)}</div></li>`);
@@ -1292,6 +1294,7 @@ function labelGridTables() {
       if (head && rows.length && !table.hasAttribute('data-keep-cols') && !table.querySelector('[colspan]') && cells.every(td => (!td.textContent.trim() || td.textContent.trim() === '—') && !td.querySelector('input, select, button, textarea'))) [ths[i], ...cells].forEach(c => c?.classList.add('col-empty'));
       if (NOWRAP_HEADS.has(head)) [ths[i], ...cells].forEach(c => c?.classList.add('nowrap-cell'));
       if (ITEM_HEADS.has(head)) ths[i]?.classList.add('item-col'); // 15.177
+      if (head.replace(/\s/g, '').length >= 5 && table.closest('.modal')) ths[i]?.classList.add('th-long'); // 15.183 팝업: 긴 머리글만 두 줄 허용
       if (CENTER_HEADS.test(head) && !cells.some(td => td.querySelector('input, select, button:not(.link-btn)'))) [ths[i], ...cells].forEach(c => c && !c.classList.contains('r') && c.classList.add('c')); // 15.180
     });
     gridLayout(table); // 15.173 열 너비·순서(빈 열 숨긴 뒤)
@@ -1416,7 +1419,7 @@ async function pageHome(main) {
       kpi('#/quality/request', r.analysis.pending, '분석 접수대기'),
       kpi('#/quality/voc/request', r.voc.pending, 'VOC 승인대기'),
       kpi('#/dev/request', r.development.pending, '개발 접수대기'),
-      kpi('#/prod/request', r.sample.pending, '샘플 접수대기'),
+      kpi('#/prod/list', r.sample.pending, '샘플 접수대기'),
     ])}
   </div></section>
   <section class="dash-section" aria-labelledby="dashProgress"><h2 id="dashProgress">진행 현황</h2>
@@ -2041,7 +2044,7 @@ async function pageIntake(type) {
   const cfg = REQ[type]; const main = $('#main'); const mgr = canApproveRequest(type);
   const managers = ['analysis','development','voc'].includes(type) ? (await api('GET', '/api/approval-managers'))[type === 'voc' ? 'analysis' : type] : null;
   main.innerHTML = `
-  <h1>${cfg.intakeTitle || cfg.label + '의뢰'} <span class="dept">${cfg.dept}</span></h1>
+  <h1>${cfg.intakeTitle || cfg.label + '의뢰'} <span class="dept">${cfg.approve ? '영업' : cfg.dept}</span></h1>
   <p class="muted">누구나 의뢰할 수 있습니다. 접수대기 목록에 올라가고, <b>${cfg.mgr}</b>가 승인하면 <a href="${cfg.list}">${cfg.listTitle || cfg.label + '리스트'}</a>에 올라갑니다.
   ${managers ? `<br>지정 승인권자: ${managers.length ? managers.map(u => esc(u.name)).join(', ') : '미지정 · 관리자에게 책임자 지정을 요청하세요.'} (관리자도 승인 가능)` : ''}
   ${mgr ? `<br><span class="tag">${cfg.mgr} 권한</span> 아래 목록에서 바로 승인/반려할 수 있습니다.` : ''}</p>
@@ -2081,6 +2084,20 @@ async function pageIntake(type) {
 }
 
 // 승인된 의뢰 리스트 (대기/진행/완료)
+// 15.183 샘플의뢰는 영업에서 쓰고, 승인은 각 부서 리스트 화면 위 「접수대기」에서 한다.
+async function loadWorkPending(type) {
+  const box = $('#workPending'); if (!box) return;
+  const rows = (await api('GET', '/api/requests?' + new URLSearchParams({ type, scope: 'intake' }))).filter(r => r.status === 'pending');
+  if (!box.isConnected) return;
+  box.hidden = !rows.length; if (!rows.length) { box.innerHTML = ''; return; }
+  const cfg = REQ[type];
+  box.innerHTML = `<h3>접수대기 · 승인 필요 <span class="chip yellow">${rows.length}건</span> <span class="small muted">영업에서 올린 ${esc(cfg.intakeTitle || cfg.label + '의뢰')}입니다. 줄을 누르면 내용을 보고 승인·반려합니다.</span></h3>
+    <div class="table-wrap"><table class="grid click" data-no-reorder><thead><tr><th>${esc(cfg.titleLabel)}</th><th>고객사</th><th>완료희망일</th><th>의뢰자</th><th>의뢰일</th><th></th></tr></thead>
+    <tbody>${rows.map(r => `<tr data-id="${r.id}"><td><b>${esc(r.title)}</b>${lineInfo(r)}</td><td>${esc(r.customer)}</td><td>${esc(r.due_date || '')}</td><td>${esc(r.requester_name)}</td><td class="small muted">${esc(String(r.created_at).slice(0, 10))}</td><td><button class="btn small primary" data-ok="${r.id}">승인</button></td></tr>`).join('')}</tbody></table></div>`;
+  const again = () => { loadWorkPending(type).catch(fail); $('#workList') && render(); };
+  $$('tr[data-id]', box).forEach(tr => { tr.onclick = e => { if (e.target.closest('button')) return; requestDetail(type, rows.find(x => x.id == tr.dataset.id), again); }; });
+  $$('[data-ok]', box).forEach(b => { b.onclick = async () => { try { const r = await api('POST', `/api/requests/${b.dataset.ok}/approve`); toast(`승인 완료 · 접수번호 ${r.req_no}`); again(); } catch (e) { fail(e); } }; });
+}
 async function pageWorkList(type) {
   const cfg = REQ[type]; const main = $('#main'); const mgr = hasRole(cfg.role);
   let status = ''; let category = ''; let qc = ''; // qc: 15.78 판정 칩
@@ -2093,7 +2110,9 @@ async function pageWorkList(type) {
     <div class="seg" id="qcSeg" role="group" aria-label="판정">${[['', '전체 판정'], ['pass', '합격'], ['fail', '불합격'], ['pending', '검사 대기']].map(([v, l]) => `<button type="button" data-qc="${v}" class="${v === '' ? 'on' : ''}" aria-pressed="${v === ''}">${l}</button>`).join('')}</div>` : ''}
   </div>
   <div id="workCounts" class="counts"></div>
+  ${cfg.approve && canApproveRequest(type) ? '<section class="card" id="workPending" hidden></section>' : ''}
   ${listControls('work', { dateLabel: '등록', placeholder: '접수번호·품목·고객사·입력자·메모' })}<div id="workList"></div>`;
+  if (cfg.approve && canApproveRequest(type)) loadWorkPending(type).catch(fail); // 15.183 영업이 올린 샘플의뢰를 여기서 승인
   const filterForm = $('#workFilters', main); let queryVersion = 0;
   const load = async () => {
     if (!main.isConnected) return;

@@ -2282,3 +2282,9 @@ table.grid.gr-freeze > tbody > tr > td[colspan]:first-child { position: static; 
 table.grid.gr-freeze > * > tr.fz-skip > * { position: static !important; box-shadow: none !important; }
 /* 고정된 둘째 열을 첫 열에 6px 겹쳐 그 틈으로 뒤 칸 글자가 비치지 않게 */
 table.grid.gr-freeze[data-freeze="2"] > * > tr:not(.fz-skip) > *:nth-child(2) { left: calc(var(--fz1, 40px) - 6px); border-left: 6px solid transparent; background-clip: border-box; }
+/* 15.183 팝업 안 표: 긴 머리글(납품예정수량 등)이 한 줄로 고정돼 팝업보다 넓어지던 것 → 머리글은 두 줄 허용, 칸 여백 조금 좁게 */
+.modal table.grid > thead > tr > th { white-space: normal; word-break: keep-all; line-height: 1.25; }
+.modal table.grid > * > tr > * { padding-left: 6px; padding-right: 6px; }
+/* 팝업 표 머리글: 짧은 말(단위·수량)은 쪼개지 않음 — 글자 단위 줄바꿈 끔, 대신 머리글 글자 조금 작게 */
+.modal table.grid > thead > tr > th { overflow-wrap: normal; font-size: 12px; padding-left: 5px; padding-right: 5px; }
+.modal table.grid > thead > tr > th.th-long { overflow-wrap: anywhere; }
