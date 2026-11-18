@@ -61,7 +61,7 @@ window.REQ = {
   },
   sample: {
     label: '샘플(제품)', dept: '생산', role: 'production', mgr: '생산담당자',
-    intake: '#/prod/request', list: '#/prod/list',
+    intake: '#/sales/sample/product', list: '#/prod/list', approve: '#/prod/list', // 15.183 의뢰는 영업, 승인·리스트는 생산
     intakeTitle: '샘플의뢰(제품)', listTitle: '샘플리스트(제품)', documentTitle: '샘플의뢰서(제품)',
     titleLabel: '샘플명',
     fields: [
@@ -82,7 +82,7 @@ window.REQ = {
   // 구매가 접수하는 상품 샘플 의뢰. 제품 샘플(생산)과 같은 흐름이며 승인은 구매 담당자가 합니다.
   sample_goods: {
     label: '샘플(상품)', dept: '구매', role: 'purchase', mgr: '구매담당자',
-    intake: '#/purchase/sample/request', list: '#/purchase/sample/list',
+    intake: '#/sales/sample/goods', list: '#/purchase/sample/list', approve: '#/purchase/sample/list', // 15.183 의뢰는 영업, 승인·리스트는 구매
     intakeTitle: '샘플의뢰(상품)', listTitle: '샘플리스트(상품)', documentTitle: '샘플의뢰서(상품)',
     titleLabel: '상품명',
     fields: [
