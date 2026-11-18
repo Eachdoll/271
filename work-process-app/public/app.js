@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.216';
+const APP_VERSION = '15.217';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -1465,7 +1465,7 @@ function foldListFilters() {
   $$('form.list-filters:not([data-folded])').forEach(form => {
     form.dataset.folded = 'true';
     const button = document.createElement('button'); button.type = 'button'; button.className = 'btn filter-toggle';
-    const changed = () => [...form.querySelectorAll('input, select')].filter(el => el.name && el.name !== 'q' && el.type !== 'search' && !el.disabled && (
+    const changed = () => [...form.querySelectorAll(':scope > .seg')].filter(s => form.classList.contains('lf-pc-fold') && s.querySelector('button.on') && s.querySelector('button.on') !== s.querySelector('button')).length + [...form.querySelectorAll(form.classList.contains('lf-pc-fold') && !matchMedia('(max-width: 700px)').matches ? 'select' : 'input, select')].filter(el => el.name && el.name !== 'q' && el.type !== 'search' && !el.disabled && (
       el.tagName === 'SELECT' ? el.value !== ([...el.options].find(o => o.defaultSelected) || el.options[0] || {}).value
       : el.type === 'checkbox' ? el.checked !== el.defaultChecked : el.value !== el.defaultValue)).length;
     const update = () => { const n = changed(); button.textContent = (form.classList.contains('show-all') ? '조건 닫기' : n ? `조건 ${n}개 적용 중` : '조건') + (form.classList.contains('show-all') ? ' ▴' : ' ▾'); button.classList.toggle('primary', !!n && !form.classList.contains('show-all')); };
@@ -1476,6 +1476,25 @@ function foldListFilters() {
   });
 }
 new MutationObserver(foldListFilters).observe(document.body, { childList: true, subtree: true });
+// 15.217 PC에서도 조회 줄이 두 줄로 넘치면 고르는 칸(상태·분류·발행구분 등 select)은 「조건 ▾」 안으로 접어 한 줄로.
+// 기간·거래처·검색어·조회 단추는 밖에 그대로. 바꾼 조건 수는 단추에 「조건 n개 적용 중」.
+function foldWideFilters() {
+  if (matchMedia('(max-width: 700px)').matches) return;
+  $$('#main form.list-filters:not([data-pc-fold])').forEach(form => {
+    const kids = [...form.children].filter(e => e.getBoundingClientRect().height > 0 && !e.matches('.filter-toggle, .lf-fold'));
+    if (!kids.length) return;
+    form.dataset.pcFold = '1';
+    const top = form.getBoundingClientRect().top, first = Math.min(...kids.map(e => e.getBoundingClientRect().top));
+    if (!kids.some(e => e.getBoundingClientRect().top - first > 24)) return; // 실제로 둘째 줄이 있을 때만(높이가 다른 칸끼리 조금 어긋난 것은 한 줄)
+    const selects = [...form.children].filter(e => (e.matches('label') && e.querySelector(':scope > select') && !e.querySelector('input:not([type=hidden])')) || e.matches('.seg'));
+    if (!selects.length || top < 0) return;
+    form.classList.add('lf-pc-fold');
+    const toggle = form.querySelector(':scope > .filter-toggle'), go = form.querySelector(':scope > .lf-actions') || form.querySelector(':scope > button.primary');
+    if (toggle && go) go.before(toggle);
+    toggle?.click(); toggle?.click(); // 글자(조건 n개 적용 중) 다시 계산
+  });
+}
+new MutationObserver(() => requestAnimationFrame(foldWideFilters)).observe(document.body, { childList: true, subtree: true });
 // 13) Phone: report sections fold to their titles (tap a title to open).
 function foldReportSections() {
   $$('.report-chart-grid > section.card:not([data-fold]), #semiReportRoot section.card:not([data-fold])').forEach((section, i) => {

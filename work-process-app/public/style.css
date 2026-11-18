@@ -2805,3 +2805,9 @@ form.list-filters > label.rp-moved, .toolbar > label.rp-moved { display: none !i
 @media (max-width: 600px) { .range-presets.rp-compact .rp-name { display: none; } }
 .range-presets.rp-replaced { display: none !important; }
 .rs-filter .rs-f.rp-moved { display: none !important; }
+/* 15.217 PC: 두 줄로 넘치던 조회 줄은 고르는 칸을 「조건 ▾」 안으로 */
+@media (min-width: 701px) {
+  form.list-filters.lf-pc-fold > .filter-toggle { display: inline-flex; align-self: center; }
+  form.list-filters.lf-pc-fold:not(.show-all) > label:has(> select):not(:has(input:not([type=hidden]))) { display: none; }
+}
+@media (min-width: 701px) { form.list-filters.lf-pc-fold:not(.show-all) > .seg, form.list-filters.lf-pc-fold:not(.show-all) > .seg-label { display: none; } }
