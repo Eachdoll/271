@@ -536,18 +536,14 @@ async function bulkSalesTax(bills, reload) {
 async function bulkPurchaseTax(bills, reload) {
   if (!bills.length) return;
   if (new Set(bills.map(b => nameKeyC(b.vendor))).size > 1) return toast('받은 세금계산서는 한 매입처씩 등록합니다. 한 매입처의 전표만 체크하세요.', 'err');
-  const supply = bills.reduce((t, b) => t + b.supply_total, 0), vat = bills.reduce((t, b) => t + b.vat_total, 0), last = bills.map(b => b.bill_date).sort().pop();
-  const v = await promptBox(`받은 세금계산서 등록 · ${bills[0].vendor}`, `<p>${esc(`전표 ${bills.length}장 · 공급가액 ${won(supply)}원 · 부가세 ${won(vat)}원 · 합계 ${won(supply + vat)}원`)}</p>
-    <p class="small muted">${bills.map(b => esc(b.bill_no)).join(', ')}</p>
-    <label>국세청 승인번호<input name="approval_no" maxlength="40" placeholder="예) 20261117-41000012-00000001"></label>
-    <label>작성일자 *<input type="date" name="write_date" required value="${esc(last)}"></label>
-    <label>비고<input name="note" maxlength="500"></label>`);
-  if (!v) return;
+  // 15.200 작은 입력 창 없이 바로 등록(작성일자 = 마지막 전표 일자)하고 매입 세금계산서 양식을 고치는 상태로 연다(승인번호·작성일자·품목·비고).
+  const last = bills.map(b => b.bill_date).sort().pop();
   try {
-    const r = await api('POST', '/api/purchase-tax-invoices', { vendor: bills[0].vendor, bill_ids: bills.map(b => b.id), approval_no: v.approval_no, write_date: v.write_date, note: v.note, request_id: crypto.randomUUID() });
-    toast(`${r.invoice_no} 받은 세금계산서를 등록했습니다.`);
-  } catch (error) { fail(error); }
-  await reload();
+    const r = await api('POST', '/api/purchase-tax-invoices', { vendor: bills[0].vendor, bill_ids: bills.map(b => b.id), write_date: last, request_id: crypto.randomUUID() });
+    await reload();
+    await purchaseTaxView(r.id, reload, true);
+    toast(`${r.invoice_no} 매입 세금계산서를 만들었습니다. 승인번호·품목을 확인하고 「저장」하세요.`);
+  } catch (error) { fail(error); await reload(); }
 }
 
 // ── 15.140 반입(매출 반품)·반출(매입 반품) ──
