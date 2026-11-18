@@ -1309,6 +1309,10 @@ function phoneGrid(table, spec) {
   const heads = $$('thead th', table).map(th => [...th.childNodes].filter(x => !(x.classList && x.classList.contains('sr-only'))).map(x => x.textContent).join('').replace(/[☆▾▴▼▲]/g, '').trim());
   const find = h => { for (const [role, list] of Object.entries(spec)) for (const e of list) { const name = Array.isArray(e) ? e[0] : e; if (name === '' ? h === '' : h === name || h.startsWith(name + ' ')) return [role, Array.isArray(e) ? e[1] : '']; } return ['x', '']; };
   const roles = spec.roles || heads.map(find); // 15.210 자동 설정은 칸별 역할
+  $$('tfoot tr', table).forEach(tr => { let col = 0; [...tr.children].forEach(td => { const i = col; col += td.colSpan || 1; // 15.210 합계 줄도 같은 칸 역할(합친 칸·첫 칸 = 제목)
+    if (td.colSpan > 1 || i === 0) { td.classList.add('m-a'); return; }
+    const [role, label] = roles[i] || ['x', '']; td.classList.add('m-' + (role === 'a' ? 'c' : role === 'k' || role === 'd' ? 'x' : role)); if (label) td.dataset.m = label;
+    if (/^[\s—-]*$/.test(td.textContent)) td.classList.add('m-empty'); }); });
   $$('tbody tr', table).forEach(tr => [...tr.children].forEach((td, i) => {
     if (td.colSpan > 1) { td.classList.add('m-full'); return; }
     const [role, label] = roles[i] || ['x', '']; td.classList.add('m-' + role); if (label) td.dataset.m = label;
@@ -1334,7 +1338,9 @@ function autoGridSpec(table) {
   if (a === undefined) a = heads.findIndex((h, i) => !kind[i] && h && !/일$|일자|날짜|번호|No|NO|코드/.test(h) && cells(i).some(td => /[가-힣A-Za-z]/.test(td.textContent)));
   if (a < 0) a = heads.findIndex((h, i) => !kind[i] && h);
   const pickB = re => heads.findIndex((h, i) => i !== a && !kind[i] && re.test(h));
-  let b = pickB(/(수량|금액|합계|총액|공급가액|잔량|잔액|현재고|재고|미수금|미지급)$/); if (b < 0) b = pickB(AUTO_B); // 수량·금액 먼저, 없으면 상태
+  let b = -1; // 수량·금액 먼저(이름이 딱 맞는 칸 우선: 잔액 > 기초 잔액), 없으면 상태
+  for (const n of ['잔액', '현재고', '잔량', '미수금', '미지급', '합계금액', '합계', '총액', '금액', '공급가액', '수량']) { b = heads.findIndex((h, i) => i !== a && !kind[i] && h === n); if (b >= 0) break; }
+  if (b < 0) b = pickB(/(수량|금액|합계|총액|공급가액|잔량|잔액|현재고|재고|미수금|미지급)$/); if (b < 0) b = pickB(AUTO_B);
   const short = h => { const x = h.split(/ · |\s*\(|\s+/)[0]; return x.length > 6 ? x.slice(0, 6) : x; };
   const roles = heads.map((h, i) => i === a ? ['a', ''] : i === b ? ['b', ''] : kind[i] ? [kind[i], ''] : ['c', h && !/^no$/i.test(h) ? short(h) : '']);
   return { roles };

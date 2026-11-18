@@ -2659,3 +2659,10 @@ table.si-table input.si-qty, .sb-doc input.sb-qty-in { width: 6.5em; text-align:
   table.m-grid td.m-d select { min-height: 36px; }
 }
 @media (max-width: 600px) { table.m-grid.gr-freeze > * > tr > * { position: static !important; } }
+/* 15.210 휴대폰 그리드: 합계 줄(tfoot)도 줄바꿈 그리드 */
+@media (max-width: 600px) {
+  table.m-grid tfoot { display: block; width: 100%; }
+  table.m-grid tfoot tr { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 10px; padding: 9px 12px; font-weight: 700; }
+  table.m-grid tfoot td { display: block; padding: 0 !important; border: 0 !important; text-align: left; }
+  table.m-grid tfoot td.m-a { flex: 1 1 100%; }
+}
