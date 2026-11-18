@@ -3437,6 +3437,40 @@ route('POST', '/api/boms/:id/quick', async ({ user, params, body }) => {
   } catch (error) { if (isGuardError(error)) throw new HttpError(409, `${row.product}: 다른 곳에서 이 품목이 바뀌었습니다. 새로 불러와 다시 고치세요.`); throw error; }
   return withSizes(decodeBom(await mustGet('boms', row.id)));
 });
+// 15.196 BOM 소요량 페이지: 기준 수량·구성자재(추가·삭제·분류·소요량·단위)를 한 번에 저장. 읽은 뒤 다른 곳에서 바뀌었으면 409.
+// 바뀐 내용은 진행 코멘트 「[BOM] …」으로 남긴다. 같은 자재 두 번·자기 자신·순환 구성은 막는다.
+route('POST', '/api/boms/:id/bom', async ({ user, params, body }) => {
+  requireAdmin(user);
+  const row = await mustGet('boms', params.id);
+  const stale = () => new HttpError(409, `${row.product}: 다른 곳에서 이 품목이 바뀌었습니다. 새로 불러와 다시 고치세요.`);
+  if (String(body.updated_at || '') !== row.updated_at) throw stale();
+  const base = num(body.base_qty, '기준 수량'); if (!(base > 0)) throw bad('기준 수량은 0보다 커야 합니다.');
+  if (!Array.isArray(body.materials) || body.materials.length > 100) throw bad('구성자재는 100개까지 넣을 수 있습니다.');
+  if (row.item_category === '제품' && !body.materials.length) throw bad('제품 BOM은 구성자재를 1개 이상 넣으세요.');
+  const mats = body.materials.map((m, i) => {
+    if (!m || typeof m !== 'object' || Array.isArray(m)) throw bad(`${i + 1}번째 자재를 확인하세요.`);
+    const name = reqStr(m.item, `${i + 1}번째 자재명`, 200), qty = num(m.qty, `${name} 소요량`);
+    if (!(qty > 0)) throw bad(`${name} 소요량은 0보다 커야 합니다.`);
+    return { item: name, item_category: itemCategory(m.item_category), qty, unit: reqStr(m.unit, `${name} 단위`, 20) };
+  });
+  const keys = mats.map(m => nameKey(m.item)), dup = keys.findIndex((k, i) => keys.indexOf(k) !== i);
+  if (dup >= 0) throw bad(`같은 자재가 두 번 들어 있습니다: ${mats[dup].item}`);
+  const json = JSON.stringify(mats);
+  await bomCycleCheck(row.product, json, row.id);
+  const old = JSON.parse(row.materials), oldBy = new Map(old.map(m => [nameKey(m.item), m])), changes = [];
+  if (base !== row.base_qty) changes.push(`기준 수량 ${row.base_qty} → ${base}`);
+  for (const m of mats) { const o = oldBy.get(nameKey(m.item)); if (!o) changes.push(`+ ${m.item} ${m.qty}${m.unit}`); else if (o.qty !== m.qty || o.unit !== m.unit || o.item_category !== m.item_category) changes.push(`${m.item} ${o.qty}${o.unit} → ${m.qty}${m.unit}${o.item_category !== m.item_category ? ` (${o.item_category} → ${m.item_category})` : ''}`); }
+  const now = new Set(keys); for (const o of old) if (!now.has(nameKey(o.item))) changes.push(`− ${o.item}`);
+  if (!changes.length && json === row.materials) return withSizes(decodeBom(row));
+  try {
+    await db.batch([
+      { sql: "UPDATE boms SET base_qty=?,materials=?,updated_at=datetime('now','+9 hours') WHERE id=? AND updated_at=? AND materials=? AND base_qty=?", args: [base, json, row.id, row.updated_at, row.materials, row.base_qty] },
+      RC_GUARD,
+      { sql: 'INSERT INTO progress_comments(entity_type,entity_id,content,author_id,author_name) VALUES(?,?,?,?,?)', args: ['bom', row.id, `[BOM] ${(changes.length ? changes : ['자재 순서 변경']).join(' · ')}`, user.id, user.name] },
+    ]);
+  } catch (error) { if (isGuardError(error)) throw stale(); throw error; }
+  return withSizes(decodeBom(await mustGet('boms', row.id)));
+});
 // Rows that used a temporary item follow it to its confirmed name/code. Inspection snapshots are left as recorded.
 function relinkCatalog(temp, target) {
   const commands = [];

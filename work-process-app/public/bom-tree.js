@@ -90,3 +90,111 @@ function renderBomTree(host, boms, all, reload, onEdit = null) {
   };
   draw();
 }
+
+
+// ── 15.196 BOM 소요량: 제품·반제품마다 구성자재·기준 수량당 소요량을 한 표로(품목코드 · 품목명 · 분류 순서).
+// 「수정」을 누르면 그 제품 자리에서 자재를 더하고 빼고 소요량·단위를 고쳐 한 번에 저장(POST /api/boms/:id/bom).
+// 생산 수량을 넣으면 필요량(소요량 ÷ 기준 수량 × 생산 수량)을, 「자재별」은 자재마다 쓰는 제품(역전개)을 보여 준다.
+function bomMatPicker(scope, rows, mats) {
+  const fill = (row, b) => { $('[data-material-item]', row).value = b.product; const c = $('[data-material-category]', row); if ([...c.options].some(o => o.value === b.item_category)) c.value = b.item_category; if (b.unit) $('[data-material-unit]', row).value = b.unit; $('[data-material-qty]', row).focus(); };
+  const find = async row => { if (!mats.length) { toast('제품등록에 원자재·부자재가 아직 없습니다. 자재명을 직접 입력하세요.', 'err'); return; } const b = await openItemPicker(mats, { title: '구성자재 찾기', query: $('[data-material-item]', row).value.trim(), lots: false, emptyText: '찾는 자재가 없습니다. 창을 닫고 자재명을 직접 입력하세요.' }); if (b && !b.items) fill(row, b); };
+  $('[data-material-add]', scope).onclick = () => { rows.insertAdjacentHTML('beforeend', bomMaterialRow()); const row = rows.lastElementChild; if (mats.length) find(row).catch(fail); else $('[data-material-item]', row).focus(); };
+  rows.onclick = e => { const f = e.target.closest('[data-material-find]'); if (f) { find(f.closest('tr')).catch(fail); return; } const d = e.target.closest('[data-material-remove]'); if (d) d.closest('tr').remove(); };
+  rows.addEventListener('change', e => { const input = e.target.closest('[data-material-item]'); if (!input) return; const b = mats.find(x => partnerKey(x.product) === partnerKey(input.value)); if (b) fill(input.closest('tr'), b); });
+}
+async function pageBomSheet(main) {
+  if (!ME.is_admin) { main.innerHTML = '<div class="empty">관리자만 BOM을 관리할 수 있습니다.</div>'; return; }
+  let view = 'product'; try { view = localStorage.getItem('wpa:bom-sheet-view') === 'material' ? 'material' : 'product'; } catch { /* 편의 기능 */ }
+  main.innerHTML = `<h1>BOM 소요량</h1><p class="muted">제품·반제품마다 구성자재와 기준 수량당 소요량을 한 표로 봅니다. 「수정」을 누르면 그 자리에서 자재를 더하거나 빼고 소요량·단위를 고칩니다. 생산 수량을 넣으면 자재별 필요량을 계산하고, 「자재별」은 자재마다 어느 제품에 얼마나 들어가는지 보여 줍니다.</p>
+  <form class="toolbar bs-tools" id="bsTools" data-read-only>
+    <label>검색<input name="q" type="search" placeholder="제품·자재 코드나 이름" autocomplete="off"></label>
+    <label>분류<select name="cls"><option value="">제품·반제품 전체</option><option value="제품">제품</option><option value="반제품">반제품</option></select></label>
+    <label>생산 수량<input name="calc" type="number" min="0" step="any" placeholder="필요량 계산"></label>
+    <label class="inline"><input type="checkbox" name="empty"> 구성자재 없는 것만</label>
+    <div class="seg" role="group" aria-label="보기"><button type="button" data-bs-view="product">제품별</button><button type="button" data-bs-view="material">자재별</button></div>
+    <button type="button" class="btn" id="bsXlsx">엑셀</button><a class="btn" href="#/admin/bom">제품등록</a>
+  </form>
+  <p class="small muted" id="bsSummary" role="status"></p><div id="bsList"><p class="muted">불러오는 중…</p></div><datalist id="bomMatList"></datalist>`;
+  const form = $('#bsTools', main); let all = [], cat = new Map(), editing = null;
+  form.onsubmit = e => e.preventDefault();
+  const codeOf = name => cat.get(partnerKey(name))?.product_code || '';
+  const N = () => Math.max(0, Number(form.elements.calc.value) || 0);
+  const round = n => Math.round(n * 10000) / 10000;
+  const qOf = () => form.elements.q.value.trim().toLowerCase();
+  const hit = (...xs) => { const q = qOf(); return !q || xs.some(x => String(x || '').toLowerCase().includes(q)); };
+  const products = () => all.filter(b => (['제품', '반제품'].includes(b.item_category) || b.materials.length)
+      && (!form.elements.cls.value || b.item_category === form.elements.cls.value) && (!form.elements.empty.checked || !b.materials.length)
+      && hit(b.product_code, b.product, ...b.materials.flatMap(m => [m.item, codeOf(m.item)])))
+    .sort((a, b) => String(a.product_code || '~').localeCompare(String(b.product_code || '~')) || a.product.localeCompare(b.product, 'ko'));
+  const editorHtml = b => `<div class="bs-editor" data-bs-editor="${b.id}">
+      <div class="bs-ed-head"><b>${esc(b.product_code || '')}</b> <b>${esc(b.product)}</b> <span class="chip">${esc(b.item_category)}</span>
+        <label class="inline">기준 수량 <input name="base_qty" type="number" min="0.00000001" step="any" value="${esc(b.base_qty)}"> ${esc(b.unit)}</label><span class="small muted">소요량은 기준 수량당 들어가는 양</span></div>
+      <div class="table-wrap"><table class="grid bom-materials" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>자재명</th><th>분류</th><th>소요량</th><th>단위</th><th></th></tr></thead><tbody data-material-rows>${b.materials.map(bomMaterialRow).join('')}</tbody></table></div>
+      <div class="actions"><button type="button" class="btn" data-material-add>+ 자재 추가</button><span class="grow"></span><button type="button" class="btn" data-bs-cancel>취소</button><button type="button" class="btn primary" data-bs-save>저장</button></div></div>`;
+  const productTable = list => {
+    const n = N(), cols = n ? 11 : 10;
+    const body = list.map(b => {
+      if (editing === b.id) return `<tr class="bs-edit-row"><td colspan="${cols}">${editorHtml(b)}</td></tr>`;
+      const ms = b.materials.length ? b.materials : [null], span = ms.length;
+      return ms.map((m, i) => `<tr class="${i === 0 ? 'bs-first' : 'bs-sub'}${b.materials.length ? '' : ' bs-empty'}" data-bs-product="${b.id}">${i === 0 ? `<td rowspan="${span}" class="nowrap bs-code"><b>${esc(b.product_code || '—')}</b></td><td rowspan="${span}" class="bs-name"><b>${esc(b.product)}</b>${b.spec ? ` <span class="small muted">${esc(b.spec)}</span>` : ''}</td><td rowspan="${span}" class="nowrap">${esc(b.item_category)}</td><td rowspan="${span}" class="r nowrap">${fmtNum(b.base_qty)} ${esc(b.unit)}</td>` : ''}${m
+        ? `<td class="nowrap">${esc(codeOf(m.item)) || '<span class="muted small">미등록</span>'}</td><td>${esc(m.item)}</td><td class="nowrap">${esc(m.item_category)}</td><td class="r"><b>${fmtNum(m.qty)}</b></td><td class="nowrap">${esc(m.unit)}</td>${n ? `<td class="r bs-need">${fmtNum(round(m.qty / b.base_qty * n))}</td>` : ''}`
+        : `<td colspan="${n ? 6 : 5}" class="bs-none">구성자재 없음 — 「수정」에서 넣으세요</td>`}${i === 0 ? `<td rowspan="${span}" class="nowrap"><button type="button" class="btn small" data-bs-edit="${b.id}">수정</button></td>` : ''}</tr>`).join('');
+    }).join('');
+    return `<div class="table-wrap"><table class="grid keep-table bs-table" data-no-sort data-no-filter data-keep-cols data-no-reorder><caption class="sr-only">제품별 BOM 소요량</caption><thead><tr><th>품목코드</th><th>품목명</th><th>분류</th><th class="r">기준 수량</th><th>자재코드</th><th>자재명</th><th>자재 분류</th><th class="r">소요량</th><th>단위</th>${n ? `<th class="r">필요량 (${fmtNum(n)})</th>` : ''}<th><span class="sr-only">작업</span></th></tr></thead><tbody>${body}</tbody></table></div>`;
+  };
+  const materialGroups = list => {
+    const by = new Map();
+    for (const b of list) for (const m of b.materials) {
+      if (qOf() && !hit(b.product_code, b.product, m.item, codeOf(m.item))) continue;
+      const k = partnerKey(m.item); if (!by.has(k)) by.set(k, { item: m.item, cat: m.item_category, uses: [] }); by.get(k).uses.push({ b, m });
+    }
+    return [...by.values()].sort((x, y) => String(codeOf(x.item) || '~').localeCompare(String(codeOf(y.item) || '~')) || x.item.localeCompare(y.item, 'ko'));
+  };
+  const materialTable = list => {
+    const groups = materialGroups(list), n = N();
+    if (!groups.length) return '<div class="empty">조건에 맞는 자재가 없습니다.</div>';
+    const body = groups.map(g => { const span = g.uses.length; const units = new Set(g.uses.map(u => u.m.unit)); const total = n && units.size === 1 ? g.uses.reduce((t, u) => t + u.m.qty / u.b.base_qty * n, 0) : null;
+      return g.uses.map((u, i) => `<tr class="${i === 0 ? 'bs-first' : 'bs-sub'}">${i === 0 ? `<td rowspan="${span}" class="nowrap bs-code"><b>${esc(codeOf(g.item) || '—')}</b></td><td rowspan="${span}" class="bs-name"><b>${esc(g.item)}</b></td><td rowspan="${span}" class="nowrap">${esc(g.cat)}</td><td rowspan="${span}" class="r">${span}개${total !== null ? `<div class="small">합계 <b>${fmtNum(round(total))}</b> ${esc([...units][0])}</div>` : ''}</td>` : ''}<td class="nowrap">${esc(u.b.product_code || '—')}</td><td>${esc(u.b.product)}</td><td class="r"><b>${fmtNum(u.m.qty)}</b> <span class="small muted">/ ${fmtNum(u.b.base_qty)} ${esc(u.b.unit)}</span></td><td class="nowrap">${esc(u.m.unit)}</td>${n ? `<td class="r bs-need">${fmtNum(round(u.m.qty / u.b.base_qty * n))}</td>` : ''}</tr>`).join(''); }).join('');
+    return `<div class="table-wrap"><table class="grid keep-table bs-table" data-no-sort data-no-filter data-keep-cols data-no-reorder><caption class="sr-only">자재별 사용 제품</caption><thead><tr><th>자재코드</th><th>자재명</th><th>자재 분류</th><th class="r">쓰는 제품</th><th>품목코드</th><th>품목명</th><th class="r">소요량 / 기준</th><th>단위</th>${n ? `<th class="r">필요량 (${fmtNum(n)})</th>` : ''}</tr></thead><tbody>${body}</tbody></table></div>`;
+  };
+  const bindEditor = () => {
+    const ed = $('[data-bs-editor]', main); if (!ed) return;
+    const b = all.find(x => x.id === editing), rows = $('[data-material-rows]', ed);
+    bomMatPicker(ed, rows, all.filter(x => x.item_category !== '제품' && x.id !== b.id));
+    $('[data-bs-cancel]', ed).onclick = () => { editing = null; draw(); };
+    $('[data-bs-save]', ed).onclick = async e => {
+      const btn = e.currentTarget, materials = $$('[data-material-row]', ed).map(row => ({ item: $('[data-material-item]', row).value.trim(), item_category: $('[data-material-category]', row).value, qty: $('[data-material-qty]', row).value, unit: $('[data-material-unit]', row).value.trim() }));
+      btn.disabled = true;
+      try { const saved = await api('POST', `/api/boms/${b.id}/bom`, { updated_at: b.updated_at, base_qty: $('[name=base_qty]', ed).value, materials }); all = all.map(x => x.id === saved.id ? saved : x); cat = bomTreeCatalog(all); editing = null; toast(`${saved.product} BOM을 저장했습니다.`); draw(); }
+      catch (error) { fail(error); if (error.status === 409) { await load(); } } finally { btn.disabled = false; }
+    };
+  };
+  const draw = () => {
+    if (!main.isConnected) return;
+    const list = products(), n = N(), mats = list.reduce((t, b) => t + b.materials.length, 0), empty = list.filter(b => !b.materials.length).length;
+    $$('[data-bs-view]', main).forEach(x => { x.classList.toggle('on', x.dataset.bsView === view); x.setAttribute('aria-pressed', String(x.dataset.bsView === view)); });
+    $('#bsSummary', main).textContent = `제품 ${list.length}개 · 자재 줄 ${mats}개${empty ? ` · 구성자재 없는 제품 ${empty}개` : ''}${n ? ` · 생산 ${fmtNum(n)} 기준 필요량 표시` : ''}`;
+    $('#bsList', main).innerHTML = view === 'material' ? materialTable(list) : list.length ? productTable(list) : '<div class="empty">조건에 맞는 제품이 없습니다.</div>';
+    $$('[data-bs-edit]', main).forEach(x => x.onclick = () => { editing = Number(x.dataset.bsEdit); draw(); $('[data-bs-editor]', main)?.scrollIntoView({ block: 'nearest' }); });
+    bindEditor();
+  };
+  const load = async () => {
+    all = await api('GET', '/api/boms'); if (!main.isConnected) return; cat = bomTreeCatalog(all);
+    $('#bomMatList', main).innerHTML = all.filter(x => x.item_category !== '제품').map(b => `<option value="${esc(b.product)}">${esc([b.product_code, b.item_category, b.spec].filter(Boolean).join(' · '))}</option>`).join('');
+    draw();
+  };
+  let t = null; form.addEventListener('input', e => { if (e.target.closest('[data-bs-editor]')) return; clearTimeout(t); t = setTimeout(draw, 150); });
+  form.addEventListener('change', draw);
+  $$('[data-bs-view]', main).forEach(x => x.onclick = () => { view = x.dataset.bsView; try { localStorage.setItem('wpa:bom-sheet-view', view); } catch { /* 편의 기능 */ } draw(); });
+  $('#bsXlsx', main).onclick = () => {
+    const list = products(), n = N(), need = (b, m) => n ? round(m.qty / b.base_qty * n) : '';
+    if (view === 'material') {
+      const rows = materialGroups(list).flatMap(g => g.uses.map(u => [codeOf(g.item), g.item, g.cat, u.b.product_code || '', u.b.product, u.m.qty, u.b.base_qty, u.b.unit, u.m.unit, ...(n ? [need(u.b, u.m)] : [])]));
+      xlsxDownload(`BOM_자재별_${todayStr()}.xlsx`, { sheet: '자재별', titles: ['BOM 자재별 사용 제품'], columns: [{ label: '자재코드', type: 'text' }, { label: '자재명', type: 'text' }, { label: '자재 분류', type: 'text' }, { label: '품목코드', type: 'text' }, { label: '품목명', type: 'text' }, { label: '소요량', type: 'number' }, { label: '기준 수량', type: 'number' }, { label: '기준 단위', type: 'text' }, { label: '자재 단위', type: 'text' }, ...(n ? [{ label: `필요량(${n})`, type: 'number' }] : [])], rows });
+    } else {
+      const rows = list.flatMap(b => (b.materials.length ? b.materials : [null]).map(m => [b.product_code || '', b.product, b.item_category, b.base_qty, b.unit, m ? codeOf(m.item) : '', m ? m.item : '(구성자재 없음)', m ? m.item_category : '', m ? m.qty : '', m ? m.unit : '', ...(n ? [m ? need(b, m) : ''] : [])]));
+      xlsxDownload(`BOM_소요량_${todayStr()}.xlsx`, { sheet: 'BOM', titles: ['BOM 소요량'], columns: [{ label: '품목코드', type: 'text' }, { label: '품목명', type: 'text' }, { label: '분류', type: 'text' }, { label: '기준 수량', type: 'number' }, { label: '단위', type: 'text' }, { label: '자재코드', type: 'text' }, { label: '자재명', type: 'text' }, { label: '자재 분류', type: 'text' }, { label: '소요량', type: 'number' }, { label: '자재 단위', type: 'text' }, ...(n ? [{ label: `필요량(${n})`, type: 'number' }] : [])], rows });
+    }
+  };
+  await load().catch(error => { $('#bsList', main).innerHTML = `<div class="empty red-text">${esc(error.message)}</div>`; });
+}

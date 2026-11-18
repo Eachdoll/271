@@ -85,3 +85,19 @@ test('15.107 Code spec flows into orders, POs and receipts; PO lines keep a unit
   assert.equal(rc.status, 200, JSON.stringify(rc.body));
   assert.equal(sqlite.prepare('SELECT spec FROM other_receipts ORDER BY id DESC LIMIT 1').get().spec, '10인치');
 });
+
+test('15.196 BOM sheet save: add/remove/change materials at once, stale and duplicate guards, comment', async () => {
+  await admin('POST', '/api/boms', raw('시트원단', 'BS-R1')); await admin('POST', '/api/boms', raw('시트실', 'BS-R2'));
+  const p = (await admin('POST', '/api/boms', fg('시트제품', 'BS-P1', ['시트원단']))).body;
+  const mats = [{ item: '시트원단', item_category: '원자재', qty: 0.5, unit: 'KG' }, { item: '시트실', item_category: '원자재', qty: 2, unit: 'M' }];
+  assert.equal((await admin('POST', `/api/boms/${p.id}/bom`, { updated_at: 'old', base_qty: 1, materials: mats })).status, 409, 'stale read');
+  assert.match((await admin('POST', `/api/boms/${p.id}/bom`, { updated_at: p.updated_at, base_qty: 1, materials: [mats[0], { ...mats[0], qty: 1 }] })).body.error, /두 번/);
+  assert.match((await admin('POST', `/api/boms/${p.id}/bom`, { updated_at: p.updated_at, base_qty: 1, materials: [] })).body.error, /1개 이상/);
+  assert.match((await admin('POST', `/api/boms/${p.id}/bom`, { updated_at: p.updated_at, base_qty: 1, materials: [{ item: '시트제품', item_category: '제품', qty: 1, unit: 'EA' }] })).body.error, /자기 자신/);
+  const saved = await admin('POST', `/api/boms/${p.id}/bom`, { updated_at: p.updated_at, base_qty: 10, materials: mats });
+  assert.equal(saved.status, 200, JSON.stringify(saved.body)); assert.equal(saved.body.base_qty, 10); assert.deepEqual(saved.body.materials.map(m => [m.item, m.qty, m.unit]), [['시트원단', 0.5, 'KG'], ['시트실', 2, 'M']]);
+  const c = sqlite.prepare("SELECT content FROM progress_comments WHERE entity_type='bom' AND entity_id=? ORDER BY id DESC").get(p.id).content;
+  assert.match(c, /\[BOM\] 기준 수량 1 → 10/); assert.match(c, /시트원단 1KG → 0.5KG/); assert.match(c, /\+ 시트실 2M/);
+  const again = await admin('POST', `/api/boms/${p.id}/bom`, { updated_at: saved.body.updated_at, base_qty: 10, materials: [mats[1]] });
+  assert.equal(again.status, 200); assert.match(sqlite.prepare("SELECT content FROM progress_comments WHERE entity_type='bom' AND entity_id=? ORDER BY id DESC").get(p.id).content, /− 시트원단/);
+});
