@@ -3287,3 +3287,27 @@ form.list-filters .range-presets.rp-compact .rp-name { align-self: center; }
   #main table.m-grid tbody td.m-d .btn, #main table.m-grid tbody td.m-d summary.btn, #main table.m-grid tbody td.m-d button:not(.xf-btn):not(.link-btn), #main table.m-grid td.m-d a.btn { min-height: 36px !important; padding: 6px 11px !important; }
   #main table.m-grid tbody td.m-d { gap: 6px; }
 }
+
+/* 15.238 품질 분석값 입력: 엑셀 그리드(행 = LOT·시료, 열 = 항목별 측정 회차 · 평균) */
+.insp-wrap { max-height: min(58vh, 560px); overflow: auto; }
+table.insp-grid { border-collapse: separate; border-spacing: 0; min-width: 100%; }
+table.insp-grid th, table.insp-grid td { padding: 0 !important; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+table.insp-grid thead th { position: sticky; top: 0; z-index: 3; background: var(--erp-head, var(--bg)); padding: 6px 8px !important; font-size: 12.5px; white-space: nowrap; }
+table.insp-grid thead tr:nth-child(2) th { top: 44px; }
+table.insp-grid th.insp-item-h { border-bottom: 1px solid var(--line); }
+table.insp-grid .insp-no { width: 2.6em; text-align: center; color: var(--muted); font-size: 12.5px; position: sticky; left: 0; z-index: 2; background: var(--panel); }
+table.insp-grid td.insp-lot, table.insp-grid th.insp-lot-h { position: sticky; left: 2.6em; z-index: 2; background: var(--panel); min-width: 10em; box-shadow: 2px 0 0 var(--line); }
+table.insp-grid thead .insp-no, table.insp-grid thead .insp-lot-h { z-index: 4; background: var(--erp-head, var(--bg)); }
+table.insp-grid td input { width: 100%; min-width: 4.6em; border: 0 !important; border-radius: 0 !important; background: transparent; padding: 7px 8px; min-height: 34px; text-align: right; font-variant-numeric: tabular-nums; box-shadow: none; }
+table.insp-grid td.insp-lot input { text-align: left; min-width: 9em; }
+table.insp-grid td input:focus { outline: 2px solid var(--accent); outline-offset: -2px; background: var(--accent-soft); }
+table.insp-grid td input.inspection-outside { background: color-mix(in srgb, #e03131 18%, transparent); color: #c92a2a; font-weight: 700; }
+table.insp-grid td.insp-avg { background: var(--total-bg, var(--bg)); padding: 0 8px !important; min-width: 4.4em; font-weight: 700; color: var(--text-2, var(--text)); white-space: nowrap; }
+table.insp-grid th.insp-avg-h { color: var(--muted); }
+table.insp-grid td input[readonly] { color: var(--text); }
+table.insp-grid td .btn.small { min-height: 30px; padding: 2px 9px; margin: 2px; }
+table.insp-grid tbody tr:hover td { background-color: var(--row-hover); }
+/* 15.238 두 줄 머리글은 thead 전체를 고정(줄마다 top 값을 따로 주면 첫 행을 덮음) */
+table.insp-grid thead th, table.insp-grid thead tr:nth-child(2) th { position: static; top: auto; }
+table.insp-grid thead { position: sticky; top: 0; z-index: 3; }
+table.insp-grid thead .insp-no, table.insp-grid thead .insp-lot-h { position: sticky; }
