@@ -4189,14 +4189,66 @@ async function lotUsage(item, lot) {
 const lotUsedMessage = (item, lot, u) => `${item}: LOT ${lot}은 ${[u.used ? `생산 투입 ${stockRound(u.used)}` : '', u.shipped ? `출하 ${stockRound(u.shipped)}` : ''].filter(Boolean).join(' · ')}에 쓰였습니다. 바꾸려면 그 생산실적·출하를 먼저 취소하세요.`;
 // 출하 LOT: 다른 품목의 LOT이면 막는다. 이 품목에 LOT 기록이 있는데 모르는 LOT이어도 막는다(LOT 기록이 아예 없는 품목은 예전처럼 자유 입력).
 // 15.254 수입검사 불합격 LOT: 커팅·생산 투입·출하에 쓸 수 없다(품질에서 판정을 바꾸면 다시 쓸 수 있음).
+// 15.256 특채: 품질책임자가 특채 처리한 불합격 LOT은 투입·출고 허용
+async function lotConcession(item, lot) { return db.prepare('SELECT * FROM lot_concessions WHERE item=TRIM(?) AND lot=? AND voided_at IS NULL').get(item, lot); }
 async function lotQcFail(item, lot) {
+  if (!lot) return null;
+  if (await lotConcession(item, lot)) return null;
+  return lotQcFailRaw(item, lot);
+}
+async function lotQcFailRaw(item, lot) {
   if (!lot) return null;
   return db.prepare(`SELECT r.req_no FROM requests r JOIN inspection_measurements m ON m.request_id=r.id WHERE r.type='analysis' AND m.result='fail' AND TRIM(r.title)=TRIM(?) AND (r.lot=? OR (', ' || r.lot || ',') LIKE ?) LIMIT 1`).get(item, lot, `%, ${lot},%`);
 }
 async function lotQcFailSet(item) {
   const rows = await db.prepare(`SELECT r.lot FROM requests r JOIN inspection_measurements m ON m.request_id=r.id WHERE r.type='analysis' AND m.result='fail' AND TRIM(r.title)=TRIM(?)`).all(item);
-  return new Set(rows.flatMap(r => String(r.lot || '').split(',').map(x => x.trim()).filter(Boolean)));
+  const ok = new Set((await db.prepare('SELECT lot FROM lot_concessions WHERE item=TRIM(?) AND voided_at IS NULL').all(item)).map(r => r.lot));
+  return new Set(rows.flatMap(r => String(r.lot || '').split(',').map(x => x.trim()).filter(Boolean)).filter(l => !ok.has(l)));
 }
+// 15.256 LOT 관리 표: 품목·LOT별 품질 상태(fail | concession)
+async function lotQcStates() {
+  const fails = await db.prepare(`SELECT TRIM(r.title) AS item, r.lot, r.req_no FROM requests r JOIN inspection_measurements m ON m.request_id=r.id WHERE r.type='analysis' AND m.result='fail'`).all();
+  const ok = new Map((await db.prepare('SELECT item, lot, id, reason, created_by, created_at FROM lot_concessions WHERE voided_at IS NULL').all()).map(c => [c.item + '\u0000' + c.lot, c]));
+  const out = new Map();
+  for (const f of fails) for (const lot of String(f.lot || '').split(',').map(x => x.trim()).filter(Boolean)) { const k = f.item + '\u0000' + lot, c = ok.get(k); out.set(k, c ? { qc: 'concession', req_no: f.req_no, concession: c } : { qc: 'fail', req_no: f.req_no }); }
+  return out;
+}
+route('POST', '/api/lots/concession', async ({ user, body }) => {
+  if (!hasRole(user, 'quality_approver')) throw new HttpError(403, '특채는 품질책임자만 처리할 수 있습니다.');
+  const item = reqStr(body.item, '품목', 200), lot = reqStr(body.lot, 'LOT', 100), reason = reqStr(body.reason, '특채 사유', 500);
+  const q = await lotQcFailRaw(item, lot); if (!q) throw bad(`${item}: LOT ${lot}은 수입검사 불합격 LOT이 아닙니다.`);
+  if (await lotConcession(item, lot)) throw new HttpError(409, '이미 특채 처리한 LOT입니다.');
+  try { await db.prepare('INSERT INTO lot_concessions(item,lot,req_no,reason,created_by,created_by_id) VALUES(?,?,?,?,?,?)').run(item, lot, q.req_no, reason, user.name, user.id); }
+  catch (error) { if (/UNIQUE/i.test(String(error?.message))) throw new HttpError(409, '이미 특채 처리한 LOT입니다.'); throw error; }
+  return lotConcession(item, lot);
+});
+route('POST', '/api/lots/concession/:id/void', async ({ user, params, body }) => {
+  if (!hasRole(user, 'quality_approver')) throw new HttpError(403, '특채 취소는 품질책임자만 할 수 있습니다.');
+  const c = await mustGet('lot_concessions', params.id); if (c.voided_at) throw new HttpError(409, '이미 취소한 특채입니다.');
+  await db.prepare('UPDATE lot_concessions SET voided_at=?, voided_by=?, void_reason=? WHERE id=? AND voided_at IS NULL').run(now(), user.name, reqStr(body.reason, '취소 사유', 500), c.id);
+  return { ok: true };
+});
+route('GET', '/api/lots/concessions', async ({ query }) => ({ rows: await db.prepare(`SELECT * FROM lot_concessions ${query.all ? '' : 'WHERE voided_at IS NULL'} ORDER BY id DESC LIMIT 500`).all() }));
+// 15.256 LOT 내역: 한 품목·LOT의 입고·생산 / 출고·투입 / 반입·반출 / 이동을 날짜순으로
+route('GET', '/api/inventory/lot-history', async ({ query }) => {
+  const item = reqStr(query.item, '품목', 200), lot = reqStr(query.lot, 'LOT', 100);
+  const q = (sql, ...args) => db.prepare(sql).all(...args);
+  const parts = await Promise.all([
+    q(`SELECT l.received_date AS d, 'in' AS kind, '발주입고' AS src, COALESCE(r.receipt_no, p.req_no) AS doc, p.vendor AS party, l.qty, TRIM(l.warehouse || ' ' || l.location) AS place, l.note FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id LEFT JOIN receipts r ON r.id=l.receipt_id WHERE l.voided_at IS NULL AND TRIM(p.item)=TRIM(?) AND l.lot=?`, item, lot),
+    q(`SELECT COALESCE(substr(recv_at,1,10), due_date) AS d, 'in' AS kind, '발주입고' AS src, req_no AS doc, vendor AS party, recv_qty AS qty, '' AS place, recv_note AS note FROM purchase_orders WHERE TRIM(item)=TRIM(?) AND lot=? AND recv_status IN ('ok','mismatch') AND recv_qty IS NOT NULL AND NOT EXISTS(SELECT 1 FROM po_receipt_lots l WHERE l.po_id=purchase_orders.id AND l.voided_at IS NULL)`, item, lot),
+    q(`SELECT o.received_date AS d, 'in' AS kind, '기타입고' AS src, COALESCE(r.receipt_no, '') AS doc, o.vendor AS party, o.qty, TRIM(o.warehouse || ' ' || o.location) AS place, o.note FROM other_receipts o LEFT JOIN receipts r ON r.id=o.receipt_id WHERE TRIM(o.item)=TRIM(?) AND o.lot=?`, item, lot),
+    q(`SELECT ship_date AS d, 'out' AS kind, '출고' AS src, '' AS doc, customer AS party, qty, '' AS place, note FROM shipments WHERE TRIM(item)=TRIM(?) AND lot=?`, item, lot),
+    q(`SELECT r.return_date AS d, CASE r.side WHEN 'in' THEN 'in' ELSE 'out' END AS kind, CASE r.side WHEN 'in' THEN '반입' ELSE '반출' END AS src, r.return_no AS doc, r.party, l.qty, '' AS place, l.reason AS note FROM stock_return_lines l JOIN stock_returns r ON r.id=l.return_id WHERE TRIM(l.item)=TRIM(?) AND l.lot=? AND r.status='confirmed' AND r.process IN ('stock_amount','stock')`, item, lot),
+    q(`SELECT a.production_date AS d, 'in' AS kind, '생산' AS src, a.work_order AS doc, '' AS party, a.qty, '' AS place, a.note FROM production_actuals a JOIN schedules s ON s.id=a.schedule_id WHERE TRIM(s.product)=TRIM(?) AND a.lot=? AND a.voided_at IS NULL`, item, lot),
+    q(`SELECT a.production_date AS d, 'out' AS kind, '생산 투입' AS src, a.work_order AS doc, s.product AS party, i.qty, '' AS place, a.lot AS note FROM production_lot_inputs i JOIN production_actuals a ON a.id=i.actual_id JOIN schedules s ON s.id=a.schedule_id WHERE TRIM(i.item)=TRIM(?) AND i.lot=? AND a.voided_at IS NULL`, item, lot),
+    q(`SELECT r.work_date AS d, 'out' AS kind, '커팅 투입' AS src, r.lot AS doc, r.unit_name AS party, i.qty, '' AS place, CASE WHEN i.piece_nos<>'' THEN '절 ' || i.piece_nos WHEN i.pieces IS NOT NULL THEN i.pieces || '절' ELSE '' END AS note FROM semi_lot_inputs i JOIN semi_records r ON r.id=i.record_id WHERE TRIM(i.item)=TRIM(?) AND i.lot=?`, item, lot),
+    q(`SELECT transfer_date AS d, 'move' AS kind, '이동' AS src, '' AS doc, from_place AS party, qty, to_place AS place, note FROM stock_transfers WHERE TRIM(item)=TRIM(?) AND lot=? AND status='confirmed'`, item, lot),
+  ]);
+  const rows = parts.flat().sort((a, b) => stockCompare(a.d, b.d) || (a.kind === 'in' ? -1 : 1));
+  let bal = 0; for (const r of rows) { r.qty = stockRound(Number(r.qty) || 0); if (r.kind === 'in') bal = stockRound(bal + r.qty); else if (r.kind === 'out') bal = stockRound(bal - r.qty); r.balance = bal; }
+  const st = (await lotQcStates()).get(String(item).trim() + '\u0000' + lot) || null;
+  return { item, lot, rows, qc: st };
+});
 const qcFailMessage = (item, lot, q) => `${item}: LOT ${lot}은 수입검사 불합격(${q.req_no})입니다. 품질에서 판정을 바꾼 뒤 쓰세요.`;
 // 15.254 출하 LOT 잔량: 재고 LOT이 있으면 잔량(같은 등록 안의 앞 줄 포함)을 넘게 출하할 수 없다
 async function checkShipLot(item, lot, qty = null, pending = null) {
@@ -4387,8 +4439,9 @@ async function lotBalances(item) {
   const r = await lotStockReport({ q: item, state: 'instock' });
   const pcs = await lotPieces(String(item).trim()); // 15.250 실물(절)
   const qcFail = await lotQcFailSet(String(item).trim()), alias = await vendorLots(String(item).trim()); // 15.254
+  const conceded = new Set((await db.prepare('SELECT lot FROM lot_concessions WHERE item=TRIM(?) AND voided_at IS NULL').all(item)).map(r => r.lot)); // 15.256 특채
   // 15.251 절 코드 LOT-1 … LOT-N: 아직 안 쓴 번호(pieces_free)
-  return r.rows.filter(x => x.item === String(item).trim() && x.lot !== '(LOT 미지정)').map(x => ({ ...x, ...(qcFail.has(x.lot) ? { qc_fail: true } : {}), ...(alias.get(x.lot) ? { vendor_lot: alias.get(x.lot) } : {}) })).map(x => { const p = pcs.get(x.lot); if (!p) return x; const free = Array.from({ length: Math.min(p.total, 2000) }, (_, i) => i + 1).filter(n => !p.nos.has(n)); return { ...x, pieces_in: p.received, pieces_left: free.filter(n => !p.temp.has(n)).length + (p.temp.size ? p.temp.size : 0), pieces_free: free, pieces_temp: [...p.temp] }; }).sort((a, b) => stockCompare(a.first_date, b.first_date) || stockCompare(a.lot, b.lot));
+  return r.rows.filter(x => x.item === String(item).trim() && x.lot !== '(LOT 미지정)').map(x => ({ ...x, ...(qcFail.has(x.lot) ? { qc_fail: true } : {}), ...(conceded.has(x.lot) ? { concession: true } : {}), ...(alias.get(x.lot) ? { vendor_lot: alias.get(x.lot) } : {}) })).map(x => { const p = pcs.get(x.lot); if (!p) return x; const free = Array.from({ length: Math.min(p.total, 2000) }, (_, i) => i + 1).filter(n => !p.nos.has(n)); return { ...x, pieces_in: p.received, pieces_left: free.filter(n => !p.temp.has(n)).length + (p.temp.size ? p.temp.size : 0), pieces_free: free, pieces_temp: [...p.temp] }; }).sort((a, b) => stockCompare(a.first_date, b.first_date) || stockCompare(a.lot, b.lot));
 }
 async function actualWithInputs(a) {
   if (!a) return a;
@@ -4700,7 +4753,7 @@ async function lotTrace(lot) {
   // 완제품 ↔ 봉투 연결(같은 묶음에서 이어진 다른 완제품까지는 넓히지 않음: 고른 LOT 기준 앞뒤만)
   for (const f of fins.values()) f.bags = [...new Set((await db.prepare('SELECT p.bag_lot FROM pack_bag_links p JOIN production_actuals a ON a.id=p.actual_id WHERE a.lot=? AND a.voided_at IS NULL ORDER BY p.id').all(f.lot)).map(x => x.bag_lot))];
   for (const b of bags.values()) b.finished = (await actualsOfBag(b.lot)).map(a => a.lot);
-  for (const b of bags.values()) for (const i of b.inputs) { const k = i.item + '\u0000' + i.lot; if (!mats.has(k)) mats.set(k, { item: i.item, lot: i.lot, unit: i.unit, receipts: await lotReceiptInfo(i.lot), bags: [], qc_fail: !!(await lotQcFail(i.item, i.lot)) }); mats.get(k).bags.push(b.lot); }
+  for (const b of bags.values()) for (const i of b.inputs) { const k = i.item + '\u0000' + i.lot; if (!mats.has(k)) mats.set(k, { item: i.item, lot: i.lot, unit: i.unit, receipts: await lotReceiptInfo(i.lot), bags: [], qc_fail: !!(await lotQcFail(i.item, i.lot)), ...(await lotConcession(i.item, i.lot) ? { concession: true } : {}) }); /* 15.256 특채 */ mats.get(k).bags.push(b.lot); }
   for (const f of fins.values()) for (const i of f.direct) { const k = i.item + '\u0000' + i.lot; if (!mats.has(k)) mats.set(k, { item: i.item, lot: i.lot, unit: i.unit, receipts: await lotReceiptInfo(i.lot), bags: [], finished: [] }); (mats.get(k).finished ||= []).push(f.lot); }
   if (kind === 'material' && ![...mats.values()].some(m => m.lot === lot)) { const r = await lotReceiptInfo(lot); mats.set('root', { item: r[0]?.item || '', lot, unit: r[0]?.unit || '', receipts: r, bags: [] }); }
   return { lot, kind, materials: [...mats.values()], bags: [...bags.values()], finished: [...fins.values()] };
@@ -5421,6 +5474,7 @@ async function lotStockReport(query) {
   }
   let rows = [...map.values()].map(({ inUnit, ...r }) => ({ ...r, received: stockRound(r.received), shipped: stockRound(r.shipped), balance: stockRound(r.received - r.shipped), places: [...r.places].join(', ') }));
   if (query.state === 'instock') rows = rows.filter(r => r.balance > 0);
+  if (query.qc) { const st = await lotQcStates(); rows = rows.map(r => { const x = st.get(r.item + '\u0000' + r.lot); return x ? { ...r, qc: x.qc, qc_req: x.req_no, ...(x.concession ? { concession: { id: x.concession.id, reason: x.concession.reason, by: x.concession.created_by, at: x.concession.created_at } } : {}) } : r; }); } // 15.256
   rows.sort((a, b) => stockCompare(a.item, b.item) || stockCompare(a.first_date, b.first_date) || stockCompare(a.lot, b.lot));
   return { asof, rows: rows.slice(0, 2000), more: truncated || rows.length > 2000 };
 }

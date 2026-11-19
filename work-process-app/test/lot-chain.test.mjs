@@ -266,3 +266,29 @@ test('15.255 work in progress: cut/wash/pack save the LOT first with no quantity
   assert.equal(pd.status, 200, JSON.stringify(pd.body)); assert.equal(pd.body.qty, 95); assert.equal(pd.body.work_status, 'done'); assert.equal(pd.body.lot, p.body.lot);
   assert.ok(!(await prod('GET', '/api/actuals/progress')).body.rows.some(r => r.id === p.body.id));
 });
+
+test('15.256 concession (특채) on a failed-inspection LOT allows use and shipping; LOT history lists in/out per LOT', async () => {
+  const g = (await admin('POST', '/api/boms', { product: '특채상품', product_code: 'CC-G', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  await admin('POST', '/api/receipts', { receipt_date: today, vendor: '상품상사', request_id: rid(), lines: [{ bom_id: g.id, lot: 'CC-L1', qty: 20 }] });
+  const req = sqlite.prepare("SELECT id FROM requests WHERE type='analysis' AND lot='CC-L1'").get();
+  sqlite.prepare("INSERT INTO inspection_measurements(request_id,values_json,result,save_token,updated_by) VALUES(?,?,?,?,?)").run(req.id, '[]', 'fail', rid(), '품질');
+  await admin('POST', '/api/vendors', { name: '특채고객', is_sales: true });
+  const ship = qty => admin('POST', '/api/shipments', { ship_date: today, item: '특채상품', bom_id: g.id, qty, customer: '특채고객', lot: 'CC-L1', request_id: rid() });
+  const blocked = await ship(5); assert.equal(blocked.status, 400); assert.match(blocked.body.error, /불합격/);
+  assert.equal((await prod('POST', '/api/lots/concession', { item: '특채상품', lot: 'CC-L1', reason: '고객 승인' })).status, 403, 'quality approver only');
+  assert.equal((await admin('POST', '/api/lots/concession', { item: '특채상품', lot: 'NOPE', reason: 'x' })).status, 400, 'only failed LOTs');
+  const c = await admin('POST', '/api/lots/concession', { item: '특채상품', lot: 'CC-L1', reason: '고객 승인' });
+  assert.equal(c.status, 200, JSON.stringify(c.body));
+  assert.equal((await admin('POST', '/api/lots/concession', { item: '특채상품', lot: 'CC-L1', reason: '또' })).status, 409);
+  assert.equal((await ship(5)).status, 200, 'shipping allowed after concession');
+  const lr = (await prod('GET', '/api/inventory/lots?qc=1&q=CC-L1')).body.rows.find(r => r.lot === 'CC-L1');
+  assert.equal(lr.qc, 'concession'); assert.equal(lr.balance, 15);
+  assert.equal((await prod('GET', '/api/lots/available?item=' + encodeURIComponent('특채상품'))).body.rows.find(l => l.lot === 'CC-L1').concession, true);
+  const h = (await prod('GET', '/api/inventory/lot-history?' + new URLSearchParams({ item: '특채상품', lot: 'CC-L1' }))).body;
+  assert.deepEqual(h.rows.map(r => [r.kind, r.src, r.qty, r.balance]), [['in', '기타입고', 20, 20], ['out', '출고', 5, 15]]);
+  assert.equal(h.rows[1].party, '특채고객'); assert.equal(h.qc.qc, 'concession');
+  // 특채 취소 → 다시 막힘
+  assert.equal((await admin('POST', `/api/lots/concession/${c.body.id}/void`, { reason: '재검토' })).status, 200);
+  assert.equal((await ship(1)).status, 400);
+  assert.equal((await prod('GET', '/api/inventory/lots?qc=1&q=CC-L1')).body.rows.find(r => r.lot === 'CC-L1').qc, 'fail');
+});
