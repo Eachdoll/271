@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.232';
+const APP_VERSION = '15.233';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -1270,6 +1270,7 @@ function grWidths(table, widths, dragging = '') {
 // 15.180 ⚙ 열 설정: 표 오른쪽 위 작은 단추 → 보일 열 체크·열 배치 초기화(너비·순서·숨김). 저장은 열 너비·순서와 같은 곳.
 function grReset(table) {
   const host = table.closest('.table-wrap'); if (!host || host.querySelector(':scope > .gr-gear')) return;
+  if (table.hasAttribute('data-no-reorder') && table.hasAttribute('data-keep-cols')) return; // 15.233 열을 고정한 표(계획표 등)에는 ⚙를 달지 않음
   host.classList.add('has-gear');
   host.insertAdjacentHTML('afterbegin', `<button type="button" class="gr-gear" title="열 설정(보일 열·초기화)" aria-label="열 설정">⚙</button>`);
   host.querySelector(':scope > .gr-gear').onclick = e => { e.stopPropagation(); grSettings(table, e.currentTarget); };

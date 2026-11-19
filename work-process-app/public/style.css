@@ -3209,3 +3209,6 @@ form.list-filters .range-presets.rp-compact .rp-name { align-self: center; }
   .dense-wrap.tw-freeze table.grid.dense-grid > thead > tr > th:first-child { z-index: 4; }
 }
 @media print { .table-wrap.tw-freeze { max-height: none !important; overflow: visible !important; } }
+
+/* 15.233 휴대폰(좁은 화면·터치)에서는 ⚙ 열 설정이 표 머리글(날짜 칸 등)을 가리던 것 → 숨김(열 설정은 넓은 화면에서) */
+@media (max-width: 820px) { .table-wrap.has-gear > .gr-gear { display: none; } }
