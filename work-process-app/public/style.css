@@ -1291,7 +1291,7 @@ table.grid td.r, table.grid th.r { font-variant-numeric: tabular-nums; }
 .nav-group[data-dept] + .nav-group[data-dept] { border-top: 1px solid var(--line); padding-top: 10px; }
 .nav-group[data-dept] > .nav-title { display: flex; align-items: center; gap: 8px; margin: 2px 4px 6px; padding: 6px 10px; border-radius: 8px; font-size: 13.5px; font-weight: 800; color: var(--text); letter-spacing: 0; background: color-mix(in srgb, var(--dept) 10%, transparent); }
 .nav-group[data-dept] > .nav-title::before { content: ''; width: 4px; height: 15px; border-radius: 2px; background: var(--dept); flex: none; }
-.nav-group[data-dept] .nav-sub > a, .nav-group[data-dept] > .nav-body > a { border-left: 2px solid transparent; }
+.nav-group[data-dept] .nav-sub > a, .nav-group[data-dept] > .nav-body > a, .nav-group[data-dept] > .nav-body > .nav-flat > a { border-left: 2px solid transparent; }
 .nav-group[data-dept] a.active { border-left-color: var(--dept); }
 /* 15.87 입고현황 */
 .rs-h { margin: 22px 0 8px; }
@@ -3021,3 +3021,43 @@ form.list-filters > label.rp-moved, .toolbar > label.rp-moved { display: none !i
 /* 바닥: 아주 옅은 하늘색 */
 :root[data-skin="penguin"]:not([data-theme="dark"]) body { background-color: #f1f7fd; }
 @media print { :root[data-skin="penguin"] .top::after, :root[data-skin="penguin"] .brand-text::after, :root[data-skin="penguin"] .dash-head h1::after, :root[data-skin="penguin"] .empty::before, :root[data-skin="penguin"] .dash-section > h2::before, :root[data-skin="penguin"] .tasks h2::before { display: none; } :root[data-skin="penguin"] body { background: #fff; } }
+
+/* 15.228 한 칸짜리 메뉴 묶음: 왼쪽 메뉴에서는 보통 줄처럼, 상단 메뉴 펼침에서는 첫 칸에 위에서부터 세로로. 모든 칸은 위쪽 정렬 */
+.nav-flat { display: contents; }
+@media (min-width: 821px) {
+  :root[data-nav="top"] .nav-body > .nav-flat { display: flex; flex-direction: column; }
+  :root[data-nav="top"] .nav-group > .nav-body { align-items: start; align-content: start; }
+  :root[data-nav="top"] .nav-body > * { align-self: start; }
+}
+
+/* ───────── 15.228 디자인 스킨: 🍶 KHA(소주 컨셉: 초록 병·투명한 잔·맑은 민트. 실제 소주 상표·로고는 쓰지 않고 직접 그린 병·잔) ───────── */
+:root[data-skin="kha"] {
+  --kh-bottle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 100'%3E %3Cpath d='M15 2 h10 v6 h-10z' fill='%231b6b45'/%3E %3Cpath d='M16 8 h8 v14 c0 4 10 8 10 18 v52 c0 4-3 6-7 6 h-14 c-4 0-7-2-7-6 v-52 c0-10 10-14 10-18z' fill='%232fa36b' stroke='%2316573a' stroke-width='2'/%3E %3Cpath d='M10 50 h20 v26 h-20z' fill='%23f4fbf7' stroke='%2316573a' stroke-width='1.2'/%3E %3Ctext x='20' y='67' font-family='Arial,Helvetica,sans-serif' font-size='9' font-weight='700' text-anchor='middle' fill='%2316573a'%3EKHA%3C/text%3E %3Cpath d='M11 36 c2-3 4-5 4-8' fill='none' stroke='%23c9f2dc' stroke-width='2.4' stroke-linecap='round' opacity='.8'/%3E %3Cpath d='M10 84 v6' stroke='%23c9f2dc' stroke-width='2' stroke-linecap='round' opacity='.6'/%3E %3C/svg%3E"); --kh-glass: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3E %3Cpath d='M5 4 h20 l-3 22 h-14z' fill='%23eafaf2' stroke='%231f8a5b' stroke-width='2' stroke-linejoin='round'/%3E %3Cpath d='M7.5 12 h15 l-1.8 12 h-11.4z' fill='%23bfead4'/%3E %3Cpath d='M10 7 v4' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E %3C/svg%3E");
+  --ns-navy: #15603e; --ns-navy-2: #1f8a5b; --ns-pill: #23a06a;
+  --accent: #1f8a5b; --accent-soft: #e2f6ec; --accent-ink: #15603e;
+  --btn-primary: #1f8a5b; --btn-primary-hover: #15603e;
+  --erp-head: #e6f6ee; --erp-head-ink: #15603e; --erp-head-line: #bfe6d1;
+  --row-hover: #effaf4; --zebra: #f7fcf9; --total-bg: #eef9f3; --erp-sum: #eef9f3;
+  --radius: 12px; --radius-md: 12px; --radius-xl: 16px;
+}
+@media (prefers-color-scheme: dark) { :root[data-skin="kha"]:not([data-theme="light"]) { --ns-navy: #0f4a30; --ns-navy-2: #15603e; --ns-pill: #3cc185; --accent: #6fd6a5; --accent-soft: #15291f; --btn-primary: #1f8a5b; --btn-primary-hover: #15603e; --erp-head: #172b22; --erp-head-ink: #a8e9c8; --erp-head-line: #24463a; --row-hover: #16241d; --zebra: #121e18; --total-bg: #15231c; --erp-sum: #15231c; } }
+:root[data-skin="kha"][data-theme="dark"] { --ns-navy: #0f4a30; --ns-navy-2: #15603e; --ns-pill: #3cc185; --accent: #6fd6a5; --accent-soft: #15291f; --btn-primary: #1f8a5b; --btn-primary-hover: #15603e; --erp-head: #172b22; --erp-head-ink: #a8e9c8; --erp-head-line: #24463a; --row-hover: #16241d; --zebra: #121e18; --total-bg: #15231c; --erp-sum: #15231c; }
+/* 머리줄: 초록 유리병 같은 그라데이션 + 유리 반사 한 줄, 아래 하얀 라벨 띠 */
+:root[data-skin="kha"] .top { position: sticky; background-color: #15603e; background-image: linear-gradient(100deg, transparent 0 62%, rgba(255,255,255,.10) 62% 66%, transparent 66%), linear-gradient(180deg, #23a06a 0%, #15603e 100%); }
+:root[data-skin="kha"] .top::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; pointer-events: none; background: linear-gradient(90deg, #ffffff 0 85%, #9be3bf 85% 100%); }
+:root[data-skin="kha"] .brand-text::after { content: ''; display: inline-block; width: 14px; height: 32px; margin-left: 8px; vertical-align: -8px; background: var(--kh-bottle) center / contain no-repeat; filter: drop-shadow(0 1px 1px rgba(0,0,0,.3)); }
+/* 메뉴·버튼 */
+:root[data-skin="kha"] .nav-group.drop > .nav-title, :root[data-skin="kha"][data-nav="top"] .side .nav-group:has(a.active) > .nav-title { background: #1f8a5b; color: #fff; }
+@media (max-width: 820px) { :root[data-skin="kha"] .side .nav-group .nav-title[aria-expanded="true"] { background: #e2f6ec; color: #15603e; } }
+:root[data-skin="kha"] .manage-tabs a.on { background: #1f8a5b; }
+:root[data-skin="kha"] form.list-filters .btn.primary, :root[data-skin="kha"] form.list-filters button.primary { background: #15603e; border-color: #15603e; }
+:root[data-skin="kha"] table.grid { border-top-color: #1f8a5b; }
+:root[data-skin="kha"] .dm-card { box-shadow: 0 4px 14px rgba(31,138,91,.08); }
+/* 대시보드: 제목 옆 병과 잔, 섹션 제목 앞 작은 잔 */
+:root[data-skin="kha"] .dash-head h1::after { content: ''; display: inline-block; width: 52px; height: 48px; margin-left: 10px; vertical-align: -10px; background: var(--kh-bottle) left center / auto 100% no-repeat, var(--kh-glass) right bottom / 24px 24px no-repeat; }
+:root[data-skin="kha"] .dash-section > h2::before, :root[data-skin="kha"] .tasks h2::before { content: ''; display: inline-block; width: 16px; height: 16px; margin-right: 6px; vertical-align: -2px; background: var(--kh-glass) center / contain no-repeat; }
+/* 자료 없음: 빈 잔 */
+:root[data-skin="kha"] .empty::before { content: ''; -webkit-mask: none; mask: none; display: block; width: 56px; height: 56px; margin: 0 auto 10px; background: var(--kh-glass) center / contain no-repeat; opacity: .9; }
+/* 바닥: 맑은 민트 */
+:root[data-skin="kha"]:not([data-theme="dark"]) body { background-color: #f3faf6; }
+@media print { :root[data-skin="kha"] .top::after, :root[data-skin="kha"] .brand-text::after, :root[data-skin="kha"] .dash-head h1::after, :root[data-skin="kha"] .empty::before, :root[data-skin="kha"] .dash-section > h2::before, :root[data-skin="kha"] .tasks h2::before { display: none; } :root[data-skin="kha"] body { background: #fff; } }

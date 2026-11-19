@@ -59,7 +59,16 @@ test('Sales rep per bill, vendor default rep, per-rep customer summary and filte
   const only = (await admin('GET', '/api/sales-reps/summary?rep=' + encodeURIComponent('박정현'))).body;
   assert.deepEqual(only.reps.map(r => r.rep), ['박정현']);
   // 고를 수 있는 이름, 달력 거르기
-  assert.deepEqual((await admin('GET', '/api/sales-reps')).body.reps, ['박정현', '송은아']);
+  // 15.228 고르기 목록은 영업팀만: 영업 부서가 없으면 영업 권한(관리자 제외) 사람, 부서가 생기면 그 부서와 하위 부서 사람
+  let r = (await admin('GET', '/api/sales-reps')).body;
+  assert.deepEqual(r.reps, []); assert.deepEqual(r.used, ['박정현', '송은아']); assert.equal(r.basis, 'role');
+  const dep = await admin('POST', '/api/admin/org/departments', { name: '영업팀' }); assert.equal(dep.status, 200, JSON.stringify(dep.body));
+  const sub = await admin('POST', '/api/admin/org/departments', { name: '국내1파트', parent_id: dep.body.id }); assert.equal(sub.status, 200, JSON.stringify(sub.body));
+  await admin('POST', '/api/admin/org/departments', { name: '생산팀' });
+  sqlite.prepare("UPDATE users SET department='국내1파트' WHERE name='직원'").run();
+  sqlite.prepare("UPDATE users SET department='생산팀' WHERE name='관리자'").run();
+  r = (await admin('GET', '/api/sales-reps')).body;
+  assert.deepEqual(r.reps, ['직원'], 'only sales team (incl. sub-departments)'); assert.equal(r.basis, 'department'); assert.deepEqual(r.departments.sort(), ['국내1파트', '영업팀']);
   const cal = (await admin('GET', `/api/sales-calendar?month=${today.slice(0, 7)}&rep=${encodeURIComponent('송은아')}`)).body;
   assert.equal(cal.totals.n, 3);
   assert.equal((await admin('GET', `/api/sales-calendar?month=${today.slice(0, 7)}&rep=${encodeURIComponent('박정현')}`)).body.totals.n, 0);

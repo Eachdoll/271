@@ -835,9 +835,10 @@ async function pageBillCalendar(main, side) {
 
 // ── 15.224 영업담당자 ──
 let SALES_REPS = null;
-function salesRepNames(fresh = false) { if (!SALES_REPS || fresh) SALES_REPS = api('GET', '/api/sales-reps').then(r => r.reps).catch(() => []); return SALES_REPS; }
-async function fillRepList(dl) { if (dl) dl.innerHTML = (await salesRepNames()).map(n => `<option value="${esc(n)}">`).join(''); }
-async function repSelect(sel, value = '') { const names = await salesRepNames(true); sel.innerHTML = `<option value="">전체</option>${names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}<option value="미지정">미지정</option>`; sel.value = value; }
+// 15.228 고르기 목록은 영업팀만(reps). 거르기 상자에는 이미 쓰인 다른 이름(used)도 따로 묶어 보여 준다.
+function salesRepNames(fresh = false) { if (!SALES_REPS || fresh) SALES_REPS = api('GET', '/api/sales-reps').catch(() => ({ reps: [], used: [] })); return SALES_REPS; }
+async function fillRepList(dl) { if (dl) dl.innerHTML = (await salesRepNames()).reps.map(n => `<option value="${esc(n)}">`).join(''); }
+async function repSelect(sel, value = '') { const { reps, used = [] } = await salesRepNames(true); const opt = n => `<option value="${esc(n)}">${esc(n)}</option>`; sel.innerHTML = `<option value="">전체</option>${reps.map(opt).join('')}${used.length ? `<optgroup label="영업팀 밖(이미 지정된 이름)">${used.map(opt).join('')}</optgroup>` : ''}<option value="미지정">미지정</option>`; sel.value = value; }
 // 거래처를 고르면 그 거래처 기본 담당자를 채움(직접 고친 값은 그대로)
 let repSeq = 0;
 function repFromCustomer(input, customer) {
@@ -848,7 +849,7 @@ function repFromCustomer(input, customer) {
 async function pageSalesReps(main) {
   const r0 = { from: todayStr().slice(0, 7) + '-01', to: todayStr() };
   main.innerHTML = `<h1>영업담당자별 현황</h1>
-  <p class="muted small">담당자마다 맡은 거래처와 기간 매출(확정 매출전표)·미수 잔액을 봅니다. 전표의 영업담당자가 비어 있으면 거래처에 정한 기본 담당자로 셉니다. 거래처 담당자는 「거래처 관리 › 수정」에서, 전표 담당자는 전표 창의 「담당자 바꾸기」에서 정합니다.</p>
+  <p class="muted small">담당자마다 맡은 거래처와 기간 매출(확정 매출전표)·미수 잔액을 봅니다. 담당자로 고를 수 있는 사람은 조직에서 「영업」이 들어간 부서(하위 부서 포함) 사람입니다(관리 › 사용자·조직에서 부서 지정). 전표의 영업담당자가 비어 있으면 거래처에 정한 기본 담당자로 셉니다. 거래처 담당자는 「거래처 관리 › 수정」에서, 전표 담당자는 전표 창의 「담당자 바꾸기」에서 정합니다.</p>
   <form class="list-filters toolbar" data-read-only id="repForm"><label>시작일<input type="date" name="from" value="${r0.from}"></label><label>종료일<input type="date" name="to" value="${r0.to}"></label><label>영업담당자<select name="rep"><option value="">전체</option></select></label><label><input type="checkbox" name="active"> 매출 있는 거래처만</label><button class="btn primary">조회</button><button type="button" class="btn" data-xlsx>엑셀</button></form>
   <div id="repSum"></div><div id="repRows"></div>`;
   const form = $('#repForm', main); let data = null;
