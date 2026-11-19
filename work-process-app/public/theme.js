@@ -29,6 +29,17 @@ const SKIN_KEY = 'wpa:skin', SKINS = [['default', '기본'], ['christmas', '🎄
 // 15.225 커스텀 캐릭터 스킨(키 cat)의 캐릭터 그림을 사용자가 직접 올린 파일로 바꾸기. 이 기기 브라우저에만 저장(서버·저장소에 올리지 않음).
 const FACE_KEY = 'wpa:skin-face';
 function skinFace() { try { const v = localStorage.getItem(FACE_KEY) || ''; return /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(v) ? v : ''; } catch { return ''; } }
+// 15.232 커스텀 캐릭터 스킨 색: 고른 색 하나로 머리줄·단추·강조색을 만든다(이 기기에만). 다크 모드용 옅은 색은 건드리지 않는다.
+const COLOR_KEY = 'wpa:skin-color', SKIN_SWATCHES = ['#e60033', '#ff6f91', '#f08c00', '#2f9e44', '#1c7ed6', '#7048e8', '#495057', '#8b5a3c'];
+function skinColor() { try { const v = localStorage.getItem(COLOR_KEY) || ''; return /^#[0-9a-f]{6}$/i.test(v) ? v : ''; } catch { return ''; } }
+function shade(hex, f) { const n = parseInt(hex.slice(1), 16), c = [n >> 16, (n >> 8) & 255, n & 255].map(v => Math.round(f < 0 ? v * (1 + f) : v + (255 - v) * f)); return '#' + c.map(v => Math.max(0, Math.min(255, v)).toString(16).padStart(2, '0')).join(''); }
+function applySkinColor() {
+  const root = document.documentElement, c = skinColor(), on = c && root.dataset.skin === 'cat';
+  const vars = { '--ct-main': c, '--ct-top': shade(c, 0.12), '--ct-top1': shade(c, 0.25), '--ct-top2': shade(c, -0.08), '--ns-navy': shade(c, 0.12), '--ns-navy-2': shade(c, 0.25), '--ns-pill': c, '--accent': c, '--btn-primary': c, '--btn-primary-hover': shade(c, -0.18) };
+  for (const [k, v] of Object.entries(vars)) { if (on) root.style.setProperty(k, v); else root.style.removeProperty(k); }
+  for (const b of document.querySelectorAll('.skin-face .sw')) b.classList.toggle('on', b.dataset.sw === c);
+  for (const i of document.querySelectorAll('.skin-face input[type=color]')) i.value = c || '#e60033';
+}
 function applyFace() {
   const v = skinFace(), root = document.documentElement;
   if (v) root.style.setProperty('--ct-face', `url("${v}")`); else root.style.removeProperty('--ct-face');
@@ -58,6 +69,7 @@ function applySkin(skin, { save = false } = {}) {
   try { localStorage.setItem(SKIN_KEY, v); } catch { /* 이 화면에만 */ }
   for (const s of document.querySelectorAll('.skin-select')) s.value = v;
   for (const f of document.querySelectorAll('.skin-face')) f.hidden = v !== 'cat'; // 15.225
+  applySkinColor(); // 15.232
   if (save && typeof api === 'function' && typeof ME !== 'undefined' && ME) api('PUT', '/api/me/prefs', { skin: v }).then(p => { if (ME) ME.ui = p; }).catch(() => {});
 }
 function themeMode() { try { const v = localStorage.getItem(THEME_KEY); return THEME_MODES.includes(v) ? v : 'auto'; } catch { return 'auto'; } }
@@ -99,6 +111,13 @@ function applyTheme(mode) {
           fw.innerHTML = '<label class="btn small" title="이 기기에서만 바뀝니다">캐릭터 그림 바꾸기<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden data-face-file></label><button type="button" class="btn small" data-face-reset>기본 그림</button>';
           fw.querySelector('[data-face-file]').onchange = e => { const f = e.target.files[0]; e.target.value = ''; setFaceFile(f).then(() => typeof toast === 'function' && toast('캐릭터 그림을 바꿨습니다(이 기기).')).catch(err => typeof toast === 'function' ? toast(err.message, 'err') : alert(err.message)); };
           fw.querySelector('[data-face-reset]').onclick = () => { try { localStorage.removeItem(FACE_KEY); } catch { /* 없음 */ } applyFace(); };
+          // 15.232 색 팔레트
+          const cw = document.createElement('div'); cw.className = 'skin-colors';
+          cw.innerHTML = `<span>색</span>${SKIN_SWATCHES.map(c => `<button type="button" class="sw" data-sw="${c}" style="background:${c}" aria-label="색 ${c}" title="${c}"></button>`).join('')}<input type="color" value="${skinColor() || '#e60033'}" aria-label="색 직접 고르기" title="직접 고르기"><button type="button" class="btn small" data-sw-reset>기본색</button>`;
+          const setC = c => { try { if (c) localStorage.setItem(COLOR_KEY, c); else localStorage.removeItem(COLOR_KEY); } catch { /* 이 화면에만 */ } applySkinColor(); };
+          cw.addEventListener('click', e => { const b = e.target.closest('[data-sw]'); if (b) setC(b.dataset.sw); if (e.target.closest('[data-sw-reset]')) setC(''); });
+          cw.querySelector('input[type=color]').addEventListener('input', e => setC(e.target.value.toLowerCase()));
+          fw.append(cw);
           host.append(fw); applyFace();
         }
       }

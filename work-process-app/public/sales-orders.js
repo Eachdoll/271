@@ -20,7 +20,7 @@ async function pageSalesOrderEntry(main, editId = null) {
       <label>과세 구분<select name="tax_type"><option value="taxable">과세 (부가세 10%)</option><option value="zero"${editing?.tax_type === 'zero' ? ' selected' : ''}>영세·면세 (부가세 0)</option></select></label>
       <label class="span2">비고 <span class="hint">(고객 비고를 그대로 붙여넣으면 PO를 읽어 고객 발주번호에 넣습니다)</span><input name="note" maxlength="500" value="${esc(editing?.note || '')}" placeholder="예: 0C0827-27 (P1DD) OLED Asan mj1938,seon 2008315425"><span class="small muted" data-note-parse></span></label>
     </div>
-    <section class="pr-section"><h3>수주 품목</h3><div data-so-lines></div><div class="actions" style="justify-content:flex-start"><button type="button" class="btn" data-so-add>+ 품목 추가</button></div></section>
+    <section class="pr-section"><h3>수주 품목</h3><div data-so-lines></div><div class="actions" style="justify-content:flex-start"><button type="button" class="btn" data-so-add>+ 품목 추가</button>${editing ? '' : '<button type="button" class="btn" data-so-recent title="지난 수주를 찾아 체크한 품목을 이 수주로 복사">최근 수주목록 (F4)</button>'}</div></section>
     <div class="bill-total card" data-so-total aria-live="polite"></div>
     <div class="actions">${editing ? `<a class="btn" href="#/sales/orders">목록으로</a>` : ''}<button class="btn primary" data-so-save>${editing ? '수주 고치기 저장' : '수주 저장'}</button></div>
   </form>`;
@@ -73,6 +73,24 @@ async function pageSalesOrderEntry(main, editId = null) {
   };
   enterMovesInTable(box);
   $('[data-so-add]', form).onclick = () => pick().catch(fail);
+  // 15.232 최근 수주목록: 지난 수주를 고르고 체크한 품목을 복사(거래처·과세 구분도 채움)
+  const copyIn = async picked => {
+    if (!catalog) catalog = await api('GET', '/api/boms').catch(() => null);
+    const { order, items, newRows } = picked;
+    if (!input.value.trim()) { input.value = order.customer; input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true })); }
+    form.elements.tax_type.value = order.tax_type === 'zero' ? 'zero' : 'taxable';
+    let added = 0, merged = 0;
+    for (const l of items) {
+      const b = catalog?.find(x => x.id === l.bom_id), sizes = b?.sizes || [], row = { bom_id: l.bom_id, item: l.item, product_code: l.product_code || '', unit: l.unit || '', spec: l.spec || '', fixedSpec: !!b?.spec && !sizes.length, sizes, qty: l.qty, price: l.unit_price ?? '', due_date: form.elements.due_date.value || '', note: l.note || '' };
+      const same = !newRows && lines.find(x => !x.used && x.bom_id === row.bom_id && (x.spec || '') === row.spec);
+      if (same) { same.qty = Math.round(((Number(same.qty) || 0) + (Number(row.qty) || 0)) * 1e6) / 1e6; merged++; } else { lines.push(row); added++; }
+    }
+    draw(); toast(`${order.order_no}에서 ${added ? `${added}품목 추가` : ''}${added && merged ? ' · ' : ''}${merged ? `${merged}품목 수량 합침` : ''}. 수량·단가·납기를 확인하세요.`);
+    $$('[data-l="qty"]', box)[lines.length - added]?.focus();
+  };
+  const recent = () => recentOrderPicker({ customer: input.value.trim() }).then(p => p && copyIn(p)).catch(fail);
+  $('[data-so-recent]', form)?.addEventListener('click', recent);
+  if (!editing) { const onKey = e => { if (!form.isConnected) return document.removeEventListener('keydown', onKey); if (e.key === 'F4' && !document.querySelector('.modal-wrap')) { e.preventDefault(); recent(); } }; document.addEventListener('keydown', onKey); }
   box.addEventListener('click', e => {
     const p = e.target.closest('[data-so-pick]'); if (p) return pick(Number(p.dataset.soPick)).catch(fail);
     const d = e.target.closest('[data-so-del]'); if (d) { lines.splice(Number(d.dataset.soDel), 1); draw(); }
@@ -488,4 +506,49 @@ async function pageQuoteList(main) {
   form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
   $('#qtList', main).addEventListener('click', async e => { const o = e.target.closest('[data-qt-open]'); if (!o) return; e.preventDefault(); try { quoteSheet(await api('GET', '/api/quotes/' + o.dataset.qtOpen), () => load()); } catch (error) { fail(error); } });
   await load();
+}
+
+// ── 15.232 최근 수주목록(수주전표별 선택): 왼쪽 수주전표 목록 → 오른쪽 그 수주의 품목(체크) → 확인하면 입력 화면에 복사 ──
+function recentOrderPicker({ customer = '' } = {}) {
+  return new Promise(resolve => {
+    const y = todayStr().slice(0, 4); let orders = [], cur = null, seq = 0, done = false;
+    const m = modal(`<h3>최근 수주목록 <span class="small muted">수주전표를 고르고 복사할 품목을 체크하세요</span></h3>
+      <form class="toolbar list-filters ro-filter" data-read-only data-ro-form><label>기간<input type="date" name="from" value="${y}-01-01"></label><label>~<input type="date" name="to" value="${todayStr()}"></label><label class="ro-cust">거래처<input name="customer" maxlength="100" value="${esc(customer)}" placeholder="비우면 전체" autocomplete="off"></label><label class="list-search">검색<input type="search" name="q" maxlength="100" placeholder="수주번호·PO·품목·비고"></label><button class="btn primary">조회</button></form>
+      <div class="ro-grid"><section><h4 class="ro-h">수주전표 목록 <span class="small muted" data-ro-count></span></h4><div data-ro-orders class="ro-pane"><p class="muted">불러오는 중…</p></div></section>
+        <section><h4 class="ro-h">개별 수주목록 <span class="small muted" data-ro-label></span></h4><div data-ro-lines class="ro-pane"><div class="empty">왼쪽에서 수주전표를 고르세요.</div></div></section></div>
+      <div class="actions ro-actions"><label class="inline"><input type="checkbox" data-ro-new checked> 동일품목 새로운 행으로 생성</label><span class="grow"></span><button type="button" class="btn" data-x>닫기</button><button type="button" class="btn primary" data-ro-ok disabled>확인 (복사)</button></div>`, { wide: true, onClose: () => { if (!done) resolve(null); } });
+    m.el.classList.add('ro-modal');
+    const f = $('[data-ro-form]', m.el);
+    if (typeof bindPartnerPicker === 'function') bindPartnerPicker(f.elements.customer, null, { type: 'sales' }).catch(() => {});
+    if (typeof rangePresets === 'function') rangePresets(f.elements.from, f.elements.to, { onPick: () => load().catch(fail) });
+    const pickedLines = () => cur ? $$('[data-ro-pick]:checked', m.el).map(x => cur.lines[Number(x.dataset.roPick)]) : [];
+    const sync = () => { const n = pickedLines().length, b = $('[data-ro-ok]', m.el); b.disabled = !n; b.textContent = n ? `확인 (${n}품목 복사)` : '확인 (복사)'; const all = $('[data-ro-all]', m.el); if (all && cur) all.checked = n === cur.lines.length; };
+    const showLines = async id => {
+      const my = ++seq; $('[data-ro-lines]', m.el).innerHTML = '<p class="muted">불러오는 중…</p>';
+      const o = await api('GET', '/api/sales-orders/' + id); if (my !== seq || !m.el.isConnected) return; cur = o;
+      $('[data-ro-label]', m.el).textContent = `${o.order_no} · ${o.customer} · ${o.order_date}`;
+      const sumQ = o.lines.reduce((t, l) => t + l.qty, 0), sumA = o.lines.reduce((t, l) => t + (l.unit_price == null ? 0 : Math.trunc(l.qty * l.unit_price)), 0);
+      $('[data-ro-lines]', m.el).innerHTML = `<div class="table-wrap"><table class="grid keep-table ro-table" data-no-sort data-keep-cols><thead><tr><th class="pick-cell"><input type="checkbox" data-ro-all checked aria-label="모두 고르기"></th><th>제품코드</th><th>제품명</th><th>규격</th><th class="r">수주</th><th>단위</th><th class="r">수주단가</th><th class="r">수주금액</th><th class="r">납품량</th></tr></thead><tbody>${o.lines.map((l, i) => `<tr><td class="pick-cell"><input type="checkbox" data-ro-pick="${i}" checked aria-label="${esc(l.item)} 고르기"></td><td class="nowrap">${esc(l.product_code || '')}</td><td><b>${esc(l.item)}</b></td><td>${esc(l.spec || '')}</td><td class="r">${fmtNum(l.qty)}</td><td>${esc(l.unit || '')}</td><td class="r">${l.unit_price == null ? '<span class="muted">—</span>' : fmtNum(l.unit_price)}</td><td class="r">${l.unit_price == null ? '' : won(Math.trunc(l.qty * l.unit_price))}</td><td class="r">${fmtNum(Math.min(l.qty, (l.billed_qty || 0) + (l.shipped_unbilled || 0)))}</td></tr>`).join('')}</tbody>
+        <tfoot><tr><th colspan="4" class="r">합계</th><td class="r"><b>${fmtNum(sumQ)}</b></td><td></td><td></td><td class="r"><b>${won(sumA)}</b></td><td></td></tr></tfoot></table></div>`;
+      $$('[data-ro-order]', m.el).forEach(tr => tr.classList.toggle('on', Number(tr.dataset.roOrder) === o.id));
+      sync();
+    };
+    const load = async () => {
+      const v = formObj(f);
+      const data = await api('GET', '/api/sales-orders?' + new URLSearchParams({ from: v.from || '', to: v.to || '', customer: v.customer || '', q: v.q || '' }));
+      if (!m.el.isConnected) return; orders = data.rows.filter(o => o.status !== 'cancelled');
+      $('[data-ro-count]', m.el).textContent = `${fmtNum(orders.length)}건${data.more ? ' (앞 200건)' : ''}`;
+      $('[data-ro-orders]', m.el).innerHTML = orders.length ? `<div class="table-wrap"><table class="grid keep-table ro-table" data-no-sort data-keep-cols><thead><tr><th>수주일자</th><th>수주번호</th><th>거래처</th><th>품목</th><th class="r">수주량</th><th class="r">납품량</th><th class="r">잔량</th></tr></thead><tbody>${orders.map(o => `<tr class="row-open" data-ro-order="${o.id}" tabindex="0" title="누르면 오른쪽에 품목"><td class="nowrap">${esc(o.order_date.slice(2))}</td><td class="nowrap">${esc(o.order_no)}</td><td>${esc(o.customer)}</td><td class="small">${esc(o.first_item || '')}${o.line_count > 1 ? ` 외 ${o.line_count - 1}` : ''}</td><td class="r">${fmtNum(o.ordered_qty)}</td><td class="r">${fmtNum(o.billed_qty)}</td><td class="r">${o.ordered_qty - o.billed_qty > 0 ? fmtNum(Math.round((o.ordered_qty - o.billed_qty) * 1e6) / 1e6) : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">조건에 맞는 수주가 없습니다. 기간을 넓히거나 거래처를 비우세요.</div>';
+      cur = null; $('[data-ro-lines]', m.el).innerHTML = '<div class="empty">왼쪽에서 수주전표를 고르세요.</div>'; $('[data-ro-label]', m.el).textContent = ''; sync();
+      if (orders[0]) showLines(orders[0].id).catch(fail);
+    };
+    m.el.addEventListener('click', e => { const tr = e.target.closest('[data-ro-order]'); if (tr) showLines(Number(tr.dataset.roOrder)).catch(fail); });
+    m.el.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-ro-order]')) { e.preventDefault(); e.target.click(); } });
+    m.el.addEventListener('change', e => { if (e.target.matches('[data-ro-all]')) $$('[data-ro-pick]', m.el).forEach(x => { x.checked = e.target.checked; }); if (e.target.matches('[data-ro-all], [data-ro-pick]')) sync(); });
+    m.el.addEventListener('dblclick', e => { const tr = e.target.closest('[data-ro-order]'); if (tr && cur && cur.id === Number(tr.dataset.roOrder)) $('[data-ro-ok]', m.el).click(); });
+    f.onsubmit = e => { e.preventDefault(); load().catch(fail); };
+    $('[data-x]', m.el).onclick = m.close;
+    $('[data-ro-ok]', m.el).onclick = () => { const items = pickedLines(); if (!items.length || !cur) return; done = true; resolve({ order: cur, items, newRows: $('[data-ro-new]', m.el).checked }); m.close(); };
+    load().catch(fail);
+  });
 }

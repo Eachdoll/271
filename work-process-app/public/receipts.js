@@ -48,7 +48,7 @@ async function pageReceiptEntry(main) {
       <div class="table-wrap"><table class="grid rc-grid"><caption class="sr-only">입고 상세 줄</caption><thead><tr><th scope="col"><input type="checkbox" data-rc-all aria-label="전체 줄 선택"></th><th scope="col">No</th><th scope="col">구분</th><th scope="col">품목</th><th scope="col">규격</th><th scope="col">단위</th><th scope="col">LOT NO</th><th scope="col">수량</th><th scope="col">입고창고</th><th scope="col">창고위치</th><th scope="col">비고</th><th scope="col">업체 정보(비고2)</th><th scope="col"><span class="sr-only">줄 작업</span></th></tr></thead><tbody data-rc-lines></tbody></table></div>
       <p class="pr-totals" data-rc-total aria-live="polite"></p>
     </section>
-    <div class="actions"><button class="btn primary" data-rc-save>입고 등록</button></div>
+    <div class="actions"><label class="inline" title="입고를 등록하면 LOT마다 QR코드 발행 창을 바로 엽니다"><input type="checkbox" data-rc-qr${(() => { try { return localStorage.getItem('wpa:rc-qr') === '0' ? '' : ' checked'; } catch { return ' checked'; } })()}> 등록하면 QR 바로 발행</label><button class="btn primary" data-rc-save>입고 등록</button></div>
   </form>`;
   const form = $('form', main), body = $('[data-rc-lines]', form);
   await rcLoadWarehouses(true); // 15.199 화면을 열 때마다 새로(다른 곳에서 더한 창고가 보이게)
@@ -252,6 +252,7 @@ async function pageReceiptEntry(main) {
   const manage = $('[data-rc-warehouses]', form);
   if (manage) manage.onclick = () => { location.hash = '#/logistics/warehouses'; }; // 15.230 관리 › 창고 관리 화면으로(입력 중인 줄은 이 탭 초안에 남음)
   // 초안(이 탭): 머리·줄
+  $('[data-rc-qr]', form)?.addEventListener('change', e => { try { localStorage.setItem('wpa:rc-qr', e.target.checked ? '1' : '0'); } catch { /* 편의 */ } });
   const entryDraft = bindEntryDraft(form, 'receipt:new', {
     noPhotos: true,
     read: () => { readAll(); return { head: uxFormRead(form), lines, requestId }; },
@@ -273,6 +274,7 @@ async function pageReceiptEntry(main) {
       lines = []; requestId = crypto.randomUUID(); form.elements.note.value = ''; draw(); await loadPos(true).catch(() => {});
       refreshNavBadges?.();
       receiptSlip(saved);
+      if ($('[data-rc-qr]', form)?.checked) lotLabels(saved); // 15.232 입고하자마자 LOT QR 발행
     } catch (error) { entryDraft.failure(); fail(error); }
     finally { busy = false; button.disabled = false; }
   };
@@ -299,7 +301,7 @@ function receiptSlip(r) {
       <div class="po-memo"><b>비고</b><div class="po-memo-body">${esc(r.note || '')}</div></div>
       <table class="rc-sign"><tbody><tr><th>입고 담당</th><th>확인</th><th>승인</th></tr><tr><td></td><td></td><td></td></tr></tbody></table>
     </section>
-    <div class="actions"><button class="btn" data-close>닫기</button><button class="btn" data-rc-labels>LOT 라벨(QR) 출력</button><button class="btn primary" data-print>인쇄 · PDF 저장</button></div>`, { wide: true });
+    <div class="actions"><button class="btn" data-close>닫기</button><button class="btn qr-pdf-btn" data-rc-labels>QR코드 발행</button><button class="btn primary" data-print>인쇄 · PDF 저장</button></div>`, { wide: true });
   m.el.parentElement.classList.add('lr-cert-wrap');
   $('[data-close]', m.el).onclick = m.close;
   $('[data-rc-labels]', m.el).onclick = () => { m.close(); lotLabels(r); };
@@ -344,7 +346,7 @@ async function pageReceiptList(main) {
     if (!main.isConnected) return;
     rows = next ? rows.concat(data.rows) : data.rows; page = data.page;
     $('#rcsMore', main).hidden = !data.more;
-    $('#rcsList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>입고번호</th><th>입고일</th><th>거래처</th><th>품목</th><th class="r">줄</th><th>입력자</th><th></th></tr></thead><tbody>${rows.map(r => `<tr><td data-card-primary><b>${esc(r.receipt_no)}</b></td><td>${esc(r.receipt_date)}</td><td>${esc(r.vendor)}</td><td>${esc(r.items)}${r.note ? `<div class="small muted">${esc(r.note)}</div>` : ''}</td><td class="r">${fmtNum(r.line_count)}${r.voided_count ? ` <span class="chip">취소 ${r.voided_count}</span>` : ''}</td><td class="small muted">${esc(r.created_by)}<br>${esc(r.created_at.slice(5, 16))}</td><td class="nowrap" data-card-primary><button class="btn small" data-rc-open="${r.id}">입고증</button> <button class="btn small" data-rc-label="${r.id}">LOT 라벨</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">조건에 맞는 입고가 없습니다.</div>';
+    $('#rcsList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>입고번호</th><th>입고일</th><th>거래처</th><th>품목</th><th class="r">줄</th><th>입력자</th><th></th></tr></thead><tbody>${rows.map(r => `<tr><td data-card-primary><b>${esc(r.receipt_no)}</b></td><td>${esc(r.receipt_date)}</td><td>${esc(r.vendor)}</td><td>${esc(r.items)}${r.note ? `<div class="small muted">${esc(r.note)}</div>` : ''}</td><td class="r">${fmtNum(r.line_count)}${r.voided_count ? ` <span class="chip">취소 ${r.voided_count}</span>` : ''}</td><td class="small muted">${esc(r.created_by)}<br>${esc(r.created_at.slice(5, 16))}</td><td class="nowrap" data-card-primary><button class="btn small" data-rc-open="${r.id}">입고증</button> <button class="btn small" data-rc-label="${r.id}" title="이 입고의 LOT QR코드 발행">QR 발행</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">조건에 맞는 입고가 없습니다.</div>';
   };
   form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
   $('#rcsMore', main).onclick = () => load(true).catch(fail);

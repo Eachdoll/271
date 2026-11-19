@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.231';
+const APP_VERSION = '15.232';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -3008,3 +3008,23 @@ function bindLotPicker(input, itemOf, qtyOf = () => 0) {
   input.addEventListener('input', show); input.addEventListener('change', show);
   return { check: () => (input.value.trim() ? warn() : ''), refresh: () => fill().then(show) };
 }
+
+// 15.232 표 제목 줄 고정(틀고정): 줄이 많아 화면보다 긴 표는 표 칸 안에서 스크롤하고 제목 줄(아래 합계 줄)은 고정한다(넓은 화면).
+// 표가 그려진 뒤에도 따라가도록 #main 변화를 지켜본다. 창(모달)·휴대폰 카드 표·인쇄 문서는 그대로.
+(function stickyGridHeads() {
+  if (typeof document === 'undefined' || typeof MutationObserver === 'undefined' || typeof document.getElementById !== 'function' || typeof window === 'undefined') return;
+  let t = 0;
+  const mark = () => {
+    t = 0; const main = document.getElementById('main'); if (!main) return;
+    for (const wrap of main.querySelectorAll('.table-wrap')) {
+      if (wrap.closest('.modal, .cert, .po-doc') ) continue;
+      const table = wrap.querySelector(':scope > table'); if (!table || !table.tHead) continue;
+      const rows = table.tBodies[0]?.rows.length || 0;
+      wrap.classList.toggle('tw-freeze', !wrap.classList.contains('tw-fill') && rows > 8 && table.scrollHeight > window.innerHeight * 0.7); // 15.180 tw-fill(15줄 넘는 목록)과 겹치지 않게, 그 밖의 긴 표도
+    }
+  };
+  const obs = new MutationObserver(() => { if (!t) t = setTimeout(mark, 120); });
+  const start = () => { const main = document.getElementById('main'); if (main) { obs.observe(main, { childList: true, subtree: true }); mark(); } else setTimeout(start, 300); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+  window.addEventListener('resize', () => { if (!t) t = setTimeout(mark, 200); });
+})();

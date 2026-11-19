@@ -73,3 +73,14 @@ test('Sales rep per bill, vendor default rep, per-rep customer summary and filte
   assert.equal(cal.totals.n, 3);
   assert.equal((await admin('GET', `/api/sales-calendar?month=${today.slice(0, 7)}&rep=${encodeURIComponent('박정현')}`)).body.totals.n, 0);
 });
+
+test('Sales/purchase calendar party search matches part of the name (15.232)', async () => {
+  const today2 = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10), mon = today2.slice(0, 7);
+  await admin('POST', '/api/vendors', { name: '세기섬유', is_sales: true });
+  await admin('POST', '/api/sales-bills', { request_id: crypto.randomUUID(), customer: '세기섬유', bill_date: today2, lines: [{ source_type: 'manual', item: '와이퍼', qty: 1, unit_price: 1000 }] });
+  for (const part of ['세기', '섬유', '기섬']) assert.equal((await admin('GET', `/api/sales-calendar?month=${mon}&customer=${encodeURIComponent(part)}`)).body.totals.n, 1, part);
+  assert.equal((await admin('GET', `/api/sales-calendar?month=${mon}&customer=${encodeURIComponent('없는')}`)).body.totals.n, 0);
+  assert.equal((await admin('GET', `/api/sales-bills?customer=${encodeURIComponent('섬유')}&party_like=1`)).body.rows.length, 1);
+  assert.equal((await admin('GET', `/api/sales-bills?customer=${encodeURIComponent('섬유')}`)).body.rows.length, 0, 'list stays exact without party_like');
+  assert.equal((await admin('GET', `/api/purchase-calendar?month=${mon}&vendor=${encodeURIComponent('섬유')}`)).status, 200);
+});
