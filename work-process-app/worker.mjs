@@ -5499,6 +5499,7 @@ async function lotStockReport(query) {
   }
   let rows = [...map.values()].map(({ inUnit, ...r }) => ({ ...r, received: stockRound(r.received), shipped: stockRound(r.shipped), balance: stockRound(r.received - r.shipped), places: [...r.places].join(', ') }));
   if (query.state === 'instock') rows = rows.filter(r => r.balance > 0);
+  if (query.cat) { const catalog = new Map(); for (const b of await db.prepare('SELECT product,product_code,item_category,cat1,cat2,cat3 FROM boms WHERE active=1 ORDER BY is_temp DESC, id DESC').all()) catalog.set(nameKey(b.product), b); rows = rows.map(r => { const c = catalog.get(nameKey(r.item)); return { ...r, product_code: c?.product_code || '', category: c?.item_category || '', cat1: c?.cat1 || '', cat2: c?.cat2 || '', cat3: c?.cat3 || '' }; }); } // 15.260
   if (query.qc) { const st = await lotQcStates(); rows = rows.map(r => { const x = st.get(r.item + '\u0000' + r.lot); return x ? { ...r, qc: x.qc, qc_req: x.req_no, ...(x.concession ? { concession: { id: x.concession.id, reason: x.concession.reason, by: x.concession.created_by, at: x.concession.created_at } } : {}) } : r; }); } // 15.256
   rows.sort((a, b) => stockCompare(a.item, b.item) || stockCompare(a.first_date, b.first_date) || stockCompare(a.lot, b.lot));
   return { asof, rows: rows.slice(0, 2000), more: truncated || rows.length > 2000 };
