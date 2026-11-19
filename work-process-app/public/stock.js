@@ -10,7 +10,7 @@ function stockCsv(rows, bySpec) {
 async function pageStock(main) {
   main.innerHTML = `
   <h1>재고 현황 <span class="dept">물류</span></h1>
-  <p class="muted">입고(발주·기타) + 생산실적·반제품 커팅/융착 − 생산 투입(BOM 기준) − 출하 ± 재고 조정으로 계산한 수량입니다. 품목명과 단위가 같은 기록끼리 합산하므로, <b>같은 품목은 같은 이름·단위</b>로 입력하세요. 시스템 도입 전부터 있던 재고는 <b>기초재고</b>로 한 번 입력합니다.</p>
+  <p class="muted">「창고·위치별」로 보면 창고 → 위치(Location)마다 어떤 품목·LOT가 얼마나 있는지 나옵니다. 입고(발주·기타) + 생산실적·반제품 커팅/융착 − 생산 투입(BOM 기준) − 출하 ± 재고 조정으로 계산한 수량입니다. 품목명과 단위가 같은 기록끼리 합산하므로, <b>같은 품목은 같은 이름·단위</b>로 입력하세요. 시스템 도입 전부터 있던 재고는 <b>기초재고</b>로 한 번 입력합니다.</p>
   <form id="stockFilters" class="toolbar list-filters lf-oneline" data-read-only="true">
     <label class="lf-date">기준일<input type="date" name="asof" value="${todayStr()}" max="${todayStr()}" required></label>
     <label class="list-search">품목 검색<input type="search" name="q" maxlength="200" placeholder="품목명·규격"></label>
@@ -21,7 +21,7 @@ async function pageStock(main) {
     <button type="submit" class="btn primary">조회</button>
   </form>
   <div class="result-bar"><div id="stockSummary" class="counts"></div>
-    <div class="seg result-seg" role="group" aria-label="보기"><label><input type="radio" name="group" value="item" form="stockFilters" checked> 품목 합계</label><label><input type="radio" name="group" value="spec" form="stockFilters"> 규격·사이즈별</label></div>
+    <div class="seg result-seg" role="group" aria-label="보기"><label><input type="radio" name="group" value="item" form="stockFilters" checked> 품목 합계</label><label><input type="radio" name="group" value="spec" form="stockFilters"> 규격·사이즈별</label><label><input type="radio" name="group" value="place" form="stockFilters"> 창고·위치별</label></div>
     <span class="result-tools"><button type="button" class="btn" id="stockLots" title="LOT가 적힌 입고 − 같은 LOT 출하">LOT별 재고</button><button type="button" class="btn" id="stockCsv">CSV 저장</button><span id="stockAdjustSlot"></span></span></div>
   <div id="stockList"></div>`;
   const form = $('#stockFilters', main); let version = 0, current = { rows: [], group: 'item' };
@@ -46,8 +46,24 @@ async function pageStock(main) {
     if (v.kind === 'count') { body.counted_qty = v.amount; if (!v.spec) body.by_item = true; } else body.qty = v.amount;
     try { const saved = await api('POST', '/api/inventory/adjustments', body); toast(`재고 조정을 기록했습니다. (${saved.qty > 0 ? '+' : ''}${fmtNum(saved.qty)})`); load(); } catch (error) { fail(error); }
   };
+  // 15.230 창고·위치별: 창고 → 위치 → 품목·LOT 잔량(어디에 얼마나 있는지)
+  let placeWh = ''; try { placeWh = sessionStorage.getItem('wpa:stock-wh') || ''; } catch { /* 편의 */ }
+  const loadPlaces = async mine => {
+    const v = formObj(form), data = await api('GET', '/api/inventory/places?' + new URLSearchParams({ asof: v.asof || todayStr(), q: v.q || '', warehouse: placeWh }));
+    if (mine !== version || !main.isConnected) return;
+    $('#stockAdjustSlot').innerHTML = `<label class="inline stock-wh-pick">창고 <select id="stockWh"><option value="">전체</option>${data.warehouses.map(w => `<option value="${esc(w.name)}">${esc(w.name)}</option>`).join('')}<option value="(위치 미지정)">위치 미지정</option></select></label>`;
+    const sel = $('#stockWh'); sel.value = placeWh; sel.onchange = () => { placeWh = sel.value; try { sessionStorage.setItem('wpa:stock-wh', placeWh); } catch { /* 편의 */ } load().catch(fail); };
+    const rows = data.rows, whs = new Set(rows.map(r => r.warehouse || '(위치 미지정)'));
+    $('#stockSummary').innerHTML = `${fmtNum(rows.length)}줄 · 창고 ${whs.size}곳 · 기준일 ${esc(data.asof)}${data.more ? ' · <span class="chip yellow">앞 3000줄</span>' : ''}`;
+    let prev = '';
+    $('#stockList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid stock-place-grid"><thead><tr><th>창고</th><th>위치(Location)</th><th>품목코드</th><th>품목명</th><th>LOT</th><th class="r">수량</th><th>처음 입고</th><th></th></tr></thead><tbody>${rows.map((r, i) => { const wh = r.warehouse || '(위치 미지정)', head = wh !== prev; prev = wh;
+      return `<tr class="${head ? 'wh-first' : ''}${r.qty < 0 ? ' row-red' : ''}"><td>${head ? `<b>${esc(wh)}</b>` : '<span class="muted small">〃</span>'}</td><td>${r.location ? `<span class="chip">${esc(r.location)}</span>` : '<span class="muted">—</span>'}</td><td class="small nowrap">${esc(r.code || '')}</td><td data-card-primary><b>${esc(r.item)}</b></td><td class="nowrap"><span class="lot-tag">${esc(r.lot)}</span></td><td class="r"><b>${fmtNum(r.qty)}</b> ${esc(r.unit || '')}</td><td class="small muted">${esc(r.first_date || '')}</td><td class="nowrap">${r.lot !== '(LOT 미지정)' ? `<button type="button" class="btn small" data-place-move="${i}" title="이 LOT를 다른 창고·위치로">이동</button>` : ''}</td></tr>`; }).join('')}</tbody></table></div>`
+      : '<div class="empty">조건에 맞는 위치별 재고가 없습니다. 입고 때 창고·위치를 넣으면 여기에 나옵니다(관리 › 창고 관리).</div>';
+    $$('[data-place-move]', main).forEach(b => b.onclick = () => { const r = rows[Number(b.dataset.placeMove)]; lotMoveWindow({ item: r.item, unit: r.unit, lot: r.lot }, load).catch(fail); });
+  };
   const load = async () => {
     if (!main.isConnected) return; const mine = ++version;
+    if (form.querySelector('[name=group]:checked')?.value === 'place' || $$('[name=group]', main).find(x => x.checked)?.value === 'place') return loadPlaces(mine);
     const result = await api('GET', '/api/inventory?' + new URLSearchParams(formObj(form)));
     if (mine !== version || !main.isConnected) return;
     current = result; const rows = result.rows; const bySpec = result.group === 'spec';

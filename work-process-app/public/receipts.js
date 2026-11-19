@@ -40,7 +40,7 @@ async function pageReceiptEntry(main) {
           <label>입고창고:<select data-rc-bulk-wh aria-label="일괄적용할 입고창고"${(rcWarehouses || []).length ? '' : ' disabled'}>${rcWarehouseOptions()}</select></label>
           <label>Location:<select data-rc-bulk-loc aria-label="일괄적용할 창고위치" disabled>${rcLocationOptions('')}</select></label>
           <button type="button" class="btn small primary" data-rc-bulk title="체크한 줄(없으면 입고 상세 모든 줄)에 입고창고·창고위치를 넣습니다">일괄적용</button>
-          ${rcCanManageWarehouse() ? '<button type="button" class="btn small" data-rc-warehouses>창고 위치관리</button>' : ''}
+          ${rcCanManageWarehouse() ? '<button type="button" class="btn small" data-rc-warehouses title="관리 › 창고 관리로 이동">창고·위치 관리 →</button>' : ''}
         </div>
         <span class="small muted" data-rc-picked>선택 0줄</span>
         <button type="button" class="btn small danger" data-rc-remove>선택 줄 삭제</button>
@@ -250,7 +250,7 @@ async function pageReceiptEntry(main) {
     draw(); toast(`${lines.some(l => l.picked) ? '체크한' : '모든'} ${list.length}줄에 ${bulkWh.value}${bulkLoc.value ? ' · ' + bulkLoc.value : ''}을(를) 넣었습니다.`);
   };
   const manage = $('[data-rc-warehouses]', form);
-  if (manage) manage.onclick = () => rcWarehouseManager(() => { readAll(); const w = bulkWh.value; bulkWh.innerHTML = rcWarehouseOptions(w); bulkWh.disabled = !(rcWarehouses || []).length; bulkWh.onchange(); draw(); });
+  if (manage) manage.onclick = () => { location.hash = '#/logistics/warehouses'; }; // 15.230 관리 › 창고 관리 화면으로(입력 중인 줄은 이 탭 초안에 남음)
   // 초안(이 탭): 머리·줄
   const entryDraft = bindEntryDraft(form, 'receipt:new', {
     noPhotos: true,
@@ -376,25 +376,34 @@ function rcLocBind(box) {
   box.addEventListener('click', e => { if (e.target.closest('[data-loc-add]')) { rcLocAdd(box); input.focus(); } const x = e.target.closest('[data-loc-del]'); if (x) { x.closest('[data-loc]').remove(); rcLocAdd(box); } });
 }
 // 창고·위치 관리(물류팀장·관리자). 입고 기록이 없는 창고는 삭제, 있으면 사용 중지(15.104). 위치는 쉼표·줄바꿈으로 나눠 적는다.
-async function rcWarehouseManager(after) {
-  const list = await api('GET', '/api/warehouses?all=1');
-  const m = modal(`<h3>창고·위치 관리</h3><p class="small muted">입고 줄의 창고·위치 선택지입니다. 한 창고에 위치를 여러 개 넣을 수 있습니다(Enter·쉼표로 추가, ×로 빼기). 위치를 비워 두면 그 창고는 위치 없이 씁니다. 이름을 바꾸면 지난 입고 기록의 창고 이름도 바뀝니다.</p>
-    <div class="table-wrap"><table class="grid keep-table"><thead><tr><th>창고</th><th>위치(Location)</th><th>순서</th><th>사용</th><th></th></tr></thead><tbody>${list.map(w => `<tr data-wh="${w.id}"><td><input data-k="name" value="${esc(w.name)}" maxlength="50" aria-label="창고 이름"></td><td>${rcLocEditor(w.locations, w.name)}</td><td><input data-k="sort" type="number" step="1" value="${w.sort}" aria-label="${esc(w.name)} 순서" style="width:5em"></td><td><input type="checkbox" data-k="active"${w.active ? ' checked' : ''} aria-label="${esc(w.name)} 사용"></td><td class="nowrap"><button type="button" class="btn small" data-wh-save>저장</button> <button type="button" class="btn small danger" data-wh-del title="입고 기록이 없는 창고만 지울 수 있습니다">삭제</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">등록된 창고가 없습니다.</td></tr>'}</tbody></table></div>
-    <form class="form-grid" data-wh-new data-own-errors><label>새 창고 *<input name="name" required maxlength="50" placeholder="예: 5동"></label><div class="span2 loc-field"><span class="loc-label">위치(Location) <span class="hint">(여러 개 · Enter나 쉼표로 추가)</span></span>${rcLocEditor('', '새 창고')}</div><div class="actions"><button class="btn primary">창고 추가</button></div></form>
-    <div class="actions"><button type="button" class="btn" data-close>닫기</button></div>`, { wide: true });
-  const done = async () => { m.close(); await rcLoadWarehouses(true); after?.(); rcWarehouseManager(after); };
-  $('[data-close]', m.el).onclick = async () => { m.close(); await rcLoadWarehouses(true); after?.(); };
-  $$('[data-loc-editor]', m.el).forEach(rcLocBind);
-  $$('[data-wh-save]', m.el).forEach(b => b.onclick = async () => {
-    const tr = b.closest('tr'), val = k => $(`[data-k="${k}"]`, tr);
-    try { await api('PUT', '/api/warehouses/' + tr.dataset.wh, { name: val('name').value, locations: rcLocValue(tr), sort: Number(val('sort').value) || 0, active: val('active').checked }); toast('저장했습니다.'); await done(); } catch (error) { fail(error); }
-  });
-  $$('[data-wh-del]', m.el).forEach(b => b.onclick = async () => {
-    const tr = b.closest('tr'), name = $('[data-k="name"]', tr).value;
-    if (!(await confirmBox(`${name} 창고를 지울까요? 이 창고로 기록된 입고가 있으면 지워지지 않습니다.`))) return;
-    try { await api('DELETE', '/api/warehouses/' + tr.dataset.wh); toast('창고를 지웠습니다.'); await done(); } catch (error) { fail(error); }
-  });
-  $('[data-wh-new]', m.el).onsubmit = async e => { e.preventDefault(); try { await api('POST', '/api/warehouses', { ...formObj(e.target), locations: rcLocValue(e.target) }); toast('창고를 추가했습니다.'); await done(); } catch (error) { fail(error); } };
+// 15.230 관리 › 창고 관리 화면으로 옮김(입고 입력의 「창고 위치관리」를 누르면 이 화면으로 이동). 권한 없는 사람은 보기만.
+async function pageWarehouses(main) {
+  const can = rcCanManageWarehouse();
+  main.innerHTML = `<h1>창고 관리 <span class="dept">관리</span></h1>
+  <p class="muted">입고 줄·재고 이동에서 고르는 창고와 위치(Location)입니다. 한 창고에 위치를 여러 개 넣을 수 있습니다(Enter·쉼표로 추가, ×로 빼기). 위치를 비워 두면 그 창고는 위치 없이 씁니다. 이름을 바꾸면 지난 입고 기록의 창고 이름도 바뀝니다. 입고 기록이 없는 창고만 지울 수 있고, 있으면 「사용」을 끄세요.${can ? '' : ' <b>고치기는 물류팀장·관리자만 할 수 있습니다.</b>'}</p>
+  <div id="whBox"><p class="muted">불러오는 중…</p></div>
+  <div class="actions" style="justify-content:flex-start"><a class="btn" href="#/logistics/stock">재고 현황(창고·위치별) →</a><a class="btn" href="#/logistics/receive">입고 입력 →</a></div>`;
+  const box = $('#whBox', main);
+  const draw = async () => {
+    const list = await api('GET', '/api/warehouses?all=1'); if (!main.isConnected) return;
+    box.innerHTML = `<div class="table-wrap"><table class="grid keep-table wh-grid"><thead><tr><th>창고</th><th>위치(Location)</th><th>순서</th><th>사용</th>${can ? '<th></th>' : ''}</tr></thead><tbody>${list.map(w => can ? `<tr data-wh="${w.id}"><td><input data-k="name" value="${esc(w.name)}" maxlength="50" aria-label="창고 이름"></td><td>${rcLocEditor(w.locations, w.name)}</td><td><input data-k="sort" type="number" step="1" value="${w.sort}" aria-label="${esc(w.name)} 순서" style="width:5em"></td><td><input type="checkbox" data-k="active"${w.active ? ' checked' : ''} aria-label="${esc(w.name)} 사용"></td><td class="nowrap"><button type="button" class="btn small" data-wh-save>저장</button> <button type="button" class="btn small danger" data-wh-del title="입고 기록이 없는 창고만 지울 수 있습니다">삭제</button></td></tr>`
+      : `<tr><td data-card-primary><b>${esc(w.name)}</b></td><td>${(w.locations ? w.locations.split(',') : []).map(l => `<span class="chip">${esc(l)}</span>`).join(' ') || '<span class="muted">위치 없음</span>'}</td><td>${w.sort}</td><td>${w.active ? '사용' : '<span class="muted">중지</span>'}</td></tr>`).join('') || `<tr><td colspan="${can ? 5 : 4}" class="muted">등록된 창고가 없습니다.</td></tr>`}</tbody></table></div>
+      ${can ? `<form class="card form-grid wh-new" data-wh-new data-own-errors><h3 class="span2">창고 추가</h3><label>새 창고 *<input name="name" required maxlength="50" placeholder="예: 5동"></label><div class="span2 loc-field"><span class="loc-label">위치(Location) <span class="hint">(여러 개 · Enter나 쉼표로 추가)</span></span>${rcLocEditor('', '새 창고')}</div><div class="actions"><button class="btn primary">창고 추가</button></div></form>` : ''}`;
+    if (!can) return;
+    $$('[data-loc-editor]', box).forEach(rcLocBind);
+    const done = async () => { await rcLoadWarehouses(true); await draw(); };
+    $$('[data-wh-save]', box).forEach(btn => btn.onclick = async () => {
+      const tr = btn.closest('tr'), val = k => $(`[data-k="${k}"]`, tr);
+      try { await api('PUT', '/api/warehouses/' + tr.dataset.wh, { name: val('name').value, locations: rcLocValue(tr), sort: Number(val('sort').value) || 0, active: val('active').checked }); toast('저장했습니다.'); await done(); } catch (error) { fail(error); }
+    });
+    $$('[data-wh-del]', box).forEach(btn => btn.onclick = async () => {
+      const tr = btn.closest('tr'), name = $('[data-k="name"]', tr).value;
+      if (!(await confirmBox(`${name} 창고를 지울까요? 이 창고로 기록된 입고가 있으면 지워지지 않습니다.`))) return;
+      try { await api('DELETE', '/api/warehouses/' + tr.dataset.wh); toast('창고를 지웠습니다.'); await done(); } catch (error) { fail(error); }
+    });
+    $('[data-wh-new]', box).onsubmit = async e => { e.preventDefault(); try { await api('POST', '/api/warehouses', { ...formObj(e.target), locations: rcLocValue(e.target) }); toast('창고를 추가했습니다.'); await done(); } catch (error) { fail(error); } };
+  };
+  await draw();
 }
 
 // ── QR 코드(15.72, 외부 라이브러리 없이): 바이트 모드 · 오류 정정 M · 버전 1~10 · 마스크는 벌점이 가장 낮은 것 ──

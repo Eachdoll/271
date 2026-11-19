@@ -4815,6 +4815,48 @@ route('POST', '/api/stock-transfers/:id/cancel', async ({ user, params }) => {
 // LOT별 재고(15.72): LOT가 적힌 입고(발주입고 LOT 줄·예전 발주입고·기타입고) − 같은 LOT의 출하. 생산 투입은 LOT를 기록하지 않아 빼지 않는다.
 // D1이 큰 UNION 조회를 거부한 적이 있어(15.40) 원천별로 나눠 읽고 서버에서 합친다.
 route('GET', '/api/inventory/lots', async ({ query }) => lotStockReport(query));
+// 15.230 창고·위치별 재고: LOT마다 위치별 잔량(위치가 적힌 입고 + 이동 들어옴 − 나감, 출고·생산 투입·반출은 먼저 들어온 위치부터 뺌).
+// LOT별 재고와 같은 원천을 쓰고 위치 없이 들어온 것(생산·반입·예전 발주)은 「위치 미지정」. ?warehouse=창고, ?q=품목·LOT·위치
+route('GET', '/api/inventory/places', async ({ query }) => {
+  const asof = stockAsOf(query.asof), q = str(query.q, 200).toLowerCase(), whF = str(query.warehouse, 50);
+  const LOT = "CASE WHEN l.lot='' THEN '(LOT 미지정)' ELSE l.lot END";
+  const [a, b, c, d, e, f, g, h, t, w] = await db.batch([
+    { sql: `SELECT TRIM(p.item) AS item, TRIM(p.unit) AS unit, ${LOT} AS lot, l.warehouse AS wh, l.location AS loc, l.qty, l.received_date AS d, p.product_code AS code FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id WHERE l.voided_at IS NULL AND p.recv_status IN ('ok','mismatch') AND l.received_date<=?`, args: [asof] },
+    { sql: `SELECT TRIM(item) AS item, TRIM(unit) AS unit, lot, '' AS wh, '' AS loc, recv_qty AS qty, COALESCE(substr(recv_at,1,10), due_date) AS d, product_code AS code FROM purchase_orders WHERE lot<>'' AND recv_status IN ('ok','mismatch') AND recv_qty IS NOT NULL AND NOT EXISTS(SELECT 1 FROM po_receipt_lots l WHERE l.po_id=purchase_orders.id AND l.voided_at IS NULL) AND COALESCE(substr(recv_at,1,10), due_date)<=?`, args: [asof] },
+    { sql: `SELECT TRIM(item) AS item, TRIM(COALESCE(NULLIF(unit,''), json_extract(bom_snapshot,'$.unit'), '')) AS unit, lot, warehouse AS wh, location AS loc, qty, received_date AS d, COALESCE(json_extract(bom_snapshot,'$.product_code'),'') AS code FROM other_receipts WHERE lot<>'' AND received_date<=?`, args: [asof] },
+    { sql: `SELECT TRIM(s.product) AS item, TRIM(COALESCE(NULLIF(s.unit,''), json_extract(s.bom_snapshot,'$.unit'), '')) AS unit, a.lot AS lot, '' AS wh, '' AS loc, a.qty AS qty, a.production_date AS d, COALESCE(json_extract(s.bom_snapshot,'$.product_code'),'') AS code FROM production_actuals a JOIN schedules s ON s.id=a.schedule_id WHERE a.voided_at IS NULL AND a.lot<>'' AND a.production_date<=?`, args: [asof] },
+    { sql: `SELECT TRIM(l.item) AS item, TRIM(l.unit) AS unit, l.lot AS lot, '' AS wh, '' AS loc, l.qty AS qty, r.return_date AS d, '' AS code FROM stock_return_lines l JOIN stock_returns r ON r.id=l.return_id WHERE l.lot<>'' AND r.status='confirmed' AND r.process IN ('stock_amount','stock') AND r.side='in' AND r.return_date<=?`, args: [asof] },
+    { sql: `SELECT TRIM(item) AS item, lot, SUM(qty) AS q FROM shipments WHERE lot<>'' AND ship_date<=? GROUP BY TRIM(item), lot`, args: [asof] },
+    { sql: `SELECT TRIM(i.item) AS item, i.lot AS lot, SUM(i.qty) AS q FROM production_lot_inputs i JOIN production_actuals a ON a.id=i.actual_id WHERE a.voided_at IS NULL AND a.production_date<=? GROUP BY TRIM(i.item), i.lot`, args: [asof] },
+    { sql: `SELECT TRIM(l.item) AS item, l.lot AS lot, SUM(l.qty) AS q FROM stock_return_lines l JOIN stock_returns r ON r.id=l.return_id WHERE l.lot<>'' AND r.status='confirmed' AND r.process IN ('stock_amount','stock') AND r.side<>'in' AND r.return_date<=? GROUP BY TRIM(l.item), l.lot`, args: [asof] },
+    { sql: `SELECT item, lot, from_place, to_place, to_warehouse, to_location, qty, transfer_date AS d FROM stock_transfers WHERE status='confirmed' AND transfer_date<=? ORDER BY transfer_date, id`, args: [asof] },
+    { sql: 'SELECT name, locations, sort FROM warehouses ORDER BY sort, name', args: [] },
+  ]);
+  const ins = [...a.results, ...b.results, ...c.results, ...d.results, ...e.results];
+  if (ins.length > 50000) throw bad('기록이 너무 많습니다. 기준일이나 검색으로 범위를 좁히세요.');
+  const lots = new Map(), placeOf = new Map(); // 위치 글자 → [창고, 위치]
+  const key = (item, lot) => item + '\u0001' + lot;
+  const at = (k, item, unit, lot, place, wh, loc, d, code) => {
+    if (!lots.has(k)) lots.set(k, { item, unit, lot, code: code || '', places: new Map() });
+    const L = lots.get(k); if (!L.unit && unit) L.unit = unit; if (!L.code && code) L.code = code;
+    if (!L.places.has(place)) L.places.set(place, { place, wh, loc, qty: 0, first: d }); const p = L.places.get(place); if (d && (!p.first || d < p.first)) p.first = d; return p;
+  };
+  for (const r of ins) { const wh = String(r.wh || '').trim(), loc = String(r.loc || '').trim(), place = `${wh} ${loc}`.trim(); if (place) placeOf.set(place, [wh, loc]); at(key(r.item, r.lot), r.item, r.unit, r.lot, place, wh, loc, r.d, r.code).qty += Number(r.qty) || 0; }
+  for (const r of t.results) { placeOf.set(r.to_place, [r.to_warehouse, r.to_location]); const k = key(String(r.item).trim(), r.lot); if (!lots.has(k)) continue; const L = lots.get(k); const fr = placeOf.get(r.from_place) || [r.from_place.split(' ')[0] || '', r.from_place.split(' ').slice(1).join(' ')]; at(k, L.item, L.unit, L.lot, r.from_place, fr[0], fr[1], r.d).qty -= r.qty; at(k, L.item, L.unit, L.lot, r.to_place, r.to_warehouse, r.to_location, r.d).qty += r.qty; }
+  const outs = new Map(); for (const r of [...f.results, ...g.results, ...h.results]) { const k = key(r.item, r.lot); outs.set(k, (outs.get(k) || 0) + (Number(r.q) || 0)); }
+  const rows = [];
+  for (const [k, L] of lots) {
+    let out = outs.get(k) || 0; const ps = [...L.places.values()].sort((x, y) => stockCompare(x.first, y.first) || stockCompare(x.place, y.place));
+    for (const p of ps) { if (out <= 0) break; const take = Math.min(Math.max(p.qty, 0), out); p.qty -= take; out -= take; }
+    if (out > 0 && ps.length) ps[0].qty -= out;
+    for (const p of ps) { const qty = stockRound(p.qty); if (Math.abs(qty) < 1e-9) continue; rows.push({ warehouse: p.wh || '', location: p.loc || '', item: L.item, code: L.code, unit: L.unit, lot: L.lot, qty, first_date: p.first }); }
+  }
+  const order = new Map(w.results.map((x, i) => [x.name, i]));
+  let out = rows.filter(r => (!whF || (whF === '(위치 미지정)' ? !r.warehouse : r.warehouse === whF)) && (!q || `${r.item} ${r.code} ${r.lot} ${r.warehouse} ${r.location}`.toLowerCase().includes(q)));
+  out.sort((x, y) => (!x.warehouse) - (!y.warehouse) || (order.get(x.warehouse) ?? 999) - (order.get(y.warehouse) ?? 999) || stockCompare(x.warehouse, y.warehouse) || stockCompare(x.location, y.location) || stockCompare(x.item, y.item) || stockCompare(x.first_date, y.first_date));
+  const warehouses = w.results.map(x => ({ name: x.name, locations: x.locations ? x.locations.split(',') : [] }));
+  return { asof, rows: out.slice(0, 3000), more: out.length > 3000, warehouses };
+});
 async function lotStockReport(query) {
   const asof = stockAsOf(query.asof), q = str(query.q, 200);
   const like = q ? '%' + q.replace(/[\\%_]/g, m => '\\' + m) + '%' : null;

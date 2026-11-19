@@ -408,7 +408,7 @@ function routeMenu(route) {
   const path = String(route || '#/').split('?')[0];
   // 구매의뢰 목록은 결재선에 지정된 누구나 들어와 결재해야 하므로 막지 않는다(서버가 본인 관련 의뢰만 보여 준다).
   if (path === '#/sales/pr') return null;
-  if (path.startsWith('#/purchase/vendors') || path.startsWith('#/purchase/prices') || path.startsWith('#/quality/specs')) return 'master';
+  if (path.startsWith('#/purchase/vendors') || path.startsWith('#/purchase/prices') || path.startsWith('#/quality/specs') || path.startsWith('#/logistics/warehouses')) return 'master';
   for (const [prefix, key] of [['#/sales', 'sales'], ['#/purchase', 'purchase'], ['#/quality', 'quality'], ['#/dev', 'dev'], ['#/prod', 'production'], ['#/logistics', 'logistics']]) if (path === prefix || path.startsWith(prefix + '/')) return key;
   return null;
 }
@@ -454,7 +454,7 @@ function applyMenuAccess(main) {
   });
 }
 // 관리 메뉴(15.38): 거래처·검사규격 같은 기준 정보는 업무 메뉴가 아닌 관리 묶음에 둔다. 주소는 그대로다.
-const NAV_MANAGE = [['#/purchase/vendors', '거래처 관리'], ['#/purchase/prices', '단가표'], ['#/quality/specs', '검사규격 설정']];
+const NAV_MANAGE = [['#/purchase/vendors', '거래처 관리'], ['#/logistics/warehouses', '창고 관리'], ['#/purchase/prices', '단가표'], ['#/quality/specs', '검사규격 설정']]; // 15.230 창고 관리
 const NAV_ADMIN = [['#/admin/users', '회원 관리'], ['#/admin', '관리자 설정'], ['#/admin/org', '조직 구성'], ['#/admin/approval', '결재선 설정'], ['#/admin/bom', '제품등록'], ['#/admin/bom-sheet', 'BOM 소요량']]; // 15.175 회원 관리 분리
 // Entry and list screens built from one page: the page renders both parts and the view hides one.
 // key: route → [page route, view, title, other route, link label]
@@ -652,6 +652,7 @@ const PAGES = {
   '#/admin/org': pageOrg,
   '#/admin/approval': main => pageApprovalRules(main), // 15.185 결재선 기본값
   '#/admin/bom': pageBoms,
+  '#/logistics/warehouses': main => pageWarehouses(main), // 15.230 관리 › 창고 관리
   '#/admin/bom-sheet': main => pageBomSheet(main), // 15.196
   '#/me': pageMe,
   '#/tasks': pageTasks,

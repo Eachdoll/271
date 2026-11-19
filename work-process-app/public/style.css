@@ -3120,3 +3120,7 @@ form.list-filters .range-presets.rp-compact .rp-name { align-self: center; }
   body.printing-cert .qr-issue { grid-template-columns: repeat(2, 1fr); gap: 8mm; padding: 0; }
   body.printing-cert .qr-card { border: 1px dashed #999; }
 }
+
+/* 15.230 재고 현황 창고·위치별 */
+.stock-place-grid tr.wh-first > td { border-top: 2px solid var(--line-strong, #c9d2de); }
+.stock-wh-pick select { min-width: 9em; }
