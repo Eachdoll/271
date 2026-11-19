@@ -3800,6 +3800,7 @@ route('GET', '/api/schedules', async ({ query }) => {
   // 기간과 겹치는 일정: 일간(그날), 주간(월~일), 월간(그 달)
   return (await db.prepare(`SELECT *,COALESCE((SELECT SUM(a.qty) FROM production_actuals a WHERE a.schedule_id=schedules.id AND a.voided_at IS NULL),0) + COALESCE((SELECT SUM(c.qty) FROM semi_records c WHERE ${semiCutMatch('schedules')}),0) AS actual_qty,
       (SELECT COUNT(*) FROM production_actuals a WHERE a.schedule_id=schedules.id AND a.voided_at IS NULL) + (SELECT COUNT(*) FROM semi_records c WHERE ${semiCutMatch('schedules')}) AS actual_count,
+      (SELECT group_concat(work_order, ',') FROM (SELECT a.work_order FROM production_actuals a WHERE a.schedule_id=schedules.id AND a.voided_at IS NULL AND a.work_order<>'' ORDER BY a.id)) AS work_orders,
       COALESCE((SELECT SUM(c.qty) FROM semi_records c WHERE ${semiCutMatch('schedules')}),0) AS cut_qty,
       (SELECT r.req_no || ' · ' || r.customer || CASE WHEN r.order_no!='' THEN ' · ' || r.order_no ELSE '' END FROM production_request_lines l JOIN production_requests r ON r.id=l.request_id WHERE l.id=schedules.production_line_id) AS order_ref,
       (SELECT l.request_id FROM production_request_lines l WHERE l.id=schedules.production_line_id) AS order_id FROM schedules WHERE kind=? AND (
@@ -4153,7 +4154,8 @@ route('POST', '/api/schedules/:id/actuals', async ({ user, params, body }) => {
   // 완제품 생산 LOT: 직접 적지 않으면 [식별문자(제품 P·상품 G)][생산일]-[순번] 자동.
   const snap = JSON.parse(schedule.bom_snapshot || '{}');
   const lot = qty > 0 ? (str(body.lot, 100) || await nextProductionLot(lotPrefixOf(snap.item_category || '제품'), date)) : '';
-  const cmds = [{ sql: 'INSERT INTO production_actuals(schedule_id,production_date,qty,note,author_id,author_name,request_id,lot) VALUES(?,?,?,?,?,?,?,?)', args: [schedule.id, date, qty, note, user.id, user.name, key, lot] },
+  const wo = `WOR_${date.replace(/-/g, '')}_`; // 15.230 작업지시번호 WOR_YYYYMMDD_001(실적 날짜 기준)
+  const cmds = [{ sql: "INSERT INTO production_actuals(schedule_id,production_date,qty,note,author_id,author_name,request_id,lot,work_order) VALUES(?,?,?,?,?,?,?,?,(SELECT ? || printf('%03d', COALESCE(MAX(CAST(substr(work_order, 14) AS INTEGER)), 0) + 1) FROM production_actuals WHERE substr(work_order, 1, 13)=?))", args: [schedule.id, date, qty, note, user.id, user.name, key, lot, wo, wo] },
     ...inputs.map(i => ({ sql: 'INSERT INTO production_lot_inputs(actual_id,item,unit,lot,qty,created_by) VALUES((SELECT id FROM production_actuals WHERE request_id=?),?,?,?,?,?)', args: [key, i.item, i.unit, i.lot, i.qty, user.name] }))];
   try { await db.batch(cmds); return actualWithInputs(await db.prepare('SELECT * FROM production_actuals WHERE request_id=?').get(key)); }
   catch (error) { const saved = await db.prepare('SELECT * FROM production_actuals WHERE request_id=?').get(key); if (saved && matches(saved)) return actualWithInputs(saved); throw error; }

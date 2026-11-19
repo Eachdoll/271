@@ -3093,3 +3093,9 @@ form.list-filters > label.rp-moved, .toolbar > label.rp-moved { display: none !i
   table.m-grid.sc-table tr.sc-row.on { background: var(--sel-row-bg); box-shadow: inset 3px 0 0 var(--sel-row-bar); }
   table.m-grid.sc-table tr.sc-row.on > td { color: var(--sel-row-ink) !important; }
 }
+
+/* 15.230 완제품 계획표: 체크 칸 없앰(칸마다 확정) → 휴대폰 고정 열 위치. 실적 리스트 제목·작업지시번호 */
+@media (max-width: 820px) { table.fp-grid td.fp-name, table.fp-grid th.fp-name-h { left: 0; } }
+.fa-title { margin: 14px 0 8px; font-size: 17px; }
+.fa-grid .wo-cell { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+.plan-undo { justify-content: flex-start; margin: 0 0 10px; }
