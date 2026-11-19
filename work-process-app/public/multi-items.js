@@ -341,7 +341,7 @@ function actualLotInputs(box, materials, getQty) {
     if (edited && !force) return draw();
     const q = getQty(); rows = [];
     for (const m of materials) {
-      let need = Math.round(q * m.per * 1000) / 1000; const lots = m.lots.filter(l => l.balance > 0);
+      let need = Math.round(q * m.per * 1000) / 1000; const lots = m.lots.filter(l => l.balance > 0 && !l.qc_fail); // 15.257 불합격 LOT은 자동으로 넣지 않음
       if (!lots.length || !(need > 0)) { rows.push({ item: m.item, unit: m.unit, lot: '', qty: '' }); continue; }
       for (const l of lots) { if (need <= 0) break; const take = Math.min(need, l.balance); rows.push({ item: m.item, unit: m.unit, lot: l.lot, qty: Math.round(take * 1000) / 1000 }); need = Math.round((need - take) * 1000) / 1000; }
     }
@@ -353,7 +353,7 @@ function actualLotInputs(box, materials, getQty) {
     box.innerHTML = `<h4>투입 자재 LOT <span class="small muted">생산량을 넣으면 먼저 들어온 LOT부터 필요량만큼 채웁니다. LOT·수량은 고칠 수 있습니다.</span></h4>
       <div class="table-wrap"><table class="grid lot-in-grid"><thead><tr><th>자재</th><th class="r">필요량</th><th>LOT (남은 수량)</th><th class="r">투입 수량</th><th></th></tr></thead><tbody>${rows.map((r, k) => { const m = materials.find(x => x.item === r.item), first = rows.findIndex(x => x.item === r.item) === k, got = rows.filter(x => x.item === r.item).reduce((t, x) => t + (Number(x.qty) || 0), 0), need = Math.round(q * (m?.per || 0) * 1000) / 1000;
         return `<tr><td>${first ? `<b>${esc(r.item)}</b>` : '<span class="small muted">〃</span>'}</td><td class="r">${first ? `${fmtNum(need)} ${esc(r.unit)}${got + 0.0005 < need ? ` <div class="small red-text">부족 ${fmtNum(Math.round((need - got) * 1000) / 1000)}</div>` : ''}` : ''}</td>
-        <td>${lotsOf(r.item).length ? `<select data-li="lot" data-k="${k}" aria-label="${esc(r.item)} LOT"><option value="">LOT 고르기</option>${lotsOf(r.item).map(l => `<option value="${esc(l.lot)}"${l.lot === r.lot ? ' selected' : ''}>${esc(l.lot)} · 남은 ${fmtNum(l.balance)}${l.places ? ' · ' + esc(l.places) : ''}</option>`).join('')}</select>` : '<span class="small muted">재고 LOT 없음</span>'}</td>
+        <td>${lotsOf(r.item).length ? `<select data-li="lot" data-k="${k}" aria-label="${esc(r.item)} LOT"${lotsOf(r.item).find(l => l.lot === r.lot)?.concession ? ' class="lot-tk-input"' : ''}><option value="">LOT 고르기</option>${lotsOf(r.item).map(l => `<option value="${esc(l.lot)}"${l.lot === r.lot ? ' selected' : ''}${l.qc_fail ? ' disabled' : ''}>${l.concession ? '★특채 ' : l.qc_fail ? '불합격 ' : ''}${esc(l.lot)} · 남은 ${fmtNum(l.balance)}${l.places ? ' · ' + esc(l.places) : ''}</option>`).join('')}</select>` : '<span class="small muted">재고 LOT 없음</span>'}</td>
         <td class="r"><input type="number" name="lotq" min="0" step="any" inputmode="decimal" data-li="qty" data-k="${k}" value="${esc(r.qty)}" aria-label="${esc(r.item)} 투입 수량"${lotsOf(r.item).length ? '' : ' disabled'}></td>
         <td class="nowrap">${lotsOf(r.item).length > 1 ? `<button type="button" class="btn small" data-li-add="${k}">+ LOT</button>` : ''}${!first ? ` <button type="button" class="btn small" data-li-del="${k}">빼기</button>` : ''}</td></tr>`; }).join('')}</tbody></table></div>`;
   };
@@ -526,7 +526,7 @@ async function pageFinishedActual(main) {
   // 투입 자재 LOT: 먼저 들어온 LOT부터 필요량만큼(상세 창의 자동 채우기와 같은 방식). 모자라면 물어 본다.
   const lotInputs = async (s, qty) => {
     const info = await api('GET', `/api/schedules/${s.id}/lot-materials`).catch(() => null), out = [], short = [];
-    for (const m of (info?.materials || []).filter(m => m.item_category !== '반제품')) { let need = Math.round(qty * m.per * 1000) / 1000; for (const l of m.lots.filter(l => l.balance > 0)) { if (need <= 0) break; const take = Math.min(need, l.balance); out.push({ item: m.item, unit: m.unit, lot: l.lot, qty: Math.round(take * 1000) / 1000 }); need = Math.round((need - take) * 1000) / 1000; } if (need > 0) short.push(`${m.item} ${fmtNum(need)}${m.unit}`); }
+    for (const m of (info?.materials || []).filter(m => m.item_category !== '반제품')) { let need = Math.round(qty * m.per * 1000) / 1000; for (const l of m.lots.filter(l => l.balance > 0 && !l.qc_fail)) { if (need <= 0) break; const take = Math.min(need, l.balance); out.push({ item: m.item, unit: m.unit, lot: l.lot, qty: Math.round(take * 1000) / 1000 }); need = Math.round((need - take) * 1000) / 1000; } if (need > 0) short.push(`${m.item} ${fmtNum(need)}${m.unit}`); }
     return { out, short };
   };
   const save = async (s, tr, quiet = false) => {

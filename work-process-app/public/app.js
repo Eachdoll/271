@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.256';
+const APP_VERSION = '15.257';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -2999,6 +2999,8 @@ function otherGroupHead(g) {
 }
 
 // ── 15.136 출하 LOT 연결: LOT 칸을 누르면 그 품목의 재고 LOT(먼저 들어온 순 · 남은 수량)을 고를 수 있고, 재고에 없는 LOT·남은 수량 초과를 바로 알려 준다.
+// 15.257 특채 LOT 표시: ★특채 라벨 + 노랑 테두리(투입·출하 때 알아보기)
+const LOT_TK = '<span class="chip lot-tk" title="수입검사 불합격 → 품질책임자 특채 승인 LOT">★특채</span>';
 const LOT_CACHE = new Map();
 async function lotsForItem(item, fresh = false) {
   const key = String(item || '').trim(); if (!key) return [];
@@ -3012,14 +3014,14 @@ function bindLotPicker(input, itemOf, qtyOf = () => 0) {
   const list = document.createElement('datalist'); list.id = 'lotList' + (++lotListSeq); input.after(list); input.setAttribute('list', list.id); input.autocomplete = 'off';
   const hint = document.createElement('div'); hint.className = 'small lot-hint'; list.after(hint);
   let rows = [];
-  const fill = async () => { rows = await lotsForItem(itemOf()); list.innerHTML = rows.map(l => `<option value="${esc(l.lot)}">남은 ${fmtNum(l.balance)} ${esc(l.unit || '')}${l.places ? ' · ' + esc(l.places) : ''} · ${esc(l.first_date || '')}</option>`).join(''); };
+  const fill = async () => { rows = await lotsForItem(itemOf()); list.innerHTML = rows.map(l => `<option value="${esc(l.lot)}">${l.concession ? '★특채 · ' : l.qc_fail ? '불합격 · ' : ''}남은 ${fmtNum(l.balance)} ${esc(l.unit || '')}${l.places ? ' · ' + esc(l.places) : ''} · ${esc(l.first_date || '')}</option>`).join(''); };
   const warn = () => {
     const lot = input.value.trim(), qty = Number(qtyOf()) || 0; if (!lot) return rows.length ? `재고 LOT ${rows.length}개 · 비어 있으면 LOT 미연결` : '';
     const hit = rows.find(l => l.lot === lot);
     if (!hit) return rows.length ? `「${lot}」은 이 품목의 재고 LOT이 아닙니다` : '';
     return qty > hit.balance + 0.000001 ? `LOT ${lot} 남은 수량 ${fmtNum(hit.balance)}보다 많습니다` : '';
   };
-  const show = () => { const lot = input.value.trim(), hit = rows.find(l => l.lot === lot), w = warn(); hint.innerHTML = w && (lot || !rows.length) ? `<span class="red-text">${esc(w)}</span>` : hit ? `<span class="muted">남은 ${fmtNum(hit.balance)} ${esc(hit.unit || '')}</span>` : rows.length ? `<span class="muted">${esc(w)}</span>` : ''; };
+  const show = () => { const lot = input.value.trim(), hit = rows.find(l => l.lot === lot), w = warn(); input.classList.toggle('lot-tk-input', !!hit?.concession); hint.innerHTML = w && (lot || !rows.length) ? `<span class="red-text">${esc(w)}</span>` : hit ? `${hit.concession ? LOT_TK + ' ' : ''}<span class="muted">남은 ${fmtNum(hit.balance)} ${esc(hit.unit || '')}</span>` : rows.length ? `<span class="muted">${esc(w)}</span>` : ''; };
   input.addEventListener('focus', () => fill().then(show).catch(() => {}));
   input.addEventListener('input', show); input.addEventListener('change', show);
   return { check: () => (input.value.trim() ? warn() : ''), refresh: () => fill().then(show) };
