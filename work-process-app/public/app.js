@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.237';
+const APP_VERSION = '15.240';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -1239,12 +1239,22 @@ const NOWRAP_HEADS = new Set(['코드', '품목코드', '제품코드', '전표�
 // 머리글을 끌어 다른 머리글 위에 놓으면 열 순서 바꿈. 사용자·화면·표(머리글 이름)마다 이 브라우저에 저장, 「열 배치 초기화」로 되돌림.
 // 순서 바꾸기는 입력칸·합친 칸·두 줄 머리글·합계 줄이 없는 표만(칸 번호로 읽는 코드 보호). 휴대폰 카드 모양에서는 쓰지 않음.
 const grKey = table => { const names = [...table.tHead.rows[0].cells].map(c => c.textContent.trim()).filter(Boolean); return names.length ? `wpa:grid:${ME?.id || 0}:${navRoute(location.hash)}:${[...names].sort().join('|')}` : ''; };
-const grRead = k => { try { const v = JSON.parse(localStorage.getItem(k) || 'null'); return v && typeof v === 'object' ? v : {}; } catch { return {}; } };
-const grWrite = (k, v) => { try { if (!v.order && !v.widths && !v.hidden) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch { /* 저장 못 해도 화면은 그대로 */ } };
+// 15.239 열 배치를 계정(/api/me/prefs grids)에도 저장: 다른 기기·브라우저에서도 같은 순서. 계정 키는 화면 + 머리글 이름의 짧은 해시.
+const grAcc = k => { let h = 5381; for (const ch of k) h = ((h * 33) ^ ch.charCodeAt(0)) >>> 0; const route = (k.split(':')[3] || '').slice(0, 60); return `${route}#${h.toString(36)}`; };
+const grRead = k => { try { const v = JSON.parse(localStorage.getItem(k) || 'null'); if (v && typeof v === 'object') return v; } catch { /* 이 브라우저 저장 없음 */ } const acc = ME?.ui?.grids?.[grAcc(k)]; return acc && typeof acc === 'object' ? JSON.parse(JSON.stringify(acc)) : {}; };
+let grSyncTimer = 0; const grPending = {};
+const grWrite = (k, v) => {
+  const empty = !v.order && !v.widths && !v.hidden;
+  try { if (empty) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch { /* 저장 못 해도 화면은 그대로 */ }
+  if (!ME || typeof api !== 'function') return;
+  const key = grAcc(k); grPending[key] = empty ? null : v; ME.ui = ME.ui || {}; ME.ui.grids = { ...(ME.ui.grids || {}) }; if (empty) delete ME.ui.grids[key]; else ME.ui.grids[key] = v;
+  clearTimeout(grSyncTimer); grSyncTimer = setTimeout(() => { const grids = { ...grPending }; for (const x of Object.keys(grPending)) delete grPending[x]; api('PUT', '/api/me/prefs', { grids }).then(p => { if (ME && p) ME.ui = p; }).catch(() => {}); }, 800);
+};
 const grName = th => [...th.childNodes].filter(n => n.nodeType === 3 || !n.matches?.('.xf-btn, .gr-rz')).map(n => n.textContent).join('').trim();
 function grCanMove(table) {
   if (table.hasAttribute('data-no-reorder') || table.tHead.rows.length > 1) return false;
-  if (table.querySelector('[colspan], [rowspan], tbody input:not([type=checkbox]), tbody select, tbody textarea')) return false;
+  if (table.querySelector('[colspan], [rowspan]')) return false;
+  if (!table.hasAttribute('data-allow-reorder') && table.querySelector('tbody input:not([type=checkbox]), tbody select, tbody textarea')) return false; // 15.239 칸 번호로 읽지 않는 표(분석 목록 등)는 입력칸이 있어도 순서 바꾸기 허용
   return ![...(table.tBodies[0]?.rows || [])].some(auxRow);
 }
 function grMove(table, order) { // order: 머리글 이름 순서. 이름 없는 칸(체크·단추)은 원래 자리 순서대로 남은 자리에
@@ -2356,11 +2366,11 @@ async function pageWorkList(type) {
   let status = ''; let category = ''; let qc = ''; // qc: 15.78 판정 칩
   main.innerHTML = `
   <h1>${cfg.listTitle || cfg.label + '리스트'} <span class="dept">${cfg.dept}</span></h1>
-  <p class="muted">${type === 'analysis' ? '승인된 분석의뢰와 입고에서 자동 등록된 수입검사 목록입니다.' : `승인된 ${cfg.label}의뢰 목록입니다.`} ${mgr ? '상태 칸에서 바로 대기/진행/완료를 바꿀 수 있습니다.' : `상태 변경은 ${cfg.mgr}가 합니다.`} 행을 누르면 의뢰서를 봅니다.</p>
-  <div class="toolbar">
-    <div class="seg" id="stSeg" role="group" aria-label="상태">${['', 'waiting', 'progress', 'done'].map((s) => `<button data-s="${s}" class="${s === status ? 'on' : ''}">${s ? STATUS[s] : '전체'}</button>`).join('')}</div>
-    ${type === 'analysis' ? `<div class="seg" id="catSeg" role="group" aria-label="검사구분">${['', '수입검사', '의뢰검사', '출하검사', '공정검사'].map((c) => `<button data-c="${c}" class="${c === category ? 'on' : ''}">${c || '전체 검사'}</button>`).join('')}</div>
-    <div class="seg" id="qcSeg" role="group" aria-label="판정">${[['', '전체 판정'], ['pass', '합격'], ['fail', '불합격'], ['pending', '검사 대기']].map(([v, l]) => `<button type="button" data-qc="${v}" class="${v === '' ? 'on' : ''}" aria-pressed="${v === ''}">${l}</button>`).join('')}</div>` : ''}
+  <p class="muted">${type === 'analysis' ? '승인된 분석의뢰와 입고에서 자동 등록된 수입검사 목록입니다.' : `승인된 ${cfg.label}의뢰 목록입니다.`} ${mgr ? '상태 칸에서 바로 대기/진행/완료를 바꿀 수 있습니다.' : `상태 변경은 ${cfg.mgr}가 합니다.`} 행을 누르면 의뢰서를 봅니다. 표 제목을 끌어 다른 제목 위에 놓으면 열 순서가 바뀌고 내 계정에 저장됩니다(다른 기기에서도 같음, ⚙에서 숨김·초기화).</p>
+  <div class="toolbar seg-groups">
+    <div class="seg-box"><span class="seg-label">상태</span><div class="seg" id="stSeg" role="group" aria-label="상태">${['', 'waiting', 'progress', 'done'].map((s) => `<button data-s="${s}" class="${s === status ? 'on' : ''}">${s ? STATUS[s] : '전체'}</button>`).join('')}</div></div>
+    ${type === 'analysis' ? `<div class="seg-box"><span class="seg-label">검사구분</span><div class="seg" id="catSeg" role="group" aria-label="검사구분">${['', '수입검사', '의뢰검사', '출하검사', '공정검사'].map((c) => `<button data-c="${c}" class="${c === category ? 'on' : ''}">${c || '전체 검사'}</button>`).join('')}</div></div>
+    <div class="seg-box"><span class="seg-label">판정</span><div class="seg" id="qcSeg" role="group" aria-label="판정">${[['', '전체 판정'], ['pass', '합격'], ['fail', '불합격'], ['pending', '검사 대기']].map(([v, l]) => `<button type="button" data-qc="${v}" class="${v === '' ? 'on' : ''}" aria-pressed="${v === ''}">${l}</button>`).join('')}</div></div>` : ''}
   </div>
   <div id="workCounts" class="counts"></div>
   ${cfg.approve && canApproveRequest(type) ? '<section class="card" id="workPending" hidden></section>' : ''}
@@ -2378,11 +2388,11 @@ async function pageWorkList(type) {
     listCount(filterForm, rows.length);
     $('#workCounts').innerHTML = ['waiting', 'progress', 'done'].map((s) => `${statusChip(s)} ${all.filter((r) => r.status === s).length}`).join(' &nbsp; ');
     const t = todayStr();
-    $('#workList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid click">
+    $('#workList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid click wl-oneline" data-allow-reorder>
       <thead><tr><th>접수번호</th>${type === 'analysis' ? '<th>검사구분</th>' : ''}<th>${cfg.titleLabel}</th>${type === 'development' ? '<th>타겟단가</th>' : ''}<th>고객사</th>${type === 'voc' ? '<th>수량</th><th>LOT</th>' : ''}<th>입력자(의뢰자)</th><th>완료희망일</th>${type === 'analysis' ? '<th>판정</th>' : ''}<th>상태</th></tr></thead>
       <tbody>${rows.map((r) => `<tr data-id="${r.id}" class="${type === 'analysis' && qcOf(r) === 'exempt' ? 'row-exempt' : type === 'analysis' && qcOf(r) === 'fail' ? 'row-red' : r.status === 'done' ? 'row-done' : ''}">
         <td class="nowrap">${esc(r.req_no)}</td>${type === 'analysis' ? `<td><span class="chip">${esc(r.category)}</span></td>` : ''}
-        <td><b>${esc(r.title)}</b>${lineInfo(r)}${r.source_type ? `<div class="small muted">${r.source_type === 'purchase_order' ? '발주입고' : '기타입고'} · ${esc(r.data.item_category || '미분류')} · 입고 ${fmtNum(r.data.received_qty)}${r.data.coa_requested ? ' · COA 요청' : ''}</div>` : ''}${r.result_note ? `<div class="small muted">${esc(r.result_note)}</div>` : ''}</td>${type === 'development' ? `<td>${esc(r.target_price)}</td>` : ''}
+        <td class="wl-title" title="${esc([r.title, r.source_type ? `${r.source_type === 'purchase_order' ? '발주입고' : '기타입고'} · ${r.data.item_category || '미분류'} · 입고 ${r.data.received_qty ?? ''}` : '', r.result_note || ''].filter(Boolean).join('\n'))}"><b>${esc(r.title)}</b>${lineInfo(r)}${r.source_type ? `<div class="small muted">${r.source_type === 'purchase_order' ? '발주입고' : '기타입고'} · ${esc(r.data.item_category || '미분류')} · 입고 ${fmtNum(r.data.received_qty)}${r.data.coa_requested ? ' · COA 요청' : ''}</div>` : ''}${r.result_note ? `<div class="small muted">${esc(r.result_note)}</div>` : ''}</td>${type === 'development' ? `<td>${esc(r.target_price)}</td>` : ''}
         <td>${esc(r.customer)}</td>${type === 'voc' ? `<td>${fmtNum(r.data.qty)} ${esc(r.data.unit)}</td><td>${esc(r.data.lot || '미확인')}</td>` : ''}<td>${esc(r.requester_name)}</td>
         <td class="${r.status !== 'done' && r.due_date && r.due_date < t ? 'overdue' : ''}">${esc(r.due_date || '')}</td>
         ${type === 'analysis' ? `<td class="nowrap">${qcOf(r) ? qualityInspectionBadge(qcOf(r)) : '<span class="small muted">규격 미지정</span>'}</td>` : ''}

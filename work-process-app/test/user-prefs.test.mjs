@@ -64,3 +64,15 @@ test('15.220 design skin is saved per person and validated', async () => {
   assert.equal((await staff('PUT', '/api/me/prefs', { skin: 'default' })).body.skin, 'default');
   assert.ok(Array.isArray((await staff('GET', '/api/me')).body.user.ui.favorites), 'other prefs stay');
 });
+
+test('Grid column layouts are kept per account (15.239)', async () => {
+  const r = await staff('PUT', '/api/me/prefs', { grids: { '#/quality/list#abc': { order: ['판정', '접수번호', '샘플명'], widths: { 판정: 90 }, hidden: ['고객사'] } } });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const me = (await staff('GET', '/api/me')).body.user.ui;
+  assert.deepEqual(me.grids['#/quality/list#abc'].order, ['판정', '접수번호', '샘플명']);
+  assert.equal(me.grids['#/quality/list#abc'].widths.판정, 90);
+  assert.equal((await admin('GET', '/api/me')).body.user.ui.grids, undefined, 'other people unaffected');
+  await staff('PUT', '/api/me/prefs', { grids: { '#/quality/list#abc': null } });
+  assert.equal((await staff('GET', '/api/me')).body.user.ui.grids['#/quality/list#abc'], undefined, 'null removes');
+  assert.equal((await staff('PUT', '/api/me/prefs', { grids: [] })).status, 400);
+});

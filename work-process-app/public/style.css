@@ -3287,3 +3287,75 @@ form.list-filters .range-presets.rp-compact .rp-name { align-self: center; }
   #main table.m-grid tbody td.m-d .btn, #main table.m-grid tbody td.m-d summary.btn, #main table.m-grid tbody td.m-d button:not(.xf-btn):not(.link-btn), #main table.m-grid td.m-d a.btn { min-height: 36px !important; padding: 6px 11px !important; }
   #main table.m-grid tbody td.m-d { gap: 6px; }
 }
+
+/* 15.238 품질 분석값 입력: 엑셀 그리드(행 = LOT·시료, 열 = 항목별 측정 회차 · 평균) */
+.insp-wrap { max-height: min(58vh, 560px); overflow: auto; }
+table.insp-grid { border-collapse: separate; border-spacing: 0; min-width: 100%; }
+table.insp-grid th, table.insp-grid td { padding: 0 !important; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+table.insp-grid thead th { position: sticky; top: 0; z-index: 3; background: var(--erp-head, var(--bg)); padding: 6px 8px !important; font-size: 12.5px; white-space: nowrap; }
+table.insp-grid thead tr:nth-child(2) th { top: 44px; }
+table.insp-grid th.insp-item-h { border-bottom: 1px solid var(--line); }
+table.insp-grid .insp-no { width: 2.6em; text-align: center; color: var(--muted); font-size: 12.5px; position: sticky; left: 0; z-index: 2; background: var(--panel); }
+table.insp-grid td.insp-lot, table.insp-grid th.insp-lot-h { position: sticky; left: 2.6em; z-index: 2; background: var(--panel); min-width: 10em; box-shadow: 2px 0 0 var(--line); }
+table.insp-grid thead .insp-no, table.insp-grid thead .insp-lot-h { z-index: 4; background: var(--erp-head, var(--bg)); }
+table.insp-grid td input { width: 100%; min-width: 4.6em; border: 0 !important; border-radius: 0 !important; background: transparent; padding: 7px 8px; min-height: 34px; text-align: right; font-variant-numeric: tabular-nums; box-shadow: none; }
+table.insp-grid td.insp-lot input { text-align: left; min-width: 9em; }
+table.insp-grid td input:focus { outline: 2px solid var(--accent); outline-offset: -2px; background: var(--accent-soft); }
+table.insp-grid td input.inspection-outside { background: color-mix(in srgb, #e03131 18%, transparent); color: #c92a2a; font-weight: 700; }
+table.insp-grid td.insp-avg { background: var(--total-bg, var(--bg)); padding: 0 8px !important; min-width: 4.4em; font-weight: 700; color: var(--text-2, var(--text)); white-space: nowrap; }
+table.insp-grid th.insp-avg-h { color: var(--muted); }
+table.insp-grid td input[readonly] { color: var(--text); }
+table.insp-grid td .btn.small { min-height: 30px; padding: 2px 9px; margin: 2px; }
+table.insp-grid tbody tr:hover td { background-color: var(--row-hover); }
+/* 15.238 두 줄 머리글은 thead 전체를 고정(줄마다 top 값을 따로 주면 첫 행을 덮음) */
+table.insp-grid thead th, table.insp-grid thead tr:nth-child(2) th { position: static; top: auto; }
+table.insp-grid thead { position: sticky; top: 0; z-index: 3; }
+table.insp-grid thead .insp-no, table.insp-grid thead .insp-lot-h { position: sticky; }
+
+/* 15.239 분석 관리 등 목록 위 구분 묶음(상태·검사구분·판정): 묶음마다 상자·음영, 이름표는 왼쪽 머리 칸 */
+.toolbar.seg-groups { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
+.seg-groups > .seg-box { display: inline-flex; align-items: stretch; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); box-shadow: 0 1px 2px rgba(15,23,42,.05); overflow: hidden; }
+.seg-groups .seg-label { display: flex; align-items: center; padding: 0 12px; background: var(--erp-head, var(--bg)); color: var(--erp-head-ink, var(--text)); border-right: 1px solid var(--line); font-weight: 800; font-size: 13px; white-space: nowrap; }
+.seg-groups .seg-box > .seg { border: 0; border-radius: 0; background: transparent; margin: 0; padding: 3px; box-shadow: none; }
+.seg-groups .seg-box > .seg button.on { box-shadow: inset 0 -3px 0 var(--accent); }
+@media (max-width: 700px) { .seg-groups > .seg-box { flex: 1 0 100%; flex-direction: column; } .seg-groups .seg-label { border-right: 0; border-bottom: 1px solid var(--line); padding: 5px 10px; } .seg-groups .seg-box > .seg { flex-wrap: wrap; } }
+#main .seg-groups .seg-box > .seg-label { align-self: stretch; background: color-mix(in srgb, var(--accent) 11%, var(--panel)); color: var(--text); border-right: 1px solid color-mix(in srgb, var(--accent) 25%, var(--line)); }
+@media (max-width: 700px) { #main .seg-groups .seg-box > .seg-label { width: auto; justify-content: flex-start; border-right: 0; border-bottom: 1px solid color-mix(in srgb, var(--accent) 25%, var(--line)); text-align: left; } }
+/* 15.239 분석·개발·VOC 목록: 한 항목 한 줄(품목 칸의 부가 정보는 같은 줄 회색 글씨, 길면 …, 마우스를 올리면 전체) */
+@media (min-width: 821px) {
+  table.wl-oneline td.wl-title { white-space: nowrap; max-width: 34vw; overflow: hidden; text-overflow: ellipsis; }
+  table.wl-oneline td.wl-title > * { display: inline; margin: 0 0 0 8px; }
+  table.wl-oneline td.wl-title > b { margin-left: 0; }
+  table.wl-oneline td.wl-title > div.small, table.wl-oneline td.wl-title > .small { font-size: 12px; color: var(--muted); }
+  table.wl-oneline td.wl-title .btn { min-height: 0; padding: 1px 7px; font-size: 11.5px; vertical-align: 1px; }
+  table.wl-oneline td { white-space: nowrap; padding-top: 7px !important; padding-bottom: 7px !important; }
+  table.wl-oneline td .st-select { min-height: 30px; padding: 2px 6px; }
+}
+/* 15.240 측정값 그리드 세로 보기(행 = 항목·회차, 열 = 시료). 항목·규격·회차 칸 왼쪽 고정, 시료 머리글(LOT 입력)은 위 고정 */
+.insp-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.insp-bar > p { margin: 0; flex: 1 1 260px; }
+table.insp-v th.insp-item-c, table.insp-v .insp-range-c, table.insp-v .insp-n-c { position: sticky; z-index: 2; background: var(--panel); }
+table.insp-v th.insp-item-c { left: 0; width: 130px; min-width: 130px; max-width: 130px; white-space: normal; text-align: left; padding: 6px 8px !important; font-size: 13px; font-weight: 700; vertical-align: top; }
+table.insp-v .insp-range-c { left: 130px; width: 104px; min-width: 104px; max-width: 104px; white-space: normal !important; padding: 6px 8px !important; vertical-align: top; white-space: nowrap; }
+table.insp-v .insp-n-c { left: 234px; width: 46px; min-width: 46px; color: var(--muted); font-size: 12.5px; box-shadow: 2px 0 0 var(--line); }
+table.insp-v thead th.insp-item-c, table.insp-v thead th.insp-range-c, table.insp-v thead th.insp-n-c { z-index: 4; background: var(--erp-head, var(--bg)); vertical-align: bottom; }
+table.insp-v thead th.insp-sample-h { min-width: 8.5em; padding: 4px 4px 0 !important; vertical-align: bottom; }
+table.insp-v .insp-sh { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 0 4px 4px; }
+table.insp-v .insp-sh .btn.small { min-height: 26px; padding: 0 8px; }
+table.insp-v thead input[data-lot] { width: 100%; min-width: 7em; border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; margin-bottom: 4px; background: var(--panel); font-weight: 600; }
+table.insp-v thead input[data-lot]:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+table.insp-v tr.insp-avg-row td { border-bottom: 2px solid var(--line-strong, var(--line)); }
+table.insp-v tr.insp-avg-row td.insp-n-c { background: var(--total-bg, var(--bg)); font-weight: 700; }
+table.insp-v tr.insp-judge-row td, table.insp-v tr.insp-judge-row th { padding: 6px 8px !important; background: var(--total-bg, var(--bg)); }
+table.insp-v tbody tr:hover td.insp-cell { background-color: var(--row-hover); }
+table.insp-v .insp-range-in { display: none; font-weight: 400; }
+@media (max-width: 700px) {
+  table.insp-v th.insp-item-c { width: 84px; min-width: 84px; max-width: 84px; font-size: 12px; }
+  table.insp-v .insp-range-in { display: block; font-size: 11px; white-space: normal; }
+  table.insp-v .insp-range-c { display: none; }
+  table.insp-v .insp-n-c { left: 84px; width: 38px; min-width: 38px; }
+  table.insp-v thead th.insp-sample-h { min-width: 6em; }
+  table.insp-v thead input[data-lot] { min-width: 5em; }
+  table.insp-v td input { min-width: 4em; }
+  table.insp-v tr.insp-judge-row th { white-space: normal; }
+}
