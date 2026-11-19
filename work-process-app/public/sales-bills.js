@@ -797,7 +797,7 @@ async function pageBillCalendar(main, side) {
   };
   const drawBills = async () => {
     $('#scDayLabel', main).textContent = `${day} (${W[new Date(day).getDay()]})`;
-    const q = new URLSearchParams({ from: day, to: day, status: 'confirmed', [C.who]: partner(), ...repQ() });
+    const q = new URLSearchParams({ from: day, to: day, status: 'confirmed', [C.who]: partner(), party_like: '1', ...repQ() }); // 15.232 거래처 일부일치
     const data = await api('GET', C.list + '?' + q); if (!main.isConnected) return;
     const rows = data.rows; if (!rows.some(r => r.id === billId)) billId = rows[0]?.id ?? null;
     const sum = k => rows.reduce((t, r) => t + (Number(r[k]) || 0), 0);

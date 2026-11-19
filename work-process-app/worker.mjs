@@ -1212,7 +1212,7 @@ route('GET', '/api/purchase-bills', async ({ user, query }) => {
   requirePurchase(user);
   const where = [], args = [];
   applyListDates(where, args, query, 'bill_date');
-  if (query.vendor) { where.push(`${billVendorKey('vendor')}=?`); args.push(nameKey(str(query.vendor, 100))); }
+  if (query.vendor) { if (query.party_like === '1') { where.push(`${billVendorKey('vendor')} LIKE ? ESCAPE '\\'`); args.push('%' + nameKey(str(query.vendor, 100)).replace(/[\\%_]/g, m => '\\' + m) + '%'); } else { where.push(`${billVendorKey('vendor')}=?`); args.push(nameKey(str(query.vendor, 100))); } } // 15.232 일부일치(달력)
   if (query.status) { if (!['confirmed', 'cancelled'].includes(query.status)) throw bad('상태를 확인하세요.'); where.push('status=?'); args.push(query.status); }
   applyListKeyword(where, args, query.q, ['bill_no', 'vendor', 'statement_no', 'note', 'created_by']);
   if (query.category) { const c = query.category === '미분류' ? '' : itemCategory(query.category); where.push(BILL_CATEGORY_FILTER('purchase_bill_lines', 'purchase_bills')); args.push(c); }
@@ -1750,7 +1750,7 @@ route('GET', '/api/sales-bills', async ({ user, query }) => {
   requireSales(user);
   const where = [], args = [];
   applyListDates(where, args, query, 'bill_date');
-  if (query.customer) { where.push(`${customerKey('customer')}=?`); args.push(nameKey(str(query.customer, 100))); }
+  if (query.customer) { if (query.party_like === '1') { where.push(`${customerKey('customer')} LIKE ? ESCAPE '\\'`); args.push('%' + nameKey(str(query.customer, 100)).replace(/[\\%_]/g, m => '\\' + m) + '%'); } else { where.push(`${customerKey('customer')}=?`); args.push(nameKey(str(query.customer, 100))); } } // 15.232 일부일치(달력)
   if (query.status) { if (!['confirmed', 'cancelled'].includes(query.status)) throw bad('상태를 확인하세요.'); where.push('status=?'); args.push(query.status); }
   if (query.rep !== undefined && query.rep !== '') { where.push(`${BILL_REP('sales_bills')}=?`); args.push(query.rep === '미지정' ? '' : repName(query.rep)); } // 15.224
   applyListKeyword(where, args, query.q, ['bill_no', 'customer', 'note', 'created_by', 'sales_rep', "(SELECT group_concat(o.customer_po || ' ' || o.note || ' ' || o.order_no, ' ') FROM sales_bill_lines l JOIN sales_order_lines ol ON ol.id=l.order_line_id JOIN sales_orders o ON o.id=ol.order_id WHERE l.bill_id=sales_bills.id)"]);
@@ -1765,7 +1765,7 @@ route('GET', '/api/sales-calendar', async ({ user, query }) => {
   requireSales(user);
   const month = String(query.month || today().slice(0, 7)); if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw bad('연·월을 확인하세요.');
   const where = ["status='confirmed'", 'bill_date>=?', 'bill_date<=?'], args = [`${month}-01`, monthEnd(month)];
-  if (query.customer) { where.push(`${customerKey('customer')}=?`); args.push(nameKey(str(query.customer, 100))); }
+  if (query.customer) { where.push(`${customerKey('customer')} LIKE ? ESCAPE '\\'`); args.push('%' + nameKey(str(query.customer, 100)).replace(/[\\%_]/g, m => '\\' + m) + '%'); } // 15.232 거래처 일부일치(예: 세기·섬유 → 세기섬유)
   if (query.rep !== undefined && query.rep !== '') { where.push(`${BILL_REP('sales_bills')}=?`); args.push(query.rep === '미지정' ? '' : repName(query.rep)); } // 15.224
   const days = await db.prepare(`SELECT bill_date AS date, COUNT(*) AS n, COALESCE(SUM(supply_total),0) AS supply, COALESCE(SUM(vat_total),0) AS vat, COALESCE(SUM(total),0) AS total FROM sales_bills WHERE ${where.join(' AND ')} GROUP BY bill_date ORDER BY bill_date`).all(...args);
   const sum = k => days.reduce((t, d) => t + d[k], 0);
@@ -1776,7 +1776,7 @@ route('GET', '/api/purchase-calendar', async ({ user, query }) => {
   requirePurchase(user);
   const month = String(query.month || today().slice(0, 7)); if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw bad('연·월을 확인하세요.');
   const where = ["status='confirmed'", 'bill_date>=?', 'bill_date<=?'], args = [`${month}-01`, monthEnd(month)];
-  if (query.vendor) { where.push(`${billVendorKey('vendor')}=?`); args.push(nameKey(str(query.vendor, 100))); }
+  if (query.vendor) { where.push(`${billVendorKey('vendor')} LIKE ? ESCAPE '\\'`); args.push('%' + nameKey(str(query.vendor, 100)).replace(/[\\%_]/g, m => '\\' + m) + '%'); } // 15.232 거래처 일부일치(예: 세기·섬유 → 세기섬유)
   const days = await db.prepare(`SELECT bill_date AS date, COUNT(*) AS n, COALESCE(SUM(supply_total),0) AS supply, COALESCE(SUM(vat_total),0) AS vat, COALESCE(SUM(total),0) AS total FROM purchase_bills WHERE ${where.join(' AND ')} GROUP BY bill_date ORDER BY bill_date`).all(...args);
   const sum = k => days.reduce((t, d) => t + d[k], 0);
   return { month, days, totals: { n: sum('n'), supply: sum('supply'), vat: sum('vat'), total: sum('total') } };
