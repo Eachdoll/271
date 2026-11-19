@@ -118,6 +118,25 @@ const MEMBER_ROLE_COLS = [['sales', '영업'], ['purchase', '구매'], ['quality
 const MEMBER_APPROVER = ['quality_approver', 'dev_approver', 'production_approver', 'logistics_approver'];
 const MEMBER_STATE = { pending: ['승인 대기', 'yellow'], approved: ['승인 완료', 'green'], rejected: ['반려', 'red'] };
 const memberMenuName = k => (MENU_GROUP_LABELS.find(([x]) => x === k) || [, k])[1].replace(/ \(.*\)$/, '');
+// 15.236 메뉴 보기: 「전체 보임」이어도 사용 권한이 없으면 숨는 화면(서버가 막는 화면)을 사람마다 알려 준다.
+// 영업 권한 화면(견적·수주·매출전표…), 구매 권한 화면(매입전표…), 관리자만 쓰는 화면(회원 관리·제품등록…).
+const ROLE_NEED_LABEL = { sales: '영업', purchase: '구매' };
+function roleHiddenScreens(u) {
+  if (u.is_admin || typeof NAV === 'undefined' || typeof routeRoles !== 'function') return [];
+  const flat = NAV.flatMap(g => g.items.flatMap(i => Array.isArray(i) ? [i] : i.items));
+  const groups = new Map();
+  for (const [href, label] of flat) {
+    const need = routeRoles(href); if (!need || need.some(r => (u.roles || []).includes(r))) continue;
+    const key = need.map(r => ROLE_NEED_LABEL[r] || r).join('·') + ' 권한';
+    if (!groups.has(key)) groups.set(key, []); if (!groups.get(key).includes(label)) groups.get(key).push(label);
+  }
+  if (typeof NAV_ADMIN !== 'undefined') groups.set('관리자만', NAV_ADMIN.map(x => x[1]));
+  return [...groups.entries()];
+}
+function roleHiddenRow(u, cols) {
+  const g = roleHiddenScreens(u); if (!g.length) return '';
+  return `<tr class="mv-hint" data-u-hint="${u.id}"><td colspan="${cols}"><span class="small muted"><b>${esc(u.name)}</b>에게 숨는 화면(메뉴를 켜도 권한이 있어야 보임) — </span>${g.map(([need, list]) => `<span class="mv-need"><span class="chip">${esc(need === '관리자만' ? '관리자만' : need + ' 필요')}</span> <span class="small">${esc(list.join(', '))}</span></span>`).join(' ')}${g.some(([n]) => n !== '관리자만') ? ' <a class="small" href="#/admin/users/roles">사용 권한에서 주기 →</a>' : ''}</td></tr>`;
+}
 async function pageMembers(main, tab) {
   if (!ME.is_admin) { main.innerHTML = '<h1>회원 관리</h1><div class="empty">관리자만 볼 수 있습니다.</div>'; return; }
   const org = await api('GET', '/api/org');
@@ -161,7 +180,7 @@ async function pageMembers(main, tab) {
       const base = u.menu_mode === 'custom' ? (u.menu_custom || []) : u.menu_mode === 'all' ? null : u.menus_base, eff = u.menus_effective;
       return `<tr data-u="${u.id}"><td>${who(u)}</td><td><select data-menu-mode aria-label="${esc(u.name)} 메뉴 방식"><option value="department"${u.menu_mode === 'department' ? ' selected' : ''}>부서 기본</option><option value="all"${u.menu_mode === 'all' ? ' selected' : ''}>전체 보임</option><option value="custom"${u.menu_mode === 'custom' ? ' selected' : ''}>직접 지정</option></select></td>
         ${MENU_GROUP_LABELS.map(([k, l]) => { const on = !base || base.includes(k), byRole = !on && (!eff || eff.includes(k));
-          return `<td class="c" data-label="${esc(l.replace(/ \(.*\)$/, ''))}"><label class="mx-cell">${u.menu_mode === 'custom' ? `<input type="checkbox" data-menu="${k}" ${on ? 'checked' : ''} aria-label="${esc(u.name)} ${esc(l)}">` : on ? '<span class="mv-on" aria-label="보임">✓</span>' : '<span class="mv-off" aria-label="숨김">—</span>'}<span class="mx-lab" aria-hidden="true">${esc(l.replace(/ \(.*\)$/, ''))}</span></label>${byRole ? ' <span class="chip" title="사용 권한이 있어 메뉴를 꺼도 보입니다">권한</span>' : ''}</td>`; }).join('')}</tr>`; }).join('')}</tbody></table>`,
+          return `<td class="c" data-label="${esc(l.replace(/ \(.*\)$/, ''))}"><label class="mx-cell">${u.menu_mode === 'custom' ? `<input type="checkbox" data-menu="${k}" ${on ? 'checked' : ''} aria-label="${esc(u.name)} ${esc(l)}">` : on ? '<span class="mv-on" aria-label="보임">✓</span>' : '<span class="mv-off" aria-label="숨김">—</span>'}<span class="mx-lab" aria-hidden="true">${esc(l.replace(/ \(.*\)$/, ''))}</span></label>${byRole ? ' <span class="chip" title="사용 권한이 있어 메뉴를 꺼도 보입니다">권한</span>' : ''}</td>`; }).join('')}</tr>${roleHiddenRow(u, MENU_GROUP_LABELS.length + 2)}`; }).join('')}</tbody></table>`,
   };
   const draw = () => { const list = users.filter(visible); $('[data-member-count]', filters).textContent = `${list.length}명`; $('#memberList', main).innerHTML = list.length ? `<div class="table-wrap">${tables[tab](list)}</div>` : '<div class="empty">조건에 맞는 회원이 없습니다.</div>'; };
   const load = async () => { users = await api('GET', '/api/admin/users'); if (main.isConnected) draw(); };
