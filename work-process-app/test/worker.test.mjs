@@ -31,6 +31,7 @@ after(() => { sqlite.close(); fs.rmSync(dir, { recursive: true, force: true }); 
 test('Worker health, static assets and method boundaries', async () => {
   assert.deepEqual((await anon('GET', '/api/me')).body, { user: null });
   assert.equal((await anon('GET', '/style.css')).status, 200);
+  assert.equal((await anon('GET', '/assets/skin-penguin.png')).status, 200); // 15.226 방귀니 스킨 그림
   assert.equal((await anon('HEAD', '/')).body, '');
   assert.equal((await anon('POST', '/')).status, 405);
   assert.equal((await anon('GET', '/missing.js')).status, 404);
