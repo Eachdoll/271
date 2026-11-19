@@ -3436,3 +3436,5 @@ table.bill-list tr[data-row-bill].on > td { background: var(--accent-soft) !impo
 .vl-grid td[data-vl-codes] { white-space: nowrap; font-family: ui-monospace, Menlo, Consolas, monospace; }
 .sl-pc em { font-style: normal; font-size: 11px; color: #b7791f; font-family: inherit; }
 .sl-pc.sl-pc-temp { border-style: dashed; }
+/* 15.254 포장 예상 생산량 */
+.pack-exp { font-weight: 600; color: var(--accent); margin: 8px 0 0; }

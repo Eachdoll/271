@@ -185,3 +185,47 @@ test('15.253 review fixes: piece numbers per item, counts block numbers, replay,
   assert.equal(sqlite.prepare('SELECT qty FROM semi_lot_inputs WHERE record_id=?').get(r1.body.id).qty, 12);
   assert.equal((await prod('GET', '/api/lot-trace?lot=X1-01')).body.bags.length, 1, 'X1-01 means piece 1');
 });
+
+test('15.254 shipping within LOT balance, failed incoming inspection blocks use, vendor LOT alias for SST, VOC linked to finished LOT, LOT number collision guard', async () => {
+  const g = (await admin('POST', '/api/boms', { product: '출하상품', product_code: 'SH-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  await admin('POST', '/api/receipts', { receipt_date: today, vendor: '출하상사', request_id: rid(), lines: [{ bom_id: g.id, lot: 'SHL', qty: 10 }] });
+  await admin('POST', '/api/vendors', { name: '고객A', is_sales: true });
+  assert.equal((await admin('POST', '/api/shipments', { ship_date: today, item: '출하상품', bom_id: g.id, qty: 11, customer: '고객A', lot: 'SHL', request_id: rid() })).status, 400, 'more than the LOT balance');
+  assert.equal((await admin('POST', '/api/shipments', { ship_date: today, item: '출하상품', bom_id: g.id, qty: 10, customer: '고객A', lot: 'SHL', request_id: rid() })).status, 200);
+  // 수입검사 불합격 LOT
+  const raw = (await admin('POST', '/api/boms', { product: '검사원단', product_code: 'QC-1', item_category: '원자재', kind: 'finished', base_qty: 1, unit: 'yd', materials: [] })).body;
+  await admin('POST', '/api/receipts', { receipt_date: today, vendor: '검사상사', request_id: rid(), lines: [{ bom_id: raw.id, lot: 'QC-BAD', qty: 100, pieces: 2 }, { bom_id: raw.id, qty: 50 }] });
+  const req = sqlite.prepare("SELECT id FROM requests WHERE type='analysis' AND lot='QC-BAD'").get();
+  sqlite.prepare("INSERT INTO inspection_measurements(request_id,values_json,result,save_token,updated_by) VALUES(?,?,?,?,?)").run(req.id, '[]', 'fail', rid(), '품질');
+  const lots = (await prod('GET', '/api/lots/available?item=' + encodeURIComponent('검사원단'))).body.rows;
+  assert.equal(lots.find(l => l.lot === 'QC-BAD').qc_fail, true);
+  const semi = (await admin('POST', '/api/boms', { product: '검사 반제품', product_code: 'QCS', item_category: '반제품', kind: 'semi', semi_type: '천와이퍼', base_qty: 1, unit: '매', materials: [{ item: '검사원단', item_category: '원자재', qty: 0.1, unit: 'yd' }] })).body;
+  const line = (await prod('GET', '/api/production-units?kind=line')).body[0];
+  const cut = inputs => prod('POST', '/api/semi-batches', { process: 'cut', common: { work_date: today, unit_id: line.id }, request_id: rid(), items: [{ entry_mode: 'code', bom_id: semi.id, product_group: 'wiper', product_type: '천와이퍼', start_time: '08:00', end_time: '09:00', qty: 100, inputs }] });
+  const blocked = await cut([{ item: '검사원단', lot: 'QC-BAD', piece_nos: [1] }]);
+  assert.equal(blocked.status, 400); assert.match(blocked.body.error, /수입검사 불합격/);
+  // 임시 SST LOT에 업체 LOT 연결 → 업체 LOT으로도 조회
+  const sst = lots.find(l => /^SST-/.test(l.lot)).lot;
+  const c = await cut([{ item: '검사원단', lot: sst, piece_nos: [1] }]); assert.equal(c.status, 200, JSON.stringify(c.body));
+  assert.equal((await admin('POST', '/api/lots/vendor-lot', { item: '검사원단', lot: 'QC-BAD', vendor_lot: 'X' })).status, 400, 'only SST LOTs');
+  assert.equal((await admin('POST', '/api/lots/vendor-lot', { item: '검사원단', lot: sst, vendor_lot: 'HS-REAL-7' })).status, 200);
+  assert.equal((await prod('GET', '/api/lots/available?item=' + encodeURIComponent('검사원단'))).body.rows.find(l => l.lot === sst).vendor_lot, 'HS-REAL-7');
+  const viaAlias = (await prod('GET', '/api/lot-trace?lot=HS-REAL-7')).body;
+  assert.equal(viaAlias.alias_of, 'HS-REAL-7'); assert.equal(viaAlias.kind, 'material'); assert.equal(viaAlias.materials.find(m => m.lot === sst).receipts[0].vendor_lot, 'HS-REAL-7');
+  // VOC ↔ 완제품 LOT
+  const fp = (await admin('POST', '/api/boms', { product: 'VOC제품', product_code: 'VC-1', item_category: '제품', kind: 'finished', base_qty: 1, unit: 'BOX', materials: [] })).body;
+  const plan = (await admin('POST', '/api/schedules', { kind: 'finished', period: 'day', start_date: today, qty: 10, bom_id: fp.id, product: 'VOC제품' })).body;
+  const act = (await prod('POST', `/api/schedules/${plan.id}/actuals`, { production_date: today, qty: 5, request_id: rid() })).body;
+  const vr = await admin('POST', '/api/requests', { type: 'voc', title: 'VOC제품', customer: '고객A', category: '', due_date: '', data: { lot: act.lot, qty: 1, unit: 'BOX', extra: '오염' } }); assert.equal(vr.status, 200, JSON.stringify(vr.body));
+  const tv = (await prod('GET', '/api/lot-trace?lot=' + encodeURIComponent(act.lot))).body;
+  assert.equal(tv.finished[0].vocs.length, 1);
+  // 번호 겹침: 다음 번호를 다른 곳에서 먼저 써 버리면(동시 저장 흉내) 되돌리고 409
+  const next = `${today.slice(2).replace(/-/g, '')}_VC-1_P2`;
+  sqlite.prepare('INSERT INTO production_actuals(schedule_id,production_date,qty,note,author_id,author_name,request_id,lot) SELECT schedule_id,production_date,1,\'\',author_id,author_name,?,? FROM production_actuals WHERE id=?').run(rid(), next + 'x', act.id);
+  sqlite.prepare('UPDATE production_actuals SET lot=? WHERE lot=?').run(next, next + 'x');
+  const before = sqlite.prepare('SELECT COUNT(*) n FROM production_actuals').get().n;
+  const dup = await prod('POST', `/api/schedules/${plan.id}/actuals`, { production_date: today, qty: 1, request_id: rid() });
+  assert.notEqual(dup.body?.lot, next);
+  assert.ok(dup.status === 200 || dup.status === 409);
+  if (dup.status === 409) assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM production_actuals').get().n, before);
+});

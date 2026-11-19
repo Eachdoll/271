@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.253';
+const APP_VERSION = '15.254';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -2216,7 +2216,7 @@ function fieldValue(f, r) {
   return s;
 }
 function requestForm(type, r) {
-  return `<form class="req-form" ${r ? `data-entry-author="${esc(r.requester_name)}"` : ''}><div class="form-grid">${REQ[type].fields.map((f) => fieldInput(f, r)).join('')}${['development','sample','sample_goods','voc'].includes(type) ? photoPicker() : ''}</div>
+  return `<form class="req-form" data-req-type="${type}" ${r ? `data-entry-author="${esc(r.requester_name)}"` : ''}><div class="form-grid">${REQ[type].fields.map((f) => fieldInput(f, r)).join('')}${['development','sample','sample_goods','voc'].includes(type) ? photoPicker() : ''}</div>
     <div class="actions"><button class="btn primary">${r ? '저장' : (REQ[type].submitLabel || '의뢰 접수')}</button></div></form>`;
 }
 function statusChip(s) { return `<span class="chip st-${s}">${STATUS[s]}</span>`; }
@@ -2236,7 +2236,7 @@ function requestDetail(type, r, reload) {
       <tr><th>입력자(의뢰자)</th><td>${esc(r.requester_name)} · ${esc(r.created_at.slice(0, 16))}</td></tr>
       ${r.approver_name ? `<tr><th>${r.status === 'rejected' ? '반려자' : '접수자'}</th><td>${esc(r.approver_name)}${r.approved_at ? ' · ' + esc(r.approved_at.slice(0, 16)) : ''}</td></tr>` : ''}
       ${r.reject_reason ? `<tr><th>반려 사유</th><td class="red-text">${esc(r.reject_reason)}</td></tr>` : ''}
-      ${rows}
+      ${rows}${type === 'voc' && r.data?.lot ? `<tr><th>LOT 연결</th><td><button type="button" class="link-btn" data-lt-open="${esc(r.data.lot)}">${esc(r.data.lot)} · LOT 연결 조회 →</button></td></tr>` : ''}
       ${r.result_note ? `<tr><th>결과/메모</th><td>${esc(r.result_note)}</td></tr>` : ''}
     </table>
     ${['development','sample','sample_goods','voc'].includes(type) || r.source_type ? '<h4>첨부 사진 · 기록</h4><div data-request-photos></div>' : ''}
