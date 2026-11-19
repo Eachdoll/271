@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.248';
+const APP_VERSION = '15.249';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -390,6 +390,7 @@ const NAV = [
     ['#/prod/orders', '생산의뢰 접수'],
     { sub: '완제품 생산', items: [['#/prod/finished/plan', '완제품 계획생산 접수·관리'], ['#/prod/finished', '완제품 실적 입력']] },
     { sub: '반제품 생산', items: [['#/prod/semi', '반제품 생산 관리'], ['#/prod/semi/cut', '커팅/융착 작업 관리'], ['#/prod/semi/wash', '세탁(호기별) 작업 관리']] },
+    ['#/prod/lot-trace', 'LOT 연결 조회'], // 15.249 완제품 ↔ 봉투(반제품) ↔ 원자재 LOT
   ] },
   { group: '물류', items: [
     ['#/logistics/receive', '입고 관리'],
@@ -637,6 +638,7 @@ const PAGES = {
   '#/purchase/prices': main => pagePrices(main),
   '#/purchase/sample/request': () => { location.replace('#/sales/sample/goods'); }, // 15.183 영업으로 옮김
   '#/purchase/sample/list': () => pageWorkList('sample_goods'),
+  '#/prod/lot-trace': main => pageLotTrace(main), // 15.249
   '#/prod/semi/cut': main => pageSemi(main, 'cut'),
   '#/prod/semi/cut/new': main => pageSemi(main, 'cut'),
   '#/prod/semi/wash': main => pageSemi(main, 'wash'),

@@ -207,7 +207,7 @@ async function pageSemi(main, process, { operator = false } = {}) {
     <label>${page.unitLabel} *<select name="unit_id" required data-semi-units></select></label></div>
     <div data-semi-rows></div><datalist id="semiInches"></datalist>
     <p class="small muted">${process === 'wash' ? '제품코드를 선택하고 어느 호기에서 몇 시에 진행했는지 기록하세요.' : '제품코드로 품목을 선택하고 시작·종료 시각을 입력하세요. 와이퍼는 매, 심리스글러브는 켤레로 기록합니다.'} 한 번에 최대 30줄입니다.</p>
-    <div class="actions">${canManage ? `<button type="button" class="btn" id="semiManage">${page.manage}</button>` : ''}<button type="button" class="btn" id="semiRecent" title="이 ${page.unitLabel}에 가장 최근에 입력한 날의 품목·사이즈·시각·인원을 불러옵니다. 수량은 비워 둡니다.">최근 입력 불러오기</button><button type="button" class="btn" id="semiAddRow">＋ 줄 추가</button><button class="btn primary" id="semiSubmit">1줄 등록</button></div></form>
+    <div class="actions">${process === 'wash' ? '<button type="button" class="btn primary" id="semiBags">봉투 LOT 고르기</button>' : ''}${canManage ? `<button type="button" class="btn" id="semiManage">${page.manage}</button>` : ''}<button type="button" class="btn" id="semiRecent" title="이 ${page.unitLabel}에 가장 최근에 입력한 날의 품목·사이즈·시각·인원을 불러옵니다. 수량은 비워 둡니다.">최근 입력 불러오기</button><button type="button" class="btn" id="semiAddRow">＋ 줄 추가</button><button class="btn primary" id="semiSubmit">1줄 등록</button></div></form>
   <form id="semiFilters" class="toolbar list-filters" data-read-only="true">
     <label>시작일<input type="date" name="from" value="${monthFirst}" required></label><label>종료일<input type="date" name="to" value="${todayStr()}" required></label>
     <label>${page.unitLabel}<select name="unit_id" data-semi-units-filter></select></label>
@@ -284,8 +284,8 @@ async function pageSemi(main, process, { operator = false } = {}) {
     if (copy) { field('product').value = $('[data-k="product"]', copy).value; field('unit').value = $('[data-k="unit"]', copy).value; syncSpec(); field('bom_id').value = $('[data-k="bom_id"]', copy).value; }
     syncSpec();
     $('[data-semi-remove]', row).onclick = () => { if ($$('[data-semi-row]', form).length === 1) return toast('기록은 1줄 이상 필요합니다.', 'err'); row.remove(); countRows(); };
-    if (process === 'wash') simplifyWasherEntry(row, models, syncSpec);
-    else if (process === 'cut') simplifyCutEntry(row, models, syncSpec);
+    if (process === 'wash') { simplifyWasherEntry(row, models, syncSpec); semiWashBagField(row); }
+    else if (process === 'cut') { simplifyCutEntry(row, models, syncSpec); semiCutLotInputs(row, models); } // 15.249 봉투 LOT · 투입 원자재 LOT
     rowsRoot.append(row); countRows(); return row;
   };
   addRow(); $('#semiAddRow').onclick = () => { const rows = $$('[data-semi-row]', form); const row = addRow(rows.at(-1)); if (row) $($('[data-semi-size]', row).hidden ? '[data-k="qty"]' : '[data-k="size"]', row).focus(); };
@@ -347,7 +347,10 @@ async function pageSemi(main, process, { operator = false } = {}) {
   };
   let entryDraft;
   form.onsubmit = async event => {
-    event.preventDefault(); if (submit.disabled) return; submit.disabled = true; form.inert = true; entryDraft?.start();
+    event.preventDefault(); if (submit.disabled) return;
+    // 15.249 LOT 연결: 커팅은 줄마다 투입 원자재 LOT, 세탁은 줄마다 봉투 LOT이 있어야 한다
+    if (process === 'cut') { const miss = $$('[data-semi-row]', form).find(r => !$('[data-k="inputs"]', r)?.value || $('[data-k="inputs"]', r).value === '[]'); if (miss) { miss.scrollIntoView({ block: 'center' }); $('[data-semi-inputs-pick]', miss)?.focus(); return toast('줄마다 「원자재 LOT 고르기」로 투입한 원자재 LOT을 넣으세요. 넣어야 완제품에서 원자재까지 거슬러 볼 수 있습니다.', 'err'); } }
+    if (process === 'wash') { const miss = $$('[data-semi-row]', form).find(r => !$('[data-k="lot"]', r)?.value); if (miss) { miss.scrollIntoView({ block: 'center' }); return toast('세탁 줄은 「봉투 LOT 고르기」로 봉투를 담아 만드세요.', 'err'); } } submit.disabled = true; form.inert = true; entryDraft?.start();
     const washNow = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
     const items = $$('[data-semi-row]', form).map(row => { const v = Object.fromEntries($$('[data-k]', row).filter(input=>!input.disabled).map(input => [input.dataset.k, input.value])); const { product, size, inch, ...rest } = v; return { ...rest, ...productOf(product), ...(process==='cut'?{entry_mode:'code'}:{entry_mode:'wash_quantity',spec:'',start_time:rest.start_time||washNow}) }; });
     const date = form.work_date.value; let saved = false;
@@ -363,6 +366,7 @@ async function pageSemi(main, process, { operator = false } = {}) {
   };
   filters.onsubmit = event => { event.preventDefault(); load().catch(fail); };
   $('#semiDetail').onchange = () => { $('#semiSummary').innerHTML = semiSummary(process, lastRows) + ($('#semiDetail').checked ? semiDetail(process, lastRows) : ''); };
+  if (process === 'wash') $('#semiBags', main).onclick = () => semiPickBags(models, addRow, form).then(() => countRows()).catch(fail);
   if (canManage) $('#semiManage').onclick = () => manageProductionUnits(page.unitKind, () => loadUnits().catch(fail)).catch(fail);
   await loadUnits();
   if (!main.isConnected || !ME) return;
@@ -378,7 +382,7 @@ async function pageSemi(main, process, { operator = false } = {}) {
         const set = key => { const input = $$('[data-k]', row).find(el => el.dataset.k === key); if (input && map.has(key)) input.value = String(map.get(key) ?? ''); return input; };
         set('product')?.onchange?.(); set('bom_id')?.onchange?.();
         for (const [key] of values) if (!['product', 'bom_id'].includes(key)) set(key);
-        $('[data-k=defect_qty]', row).oninput(); $('[data-k=start_time]', row).oninput();
+        $('[data-k=defect_qty]', row).oninput(); $('[data-k=start_time]', row).oninput(); row._inputsSync?.();
       }
       if (!rowsRoot.children.length) addRow();
       if (typeof value.requestId === 'string') requestId = value.requestId;
@@ -386,4 +390,107 @@ async function pageSemi(main, process, { operator = false } = {}) {
     },
   });
   await load();
+}
+
+// ── 15.249 LOT 체계: 커팅·융착 = 봉투 LOT(자동) + 투입 원자재 LOT(BOM 자재만) / 세탁 = 봉투 LOT 고르기 / 포장 = 세탁 완료 봉투 고르기 / LOT 연결 조회 ──
+const semiLotText = list => list.map(i => `${i.item} ${i.lot} ${fmtNum(i.qty)}${i.unit ? ' ' + i.unit : ''}`).join(' · ');
+function semiCutLotInputs(row, models) {
+  const field = key => $(`[data-k="${key}"]`, row);
+  const lot = field('lot'); if (lot) { lot.disabled = true; lot.value = ''; lot.placeholder = '저장하면 자동 (예: 261119_NX808_1)'; lot.closest('label').firstChild.textContent = '봉투 LOT '; }
+  const box = document.createElement('div'); box.className = 'semi-inputs';
+  box.innerHTML = '<span class="semi-inputs-h">투입 원자재 LOT *</span><button type="button" class="btn small" data-semi-inputs-pick>원자재 LOT 고르기</button><span class="small" data-semi-inputs-text></span><input type="hidden" data-k="inputs" value="">';
+  $('.actions', row).before(box);
+  const hidden = $('[data-k="inputs"]', box), text = $('[data-semi-inputs-text]', box);
+  const read = () => { try { return JSON.parse(hidden.value || '[]'); } catch { return []; } };
+  row._inputsSync = () => { const list = read(); text.innerHTML = list.length ? esc(semiLotText(list)) : '<span class="muted">BOM에 등록된 원자재의 재고 LOT에서 고릅니다</span>'; box.classList.toggle('semi-inputs-empty', !list.length); };
+  row._inputsSync();
+  $('[data-semi-inputs-pick]', box).onclick = async () => {
+    const model = models.find(m => String(m.id) === field('bom_id').value);
+    if (!model) return toast('제품코드를 먼저 고르세요.', 'err');
+    const mats = (model.materials || []).filter(m => m.item);
+    if (!mats.length) return toast(`${model.product}의 BOM에 원자재가 없습니다. 제품등록에서 BOM 자재를 먼저 넣으세요(넣어야 LOT이 이어집니다).`, 'err');
+    const now = read(), good = Number(field('qty').value) || 0;
+    LOT_CACHE.clear(); const stock = await Promise.all(mats.map(m => lotsForItem(m.item, true)));
+    const cells = [];
+    const body = mats.map((m, mi) => `<tbody class="sl-mat"><tr class="sl-mat-h"><th colspan="5">${esc(m.item)} <span class="small muted">BOM ${fmtNum(m.qty)} ${esc(m.unit || '')}${good ? ` · 이번 양품 ${fmtNum(good)} 기준 필요량 약 ${fmtNum(Math.round(good * m.qty / (model.base_qty || 1) * 1000) / 1000)} ${esc(m.unit || '')}` : ''}</span></th></tr>${stock[mi].length ? stock[mi].map(l => { const was = now.find(x => x.item === m.item && x.lot === l.lot), ci = cells.push({ item: m.item, unit: l.unit || m.unit || '', lot: l.lot }) - 1; return `<tr><td class="nowrap"><b>${esc(l.lot)}</b>${/^SST-/.test(l.lot) ? ' <span class="chip yellow">임시</span>' : ''}</td><td class="nowrap small">${esc(l.first_date || '')}</td><td class="small">${esc(l.places || '')}</td><td class="r">${fmtNum(l.balance)} ${esc(l.unit || '')}</td><td class="r"><input type="number" min="0" step="any" inputmode="decimal" name="q${ci}" data-sl-qty data-item="${esc(m.item)}" data-unit="${esc(l.unit || m.unit || '')}" data-lot="${esc(l.lot)}" data-max="${l.balance}" value="${was ? esc(was.qty) : ''}" aria-label="${esc(m.item)} ${esc(l.lot)} 투입량"></td></tr>`; }).join('') : `<tr><td colspan="5" class="muted">재고 LOT이 없습니다. 입고부터 하세요.</td></tr>`}</tbody>`).join('');
+    const v = await promptBox(`투입 원자재 LOT · ${model.product_code || ''} ${model.product}`, `<p class="small muted">이 봉투(줄)에 넣은 원자재 LOT마다 투입량을 적으세요. BOM에 있는 원자재만 나옵니다. 적은 만큼 그 LOT 재고에서 빠집니다.</p><div class="table-wrap sl-wrap"><table class="grid keep-table sl-grid" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>LOT</th><th>입고일</th><th>위치</th><th class="r">남은 수량</th><th class="r">투입량</th></tr></thead>${body}</table></div>`, { wide: true, onOpen: el => {
+      $$('[data-sl-qty]', el).forEach(inp => inp.addEventListener('input', () => inp.setCustomValidity(Number(inp.value) > Number(inp.dataset.max) + 1e-6 ? `남은 수량 ${fmtNum(Number(inp.dataset.max))}보다 많습니다.` : '')));
+      $('[data-sl-qty]', el)?.focus();
+      el.addEventListener('keydown', e => { if (e.key !== 'Enter' || !e.target.matches('[data-sl-qty]')) return; e.preventDefault(); const all = $$('[data-sl-qty]', el), i = all.indexOf(e.target); (all[i + 1] || $('button.primary', el))?.focus(); });
+    } });
+    if (!v) return;
+    const list = cells.map((c, i) => ({ ...c, qty: Number(v['q' + i]) })).filter(c => c.qty > 0);
+    hidden.value = JSON.stringify(list); row._inputsSync();
+  };
+}
+function semiWashBagField(row) {
+  const lot = $('[data-k="lot"]', row); if (!lot) return;
+  lot.readOnly = true; lot.required = true; lot.placeholder = '위 「봉투 LOT 고르기」로 담기'; lot.closest('label').firstChild.textContent = '봉투 LOT * ';
+  const flag = document.createElement('input'); flag.type = 'hidden'; flag.dataset.k = 'bag_required'; flag.value = '1'; lot.after(flag);
+}
+async function semiPickBags(models, addRow, form) {
+  const data = await api('GET', '/api/semi-bags?state=unwashed');
+  const taken = new Set($$('[data-semi-row] [data-k="lot"]', form).map(i => i.value).filter(Boolean));
+  const rows = data.rows.filter(r => !taken.has(r.lot));
+  if (!rows.length) return toast('세탁할 봉투 LOT이 없습니다. 커팅·융착 기록부터 입력하세요.', 'err');
+  const v = await promptBox('봉투 LOT 고르기 (세탁 전)', `<p class="small muted">이번 세탁에 넣은 봉투를 체크하세요. 체크한 봉투마다 한 줄이 생기고 세탁수량은 봉투 수량으로 채워집니다(고칠 수 있음).</p><div class="table-wrap sl-wrap"><table class="grid keep-table" data-no-sort data-keep-cols data-no-reorder><thead><tr><th class="c"><input type="checkbox" data-bag-all aria-label="모두"></th><th>봉투 LOT</th><th>품목</th><th>커팅일</th><th>라인</th><th class="r">수량</th></tr></thead><tbody>${rows.map((r, i) => `<tr data-bag-row><td class="c"><input type="checkbox" name="b${i}" value="1" aria-label="${esc(r.lot)}"></td><td class="nowrap"><b>${esc(r.lot)}</b></td><td>${esc(r.product_code || '')} ${esc(r.item_name || '')}</td><td class="nowrap">${esc(r.work_date)}</td><td>${esc(r.unit_name || '')}</td><td class="r">${fmtNum(r.qty)} ${esc(r.unit || '')}</td></tr>`).join('')}</tbody></table></div>`, { wide: true, onOpen: el => {
+    $('[data-bag-all]', el).onchange = e => $$('input[name^="b"]', el).forEach(c => { c.checked = e.target.checked; });
+    $$('[data-bag-row]', el).forEach(tr => tr.addEventListener('click', e => { if (e.target.closest('input')) return; const c = $('input', tr); c.checked = !c.checked; }));
+  } });
+  if (!v) return;
+  const chosen = rows.filter((_, i) => v['b' + i]); if (!chosen.length) return toast('봉투를 체크하세요.', 'err');
+  // 비어 있는 줄(제품·수량·봉투 없음)은 지우고 고른 봉투로 채운다
+  $$('[data-semi-row]', form).forEach(r => { if (!$('[data-k="lot"]', r)?.value && !$('[data-k="qty"]', r)?.value && $$('[data-semi-row]', form).length > 1) r.remove(); });
+  let first = $$('[data-semi-row]', form)[0]; if (first && !$('[data-k="lot"]', first).value && !$('[data-k="qty"]', first).value) first.remove(); else first = null;
+  for (const b of chosen) {
+    const row = addRow(); if (!row) { toast('한 번에 30줄까지입니다.', 'err'); break; }
+    const model = $('[data-k="bom_id"]', row);
+    if (b.bom_id) { if (![...model.options].some(o => o.value === String(b.bom_id))) model.add(new Option(`${b.product_code} · ${b.item_name}`, b.bom_id)); model.value = String(b.bom_id); model.onchange?.(); }
+    $('[data-k="qty"]', row).value = b.qty; $('[data-k="lot"]', row).value = b.lot;
+  }
+  toast(`봉투 ${chosen.length}개를 담았습니다. 호기·진행시각을 확인하고 등록하세요.`);
+}
+// 완제품 포장: 세탁 완료 봉투 LOT 고르기(BOM의 반제품 자재로 거름). 이미 다른 완제품 LOT에 들어간 봉투는 표시만(남은 봉투 다시 쓰기 가능).
+async function packPickBags(schedule, current = []) {
+  const semis = (schedule.bom_snapshot?.materials || []).filter(m => m.item_category === '반제품').map(m => m.item);
+  const data = await api('GET', '/api/semi-bags?' + new URLSearchParams({ state: 'washed', items: semis.join('|') }));
+  if (!data.rows.length) { toast(`세탁을 마친 봉투 LOT이 없습니다${semis.length ? `(${semis.join(', ')})` : ''}. 세탁 입력부터 하세요.`, 'err'); return null; }
+  const v = await promptBox(`포장에 쓴 봉투 LOT · ${schedule.product}`, `<p class="small muted">이날 포장에 쓴 세탁 완료 봉투를 모두 체크하세요. 완제품 LOT에 이 봉투들이 연결되고, 봉투에 투입된 원자재 LOT까지 거슬러 볼 수 있습니다.</p><div class="table-wrap sl-wrap"><table class="grid keep-table" data-no-sort data-keep-cols data-no-reorder><thead><tr><th class="c"><input type="checkbox" data-bag-all aria-label="모두"></th><th>봉투 LOT</th><th>품목</th><th>커팅일</th><th>세탁일</th><th class="r">세탁량</th><th>이미 포장</th></tr></thead><tbody>${data.rows.map((r, i) => `<tr data-bag-row><td class="c"><input type="checkbox" name="b${i}" value="1" ${current.includes(r.lot) ? 'checked' : ''} aria-label="${esc(r.lot)}"></td><td class="nowrap"><b>${esc(r.lot)}</b></td><td>${esc(r.product_code || '')} ${esc(r.item_name || '')}</td><td class="nowrap">${esc(r.work_date)}</td><td class="nowrap">${esc(r.washed_date || '')}</td><td class="r">${fmtNum(r.washed_qty)} ${esc(r.unit || '')}</td><td class="small">${r.packed_lots ? `<span class="chip">${esc(r.packed_lots)}</span>` : '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table></div>`, { wide: true, onOpen: el => {
+    $('[data-bag-all]', el).onchange = e => $$('input[name^="b"]', el).forEach(c => { c.checked = e.target.checked; });
+    $$('[data-bag-row]', el).forEach(tr => tr.addEventListener('click', e => { if (e.target.closest('input')) return; const c = $('input', tr); c.checked = !c.checked; }));
+  } });
+  if (!v) return null;
+  return data.rows.filter((_, i) => v['b' + i]).map(r => r.lot);
+}
+// ── LOT 연결 조회: 완제품 ↔ 봉투(반제품) ↔ 원자재 LOT ──
+async function pageLotTrace(main) {
+  main.innerHTML = `<h1>LOT 연결 조회 <span class="dept">생산 · 품질</span></h1>
+  <p class="muted">완제품·봉투(반제품)·원자재 LOT 중 하나를 넣으면 앞뒤로 이어진 LOT를 모두 보여 줍니다. 세탁 뒤 여러 봉투를 합쳐 포장하므로 완제품은 「들어간 봉투 묶음」 단위로 연결됩니다.</p>
+  <form class="list-filters toolbar" id="ltForm" data-read-only><label class="grow">LOT<input name="lot" maxlength="100" placeholder="예) 261121_NX808_P1 · 261119_NX808_1 · HS-2611-0457" autocomplete="off" required></label><button class="btn primary">조회</button></form>
+  <div id="ltResult"></div><section class="ot-sec"><div class="ot-head"><h2>☰ 최근 LOT <span class="small muted">눌러서 조회</span></h2><span class="grow"></span><label class="inline">찾기 <input type="search" id="ltRecentQ" placeholder="LOT·품목" autocomplete="off"></label></div><div id="ltRecent"></div></section>`;
+  const form = $('#ltForm', main);
+  const chip = (lot, kind) => `<button type="button" class="link-btn lt-lot lt-${kind}" data-lt="${esc(lot)}">${esc(lot)}</button>`;
+  const show = async lot => {
+    lot = String(lot || '').trim(); if (!lot) return; form.elements.lot.value = lot;
+    const r = await api('GET', '/api/lot-trace?lot=' + encodeURIComponent(lot)); if (!main.isConnected) return;
+    const box = $('#ltResult', main);
+    if (!r.kind) { box.innerHTML = `<div class="empty">「${esc(lot)}」와 이어진 기록이 없습니다. LOT을 확인하세요.</div>`; return; }
+    const kindLabel = { finished: '완제품 LOT', bag: '봉투(반제품) LOT', material: '원자재 LOT' }[r.kind];
+    const mats = r.materials.map(m => `<div class="lt-card${m.lot === lot ? ' on' : ''}"><div>${chip(m.lot, 'm')}${/^SST-/.test(m.lot) ? ' <span class="chip yellow">임시</span>' : ''}</div><div class="small"><b>${esc(m.item)}</b></div><div class="small muted">${(m.receipts || []).map(x => `${esc(x.date)} ${esc(x.vendor)} ${fmtNum(x.qty)} ${esc(x.unit || '')}`).join('<br>') || '입고 기록 없음'}</div><div class="small">→ 봉투 ${m.bags.length}${m.finished?.length ? ` · 완제품 직접 ${m.finished.length}` : ''}</div></div>`).join('') || '<p class="muted small">이어진 원자재 LOT이 없습니다.</p>';
+    const bags = r.bags.map(b => `<div class="lt-card${b.lot === lot ? ' on' : ''}"><div>${chip(b.lot, 'b')}</div><div class="small"><b>${esc(b.product_code || '')} ${esc(b.item || '')}</b></div><div class="small muted">커팅 ${esc(b.work_date)} · ${esc(b.unit_name || '')} · ${fmtNum(b.qty)} ${esc(b.unit || '')}</div><div class="small">${b.washes.length ? `세탁 ${b.washes.map(w => `${esc(w.work_date)} ${esc(w.unit_name)} ${fmtNum(w.qty)}`).join(', ')}` : '<span class="red-text">세탁 전</span>'}</div><div class="small muted">원자재 ${b.inputs.map(i => `${esc(i.lot)} ${fmtNum(i.qty)}${esc(i.unit || '')}`).join(', ') || '없음'}</div></div>`).join('') || '<p class="muted small">이어진 봉투 LOT이 없습니다.</p>';
+    const fins = r.finished.map(f => `<div class="lt-card${f.lot === lot ? ' on' : ''}"><div>${chip(f.lot, 'f')}</div><div class="small"><b>${esc(f.product_code || '')} ${esc(f.item)}</b></div><div class="small muted">포장 ${esc(f.date)} · ${fmtNum(f.qty)} ${esc(f.unit || '')}${f.work_order ? ` · ${esc(f.work_order)}` : ''}</div><div class="small">봉투 ${f.bags.length}개</div><div class="small">${f.shipments.length ? `출하 ${f.shipments.map(s => `${esc(s.ship_date)} ${esc(s.customer)} ${fmtNum(s.qty)}`).join(', ')}` : '<span class="muted">출하 전</span>'}</div></div>`).join('') || '<p class="muted small">이어진 완제품 LOT이 없습니다.</p>';
+    box.innerHTML = `<section class="ot-sec lt-res"><div class="ot-head"><h2>☰ ${esc(lot)} <span class="small muted">${kindLabel}</span></h2><span class="grow"></span><span class="small">원자재 ${r.materials.length} · 봉투 ${r.bags.length} · 완제품 ${r.finished.length}</span></div>
+      <div class="lt-cols"><div class="lt-col"><h3>① 원자재 LOT <span class="small muted">입고</span></h3>${mats}</div><div class="lt-arrow" aria-hidden="true">→</div><div class="lt-col"><h3>②③ 봉투 LOT <span class="small muted">커팅·융착 → 세탁</span></h3>${bags}</div><div class="lt-arrow" aria-hidden="true">→</div><div class="lt-col"><h3>④ 완제품 LOT <span class="small muted">포장 → 출하</span></h3>${fins}</div></div>
+      <p class="small muted">세탁 뒤 봉투를 합쳐 포장하므로, 문제가 생기면 그 완제품 LOT에 들어간 봉투 전부와 그 봉투들의 원자재 LOT 전부를 대상으로 봅니다.</p></section>`;
+  };
+  const recent = async () => {
+    const q = $('#ltRecentQ', main).value.trim(); const r = await api('GET', '/api/lot-trace/recent?' + new URLSearchParams({ q })); if (!main.isConnected) return;
+    $('#ltRecent', main).innerHTML = `<div class="lt-recent"><div><h3>완제품 LOT</h3>${r.finished.length ? `<div class="table-wrap"><table class="grid keep-table" data-no-sort data-keep-cols><thead><tr><th>LOT</th><th>품목</th><th>포장일</th><th class="r">수량</th><th class="r">봉투</th></tr></thead><tbody>${r.finished.map(x => `<tr><td class="nowrap">${chip(x.lot, 'f')}</td><td>${esc(x.item)}</td><td class="nowrap">${esc(x.date)}</td><td class="r">${fmtNum(x.qty)} ${esc(x.unit || '')}</td><td class="r">${x.bags ? x.bags : '<span class="red-text">0</span>'}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted small">없음</p>'}</div>
+      <div><h3>봉투(반제품) LOT</h3>${r.bags.length ? `<div class="table-wrap"><table class="grid keep-table" data-no-sort data-keep-cols><thead><tr><th>LOT</th><th>품목</th><th>커팅일</th><th class="r">수량</th><th>세탁</th></tr></thead><tbody>${r.bags.map(x => `<tr><td class="nowrap">${chip(x.lot, 'b')}</td><td>${esc(x.item || '')}</td><td class="nowrap">${esc(x.date)}</td><td class="r">${fmtNum(x.qty)} ${esc(x.unit || '')}</td><td>${x.washed ? '<span class="chip green">완료</span>' : '<span class="chip">전</span>'}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted small">없음</p>'}</div></div>`;
+  };
+  form.onsubmit = e => { e.preventDefault(); show(form.elements.lot.value).catch(fail); };
+  main.addEventListener('click', e => { const b = e.target.closest('[data-lt]'); if (b) { show(b.dataset.lt).then(() => $('#ltResult', main).scrollIntoView({ block: 'start', behavior: 'smooth' })).catch(fail); } });
+  let t = 0; $('#ltRecentQ', main).addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => recent().catch(fail), 250); });
+  let first = ''; try { first = sessionStorage.getItem('wpa:lot-trace') || ''; sessionStorage.removeItem('wpa:lot-trace'); } catch { first = ''; }
+  await recent(); if (first) await show(first);
 }

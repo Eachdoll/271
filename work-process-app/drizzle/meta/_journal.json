@@ -449,6 +449,13 @@
       "when": 1797418413000,
       "tag": "0063_pallets",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "6",
+      "when": 1797504813000,
+      "tag": "0064_lot_chain",
+      "breakpoints": true
     }
   ]
 }

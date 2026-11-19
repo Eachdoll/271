@@ -511,25 +511,28 @@ async function pageFinishedActual(main) {
         <td class="r">${fmtNum(s.qty)}</td><td class="r">${fmtNum(s.actual_qty)}</td><td class="r ${left <= 0 ? 'green-text' : ''}"><b>${left <= 0 ? '완료' : fmtNum(left)}</b></td>
         <td class="r"><input type="number" min="0" step="any" inputmode="decimal" data-fa-qty placeholder="${left > 0 ? fmtNum(left) : ''}" aria-label="${esc(s.product)} 양품수량"${canEnter ? '' : ' disabled'}></td>
         <td><input data-fa-note maxlength="200" aria-label="${esc(s.product)} 비고"${canEnter ? '' : ' disabled'}></td>
-        <td class="nowrap">${canEnter ? '<button type="button" class="btn small primary" data-fa-save>저장</button> ' : ''}<button type="button" class="btn small" data-fa-detail>상세</button></td></tr>`; }).join('')}</tbody></table></div>`;
+        <td class="nowrap">${canEnter ? '<button type="button" class="btn small" data-fa-bags title="이날 포장에 쓴 세탁 완료 봉투 LOT">봉투 LOT <b data-fa-bagn>0</b></button> <button type="button" class="btn small primary" data-fa-save>저장</button> ' : ''}<button type="button" class="btn small" data-fa-detail>상세</button></td></tr>`; }).join('')}</tbody></table></div>`;
     $$('[data-fa-row]', main).forEach(tr => { const s = rows[Number(tr.dataset.faRow)];
       $('[data-fa-detail]', tr).onclick = () => openProductionActuals(s.id, { onChange: () => load() }).catch(fail);
+      tr._bags = []; $('[data-fa-bags]', tr)?.addEventListener('click', async () => { const picked = await packPickBags(s, tr._bags).catch(e => { fail(e); return null; }); if (!picked) return; tr._bags = picked; $('[data-fa-bagn]', tr).textContent = picked.length; $('[data-fa-bags]', tr).classList.toggle('on', picked.length > 0); $('[data-fa-qty]', tr).focus(); }); // 15.249
       const q = $('[data-fa-qty]', tr); q.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('[data-fa-save]', tr)?.click(); } });
       $('[data-fa-save]', tr)?.addEventListener('click', async e => { const btn = e.currentTarget; btn.disabled = true; try { if (await save(s, tr)) await load(); } finally { btn.disabled = false; } }); });
   };
   // 투입 자재 LOT: 먼저 들어온 LOT부터 필요량만큼(상세 창의 자동 채우기와 같은 방식). 모자라면 물어 본다.
   const lotInputs = async (s, qty) => {
     const info = await api('GET', `/api/schedules/${s.id}/lot-materials`).catch(() => null), out = [], short = [];
-    for (const m of info?.materials || []) { let need = Math.round(qty * m.per * 1000) / 1000; for (const l of m.lots.filter(l => l.balance > 0)) { if (need <= 0) break; const take = Math.min(need, l.balance); out.push({ item: m.item, unit: m.unit, lot: l.lot, qty: Math.round(take * 1000) / 1000 }); need = Math.round((need - take) * 1000) / 1000; } if (need > 0) short.push(`${m.item} ${fmtNum(need)}${m.unit}`); }
+    for (const m of (info?.materials || []).filter(m => m.item_category !== '반제품')) { let need = Math.round(qty * m.per * 1000) / 1000; for (const l of m.lots.filter(l => l.balance > 0)) { if (need <= 0) break; const take = Math.min(need, l.balance); out.push({ item: m.item, unit: m.unit, lot: l.lot, qty: Math.round(take * 1000) / 1000 }); need = Math.round((need - take) * 1000) / 1000; } if (need > 0) short.push(`${m.item} ${fmtNum(need)}${m.unit}`); }
     return { out, short };
   };
   const save = async (s, tr, quiet = false) => {
     const qty = Number($('[data-fa-qty]', tr).value); if (!(qty > 0)) { if (!quiet) { $('[data-fa-qty]', tr).focus(); toast('양품수량을 넣으세요.', 'err'); } return false; }
     const date = form.elements.date.value, last = end(s), pd = date < s.start_date ? s.start_date : date > last ? last : date;
+    const hasSemi = (s.bom_snapshot?.materials || []).some(m => m.item_category === '반제품');
+    if (hasSemi && !(tr._bags || []).length && !await confirmBox(`${s.product}: 포장에 쓴 봉투 LOT을 고르지 않았습니다. 고르지 않으면 이 완제품 LOT에서 봉투·원자재 LOT으로 거슬러 볼 수 없습니다. 그래도 저장할까요?`)) { $('[data-fa-bags]', tr)?.focus(); return false; }
     const { out, short } = await lotInputs(s, qty);
     if (short.length && !await confirmBox(`${s.product}: 투입 자재 LOT 재고가 모자랍니다(${short.join(', ')}). 있는 만큼만 넣고 저장할까요?`)) return false;
     try {
-      const r = await api('POST', `/api/schedules/${s.id}/actuals`, { production_date: pd, qty, note: $('[data-fa-note]', tr).value, inputs: out, request_id: crypto.randomUUID() });
+      const r = await api('POST', `/api/schedules/${s.id}/actuals`, { production_date: pd, qty, note: $('[data-fa-note]', tr).value, inputs: out, bags: tr._bags || [], request_id: crypto.randomUUID() });
       toast(`${s.product} 양품 ${fmtNum(qty)} 저장 · ${r.work_order || ''} · LOT ${r.lot || '—'}${pd !== date ? ` (생산일 ${pd})` : ''}`); return true;
     } catch (error) { fail(error); return false; }
   };
