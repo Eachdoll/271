@@ -2980,3 +2980,8 @@ form.list-filters > label.rp-moved, .toolbar > label.rp-moved { display: none !i
 :root[data-skin="cat"]:not([data-theme="dark"]) body { background-color: #fff6f8; }
 @media (prefers-color-scheme: dark) { :root[data-skin="cat"]:not([data-theme="light"]) body { background-image: none; } }
 @media print { :root[data-skin="cat"] .top::after, :root[data-skin="cat"] .brand-text::after, :root[data-skin="cat"] .dash-head h1::after, :root[data-skin="cat"] .empty::before, :root[data-skin="cat"] .dash-section > h2::before, :root[data-skin="cat"] .tasks h2::before { display: none; } :root[data-skin="cat"] body { background: #fff; } }
+
+/* 15.225 캐릭터 그림 바꾸기 단추 */
+.skin-face { display: flex; gap: 6px; flex-wrap: wrap; }
+.skin-face[hidden], .skin-face [hidden] { display: none !important; }
+.skin-face label.btn { cursor: pointer; }

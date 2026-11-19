@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.224';
+const APP_VERSION = '15.225';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -736,7 +736,7 @@ function bindNavFind() {
   if (!bindNavFind.once) { bindNavFind.once = true; // 문서 이벤트는 한 번만(화면마다 메뉴를 다시 그려도 쌓이지 않게). 누른 단추 글자가 바뀌어 떨어져도 경로로 판단.
     document.addEventListener('click', e => { const path = e.composedPath(); if (!path.some(n => n.classList?.contains('nav-search'))) $$('.nav-find-list').forEach(l => { l.hidden = true; }); if (!path.some(n => n.classList?.contains('prefs-menu'))) $$('.prefs-menu[open]').forEach(d => { d.open = false; }); }); }
   // 화면 설정: 언어·화면 모드·메뉴 위치·밀도 단추를 「⚙ 화면 설정」 안으로 모은다(theme.js·i18n.js가 머리줄에 넣는 단추를 옮김)
-  const gather = () => { const pop = $('.who .prefs-pop'); if (!pop) return; $$('.who > .lang-select, .who > .theme-toggle, .who > .skin-select').forEach(x => pop.append(x)); };
+  const gather = () => { const pop = $('.who .prefs-pop'); if (!pop) return; $$('.who > .lang-select, .who > .theme-toggle, .who > .skin-select, .who > .skin-face').forEach(x => pop.append(x)); };
   if (typeof applySkin === 'function' && ME?.ui) applySkin(ME.ui.skin || 'default'); // 15.220 계정에 저장된 스킨
   gather(); new MutationObserver(gather).observe($('.who'), { childList: true });
 }
