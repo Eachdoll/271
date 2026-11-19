@@ -3311,3 +3311,23 @@ table.insp-grid tbody tr:hover td { background-color: var(--row-hover); }
 table.insp-grid thead th, table.insp-grid thead tr:nth-child(2) th { position: static; top: auto; }
 table.insp-grid thead { position: sticky; top: 0; z-index: 3; }
 table.insp-grid thead .insp-no, table.insp-grid thead .insp-lot-h { position: sticky; }
+
+/* 15.239 분석 관리 등 목록 위 구분 묶음(상태·검사구분·판정): 묶음마다 상자·음영, 이름표는 왼쪽 머리 칸 */
+.toolbar.seg-groups { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
+.seg-groups > .seg-box { display: inline-flex; align-items: stretch; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); box-shadow: 0 1px 2px rgba(15,23,42,.05); overflow: hidden; }
+.seg-groups .seg-label { display: flex; align-items: center; padding: 0 12px; background: var(--erp-head, var(--bg)); color: var(--erp-head-ink, var(--text)); border-right: 1px solid var(--line); font-weight: 800; font-size: 13px; white-space: nowrap; }
+.seg-groups .seg-box > .seg { border: 0; border-radius: 0; background: transparent; margin: 0; padding: 3px; box-shadow: none; }
+.seg-groups .seg-box > .seg button.on { box-shadow: inset 0 -3px 0 var(--accent); }
+@media (max-width: 700px) { .seg-groups > .seg-box { flex: 1 0 100%; flex-direction: column; } .seg-groups .seg-label { border-right: 0; border-bottom: 1px solid var(--line); padding: 5px 10px; } .seg-groups .seg-box > .seg { flex-wrap: wrap; } }
+#main .seg-groups .seg-box > .seg-label { align-self: stretch; background: color-mix(in srgb, var(--accent) 11%, var(--panel)); color: var(--text); border-right: 1px solid color-mix(in srgb, var(--accent) 25%, var(--line)); }
+@media (max-width: 700px) { #main .seg-groups .seg-box > .seg-label { width: auto; justify-content: flex-start; border-right: 0; border-bottom: 1px solid color-mix(in srgb, var(--accent) 25%, var(--line)); text-align: left; } }
+/* 15.239 분석·개발·VOC 목록: 한 항목 한 줄(품목 칸의 부가 정보는 같은 줄 회색 글씨, 길면 …, 마우스를 올리면 전체) */
+@media (min-width: 821px) {
+  table.wl-oneline td.wl-title { white-space: nowrap; max-width: 34vw; overflow: hidden; text-overflow: ellipsis; }
+  table.wl-oneline td.wl-title > * { display: inline; margin: 0 0 0 8px; }
+  table.wl-oneline td.wl-title > b { margin-left: 0; }
+  table.wl-oneline td.wl-title > div.small, table.wl-oneline td.wl-title > .small { font-size: 12px; color: var(--muted); }
+  table.wl-oneline td.wl-title .btn { min-height: 0; padding: 1px 7px; font-size: 11.5px; vertical-align: 1px; }
+  table.wl-oneline td { white-space: nowrap; padding-top: 7px !important; padding-bottom: 7px !important; }
+  table.wl-oneline td .st-select { min-height: 30px; padding: 2px 6px; }
+}

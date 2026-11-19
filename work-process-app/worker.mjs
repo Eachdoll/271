@@ -128,7 +128,7 @@ async function baseMenus(u, departments = null) { // 15.179 departments를 넘�
 const SKINS_ALLOWED = ['default', 'christmas', 'ribbon', 'cat', 'penguin', 'kha', 'pjh']; // 15.220 디자인 스킨(15.222 핑크 리본, 15.226 커스텀 캐릭터(cat)·방귀니(penguin))
 async function userPrefs(id) {
   const row = await db.prepare('SELECT value FROM settings WHERE key=?').get('prefs:' + id);
-  try { const v = row ? JSON.parse(row.value) : {}; return { favorites: Array.isArray(v.favorites) ? v.favorites : [], filters: v.filters && typeof v.filters === 'object' ? v.filters : {}, ...(SKINS_ALLOWED.includes(v.skin) ? { skin: v.skin } : {}) }; } catch { return { favorites: [], filters: {} }; } // 15.220 skin
+  try { const v = row ? JSON.parse(row.value) : {}; return { favorites: Array.isArray(v.favorites) ? v.favorites : [], filters: v.filters && typeof v.filters === 'object' ? v.filters : {}, ...(SKINS_ALLOWED.includes(v.skin) ? { skin: v.skin } : {}), ...(v.grids && typeof v.grids === 'object' && !Array.isArray(v.grids) ? { grids: v.grids } : {}) }; } catch { return { favorites: [], filters: {} }; } // 15.220 skin · 15.239 grids(표 열 순서·너비·숨김)
 }
 function cleanPrefs(body, prior) {
   const out = { ...prior };
@@ -152,7 +152,23 @@ function cleanPrefs(body, prior) {
     if (Object.keys(filters).length > 80) throw bad('목록 조건이 너무 많습니다.');
     out.filters = filters;
   }
-  if (JSON.stringify(out).length > 30000) throw bad('저장할 화면 설정이 너무 큽니다.');
+  if (body.grids !== undefined) { // 15.239 표 열 배치(순서·너비·숨김)를 계정에: 다른 기기·브라우저에서도 같은 순서
+    if (!body.grids || typeof body.grids !== 'object' || Array.isArray(body.grids)) throw bad('표 열 설정 형식을 확인하세요.');
+    const grids = { ...(prior.grids || {}) };
+    for (const [key, value] of Object.entries(body.grids)) {
+      if (key.length > 300) throw bad('표 열 설정 이름이 너무 깁니다.');
+      if (value === null) { delete grids[key]; continue; }
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw bad('표 열 설정 형식을 확인하세요.');
+      const clean = {};
+      if (Array.isArray(value.order)) clean.order = value.order.slice(0, 40).map(x => String(x).slice(0, 40));
+      if (Array.isArray(value.hidden)) clean.hidden = value.hidden.slice(0, 40).map(x => String(x).slice(0, 40));
+      if (value.widths && typeof value.widths === 'object' && !Array.isArray(value.widths)) clean.widths = Object.fromEntries(Object.entries(value.widths).slice(0, 40).map(([k, w]) => [String(k).slice(0, 40), Math.max(30, Math.min(1200, Number(w) || 0))]));
+      if (Object.keys(clean).length) grids[key] = clean; else delete grids[key];
+    }
+    if (Object.keys(grids).length > 120) throw bad('표 열 설정이 너무 많습니다. 쓰지 않는 표의 「열 배치 초기화」를 해 주세요.');
+    out.grids = grids;
+  }
+  if (JSON.stringify(out).length > 60000) throw bad('저장할 화면 설정이 너무 큽니다.');
   if (body.skin !== undefined) { // 15.220 디자인 스킨(사용자별)
     const skin = String(body.skin || 'default');
     if (!SKINS_ALLOWED.includes(skin)) throw bad('디자인 스킨을 확인하세요.');
