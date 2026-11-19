@@ -966,12 +966,12 @@ async function warehouseRules() {
   };
 }
 function receiptLineSql() {
-  return `SELECT 'po' AS kind, l.id, l.receipt_id, l.po_id, NULL AS other_id, COALESCE(p.req_no,'') AS req_no, COALESCE(p.item,'(삭제된 발주)') AS item, COALESCE(p.spec,'') AS spec, COALESCE(p.unit,'') AS unit, COALESCE(p.product_code,'') AS product_code, COALESCE(p.item_category,'') AS item_category, l.lot, l.sub_lot, l.qty, l.pieces, CASE WHEN l.pieces IS NULL THEN NULL ELSE 1 + COALESCE((SELECT SUM(x.pieces) FROM po_receipt_lots x WHERE x.lot=l.lot AND x.lot<>'' AND x.voided_at IS NULL AND x.id<l.id),0) END AS piece_from, l.received_date, l.warehouse, l.location, l.note, l.note2, l.voided_at, p.qty AS po_qty, p.recv_qty, p.recv_status
+  return `SELECT 'po' AS kind, l.id, l.receipt_id, l.po_id, NULL AS other_id, COALESCE(p.req_no,'') AS req_no, COALESCE(p.item,'(삭제된 발주)') AS item, COALESCE(p.spec,'') AS spec, COALESCE(p.unit,'') AS unit, COALESCE(p.product_code,'') AS product_code, COALESCE(p.item_category,'') AS item_category, l.lot, l.sub_lot, l.qty, l.pieces, l.pieces_temp, CASE WHEN l.pieces IS NULL THEN NULL ELSE 1 + COALESCE((SELECT SUM(x.pieces) FROM po_receipt_lots x WHERE x.lot=l.lot AND x.lot<>'' AND x.voided_at IS NULL AND x.id<l.id),0) END AS piece_from, l.received_date, l.warehouse, l.location, l.note, l.note2, l.voided_at, p.qty AS po_qty, p.recv_qty, p.recv_status
       FROM po_receipt_lots l LEFT JOIN purchase_orders p ON p.id=l.po_id`;
 }
 async function receiptDetail(r) {
   const po = await db.prepare(`${receiptLineSql()} WHERE l.receipt_id=? ORDER BY l.id`).all(r.id);
-  const other = await db.prepare(`SELECT 'other' AS kind, id, receipt_id, NULL AS po_id, id AS other_id, '' AS req_no, item, spec, COALESCE(NULLIF(unit,''), json_extract(bom_snapshot,'$.unit'), '') AS unit, json_extract(bom_snapshot,'$.product_code') AS product_code, item_category, lot, sub_lot, qty, pieces, CASE WHEN pieces IS NULL THEN NULL ELSE 1 + COALESCE((SELECT SUM(x.pieces) FROM po_receipt_lots x WHERE x.lot=other_receipts.lot AND x.voided_at IS NULL),0) + COALESCE((SELECT SUM(o.pieces) FROM other_receipts o WHERE o.lot=other_receipts.lot AND o.id<other_receipts.id),0) END AS piece_from, received_date, warehouse, location, note, note2, NULL AS voided_at FROM other_receipts WHERE receipt_id=? ORDER BY id`).all(r.id);
+  const other = await db.prepare(`SELECT 'other' AS kind, id, receipt_id, NULL AS po_id, id AS other_id, '' AS req_no, item, spec, COALESCE(NULLIF(unit,''), json_extract(bom_snapshot,'$.unit'), '') AS unit, json_extract(bom_snapshot,'$.product_code') AS product_code, item_category, lot, sub_lot, qty, pieces, pieces_temp, CASE WHEN pieces IS NULL THEN NULL ELSE 1 + COALESCE((SELECT SUM(x.pieces) FROM po_receipt_lots x WHERE x.lot=other_receipts.lot AND x.voided_at IS NULL),0) + COALESCE((SELECT SUM(o.pieces) FROM other_receipts o WHERE o.lot=other_receipts.lot AND o.id<other_receipts.id),0) END AS piece_from, received_date, warehouse, location, note, note2, NULL AS voided_at FROM other_receipts WHERE receipt_id=? ORDER BY id`).all(r.id);
   return { ...r, lines: [...po, ...other] };
 }
 route('GET', '/api/receipts', async ({ query }) => {
@@ -1068,7 +1068,7 @@ route('POST', '/api/receipts', async ({ user, body }) => {
     const add = stockRound(group.reduce((t, l) => t + l.qty, 0)), total = stockRound(recorded + add), status = total === po.qty ? 'ok' : 'mismatch';
     // 예전 방식으로 기록된 입고(줄 없음)는 먼저 한 줄로 옮겨 recv_qty = 줄 합을 지킨다.
     if (!active.length && recorded) cmds.push({ sql: 'INSERT INTO po_receipt_lots(po_id,lot,qty,received_date,note,created_by) VALUES(?,?,?,?,?,?)', args: [poId, po.lot || '', recorded, (po.recv_at || '').slice(0, 10) || date, '이전 입고', po.recv_by || ''] });
-    for (const l of group) cmds.push({ sql: `INSERT INTO po_receipt_lots(po_id,receipt_id,lot,sub_lot,qty,received_date,warehouse,location,note,created_by,note2,pieces) VALUES(?,${RID},?,?,?,?,?,?,?,?,?,${l.pieces == null ? 'NULL' : Number(l.pieces)})`, args: [poId, token, l.lot, l.sub_lot || '', l.qty, date, l.warehouse, l.location, l.note, user.name, l.note2 || ''] });
+    for (const l of group) { const tp = tempPieces(l, po.item_category); cmds.push({ sql: `INSERT INTO po_receipt_lots(po_id,receipt_id,lot,sub_lot,qty,received_date,warehouse,location,note,created_by,note2,pieces,pieces_temp) VALUES(?,${RID},?,?,?,?,?,?,?,?,?,${tp.pieces == null ? 'NULL' : Number(tp.pieces)},${tp.temp})`, args: [poId, token, l.lot, l.sub_lot || '', l.qty, date, l.warehouse, l.location, l.note, user.name, l.note2 || ''] }); }
     const keepPoLot = !active.length && (recorded || !group.some(l => l.lot)); // 예전 입고를 옮기거나, 이번 줄에 LOT가 없으면 발주의 LOT 유지(15.77)
     const lots = [...new Set([...active.map(a => a.lot), ...(keepPoLot ? [po.lot] : []), ...group.map(l => l.lot)].filter(Boolean))].join(', ').slice(0, 100);
     cmds.push({ sql: `UPDATE purchase_orders SET recv_status=?,recv_qty=?,recv_by=?,recv_at=CASE WHEN recv_at IS NULL OR recv_status NOT IN ('ok','mismatch') OR recv_at<? THEN ? ELSE recv_at END,lot=? WHERE id=? AND recv_status=? AND recv_qty IS ? AND NOT EXISTS(SELECT 1 FROM receipt_qty_changes c WHERE c.po_id=purchase_orders.id AND c.status='pending')`, args: [status, total, user.name, at, at, lots, poId, po.recv_status, po.recv_qty] });
@@ -1084,7 +1084,8 @@ route('POST', '/api/receipts', async ({ user, body }) => {
     try { fields = await otherReceiptFields({ ...l.raw, received_date: date, vendor, note: l.note || note, qty: l.qty }); }
     catch (error) { if (error.status === 400 || error.status === 404) throw bad(`${l.no}번째 줄: ${error.message}`); throw error; }
     const snapshot = JSON.parse(fields[7]);
-    cmds.push({ sql: `INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,bom_id,bom_snapshot,created_by,spec,unit,lot,batch_id,receipt_id,warehouse,location,sub_lot,note2,pieces) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,${RID},?,?,?,?,${l.pieces == null ? 'NULL' : Number(l.pieces)})`,
+    const tp = tempPieces(l, fields[2]);
+    cmds.push({ sql: `INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,bom_id,bom_snapshot,created_by,spec,unit,lot,batch_id,receipt_id,warehouse,location,sub_lot,note2,pieces,pieces_temp) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,${RID},?,?,?,?,${tp.pieces == null ? 'NULL' : Number(tp.pieces)},${tp.temp})`,
       args: [...fields, user.name, await catalogSpec(fields[6], l.raw.spec), snapshot.unit || '', l.lot, token, token, l.warehouse, l.location, l.sub_lot || '', l.note2 || ''] });
     cmds.push(receiptAnalysisQuery('other_receipt', null, user));
   }
@@ -1146,8 +1147,9 @@ route('POST', '/api/receipts/:id/lines', async ({ user, params, body }) => {
   for (const l of lines) {
     let fields; try { fields = await otherReceiptFields({ ...l.raw, received_date: r.receipt_date, vendor: r.vendor, note: l.note, qty: l.qty }); } catch (error) { if (error.status === 400 || error.status === 404) throw bad(`${l.no}번째 줄: ${error.message}`); throw error; }
     const snapshot = JSON.parse(fields[7]);
-    cmds.push({ sql: 'INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,bom_id,bom_snapshot,created_by,spec,unit,lot,batch_id,receipt_id,warehouse,location,sub_lot,note2,pieces) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-      args: [...fields, user.name, await catalogSpec(fields[6], l.raw.spec), snapshot.unit || '', l.lot, token, r.id, l.warehouse, l.location, l.sub_lot || '', l.note2, l.pieces] });
+    const tp = tempPieces(l, fields[2]);
+    cmds.push({ sql: 'INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,bom_id,bom_snapshot,created_by,spec,unit,lot,batch_id,receipt_id,warehouse,location,sub_lot,note2,pieces,pieces_temp) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      args: [...fields, user.name, await catalogSpec(fields[6], l.raw.spec), snapshot.unit || '', l.lot, token, r.id, l.warehouse, l.location, l.sub_lot || '', l.note2, tp.pieces, tp.temp] });
     cmds.push(receiptAnalysisQuery('other_receipt', null, user));
   }
   await db.batch(cmds);
@@ -4313,22 +4315,27 @@ async function actualLotInputs(raw) {
   return out;
 }
 // 품목 하나의 LOT별 남은 수량(먼저 들어온 순). 생산 투입·출하 LOT 고르기에 쓴다.
+// 15.252 원자재 입고에 실물(절)을 안 적으면 임시 1절(코드 LOT-1, 여러 번 투입 가능)으로 LOT 추적이 끊기지 않게
+function tempPieces(line, category) { return line.pieces == null && String(category || '') === '원자재' ? { pieces: 1, temp: 1 } : { pieces: line.pieces, temp: 0 }; }
 // 15.250 실물 수량(절): 비우면 없음(NULL), 0 이상 숫자
 function piecesOf(v) { if (v === undefined || v === null || v === '') return null; const n = Number(v); if (!Number.isFinite(n) || n < 0) throw bad('실물(절) 수량은 0 이상 숫자로 넣으세요.'); return stockRound(n); }
 // LOT별 실물(절): 입고에 적은 절 − 커팅·융착에 투입한 절. 입고에 절을 안 적은 LOT은 null.
 async function lotPieces(item) {
-  const rows = await db.prepare(`SELECT lot, SUM(p) AS received FROM (SELECT l.lot, l.pieces AS p FROM po_receipt_lots l JOIN purchase_orders o ON o.id=l.po_id WHERE TRIM(o.item)=? AND l.voided_at IS NULL AND l.pieces IS NOT NULL
-    UNION ALL SELECT lot, pieces FROM other_receipts WHERE TRIM(item)=? AND pieces IS NOT NULL) GROUP BY lot`).all(item, item);
-  const used = await db.prepare("SELECT lot, SUM(COALESCE(pieces,0)) AS used, group_concat(NULLIF(piece_nos,'')) AS nos FROM semi_lot_inputs WHERE TRIM(item)=? GROUP BY lot").all(item);
-  const map = new Map(rows.map(r => [r.lot, { received: stockRound(r.received), used: 0, nos: new Set() }]));
-  for (const u of used) if (map.has(u.lot)) { const m = map.get(u.lot); m.used = stockRound(u.used); for (const n of String(u.nos || '').split(',')) if (/^\d+$/.test(n)) m.nos.add(Number(n)); }
+  // 줄마다 절 번호를 매긴다(발주입고 줄 먼저, 그다음 기타입고, 각각 id 순) — 입고 상세의 piece_from과 같은 순서
+  const rows = await db.prepare(`SELECT l.lot AS lot, l.pieces AS pieces, l.pieces_temp AS pieces_temp, 0 AS src, l.id AS id FROM po_receipt_lots l JOIN purchase_orders o ON o.id=l.po_id WHERE TRIM(o.item)=? AND l.voided_at IS NULL AND l.pieces IS NOT NULL
+    UNION ALL SELECT lot, pieces, pieces_temp, 1, id FROM other_receipts WHERE TRIM(item)=? AND pieces IS NOT NULL ORDER BY 1, 4, 5`).all(item, item);
+  const map = new Map();
+  for (const r of rows) { const m = map.get(r.lot) || { received: 0, used: 0, nos: new Set(), temp: new Set() }; const from = Math.floor(m.received) + 1; m.received = stockRound(m.received + r.pieces); if (r.pieces_temp) for (let n = from; n <= Math.floor(m.received); n++) m.temp.add(n); map.set(r.lot, m); }
+  const used = await db.prepare("SELECT lot, pieces, piece_nos FROM semi_lot_inputs WHERE TRIM(item)=?").all(item);
+  for (const u of used) { const m = map.get(u.lot); if (!m) continue; const nos = String(u.piece_nos || '').split(',').filter(n => /^\d+$/.test(n)).map(Number);
+    if (nos.length) { for (const n of nos) if (!m.temp.has(n)) { m.nos.add(n); m.used = stockRound(m.used + 1); } } else m.used = stockRound(m.used + (Number(u.pieces) || 0)); }
   return map;
 }
 async function lotBalances(item) {
   const r = await lotStockReport({ q: item, state: 'instock' });
   const pcs = await lotPieces(String(item).trim()); // 15.250 실물(절)
   // 15.251 절 코드 LOT-1 … LOT-N: 아직 안 쓴 번호(pieces_free)
-  return r.rows.filter(x => x.item === String(item).trim() && x.lot !== '(LOT 미지정)').map(x => { const p = pcs.get(x.lot); if (!p) return x; const total = Math.floor(p.received); return { ...x, pieces_in: p.received, pieces_left: stockRound(p.received - p.used), pieces_free: Array.from({ length: Math.min(total, 2000) }, (_, i) => i + 1).filter(n => !p.nos.has(n)) }; }).sort((a, b) => stockCompare(a.first_date, b.first_date) || stockCompare(a.lot, b.lot));
+  return r.rows.filter(x => x.item === String(item).trim() && x.lot !== '(LOT 미지정)').map(x => { const p = pcs.get(x.lot); if (!p) return x; const total = Math.floor(p.received); return { ...x, pieces_in: p.received, pieces_left: stockRound(p.received - p.used), pieces_free: Array.from({ length: Math.min(total, 2000) }, (_, i) => i + 1).filter(n => !p.nos.has(n)), pieces_temp: [...p.temp] }; }).sort((a, b) => stockCompare(a.first_date, b.first_date) || stockCompare(a.lot, b.lot));
 }
 async function actualWithInputs(a) {
   if (!a) return a;
@@ -4711,10 +4718,10 @@ async function semiLotInputs(raw, snapshotText, used = new Map(), made = null) {
     if (nos.length) {
       if (bal.pieces_free === undefined) throw bad(`${item}: LOT ${lot}은 입고 때 실물(절)을 적지 않아 절 번호로 고를 수 없습니다.`);
       const free = new Set(bal.pieces_free), nk = key + '\u0002', taken = used.get(nk) || new Set();
-      const bad1 = nos.find(n => !free.has(n) || taken.has(n)); if (bad1) throw bad(`${item}: ${lot}-${bad1}은 없는 절이거나 이미 투입한 절입니다.`);
+      const tmp = new Set(bal.pieces_temp || []), bad1 = nos.find(n => !free.has(n) || (taken.has(n) && !tmp.has(n))); if (bad1) throw bad(`${item}: ${lot}-${bad1}은 없는 절이거나 이미 투입한 절입니다.`);
       nos.forEach(n => taken.add(n)); used.set(nk, taken);
     }
-    if (pieces !== null && bal.pieces_left !== undefined) { const pk = key + '\u0001', pt = stockRound((used.get(pk) || 0) + pieces); if (pt > bal.pieces_left + 0.000001) throw bad(`${item}: LOT ${lot} 남은 실물 ${stockRound(bal.pieces_left)}절보다 많이 투입할 수 없습니다.`); used.set(pk, pt); }
+    if (pieces !== null && bal.pieces_left !== undefined && !nos.length) { const pk = key + '\u0001', pt = stockRound((used.get(pk) || 0) + pieces); if (pt > bal.pieces_left + 0.000001) throw bad(`${item}: LOT ${lot} 남은 실물 ${stockRound(bal.pieces_left)}절보다 많이 투입할 수 없습니다.`); used.set(pk, pt); }
     out.push({ item: bal.item, unit: bal.unit || mat.unit || '', lot, qty, pieces, piece_nos: nos.join(',') });
   }
   return out;

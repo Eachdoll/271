@@ -470,6 +470,13 @@
       "when": 1797677613000,
       "tag": "0066_lot_piece_nos",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "6",
+      "when": 1797764013000,
+      "tag": "0067_lot_pieces_temp",
+      "breakpoints": true
     }
   ]
 }

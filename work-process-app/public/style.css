@@ -3434,3 +3434,5 @@ table.bill-list tr[data-row-bill].on > td { background: var(--accent-soft) !impo
 .sl-pc:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); font-weight: 700; }
 .vl-grid input { width: 100%; min-width: 7em; }
 .vl-grid td[data-vl-codes] { white-space: nowrap; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.sl-pc em { font-style: normal; font-size: 11px; color: #b7791f; font-family: inherit; }
+.sl-pc.sl-pc-temp { border-style: dashed; }

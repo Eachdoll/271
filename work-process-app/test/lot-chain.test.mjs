@@ -142,3 +142,19 @@ test('15.251 one item received as several vendor LOTs with pieces; pieces get co
   assert.equal(tr.kind, 'piece'); assert.deepEqual(tr.bags.map(b => b.lot), [ok1.body.rows[0].lot]);
   assert.equal((await prod('GET', '/api/lot-trace?lot=L1-2')).body.bags.length, 0, 'an unused piece has no bags');
 });
+
+test('15.252 raw material received without pieces gets a temporary piece LOT-1 that can be picked again; non-raw items do not', async () => {
+  const raw = (await admin('POST', '/api/boms', { product: '임시절원단', product_code: 'TP-1', item_category: '원자재', kind: 'finished', base_qty: 1, unit: 'yd', materials: [] })).body;
+  const goods = (await admin('POST', '/api/boms', { product: '임시절상품', product_code: 'TG-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  const rc = (await admin('POST', '/api/receipts', { receipt_date: today, vendor: '임시상사', request_id: rid(), lines: [{ bom_id: raw.id, lot: 'TMP-A', qty: 500 }, { bom_id: goods.id, lot: 'G-A', qty: 5 }] })).body;
+  assert.deepEqual(rc.lines.map(l => [l.lot, l.pieces, l.pieces_temp, l.piece_from]), [['TMP-A', 1, 1, 1], ['G-A', null, 0, null]]);
+  const lot = (await prod('GET', '/api/lots/available?item=' + encodeURIComponent('임시절원단'))).body.rows[0];
+  assert.deepEqual([lot.pieces_free, lot.pieces_temp], [[1], [1]]);
+  const semi = (await admin('POST', '/api/boms', { product: '임시절 반제품', product_code: 'TPS', item_category: '반제품', kind: 'semi', semi_type: '천와이퍼', base_qty: 1, unit: '매', materials: [{ item: '임시절원단', item_category: '원자재', qty: 1, unit: 'yd' }] })).body;
+  const line = (await prod('GET', '/api/production-units?kind=line')).body[0];
+  const cut = () => prod('POST', '/api/semi-batches', { process: 'cut', common: { work_date: today, unit_id: line.id }, request_id: rid(), items: [{ entry_mode: 'code', bom_id: semi.id, product_group: 'wiper', product_type: '천와이퍼', start_time: '08:00', end_time: '09:00', qty: 100, inputs: [{ item: '임시절원단', lot: 'TMP-A', piece_nos: [1] }] }] });
+  assert.equal((await cut()).status, 200); assert.equal((await cut()).status, 200, 'a temporary piece can be picked again');
+  const after = (await prod('GET', '/api/lots/available?item=' + encodeURIComponent('임시절원단'))).body.rows[0];
+  assert.deepEqual([after.balance, after.pieces_free, after.pieces_left], [300, [1], 1]);
+  assert.equal((await prod('GET', '/api/lot-trace?lot=TMP-A-1')).body.bags.length, 2);
+});
