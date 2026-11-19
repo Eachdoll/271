@@ -292,3 +292,45 @@ test('15.256 concession (특채) on a failed-inspection LOT allows use and shipp
   assert.equal((await ship(1)).status, 400);
   assert.equal((await prod('GET', '/api/inventory/lots?qc=1&q=CC-L1')).body.rows.find(r => r.lot === 'CC-L1').qc, 'fail');
 });
+
+test('15.258 review fixes: progress rows cannot be edited, one progress rule, atomic complete, shipment edits checked', async () => {
+  const raw = (await admin('POST', '/api/boms', { product: '리뷰원단', product_code: 'RV-R', item_category: '원자재', kind: 'finished', base_qty: 1, unit: 'yd', materials: [] })).body;
+  const semiR = await admin('POST', '/api/boms', { product: '리뷰반', product_code: 'RVW', item_category: '반제품', kind: 'semi', semi_type: '천와이퍼', base_qty: 1, unit: '매', materials: [{ item: '리뷰원단', item_category: '원자재', qty: 0.01, unit: 'yd' }] }); assert.equal(semiR.status, 200, JSON.stringify(semiR.body)); const semi = semiR.body;
+  await admin('POST', '/api/receipts', { receipt_date: today, vendor: '리뷰상사', request_id: rid(), lines: [{ bom_id: raw.id, lot: 'RV-L', qty: 5, pieces: 3 }] });
+  const line = (await prod('GET', '/api/production-units?kind=line')).body[0];
+  const cut = extra => prod('POST', '/api/semi-batches', { process: 'cut', common: { work_date: today, unit_id: line.id }, request_id: rid(), items: [{ entry_mode: 'code', bom_id: semi.id, product_group: 'wiper', product_type: '천와이퍼', start_time: '08:00', ...extra }] });
+  // 양품 0·불량만 있으면 작업중이 아님(종료 시각 필요)
+  const d0 = await cut({ work_status: 'progress', qty: 0, defect_qty: 100, inputs: [{ item: '리뷰원단', lot: 'RV-L', piece_nos: [1] }] });
+  assert.equal(d0.status, 400, JSON.stringify(d0.body)); assert.match(d0.body.error, /종료 시각/);
+  const w = await cut({ work_status: 'progress', qty: '', inputs: [{ item: '리뷰원단', lot: 'RV-L', piece_nos: [1] }] }); assert.equal(w.status, 200, JSON.stringify(w.body));
+  const rec = w.body.rows[0];
+  // 작업중 기록은 수정 요청 불가
+  assert.equal((await prod('PUT', `/api/semi-records/${rec.id}`, { ...rec, qty: 500, reason: 'x', request_id: rid() })).status, 409);
+  // 잔량보다 많은 사용량 → 저장 전에 막히고 아무것도 바뀌지 않음
+  const tooMuch = await prod('POST', `/api/semi-records/${rec.id}/complete`, { qty: 1000, end_time: '10:00' });
+  assert.equal(tooMuch.status, 400); assert.match(tooMuch.body.error, /RV-L/);
+  const after = sqlite.prepare('SELECT work_status, qty, end_time FROM semi_records WHERE id=?').get(rec.id);
+  assert.deepEqual({ ...after }, { work_status: 'progress', qty: 0, end_time: null });
+  assert.ok(sqlite.prepare('SELECT qty FROM semi_lot_inputs WHERE record_id=?').get(rec.id).qty < 0.00001);
+  const ok = await prod('POST', `/api/semi-records/${rec.id}/complete`, { qty: 300, end_time: '10:00' }); assert.equal(ok.status, 200);
+  assert.equal(sqlite.prepare('SELECT qty FROM semi_lot_inputs WHERE record_id=?').get(rec.id).qty, 3);
+  assert.equal((await prod('POST', `/api/semi-records/${rec.id}/complete`, { qty: 300, end_time: '10:00' })).status, 200, 'retry returns the saved record');
+  // 포장 작업중은 수정 요청 불가(취소는 가능)
+  const fin = (await admin('POST', '/api/boms', { product: '리뷰제품', product_code: 'RVF', item_category: '제품', kind: 'finished', base_qty: 1, unit: 'BOX', materials: [] })).body;
+  const plan = (await admin('POST', '/api/schedules', { kind: 'finished', period: 'day', start_date: today, qty: 10, bom_id: fin.id, product: '리뷰제품' })).body;
+  const act = (await prod('POST', `/api/schedules/${plan.id}/actuals`, { production_date: today, qty: 5, request_id: rid() })).body;
+  sqlite.prepare("UPDATE production_actuals SET work_status='progress', qty=0 WHERE id=?").run(act.id);
+  assert.equal((await prod('POST', `/api/schedules/${plan.id}/actuals/${act.id}/changes`, { qty: 40, reason: 'x', request_id: rid() })).status, 409);
+  // 출하 수정: 불합격 LOT·잔량 초과 막힘
+  const g = (await admin('POST', '/api/boms', { product: '리뷰상품', product_code: 'RV-G', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  await admin('POST', '/api/receipts', { receipt_date: today, vendor: '리뷰상사', request_id: rid(), lines: [{ bom_id: g.id, lot: 'RG-OK', qty: 50 }, { bom_id: g.id, lot: 'RG-BAD', qty: 50 }] });
+  const req = sqlite.prepare("SELECT id FROM requests WHERE type='analysis' AND lot LIKE '%RG-BAD%'").get();
+  sqlite.prepare("INSERT INTO inspection_measurements(request_id,values_json,result,save_token,updated_by) VALUES(?,?,?,?,?)").run(req.id, '[]', 'fail', rid(), '품질');
+  await admin('POST', '/api/vendors', { name: '리뷰고객', is_sales: true });
+  const sh = (await admin('POST', '/api/shipments', { ship_date: today, item: '리뷰상품', bom_id: g.id, qty: 30, customer: '리뷰고객', lot: 'RG-OK', request_id: rid() })).body;
+  const put = b => admin('PUT', `/api/shipments/${sh.id}`, { ship_date: today, item: '리뷰상품', qty: 30, customer: '리뷰고객', note: '', lot: 'RG-OK', ...b });
+  assert.equal((await put({ qty: 50 })).status, 200, 'same LOT: its own 30 is not counted twice');
+  assert.equal((await put({ qty: 51 })).status, 400, 'over balance');
+  assert.equal((await put({ lot: 'RG-BAD' })).status, 400, 'failed LOT');
+  const lt = await admin('PUT', `/api/items/shipment/${sh.id}`, { spec: '', unit: 'EA', lot: 'RG-BAD' }); assert.notEqual(lt.status, 200);
+});

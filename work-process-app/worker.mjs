@@ -4062,6 +4062,7 @@ route('PUT', '/api/shipments/:id', async ({ user, params, body }) => {
   const fromOrder = await db.prepare("SELECT 1 FROM ship_instructions WHERE shipment_id=? AND status='shipped'").get(row.id);
   if (fromOrder) {
     const lot = body.lot === undefined ? row.lot : str(body.lot, 100), note = body.note === undefined ? row.note : str(body.note, 500);
+    if (lot !== (row.lot || '')) await checkShipLot(row.item, lot, row.qty); // 15.258
     const changed = ['ship_date', 'item', 'qty', 'customer', 'unit', 'spec', 'product_code'].filter(k => body[k] !== undefined && String(body[k]) !== String(row[k] ?? ''));
     if (changed.length || body.bom_id !== undefined) throw new HttpError(409, `${row.item}: 출하지시로 나간 출하는 LOT·메모만 고칠 수 있습니다. 거래처·품목·수량을 바꾸려면 출하를 삭제해 지시를 되돌린 뒤 다시 출하 처리하세요.`);
     await db.prepare('UPDATE shipments SET lot=?,note=? WHERE id=?').run(lot, note, row.id);
@@ -4070,6 +4071,7 @@ route('PUT', '/api/shipments/:id', async ({ user, params, body }) => {
   }
   const f = shipFields(body);
   const entry = nameKey(f[1]) === nameKey(row.item) && row.product_code && body.bom_id === undefined ? { product: row.item, product_code: row.product_code } : await catalogItem(user, body);
+  if (f[5]) { const same = f[5] === (row.lot || '') && nameKey(entry.product) === nameKey(row.item); await checkShipLot(entry.product, f[5], f[2], same ? new Map([[String(entry.product).trim() + '\u0000' + f[5], -Number(row.qty || 0)]]) : null); } // 15.258 이 출하 몫은 빼고 잔량 확인
   await ensureVendor(f[3], user, 'sales');
   (await db.prepare('UPDATE shipments SET ship_date=?,item=?,qty=?,customer=?,note=?,lot=?,product_code=? WHERE id=?').run(f[0], entry.product, ...f.slice(2), entry.product_code, row.id)); await recordEdit('shipment', 'shipments', row.id, row, EDIT_LABELS.shipment, user); return (await mustGet('shipments', row.id));
 });
@@ -4234,17 +4236,17 @@ route('GET', '/api/inventory/lot-history', async ({ query }) => {
   const item = reqStr(query.item, '품목', 200), lot = reqStr(query.lot, 'LOT', 100);
   const q = (sql, ...args) => db.prepare(sql).all(...args);
   const parts = await Promise.all([
-    q(`SELECT l.received_date AS d, 'in' AS kind, '발주입고' AS src, COALESCE(r.receipt_no, p.req_no) AS doc, p.vendor AS party, l.qty, TRIM(l.warehouse || ' ' || l.location) AS place, l.note FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id LEFT JOIN receipts r ON r.id=l.receipt_id WHERE l.voided_at IS NULL AND TRIM(p.item)=TRIM(?) AND l.lot=?`, item, lot),
+    q(`SELECT l.received_date AS d, 'in' AS kind, '발주입고' AS src, COALESCE(r.receipt_no, p.req_no) AS doc, p.vendor AS party, l.qty, TRIM(l.warehouse || ' ' || l.location) AS place, l.note FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id LEFT JOIN receipts r ON r.id=l.receipt_id WHERE l.voided_at IS NULL AND p.recv_status IN ('ok','mismatch') AND TRIM(p.item)=TRIM(?) AND l.lot=?`, item, lot),
     q(`SELECT COALESCE(substr(recv_at,1,10), due_date) AS d, 'in' AS kind, '발주입고' AS src, req_no AS doc, vendor AS party, recv_qty AS qty, '' AS place, recv_note AS note FROM purchase_orders WHERE TRIM(item)=TRIM(?) AND lot=? AND recv_status IN ('ok','mismatch') AND recv_qty IS NOT NULL AND NOT EXISTS(SELECT 1 FROM po_receipt_lots l WHERE l.po_id=purchase_orders.id AND l.voided_at IS NULL)`, item, lot),
     q(`SELECT o.received_date AS d, 'in' AS kind, '기타입고' AS src, COALESCE(r.receipt_no, '') AS doc, o.vendor AS party, o.qty, TRIM(o.warehouse || ' ' || o.location) AS place, o.note FROM other_receipts o LEFT JOIN receipts r ON r.id=o.receipt_id WHERE TRIM(o.item)=TRIM(?) AND o.lot=?`, item, lot),
     q(`SELECT ship_date AS d, 'out' AS kind, '출고' AS src, '' AS doc, customer AS party, qty, '' AS place, note FROM shipments WHERE TRIM(item)=TRIM(?) AND lot=?`, item, lot),
     q(`SELECT r.return_date AS d, CASE r.side WHEN 'in' THEN 'in' ELSE 'out' END AS kind, CASE r.side WHEN 'in' THEN '반입' ELSE '반출' END AS src, r.return_no AS doc, r.party, l.qty, '' AS place, l.reason AS note FROM stock_return_lines l JOIN stock_returns r ON r.id=l.return_id WHERE TRIM(l.item)=TRIM(?) AND l.lot=? AND r.status='confirmed' AND r.process IN ('stock_amount','stock')`, item, lot),
     q(`SELECT a.production_date AS d, 'in' AS kind, '생산' AS src, a.work_order AS doc, '' AS party, a.qty, '' AS place, a.note FROM production_actuals a JOIN schedules s ON s.id=a.schedule_id WHERE TRIM(s.product)=TRIM(?) AND a.lot=? AND a.voided_at IS NULL`, item, lot),
     q(`SELECT a.production_date AS d, 'out' AS kind, '생산 투입' AS src, a.work_order AS doc, s.product AS party, i.qty, '' AS place, a.lot AS note FROM production_lot_inputs i JOIN production_actuals a ON a.id=i.actual_id JOIN schedules s ON s.id=a.schedule_id WHERE TRIM(i.item)=TRIM(?) AND i.lot=? AND a.voided_at IS NULL`, item, lot),
-    q(`SELECT r.work_date AS d, 'out' AS kind, '커팅 투입' AS src, r.lot AS doc, r.unit_name AS party, i.qty, '' AS place, CASE WHEN i.piece_nos<>'' THEN '절 ' || i.piece_nos WHEN i.pieces IS NOT NULL THEN i.pieces || '절' ELSE '' END AS note FROM semi_lot_inputs i JOIN semi_records r ON r.id=i.record_id WHERE TRIM(i.item)=TRIM(?) AND i.lot=?`, item, lot),
+    q(`SELECT r.work_date AS d, 'out' AS kind, CASE WHEN r.work_status='progress' THEN '커팅 투입(작업중)' ELSE '커팅 투입' END AS src, r.lot AS doc, r.unit_name AS party, CASE WHEN r.work_status='progress' THEN 0 ELSE i.qty END AS qty, '' AS place, CASE WHEN i.piece_nos<>'' THEN '절 ' || i.piece_nos WHEN i.pieces IS NOT NULL THEN i.pieces || '절' ELSE '' END AS note FROM semi_lot_inputs i JOIN semi_records r ON r.id=i.record_id WHERE TRIM(i.item)=TRIM(?) AND i.lot=?`, item, lot),
     q(`SELECT transfer_date AS d, 'move' AS kind, '이동' AS src, '' AS doc, from_place AS party, qty, to_place AS place, note FROM stock_transfers WHERE TRIM(item)=TRIM(?) AND lot=? AND status='confirmed'`, item, lot),
   ]);
-  const rows = parts.flat().sort((a, b) => stockCompare(a.d, b.d) || (a.kind === 'in' ? -1 : 1));
+  const KO = { in: 0, out: 1, move: 2 }, rows = parts.flat().sort((a, b) => stockCompare(a.d, b.d) || KO[a.kind] - KO[b.kind] || stockCompare(a.src, b.src) || stockCompare(String(a.doc || ''), String(b.doc || '')));
   let bal = 0; for (const r of rows) { r.qty = stockRound(Number(r.qty) || 0); if (r.kind === 'in') bal = stockRound(bal + r.qty); else if (r.kind === 'out') bal = stockRound(bal - r.qty); r.balance = bal; }
   const st = (await lotQcStates()).get(String(item).trim() + '\u0000' + lot) || null;
   return { item, lot, rows, qc: st };
@@ -4285,7 +4287,7 @@ route('PUT', '/api/items/:entity/:id', async ({ user, params, body }) => {
     const u = await lotUsage(row.item, row.lot); if (u) throw new HttpError(409, lotUsedMessage(row.item, row.lot, u));
     if (row.lot && !user.is_admin) throw new HttpError(403, `LOT 번호는 관리자만 바꿀 수 있습니다(라벨·투입·출하 기록과 어긋나지 않게). 잘못 넣은 경우 관리자에게 요청하세요.`);
   }
-  if (params.entity === 'shipment' && meta.lot !== (row.lot || '')) await checkShipLot(row.item, meta.lot);
+  if (params.entity === 'shipment' && meta.lot !== (row.lot || '')) await checkShipLot(row.item, meta.lot, row.qty); // 15.258 잔량까지
   const set = ['spec=?','unit=?','lot=?']; const args = [meta.spec,meta.unit,meta.lot];
   if (params.entity === 'laundry') { set.push('item=?'); args.push(reqStr(body.item ?? row.item,'옷 종류',200)); }
   if (params.entity === 'request') {
@@ -4357,6 +4359,7 @@ route('GET', '/api/actuals/progress', async () => {
 });
 route('POST', '/api/actuals/:id/complete', async ({ user, params, body }) => {
   const a = await mustGet('production_actuals', params.id);
+  if (a.work_status === 'done' && !a.voided_at && Number(body.qty) === Number(a.qty)) return actualWithInputs(a); // 15.258 재요청
   if (a.work_status !== 'progress' || a.voided_at) throw new HttpError(409, '작업중인 포장 기록이 아닙니다.');
   await actualSchedule(user, a.schedule_id, true);
   const qty = num(body.qty, '실제 생산량'); if (!(qty > 0)) throw bad('생산 수량을 넣으세요.');
@@ -4466,6 +4469,7 @@ async function requestActualChange(user, params, body, action) {
   const row = await db.prepare('SELECT * FROM production_actuals WHERE id=? AND schedule_id=?').get(params.actualId, schedule.id);
   if (!row) throw new HttpError(404, '생산실적을 찾을 수 없습니다.');
   if (row.voided_at) throw bad('이미 취소된 생산실적입니다.');
+  if (row.work_status === 'progress' && action !== 'void') throw new HttpError(409, '작업중인 포장 기록입니다. 완제품 실적 입력에서 수량을 넣고 「저장」하면 작업완료됩니다(수정은 작업완료 뒤).'); // 15.258
   const reason = reqStr(body.reason, action === 'void' ? '취소 사유' : '수정 사유', 500);
   const key = body.request_id === undefined ? randomHex(16) : String(body.request_id);
   if (!/^[a-zA-Z0-9-]{16,80}$/.test(key)) throw bad('요청 번호를 확인하세요.');
@@ -4611,8 +4615,8 @@ async function semiLotValue(process, body, previous) {
   return next;
 }
 // 15.255 작업중: 새 기록에 수량을 비우고 work_status='progress'로 보내면 수량 0으로 저장(나중에 「작업완료」로 수량을 넣음)
-const semiWip = body => body?.work_status === 'progress' && !(Number(body.qty) > 0);
-const semiProgress = body => body?.work_status === 'progress' && (body.qty === '' || body.qty == null);
+const semiWip = body => body?.work_status === 'progress' && !(Number(body.qty) > 0) && !(Number(body.defect_qty) > 0); // 15.258 한 가지 기준
+const semiProgress = semiWip;
 async function semiFields(body, process, previous = null) {
   if (!previous && semiProgress(body)) body = { ...body, qty: 0 };
   const date = dateStr(body.work_date, '작업일'); if (date > today()) throw bad('작업일은 오늘 이전으로 선택하세요.');
@@ -4660,7 +4664,7 @@ function semiWorkDetails(body, previous, process) {
     return value;
   };
   const start = clock('start_time', '시작 시각'), end = clock('end_time', '종료 시각');
-  if (process !== 'wash' && !start !== !end && !(body.work_status === 'progress' && start && !end)) throw bad('시작 시각과 종료 시각을 함께 입력하세요.'); // 15.255 작업중은 시작만
+  if (process !== 'wash' && !start !== !end && !(semiWip(body) && start && !end)) throw bad('시작 시각과 종료 시각을 함께 입력하세요.'); // 15.255 작업중은 시작만
   let hours = previous && body.end_time === undefined && (process === 'wash' || body.start_time === undefined) ? previous.work_hours : null;
   let breakMinutes = body.break_minutes === undefined ? (previous ? previous.break_minutes : 0) : num(body.break_minutes, '휴게시간', { required: false }) ?? 0;
   if (!Number.isInteger(breakMinutes)) throw bad('휴게시간은 분 단위 정수로 입력하세요.');
@@ -4711,7 +4715,7 @@ route('GET', '/api/semi-bags', async ({ query }) => {
   if (state === 'unwashed') where.push("c.work_status='done' AND NOT EXISTS(SELECT 1 FROM semi_records w WHERE w.process='wash' AND w.lot=c.lot)"); // 15.255
   if (state === 'washed') where.push("EXISTS(SELECT 1 FROM semi_records w WHERE w.process='wash' AND w.lot=c.lot AND w.work_status='done')");
   const rows = await db.prepare(`SELECT c.id, c.lot, c.work_date, c.unit_name, c.bom_id, c.item_name, c.product_code, c.product_group, c.product_type, c.qty, c.unit,
-      (SELECT COALESCE(SUM(w.qty + COALESCE(w.defect_qty,0)),0) FROM semi_records w WHERE w.process='wash' AND w.lot=c.lot) AS washed_qty,
+      (SELECT COALESCE(SUM(w.qty + COALESCE(w.defect_qty,0)),0) FROM semi_records w WHERE w.process='wash' AND w.lot=c.lot AND w.work_status='done') AS washed_qty,
       (SELECT MAX(w.work_date) FROM semi_records w WHERE w.process='wash' AND w.lot=c.lot) AS washed_date,
       (SELECT group_concat(DISTINCT a.lot) FROM pack_bag_links p JOIN production_actuals a ON a.id=p.actual_id AND a.voided_at IS NULL WHERE p.bag_lot=c.lot) AS packed_lots
     FROM semi_records c WHERE ${where.join(' AND ')} ORDER BY c.work_date DESC, c.id DESC LIMIT 501`).all(...args);
@@ -4722,7 +4726,7 @@ async function lotTrace(lot) {
   const mats = new Map(), bags = new Map(), fins = new Map();
   const addBag = async b => { if (!b || bags.has(b)) return false; const c = await semiBagRecord(b); if (!c) return false;
     const inputs = await db.prepare('SELECT item, unit, lot, qty, pieces, piece_nos FROM semi_lot_inputs WHERE record_id=? ORDER BY id').all(c.id);
-    const washes = await db.prepare("SELECT work_date, unit_name, qty + COALESCE(defect_qty,0) AS qty, unit FROM semi_records WHERE process='wash' AND lot=? ORDER BY work_date, id").all(b);
+    const washes = await db.prepare("SELECT work_date, unit_name, qty + COALESCE(defect_qty,0) AS qty, unit, CASE WHEN work_status='progress' THEN 1 ELSE 0 END AS wip FROM semi_records WHERE process='wash' AND lot=? ORDER BY work_date, id").all(b);
     bags.set(b, { lot: b, item: c.item_name, product_code: c.product_code, work_date: c.work_date, unit_name: c.unit_name, qty: c.qty, unit: c.unit, inputs, washes, finished: [], ...(c.work_status === 'progress' ? { wip: true } : {}) }); return true; };
   const addFin = async a => { if (!a || fins.has(a.lot)) return false;
     const s = await db.prepare('SELECT product, unit, bom_snapshot FROM schedules WHERE id=?').get(a.schedule_id) || {};
@@ -4869,7 +4873,7 @@ async function semiBagRecord(lot) { return db.prepare("SELECT * FROM semi_record
 async function semiLotLink(process, f, row, usedInputs = new Map(), bagNext = new Map()) {
   if (process === 'cut') {
     if (f.lot && await semiBagRecord(f.lot)) throw bad(`봉투 LOT ${f.lot}은 이미 있습니다. 비워 두면 자동으로 붙습니다.`); // 15.253
-    const progress = row.work_status === 'progress' && !(Number(f.qty) > 0);
+    const progress = semiWip(row);
     let raw = row.inputs; if (progress) { try { raw = (typeof raw === 'string' ? (raw.trim() ? JSON.parse(raw) : []) : raw || []).map(l => ({ ...l, qty: l.qty === undefined || l.qty === '' || l.qty === null ? 0.000001 : l.qty })); } catch { throw bad('투입 원자재 LOT 형식을 확인하세요.'); } } // 15.255 작업중: 사용량은 완료 때
     const inputs = await semiLotInputs(raw, f.bom_snapshot, usedInputs, progress ? null : stockRound((Number(f.qty) || 0) + (Number(f.defect_qty) || 0)));
     if (!f.lot) {
@@ -4889,6 +4893,18 @@ async function semiBagGuard(row, what = '지울') {
   if (await db.prepare("SELECT 1 WHERE EXISTS(SELECT 1 FROM semi_records WHERE process='wash' AND lot=?) OR EXISTS(SELECT 1 FROM pack_bag_links WHERE bag_lot=?)").get(row.lot, row.lot)) throw new HttpError(409, `봉투 LOT ${row.lot}은 이미 세탁·포장에 쓰여 ${what} 수 없습니다. 세탁·포장 기록을 먼저 정리하세요.`);
 }
 // 커팅 기록의 양품·불량이 바뀌면 투입 원자재 사용량(BOM × (양품+불량), 같은 자재 여러 LOT은 절 비율)을 다시 계산
+// 15.258 투입 사용량 계획(쓰지 않고 계산만): [{ id, qty }]. 절이 없는 줄·BOM에 없는 자재는 건너뜀.
+function semiInputsShares(r, inputs) {
+  let mats = [], base = 1; try { const snap = JSON.parse(r.bom_snapshot || '{}'); mats = snap.materials || []; base = Number(snap.base_qty) || 1; } catch { return []; }
+  const made = stockRound((Number(r.qty) || 0) + (Number(r.defect_qty) || 0)), out = [];
+  const byItem = new Map(); for (const i of inputs) { const k = nameKey(i.item); if (!byItem.has(k)) byItem.set(k, []); byItem.get(k).push(i); }
+  for (const [k, list] of byItem) {
+    const mat = mats.find(m => nameKey(m.item) === k); if (!mat || list.some(i => i.pieces == null)) continue;
+    const need = stockRound(made * Number(mat.qty) / base), total = list.reduce((t, i) => t + (Number(i.pieces) || 0), 0); let left = need;
+    list.forEach((i, n) => { const share = n === list.length - 1 ? left : stockRound(total ? need * i.pieces / total : need / list.length); left = stockRound(left - share); out.push({ id: i.id, qty: share > 0 ? share : 0.000001 }); });
+  }
+  return out;
+}
 async function semiInputsRecalc(recordId) {
   const r = await db.prepare('SELECT * FROM semi_records WHERE id=?').get(recordId); if (!r) return;
   const inputs = await db.prepare('SELECT * FROM semi_lot_inputs WHERE record_id=? ORDER BY id').all(recordId); if (!inputs.length) return;
@@ -4960,6 +4976,7 @@ async function requestSemiChange(user, row, action, next, body) {
 route('PUT', '/api/semi-records/:id', async ({ user, params, body }) => {
   const row = await mustGet('semi_records', params.id);
   if (!canModify(user, row) && !canManageProduction(user)) throw new HttpError(403, '등록자 또는 생산 담당자만 수정할 수 있습니다.');
+  if (row.work_status === 'progress') throw new HttpError(409, '작업중 기록입니다. 위 「작업중」 표에서 수량을 넣고 「완료」하세요(수정은 작업완료 뒤, 지우려면 「삭제 요청」).'); // 15.258
   const f = await semiFields(body, row.process, row);
   if (SEMI_APPROVAL_FIELDS.every(key => f[key] === row[key])) {
     if (SEMI_DIRECT_FIELDS.every(key => f[key] === row[key])) throw bad('바뀐 내용이 없습니다.');
@@ -4974,26 +4991,34 @@ route('PUT', '/api/semi-records/:id', async ({ user, params, body }) => {
 // 15.255 작업완료: 작업중 기록에 수량(커팅: 양품·불량·종료시각 / 세탁: 세탁수량)을 넣는다. 커팅은 원자재 사용량을 BOM으로 다시 계산.
 route('POST', '/api/operator/semi-records/:id/complete', context => semiComplete(context));
 route('POST', '/api/semi-records/:id/complete', context => semiComplete(context));
+const fmtQty = n => String(n);
 async function semiComplete({ user, params, body }) {
   const row = await mustGet('semi_records', params.id);
   if (!canModify(user, row) && !canManageProduction(user)) throw new HttpError(403, '등록자 또는 생산 담당자만 작업완료할 수 있습니다.');
-  if (row.work_status !== 'progress') throw new HttpError(409, '이미 작업완료한 기록입니다. 고치려면 「수정」을 쓰세요.');
+  const strip = x => isOperator(user) ? (({ bom_snapshot, request_id, ...y }) => y)(x) : x;
+  if (row.work_status !== 'progress') { if (body.qty !== undefined && Number(body.qty) === Number(row.qty) && (row.process !== 'cut' || Number(body.defect_qty || 0) === Number(row.defect_qty || 0))) return strip(row); throw new HttpError(409, '이미 작업완료한 기록입니다. 고치려면 「수정」을 쓰세요.'); } // 15.258 재요청은 저장된 기록
   let qty = num(body.qty, row.process === 'wash' ? '세탁수량' : '양품수량'), defect = row.process === 'cut' ? num(body.defect_qty, '불량수량', { required: false }) ?? 0 : 0;
   if (!(qty + defect > 0)) throw bad('수량을 넣으세요.');
   const reason = defect ? str(body.defect_reason, 40) : ''; if (reason && !SEMI_DEFECT_REASONS[row.process].includes(reason)) throw bad('불량 사유를 다시 선택하세요.');
   const d = semiWorkDetails({ start_time: body.start_time === undefined ? row.start_time : body.start_time, end_time: body.end_time === undefined ? row.end_time : body.end_time, break_minutes: body.break_minutes, workers: body.workers, defect_qty: defect, defect_reason: reason }, row, row.process);
-  const r = await db.prepare("UPDATE semi_records SET qty=?,defect_qty=?,defect_reason=?,start_time=?,end_time=?,break_minutes=?,work_hours=?,workers=?,work_status='done',updated_by=?,updated_at=? WHERE id=? AND work_status='progress'")
-    .run(qty, defect, reason, d.start_time, d.end_time, d.break_minutes, d.work_hours, d.workers, user.name, now(), row.id);
-  if (!r.changes) throw new HttpError(409, '이미 작업완료한 기록입니다.');
-  if (row.process === 'cut') {
-    await semiInputsRecalc(row.id);
-    if (await db.prepare('SELECT 1 FROM semi_lot_inputs WHERE record_id=? AND qty<0.00001 LIMIT 1').get(row.id)) { await db.prepare("UPDATE semi_records SET qty=0,defect_qty=0,work_status='progress' WHERE id=?").run(row.id); throw bad('투입 원자재 사용량을 BOM으로 계산할 수 없습니다(절 없이 넣은 줄). 「수정」에서 투입을 다시 고르세요.'); }
-    for (const i of await db.prepare('SELECT DISTINCT item, lot FROM semi_lot_inputs WHERE record_id=?').all(row.id)) {
-      const bal = (await lotBalances(i.item)).find(x => x.lot === i.lot) || (await lotStockReport({ q: i.lot })).rows.find(x => x.item === String(i.item).trim() && x.lot === i.lot);
-      if (bal && bal.balance < -0.000001) { await db.prepare("UPDATE semi_records SET qty=0,defect_qty=0,work_status='progress' WHERE id=?").run(row.id); await db.prepare('UPDATE semi_lot_inputs SET qty=0.000001 WHERE record_id=?').run(row.id); throw bad(`${i.item}: LOT ${i.lot} 재고가 모자랍니다(BOM 사용량이 잔량보다 많음). 수량이나 투입 절을 확인하세요.`); }
+  const inputCmds = [];
+  if (row.process === 'cut') { // 사용량을 먼저 계산하고 LOT 잔량을 확인한 뒤 한 번에 저장
+    const inputs = await db.prepare('SELECT * FROM semi_lot_inputs WHERE record_id=? ORDER BY id').all(row.id);
+    const shares = new Map(semiInputsShares({ ...row, qty, defect_qty: defect }, inputs).map(x => [x.id, x.qty]));
+    const stuck = inputs.find(i => !shares.has(i.id) && Number(i.qty) < 0.00001);
+    if (stuck) throw bad(`${stuck.item} ${stuck.lot}: 투입 사용량을 BOM으로 계산할 수 없습니다(절 없이 넣었거나 BOM에 없는 자재). 이 기록은 「삭제 요청」 후 다시 입력하세요.`);
+    const groups = new Map(); for (const i of inputs) { const k = i.item + '\u0000' + i.lot, g = groups.get(k) || { item: i.item, lot: i.lot, was: 0, now: 0 }; g.was += Number(i.qty) || 0; g.now += shares.has(i.id) ? shares.get(i.id) : Number(i.qty) || 0; groups.set(k, g); }
+    for (const g of groups.values()) {
+      const bal = (await lotStockReport({ q: g.lot })).rows.find(x => x.item === String(g.item).trim() && x.lot === g.lot);
+      if (bal && stockRound(bal.balance + g.was - g.now) < -0.000001) throw bad(`${g.item}: LOT ${g.lot} 남은 수량 ${fmtQty(stockRound(bal.balance + g.was))}보다 BOM 사용량 ${fmtQty(stockRound(g.now))}이 많습니다. 수량이나 투입 절을 확인하세요.`);
     }
+    for (const [id, q] of shares) inputCmds.push({ sql: 'UPDATE semi_lot_inputs SET qty=? WHERE id=?', args: [q, id] });
   }
-  const done = await mustGet('semi_records', row.id); return isOperator(user) ? (({ bom_snapshot, request_id, ...x }) => x)(done) : done;
+  try {
+    await db.batch([{ sql: "UPDATE semi_records SET qty=?,defect_qty=?,defect_reason=?,start_time=?,end_time=?,break_minutes=?,work_hours=?,workers=?,work_status='done',updated_by=?,updated_at=? WHERE id=? AND work_status='progress'",
+      args: [qty, defect, reason, d.start_time, d.end_time, d.break_minutes, d.work_hours, d.workers, user.name, now(), row.id] }, RC_GUARD, ...inputCmds]);
+  } catch (error) { if (isGuardError(error)) throw new HttpError(409, '이미 작업완료한 기록입니다.'); throw error; }
+  return strip(await mustGet('semi_records', row.id));
 }
 route('DELETE', '/api/semi-records/:id', async ({ user, params, body }) => {
   const row = await mustGet('semi_records', params.id);
