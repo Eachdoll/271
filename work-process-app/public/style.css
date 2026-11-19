@@ -3061,3 +3061,35 @@ form.list-filters > label.rp-moved, .toolbar > label.rp-moved { display: none !i
 /* 바닥: 맑은 민트 */
 :root[data-skin="kha"]:not([data-theme="dark"]) body { background-color: #f3faf6; }
 @media print { :root[data-skin="kha"] .top::after, :root[data-skin="kha"] .brand-text::after, :root[data-skin="kha"] .dash-head h1::after, :root[data-skin="kha"] .empty::before, :root[data-skin="kha"] .dash-section > h2::before, :root[data-skin="kha"] .tasks h2::before { display: none; } :root[data-skin="kha"] body { background: #fff; } }
+
+/* 15.229 입고현황·납품현황 「보기」: 작은 동그라미 대신 위 금액 칸과 같은 폭의 큰 단추 줄(누르기 쉬움). 동그라미는 화면에서만 숨기고 키보드·읽기 프로그램은 그대로 */
+.rs-modes { display: grid; grid-template-columns: auto repeat(4, 1fr); gap: 0; align-items: stretch; margin: 10px 0 12px; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--panel); }
+.rs-page .rs-modes { margin: 10px 0 12px; }
+.rs-modes > span { display: flex; align-items: center; padding: 0 14px; font-size: 13px; font-weight: 700; color: var(--muted); background: var(--erp-head, #f3f6fa); border-right: 1px solid var(--line); }
+.rs-modes label.inline { position: relative; justify-content: center; min-height: 46px; padding: 8px 10px; font-size: 15px; font-weight: 700; color: var(--text); cursor: pointer; border-right: 1px solid var(--line); transition: background .12s, color .12s; }
+.rs-modes label.inline:last-child { border-right: 0; }
+.rs-modes label.inline:hover { background: var(--row-hover, #f3f8ff); }
+.rs-modes label.inline input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.rs-modes label.inline:has(input:checked) { background: var(--accent-soft, #e8f0fe); color: var(--accent, #1f6fd8); box-shadow: inset 0 -3px 0 var(--accent, #1f6fd8); }
+.rs-modes label.inline:has(input:focus-visible) { outline: 2px solid var(--accent, #1f6fd8); outline-offset: -3px; }
+@media (max-width: 640px) {
+  .rs-modes { grid-template-columns: repeat(2, 1fr); }
+  .rs-modes > span { display: none; }
+  .rs-modes label.inline { min-height: 44px; font-size: 14px; border-bottom: 1px solid var(--line); }
+  .rs-modes label.inline:nth-of-type(2n) { border-right: 0; }
+}
+
+/* 15.229 고른 줄 색: 다크 모드(기기 설정·직접 고름 둘 다)에서 밝은 살구색 바탕에 흰 글자가 되어 안 보이던 것 → 어두운 호박색 바탕 + 밝은 글자, 왼쪽 강조선 */
+:root { --sel-row-bg: #fde3c8; --sel-row-ink: inherit; --sel-row-bar: #e8590c; --sc-sum-ink: #8a1c1c; }
+:root[data-theme="dark"] { --sel-row-bg: #4a3417; --sel-row-ink: #ffe8c7; --sel-row-bar: #f59f00; --sc-sum-ink: #ff9b9b; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --sel-row-bg: #4a3417; --sel-row-ink: #ffe8c7; --sel-row-bar: #f59f00; --sc-sum-ink: #ff9b9b; } }
+.sc-table tr.sc-row.on > td, .rs-grid tr.rs-on td { background: var(--sel-row-bg) !important; color: var(--sel-row-ink) !important; }
+.sc-table tr.sc-row.on > td:first-child, .rs-grid tr.rs-on td:first-child { box-shadow: inset 3px 0 0 var(--sel-row-bar); }
+.sc-table tr.sc-row.on > td * { color: inherit; }
+.sc-sum th { color: var(--sc-sum-ink); }
+:root[data-theme="dark"] .rs-grid tbody tr:hover td { background: var(--row-hover, #1e2633); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .rs-grid tbody tr:hover td { background: var(--row-hover, #1e2633); } }
+@media (max-width: 820px) {
+  table.m-grid.sc-table tr.sc-row.on { background: var(--sel-row-bg); box-shadow: inset 3px 0 0 var(--sel-row-bar); }
+  table.m-grid.sc-table tr.sc-row.on > td { color: var(--sel-row-ink) !important; }
+}
