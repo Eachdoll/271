@@ -20,8 +20,10 @@ function rcLocationOptions(warehouse, value = '') {
   return `<option value="">${list.length ? '선택' : '—'}</option>${list.map(l => `<option${l === value ? ' selected' : ''}>${esc(l)}</option>`).join('')}`;
 }
 
+// 15.234 입고 입력 아래 「발주입고 | 기타입고」 줄(입고목록·입고 입력·입고증 목록 탭 바로 아래)
+const rcKindTabs = on => `<nav class="rc-kind-tabs" aria-label="입고 구분"><a href="#/logistics/receipt/new" class="${on === 'po' ? 'on' : ''}"${on === 'po' ? ' aria-current="page"' : ''}><span class="rc-kind-dot po"></span>발주입고</a><a href="#/logistics/receipt/other" class="${on === 'other' ? 'on' : ''}"${on === 'other' ? ' aria-current="page"' : ''}><span class="rc-kind-dot other"></span>기타입고</a></nav>`;
 async function pageReceiptEntry(main) {
-  main.innerHTML = `<h1>입고 입력</h1>
+  main.innerHTML = `<h1>입고 입력</h1>${rcKindTabs('po')}
   <p class="muted">입고일·거래처를 한 번 넣고, 아래 표에 받은 품목을 LOT별로 입력합니다. 발주입고는 그 거래처의 미입고 발주를 불러오고, 기타입고는 품목 찾기로 담습니다. 한 품목에 LOT가 여러 개면 「LOT 나누기」를 누르세요. 엑셀에서 복사한 열을 붙여넣으면 그 칸부터 아래 줄을 차례로 채우고(LOT 칸에는 LOT·수량 두 열도 됨), 표 끝을 넘을 때만 줄이 늘어납니다. 저장하면 입고번호로 묶여 입고증이 열립니다.</p>
   <form class="stack rc-form" data-no-author novalidate>
     <div class="rc-head">
@@ -525,4 +527,114 @@ async function pageQrBulk(main) {
   form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
   form.elements.instock.onchange = () => load().catch(fail);
   await load();
+}
+
+// ── 15.234 기타입고: 위 「기타입고내역」(입고번호 OTS_YYMMDD_NNNN · 입고일 · 거래처 · 입고담당자 · 비고) → 아래 「기타입고 상세내역」(LOT NO · 품목 · 입하수량 · 창고 · 로케이션 · 비고 · 업체정보) ──
+const OT_PREFIX = { 원자재: 'R', 제품: 'P', 반제품: 'P', 상품: 'G', 부자재: 'S', 소모품: 'C' };
+async function pageOtherReceiptHeads(main) {
+  await rcLoadWarehouses(true);
+  const y = todayStr().slice(0, 7) + '-01';
+  main.innerHTML = `<h1>입고 입력</h1>${rcKindTabs('other')}
+  <form class="list-filters toolbar" data-read-only id="otFilters"><label>입고일<input type="date" name="from" value="${y}"></label><label>~<input type="date" name="to" value="${todayStr()}"></label><label>협력사<input name="vendor" maxlength="100" autocomplete="off" placeholder="협력사 검색"></label><label class="list-search">품목코드/명<input type="search" name="q" maxlength="100" placeholder="입고번호·품목코드/명·LOT"></label><button class="btn primary">조회</button></form>
+  <section class="ot-sec"><div class="ot-head"><h2>☰ 기타입고내역 <span class="small muted" id="otCount"></span></h2><span class="grow"></span><button type="button" class="btn" id="otAdd">추가</button><button type="button" class="btn danger" id="otDel" disabled>삭제</button></div>
+    <div id="otHeads"><p class="muted">불러오는 중…</p></div></section>
+  <section class="ot-sec"><div class="ot-head ot-head2"><h2>☰ 기타입고상세내역 <span class="small muted" id="otLabel"></span></h2>
+      <label class="inline">입고창고 <select id="otWh">${rcWarehouseOptions()}</select></label><label class="inline">위치 <select id="otLoc" disabled><option value="">—</option></select></label><button type="button" class="btn" id="otApply" disabled>일괄적용</button>
+      <span class="grow"></span><button type="button" class="btn" id="otLineAdd" disabled>추가</button><button type="button" class="btn danger" id="otLineDel" disabled>삭제</button><button type="button" class="btn qr-pdf-btn" id="otQr" disabled>QR코드</button><button type="button" class="btn primary" id="otSave" disabled>저장</button></div>
+    <div id="otLines"><div class="empty">위 기타입고내역에서 입고번호를 고르거나 「추가」로 새 입고번호를 만드세요.</div></div></section>`;
+  const form = $('#otFilters', main); let heads = [], cur = null, lines = [], catalog = null, seq = 0;
+  if (typeof bindPartnerPicker === 'function') bindPartnerPicker(form.elements.vendor, null, { type: 'purchase' }).catch(() => {});
+  if (typeof rangePresets === 'function') rangePresets(form.elements.from, form.elements.to, { onPick: () => loadHeads().catch(fail) });
+  const loadHeads = async (keep = cur?.id) => {
+    const v = formObj(form);
+    const data = await api('GET', '/api/receipts?' + new URLSearchParams({ kind: 'other', from: v.from || '', to: v.to || '', vendor: v.vendor || '', q: v.q || '' })); if (!main.isConnected) return;
+    heads = data.rows; $('#otCount', main).textContent = `${fmtNum(heads.length)}건`;
+    $('#otHeads', main).innerHTML = heads.length ? `<div class="table-wrap"><table class="grid keep-table ot-grid" data-no-sort data-keep-cols><thead><tr><th class="c">No.</th><th>입고번호</th><th>입고일</th><th>거래처(협력사)</th><th>입고담당자</th><th class="c">품목</th><th>비고</th></tr></thead><tbody>${heads.map((r, i) => `<tr class="row-open${r.id === keep ? ' on' : ''}" data-ot-head="${r.id}" tabindex="0" title="누르면 아래에 상세내역 · 두 번 누르면 고치기"><td class="c">${i + 1}</td><td class="nowrap"><b>${esc(r.receipt_no)}</b></td><td class="nowrap">${esc(r.receipt_date)}</td><td>${esc(r.vendor)}</td><td>${esc(r.created_by)}</td><td class="c">${r.line_count ? fmtNum(r.line_count) : '<span class="muted">0</span>'}</td><td>${esc(r.note || '')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">이 기간에 기타입고가 없습니다. 「추가」로 입고번호를 만드세요.</div>';
+    if (keep && heads.some(r => r.id === keep)) await pick(keep); else if (!heads.some(r => r.id === cur?.id)) { cur = null; lines = []; drawLines(); }
+  };
+  const dirty = () => lines.some(l => l.isNew || l.changed);
+  const pick = async id => {
+    if (cur && cur.id !== id && dirty() && !await confirmBox('저장하지 않은 상세 줄이 있습니다. 다른 입고번호로 바꿀까요?')) return;
+    const my = ++seq, r = await api('GET', '/api/receipts/' + id); if (my !== seq || !main.isConnected) return;
+    cur = r; lines = r.lines.filter(l => l.kind === 'other').map(l => ({ ...l, key: 'o' + l.id }));
+    $$('[data-ot-head]', main).forEach(tr => tr.classList.toggle('on', Number(tr.dataset.otHead) === id));
+    drawLines();
+  };
+  const picked = () => $$('[data-ot-pick]:checked', main).map(x => lines.find(l => l.key === x.dataset.otPick)).filter(Boolean);
+  const sync = () => {
+    const has = !!cur, n = picked().length;
+    $('#otDel', main).disabled = !has; $('#otLineAdd', main).disabled = !has; $('#otApply', main).disabled = !has || !lines.length; $('#otLineDel', main).disabled = !n; $('#otQr', main).disabled = !has || !lines.some(l => !l.isNew);
+    const s = $('#otSave', main); s.disabled = !dirty(); s.textContent = dirty() ? `저장 (${lines.filter(l => l.isNew || l.changed).length})` : '저장';
+  };
+  const drawLines = () => {
+    $('#otLabel', main).textContent = cur ? `${cur.receipt_no} · ${cur.receipt_date} · ${cur.vendor}` : '';
+    $('#otLines', main).innerHTML = !cur ? '<div class="empty">위 기타입고내역에서 입고번호를 고르거나 「추가」로 새 입고번호를 만드세요.</div>' : lines.length ? `<div class="table-wrap"><table class="grid keep-table ot-grid ot-lines" data-no-sort data-keep-cols><thead><tr><th class="c">No.</th><th class="pick-cell"><input type="checkbox" data-ot-all aria-label="모두 고르기"></th><th>LOT NO</th><th>품목코드</th><th>품목명</th><th>품목분류</th><th class="r">입하수량</th><th>입고창고</th><th>로케이션</th><th>비고</th><th>업체정보</th></tr></thead><tbody>${lines.map((l, i) => `<tr data-ot-line="${l.key}" class="${l.isNew ? 'ot-new' : l.changed ? 'ot-changed' : ''}"><td class="c">${i + 1}</td><td class="pick-cell"><input type="checkbox" data-ot-pick="${l.key}" aria-label="${esc(l.item)} 고르기"></td>
+      <td class="nowrap"><input data-f="lot" value="${esc(l.lot || '')}" maxlength="100" aria-label="LOT NO" class="ot-lot">${!l.isNew && l.sub_lot ? `<span class="small muted">-${esc(l.sub_lot)}</span>` : ''}</td><td class="nowrap">${esc(l.product_code || '')}</td><td><b>${esc(l.item)}</b>${l.spec ? ` <span class="small muted">${esc(l.spec)}</span>` : ''}</td><td>${esc(l.item_category || '')}</td>
+      <td class="r">${l.isNew ? `<input type="number" data-f="qty" min="0" step="any" inputmode="decimal" value="${esc(l.qty ?? '')}" aria-label="입하수량" style="width:6em">` : `${fmtNum(l.qty)} <span class="small muted">${esc(l.unit || '')}</span>`}</td>
+      <td><select data-f="warehouse" aria-label="입고창고">${rcWarehouseOptions(l.warehouse || '')}</select></td><td><select data-f="location" aria-label="로케이션"${rcLocations(l.warehouse).length ? '' : ' disabled'}>${rcLocationOptions(l.warehouse, l.location || '')}</select></td>
+      <td><input data-f="note" value="${esc(l.note || '')}" maxlength="200" aria-label="비고"></td><td><input data-f="note2" value="${esc(l.note2 || '')}" maxlength="200" aria-label="업체정보"></td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="empty">상세 줄이 없습니다. 오른쪽 위 「추가」로 품목을 담으세요.</div>';
+    sync();
+  };
+  // 머리: 추가·고치기·삭제
+  const headForm = (r = {}) => `<div class="form-grid"><label>입고일 *<input type="date" name="receipt_date" required value="${esc(r.receipt_date || todayStr())}" max="${todayStr()}"${r.line_count ? ' disabled' : ''}></label><label>거래처(협력사) *<input name="vendor" required maxlength="100" value="${esc(r.vendor || '')}" autocomplete="off"${r.line_count ? ' disabled' : ''}></label><label class="span2">비고<input name="note" maxlength="500" value="${esc(r.note || '')}"></label></div>${r.line_count ? '<p class="small muted">품목이 담긴 입고는 비고만 고칠 수 있습니다.</p>' : ''}`;
+  const bindVendor = el => { const i = $('[name=vendor]', el); if (i && !i.disabled && typeof bindPartnerPicker === 'function') bindPartnerPicker(i, null, { type: 'purchase' }).catch(() => {}); };
+  $('#otAdd', main).onclick = async () => {
+    const v = await promptBox('기타입고 추가 · 입고번호 만들기', `<p class="small muted">입고번호는 OTS_입고일(YYMMDD)_순번으로 붙습니다. 만든 뒤 아래 상세내역에서 품목을 담으세요.</p>${headForm()}`, { onOpen: bindVendor }); if (!v) return;
+    try { const r = await api('POST', '/api/receipts/other', { ...v, request_id: crypto.randomUUID() }); toast(`${r.receipt_no}를 만들었습니다. 「추가」로 품목을 담으세요.`); if (r.receipt_date < form.elements.from.value) form.elements.from.value = r.receipt_date; await loadHeads(r.id); } catch (error) { fail(error); }
+  };
+  const editHead = async id => { const r = heads.find(x => x.id === id); if (!r) return; const v = await promptBox(`${r.receipt_no} 고치기`, headForm(r), { onOpen: bindVendor }); if (!v) return; try { await api('PUT', '/api/receipts/' + id, v); toast('고쳤습니다.'); await loadHeads(id); } catch (error) { fail(error); } };
+  $('#otDel', main).onclick = async () => {
+    if (!cur) return; if (lines.some(l => !l.isNew)) return toast(`${cur.receipt_no}에 상세 줄이 있습니다. 줄을 먼저 지우세요(체크 → 삭제).`, 'err');
+    if (!await confirmBox(`${cur.receipt_no}를 지울까요?`)) return;
+    try { await api('DELETE', '/api/receipts/' + cur.id); toast('지웠습니다.'); cur = null; lines = []; await loadHeads(); } catch (error) { fail(error); }
+  };
+  // 상세: 추가(품목 찾기) → LOT 자동 제안
+  $('#otLineAdd', main).onclick = async () => {
+    if (!cur) return; if (!catalog) catalog = await api('GET', '/api/boms?temp=1').catch(() => []);
+    const pickR = await openItemPicker(catalog, { title: '기타입고 품목 찾기', filter: b => !['반제품', '임가공'].includes(b.item_category), multi: true, autoLotBox: false }); if (!pickR) return;
+    const made = pickR.items.flatMap(({ bom, count }) => Array.from({ length: count || 1 }, () => ({ key: 'n' + Math.random().toString(36).slice(2), isNew: true, bom_id: bom.id, item: bom.product, product_code: bom.product_code || '', item_category: bom.item_category || '', unit: bom.unit || '', spec: (bom.sizes || []).length ? '' : bom.spec || '', qty: '', lot: '', warehouse: $('#otWh', main).value, location: $('#otLoc', main).value, note: '', note2: bom.vendor_info || '' })));
+    // 같은 품목 줄은 같은 LOT(박스마다 서브 번호), 품목마다 다음 LOT 번호
+    const byItem = new Map(); for (const l of made) { const k = l.bom_id; if (!byItem.has(k)) byItem.set(k, []); byItem.get(k).push(l); }
+    const used = new Map();
+    for (const [, ls] of byItem) { const pre = OT_PREFIX[ls[0].item_category] || 'M', n = (used.get(pre) || 0) + 1; used.set(pre, n);
+      const lots = (await api('GET', '/api/lots/next?' + new URLSearchParams({ prefix: pre, date: cur.receipt_date, count: n })).catch(() => ({ lots: [] }))).lots; const lot = lots[n - 1] || ''; ls.forEach(l => { l.lot = lot; }); }
+    lines.push(...made); drawLines(); $(`[data-ot-line="${made[0].key}"] [data-f="qty"]`, main)?.focus();
+    toast(`${made.length}줄을 담았습니다. 입하수량·LOT NO를 확인하고 「저장」하세요.`);
+  };
+  const box = $('#otLines', main);
+  box.addEventListener('input', e => { const tr = e.target.closest('[data-ot-line]'); if (!tr || !e.target.dataset.f) return; const l = lines.find(x => x.key === tr.dataset.otLine); l[e.target.dataset.f] = e.target.value; if (!l.isNew) { l.changed = true; tr.classList.add('ot-changed'); } sync(); });
+  box.addEventListener('change', e => {
+    if (e.target.matches('[data-ot-all]')) { $$('[data-ot-pick]', box).forEach(x => { x.checked = e.target.checked; }); return sync(); }
+    if (e.target.matches('[data-ot-pick]')) return sync();
+    const tr = e.target.closest('[data-ot-line]'); if (!tr || !e.target.dataset.f) return; const l = lines.find(x => x.key === tr.dataset.otLine); l[e.target.dataset.f] = e.target.value; if (!l.isNew) l.changed = true;
+    if (e.target.dataset.f === 'warehouse') { l.location = ''; const loc = $('[data-f=location]', tr); loc.innerHTML = rcLocationOptions(l.warehouse); loc.disabled = !rcLocations(l.warehouse).length; }
+    tr.classList.toggle('ot-changed', !!l.changed && !l.isNew); sync();
+  });
+  $('#otWh', main).onchange = e => { const loc = $('#otLoc', main); loc.innerHTML = rcLocationOptions(e.target.value); loc.disabled = !rcLocations(e.target.value).length; };
+  $('#otApply', main).onclick = () => { const wh = $('#otWh', main).value, loc = $('#otLoc', main).value; if (!wh) return toast('입고창고를 고르세요.', 'err'); const target = picked().length ? picked() : lines; for (const l of target) { l.warehouse = wh; l.location = loc; if (!l.isNew) l.changed = true; } drawLines(); toast(`${picked().length ? '체크한' : '모든'} ${target.length}줄에 ${wh}${loc ? ' · ' + loc : ''}을(를) 넣었습니다. 「저장」하세요.`); };
+  $('#otLineDel', main).onclick = async () => {
+    const list = picked(); if (!list.length) return; const saved = list.filter(l => !l.isNew);
+    if (saved.length && !await confirmBox(`저장된 ${saved.length}줄을 지울까요? (재고에서 빠집니다)`)) return;
+    for (const l of saved) { try { await api('DELETE', '/api/other-receipts/' + l.id); } catch (error) { fail(error); return pick(cur.id); } }
+    lines = lines.filter(l => !list.includes(l)); if (saved.length) { toast(`${saved.length}줄을 지웠습니다.`); await loadHeads(cur.id); } else drawLines();
+  };
+  $('#otSave', main).onclick = async e => {
+    const btn = e.currentTarget, nw = lines.filter(l => l.isNew), ch = lines.filter(l => l.changed && !l.isNew);
+    const bad = nw.find(l => !(Number(l.qty) > 0)); if (bad) { $(`[data-ot-line="${bad.key}"] [data-f="qty"]`, main)?.focus(); return toast(`${bad.item}: 입하수량을 넣으세요.`, 'err'); }
+    btn.disabled = true;
+    try {
+      if (nw.length) await api('POST', `/api/receipts/${cur.id}/lines`, { request_id: crypto.randomUUID(), lines: nw.map(l => ({ bom_id: l.bom_id, item: l.item, item_category: l.item_category, spec: l.spec, qty: l.qty, lot: l.lot, warehouse: l.warehouse, location: l.location, note: l.note, note2: l.note2 })) });
+      for (const l of ch) await api('PUT', `/api/other-receipts/${l.id}/place`, { lot: l.lot, warehouse: l.warehouse, location: l.location, note: l.note, note2: l.note2 });
+      toast(`저장했습니다.${nw.length ? ` 새 줄 ${nw.length}` : ''}${ch.length ? ` · 고친 줄 ${ch.length}` : ''}`);
+      await loadHeads(cur.id);
+    } catch (error) { fail(error); sync(); }
+  };
+  $('#otQr', main).onclick = () => { const list = (picked().length ? picked() : lines).filter(l => !l.isNew); if (!list.length) return toast('저장된 줄만 QR을 발행할 수 있습니다.', 'err'); qrIssue(list.map(l => ({ code: lotFull(l) || `${cur.receipt_no}-${l.id}`, sub: [`${l.item}${l.spec ? ' ' + l.spec : ''}`, `${fmtNum(l.qty)} ${l.unit || ''}`.trim(), [l.warehouse, l.location].filter(Boolean).join(' '), cur.receipt_no].filter(Boolean).join(' · ') })), { title: `QR코드 발행 · ${cur.receipt_no}`, file: 'LOT라벨' }); };
+  main.addEventListener('click', e => { const tr = e.target.closest('[data-ot-head]'); if (tr) pick(Number(tr.dataset.otHead)).catch(fail); });
+  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-ot-head]'); if (tr) editHead(Number(tr.dataset.otHead)).catch(fail); });
+  main.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('[data-ot-head]')) { e.preventDefault(); e.target.click(); } });
+  form.onsubmit = e => { e.preventDefault(); loadHeads().catch(fail); };
+  await loadHeads();
+  if (heads[0] && !cur) await pick(heads[0].id);
 }
