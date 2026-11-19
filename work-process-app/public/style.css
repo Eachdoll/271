@@ -3482,3 +3482,6 @@ tr.lot-tk-sub > td { background: #fffbe6 !important; box-shadow: inset 3px 0 0 #
 .stock-tree .st-tabs button { border: 0; background: none; padding: 8px 6px; border-radius: 6px; font: inherit; font-weight: 600; color: var(--muted); cursor: pointer; }
 .stock-tree .st-tabs button[aria-selected="true"] { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 .stock-tree .st-set { margin: 12px 6px 4px; padding-top: 10px; border-top: 1px solid var(--line); }
+
+/* 15.261 커스텀 캐릭터 스킨: 메뉴줄·탭줄도 고른 색의 옅은 색(밝은 화면, theme.js가 --ct-bar를 넣을 때만) */
+:root[data-skin="cat"]:not([data-theme="dark"]) .side, :root[data-skin="cat"]:not([data-theme="dark"]) .page-tabs { background: var(--ct-bar, var(--panel)); }

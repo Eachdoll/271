@@ -33,18 +33,26 @@ function skinFace() { try { const v = localStorage.getItem(FACE_KEY) || ''; retu
 const COLOR_KEY = 'wpa:skin-color', SKIN_SWATCHES = ['#e60033', '#ff6f91', '#f08c00', '#2f9e44', '#1c7ed6', '#7048e8', '#495057', '#8b5a3c'];
 function skinColor() { try { const v = localStorage.getItem(COLOR_KEY) || ''; return /^#[0-9a-f]{6}$/i.test(v) ? v : ''; } catch { return ''; } }
 function shade(hex, f) { const n = parseInt(hex.slice(1), 16), c = [n >> 16, (n >> 8) & 255, n & 255].map(v => Math.round(f < 0 ? v * (1 + f) : v + (255 - v) * f)); return '#' + c.map(v => Math.max(0, Math.min(255, v)).toString(16).padStart(2, '0')).join(''); }
+// 15.261 바탕까지 고른 색으로: 밝은 화면에서 바닥·메뉴줄·탭줄·조회 상자·회색 칩/단추를 그 색의 옅은 색으로, 기본 하트도 그 색. 어두운 화면은 그대로.
+const isDarkNow = () => { const t = document.documentElement.dataset.theme; return t === 'dark' || (t !== 'light' && !!window.matchMedia?.('(prefers-color-scheme: dark)').matches); };
+const heartSvg = (fill, w, h, d, shine) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${w} ${h}'><path d='${d}' fill='${fill}'/>${shine}</svg>`)}")`;
 function applySkinColor() {
-  const root = document.documentElement, c = skinColor(), on = c && root.dataset.skin === 'cat';
+  const root = document.documentElement, c = skinColor(), on = c && root.dataset.skin === 'cat', light = on && !isDarkNow();
+  const tintVars = { '--bg': shade(c, 0.9), '--ns-panel': shade(c, 0.95), '--ct-bar': shade(c, 0.93) };
+  for (const [k, v] of Object.entries(tintVars)) { if (light) root.style.setProperty(k, v); else root.style.removeProperty(k); }
+  const heart = on ? shade(c, 0.2) : '';
+  if (on) root.style.setProperty('--ct-bow', heartSvg(heart, 24, 22, 'M12 21 S1 14 1 7 C1 3 4 1 7 1 c2.4 0 4 1.4 5 3 c1-1.6 2.6-3 5-3 c3 0 6 2 6 6 c0 7-11 14-11 14z', '')); else root.style.removeProperty('--ct-bow');
+  if (!skinFace()) { if (on) root.style.setProperty('--ct-face', heartSvg(heart, 32, 30, 'M16 28 S2 19.5 2 10 C2 5 5.6 2 9.6 2 c2.9 0 5 1.6 6.4 3.8 C17.4 3.6 19.5 2 22.4 2 C26.4 2 30 5 30 10 c0 9.5-14 18-14 18z', "<path d='M8 8 q2-3 5-2' fill='none' stroke='#fff' stroke-width='2' stroke-linecap='round' opacity='.7'/>")); else root.style.removeProperty('--ct-face'); }
   const vars = { '--ct-main': c, '--ct-top': shade(c, 0.12), '--ct-top1': shade(c, 0.25), '--ct-top2': shade(c, -0.08), '--ns-navy': shade(c, 0.12), '--ns-navy-2': shade(c, 0.25), '--ns-pill': c, '--accent': c, '--btn-primary': c, '--btn-primary-hover': shade(c, -0.18),
     // 15.246 바탕·표 머리·줄 강조도 고른 색의 옅은 색으로(다크 모드는 style.css의 어두운 값이 이김)
-    '--ct-bg': shade(c, 0.95), '--ct-soft': shade(c, 0.86), '--ct-head': shade(c, 0.89), '--ct-ink': shade(c, -0.18), '--ct-line': shade(c, 0.72), '--ct-hover': shade(c, 0.93), '--ct-zebra': shade(c, 0.97) };
+    '--ct-bg': shade(c, 0.86), '--ct-soft': shade(c, 0.86), '--ct-head': shade(c, 0.89), '--ct-ink': shade(c, -0.18), '--ct-line': shade(c, 0.72), '--ct-hover': shade(c, 0.93), '--ct-zebra': shade(c, 0.97) };
   for (const [k, v] of Object.entries(vars)) { if (on) root.style.setProperty(k, v); else root.style.removeProperty(k); }
   for (const b of document.querySelectorAll('.skin-face .sw')) b.classList.toggle('on', b.dataset.sw === c);
   for (const i of document.querySelectorAll('.skin-face input[type=color]')) i.value = c || '#e60033';
 }
 function applyFace() {
   const v = skinFace(), root = document.documentElement;
-  if (v) root.style.setProperty('--ct-face', `url("${v}")`); else root.style.removeProperty('--ct-face');
+  if (v) root.style.setProperty('--ct-face', `url("${v}")`); else { root.style.removeProperty('--ct-face'); applySkinColor(); } // 15.261 그림을 지우면 고른 색 하트
   for (const b of document.querySelectorAll('[data-face-reset]')) b.hidden = !v;
 }
 function setFaceFile(file) {
@@ -78,11 +86,13 @@ function themeMode() { try { const v = localStorage.getItem(THEME_KEY); return T
 function applyTheme(mode) {
   const root = document.documentElement;
   if (mode === 'auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', mode);
+  if (typeof applySkinColor === 'function' && typeof COLOR_KEY !== 'undefined') applySkinColor(); // 15.261 밝은/어두운 화면이 바뀌면 바탕 색도
   for (const button of document.querySelectorAll('.theme-toggle:not(.nav-layout-toggle):not(.density-toggle)')) { button.innerHTML = `<span class="theme-icon" aria-hidden="true">${THEME_ICON[mode]}</span> <span>${THEME_LABEL[mode]}</span>`; button.title = '화면 모드'; }
 }
 (function themeStart() {
   if (typeof document === 'undefined' || !document.documentElement) return;
   applyTheme(themeMode()); applyNavLayout(navLayout()); applyDensity(densityMode()); applySkin(skinMode()); applyFace();
+  try { window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener('change', () => applySkinColor()); } catch { /* 오래된 브라우저 */ }
   const place = () => {
     for (const found of document.querySelectorAll('.who, .auth-card, .side')) {
       const host = found.classList.contains('side') ? (found.querySelector(':scope > .side-prefs') || found.insertAdjacentElement('afterbegin', Object.assign(document.createElement('div'), { className: 'side-prefs' }))) : found;
