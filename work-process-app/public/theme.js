@@ -25,7 +25,7 @@ function applyDensity(mode) {
   for (const b of document.querySelectorAll('.density-toggle')) { b.innerHTML = `<span class="theme-icon" aria-hidden="true">${mode === 'compact' ? '☰' : '≡'}</span> <span>${DENSITY_LABEL[mode]}</span>`; b.title = '화면 밀도(촘촘 ↔ 보통)'; b.setAttribute('aria-label', `화면 밀도: ${DENSITY_LABEL[mode]}`); }
 }
 // 15.220 디자인 스킨(사용자별): 기본 · 크리스마스. <html data-skin="christmas">. 계정 설정(ME.ui.skin)에 저장, 이 기기에도 기억(첫 화면 깜빡임 없이).
-const SKIN_KEY = 'wpa:skin', SKINS = [['default', '기본'], ['christmas', '🎄 크리스마스'], ['ribbon', '🎀 핑크 리본'], ['penguin', '🐧 방귀니'], ['cat', '💗 커스텀 캐릭터']]; // 15.222 핑크 리본, 15.226 방귀니(회사 캐릭터)·커스텀 캐릭터(기본 하트, 그림 올리면 교체)
+const SKIN_KEY = 'wpa:skin', SKINS = [['default', '기본'], ['christmas', '🎄 크리스마스'], ['ribbon', '🎀 핑크 리본'], ['penguin', '🐧 방귀니'], ['kha', '🍶 KHA'], ['cat', '💗 커스텀 캐릭터']]; // 15.228 KHA(소주 컨셉) // 15.222 핑크 리본, 15.226 방귀니(회사 캐릭터)·커스텀 캐릭터(기본 하트, 그림 올리면 교체)
 // 15.225 커스텀 캐릭터 스킨(키 cat)의 캐릭터 그림을 사용자가 직접 올린 파일로 바꾸기. 이 기기 브라우저에만 저장(서버·저장소에 올리지 않음).
 const FACE_KEY = 'wpa:skin-face';
 function skinFace() { try { const v = localStorage.getItem(FACE_KEY) || ''; return /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(v) ? v : ''; } catch { return ''; } }

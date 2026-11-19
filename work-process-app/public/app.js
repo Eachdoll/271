@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.227';
+const APP_VERSION = '15.228';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -741,6 +741,12 @@ function bindNavFind() {
   gather(); new MutationObserver(gather).observe($('.who'), { childList: true });
 }
 async function managedPage(main, route, fn) { await fn(main); managedTabs(main, route); }
+// 15.228 한 칸짜리 메뉴(묶음 없이 바로 링크)는 한 칸에 모아 맨 앞에 둔다. 상단 메뉴 펼침에서 띄엄띄엄 흩어지지 않게.
+function navBody(items, entry) {
+  const flat = items.filter(Array.isArray), subs = items.filter(i => !Array.isArray(i));
+  if (!flat.length || !subs.length) return items.map(entry).join('');
+  return `<div class="nav-flat">${flat.map(entry).join('')}</div>${subs.map(entry).join('')}`;
+}
 function shell() {
   const cur = navRoute(location.hash || '#/'); // 15.170 입력 주소도 관리 메뉴로 강조
   const link = ([h, l]) => `<a href="${h}" class="${cur === h ? 'active' : ''}">${l}${navStar(h, l)}</a>`;
@@ -751,7 +757,7 @@ function shell() {
   const hasCur = items => items.some(i => Array.isArray(i) ? i[0] === cur : i.items.some(([h]) => h === cur));
   const group = (dept, title, items, body) => { const shut = navShut.has(dept) && !hasCur(items); return `<div class="nav-group${shut ? ' shut' : ''}" data-dept="${dept}"><button type="button" class="nav-title" data-nav-toggle="${dept}" aria-expanded="${!shut}">${title}</button><div class="nav-body">${body}</div></div>`; };
   const seeItems = items => items.map(i => Array.isArray(i) ? (canSeeRoute(i[0]) ? i : null) : (s => s.items.length ? s : null)({ ...i, items: i.items.filter(([h]) => canSeeRoute(h)) })).filter(Boolean); // 15.164 경리처럼 여러 부서 화면이 섞인 묶음
-  const nav = favNavHtml(cur) + NAV.filter(g => g.group === '경리' || canSeeMenu(NAV_GROUP_KEY[g.group])).map(g => ({ ...g, items: seeItems(g.items) })).filter(g => g.items.length) /* 15.179 모든 묶음에서 쓸 수 없는 화면 빼기 */.map((g) => group(NAV_GROUP_KEY[g.group] || 'home', g.group, g.items, g.items.map(entry).join(''))).join('')
+  const nav = favNavHtml(cur) + NAV.filter(g => g.group === '경리' || canSeeMenu(NAV_GROUP_KEY[g.group])).map(g => ({ ...g, items: seeItems(g.items) })).filter(g => g.items.length) /* 15.179 모든 묶음에서 쓸 수 없는 화면 빼기 */.map((g) => group(NAV_GROUP_KEY[g.group] || 'home', g.group, g.items, navBody(g.items, entry))).join('')
     // 관리: 기준 정보 화면(메뉴 권한 「기준 정보」, 권한은 각 화면과 서버가 그대로 판단) + 관리자 전용 화면
     + ((manage => manage.length ? group('manage', '관리', manage, manage.map(link).join('')) : '')([...(canSeeMenu('master') ? NAV_MANAGE : []), ...(ME.is_admin ? NAV_ADMIN : [])]));
   const roles = ME.roles.map((r) => ROLE_LABEL[r]).join(', ');

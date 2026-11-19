@@ -125,7 +125,7 @@ async function baseMenus(u, departments = null) { // 15.179 departments를 넘�
   return list || null;
 }
 // 사람별 화면 설정(15.62): 자주 쓰는 화면(★)과 목록 조건(상태·구분 같은 선택값). settings 표의 'prefs:<id>' 한 줄에 둔다(마이그레이션 없음).
-const SKINS_ALLOWED = ['default', 'christmas', 'ribbon', 'cat', 'penguin']; // 15.220 디자인 스킨(15.222 핑크 리본, 15.226 커스텀 캐릭터(cat)·방귀니(penguin))
+const SKINS_ALLOWED = ['default', 'christmas', 'ribbon', 'cat', 'penguin', 'kha']; // 15.220 디자인 스킨(15.222 핑크 리본, 15.226 커스텀 캐릭터(cat)·방귀니(penguin))
 async function userPrefs(id) {
   const row = await db.prepare('SELECT value FROM settings WHERE key=?').get('prefs:' + id);
   try { const v = row ? JSON.parse(row.value) : {}; return { favorites: Array.isArray(v.favorites) ? v.favorites : [], filters: v.filters && typeof v.filters === 'object' ? v.filters : {}, ...(SKINS_ALLOWED.includes(v.skin) ? { skin: v.skin } : {}) }; } catch { return { favorites: [], filters: {} }; } // 15.220 skin
@@ -1794,12 +1794,23 @@ route('PUT', '/api/sales-bills/:id/rep', async ({ user, params, body }) => {
   return salesBillDetail(await mustGet('sales_bills', bill.id));
 });
 // 고를 수 있는 담당자: 영업 권한 사용자 + 거래처·전표에 이미 쓰인 이름
+// 15.228 영업팀만: 조직에서 이름에 「영업」이 들어간 부서와 그 하위 부서에 속한 승인 사용자. 그런 부서·사람이 없으면 영업 권한(관리자 제외) 사용자.
+async function salesTeam() {
+  const deps = await db.prepare('SELECT id, name, parent_id FROM org_departments').all();
+  const ids = new Set(deps.filter(d => d.name.includes('영업')).map(d => d.id));
+  for (let grew = true; grew;) { grew = false; for (const d of deps) if (!ids.has(d.id) && ids.has(d.parent_id)) { ids.add(d.id); grew = true; } }
+  const departments = deps.filter(d => ids.has(d.id)).map(d => d.name), inTeam = new Set(departments);
+  const users = await db.prepare("SELECT name, department, roles, is_admin FROM users WHERE approval_status='approved'").all();
+  let team = users.filter(u => inTeam.has(u.department)).map(u => u.name), basis = 'department';
+  if (!team.length) { team = users.filter(u => !u.is_admin && (u.roles || '').split(',').includes('sales')).map(u => u.name); basis = 'role'; }
+  return { team: team.sort((a, b) => a.localeCompare(b, 'ko')), basis, departments };
+}
+// 고를 수 있는 담당자(reps) = 영업팀. used = 거래처·전표에 이미 쓰인 다른 이름(목록 거르기에서만 보임).
 route('GET', '/api/sales-reps', async ({ user }) => {
   requireSales(user);
-  const names = new Set();
-  for (const u of await db.prepare("SELECT name, is_admin, roles FROM users WHERE approval_status='approved' ORDER BY name").all()) if ((u.roles || '').split(',').includes('sales')) names.add(u.name);
-  for (const r of await db.prepare("SELECT sales_rep AS n FROM vendors WHERE sales_rep<>'' UNION SELECT sales_rep FROM sales_bills WHERE sales_rep<>''").all()) names.add(r.n);
-  return { reps: [...names].sort((a, b) => a.localeCompare(b, 'ko')) };
+  const { team, basis, departments } = await salesTeam(), set = new Set(team);
+  const used = (await db.prepare("SELECT sales_rep AS n FROM vendors WHERE sales_rep<>'' UNION SELECT sales_rep FROM sales_bills WHERE sales_rep<>''").all()).map(r => r.n).filter(n => !set.has(n)).sort((a, b) => a.localeCompare(b, 'ko'));
+  return { reps: team, used, basis, departments };
 });
 // 담당자별 담당업체 현황: 기간 안 확정 매출(건수·공급가액·세액·합계·마지막 일자) + 담당 거래처(매출 없어도) + 미수 잔액
 route('GET', '/api/sales-reps/summary', async ({ user, query }) => {
