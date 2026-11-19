@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.230';
+const APP_VERSION = '15.231';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -395,7 +395,7 @@ const NAV = [
     ['#/logistics/receive', '입고 관리'],
     { sub: '출하', items: [['#/logistics/ship-orders', '출하지시'], ['#/logistics/ship', '출하 관리']] },
     ['#/logistics/stock', '재고 현황'],
-    ['#/logistics/scan', 'QR 스캔'], ['#/logistics/qr', 'QR 일괄 발행'],
+    ['#/logistics/lots', 'LOT·QR 관리'], // 15.231 LOT 관리 · QR 일괄 발행 · 파렛트 묶음 · QR 스캔을 한 관리 화면(탭)으로
   ] },
 ];
 // 15.213 하위 묶음에 화면이 하나뿐이면(견적 > 견적서 관리 등) 묶음 없이 바로 화면 링크로
@@ -631,7 +631,7 @@ const PAGES = {
   '#/sales/tax-check': main => pageTaxCheck(main, 'sales'),
   '#/purchase/tax-check': main => pageTaxCheck(main, 'purchase'),
   '#/logistics/stock': main => pageStock(main),
-  '#/logistics/scan': main => pageScan(main),
+  '#/logistics/scan': main => managedPage(main, '#/logistics/scan', pageScan),
   '#/purchase/vendors': main => pageVendors(main),
   '#/purchase/prices': main => pagePrices(main),
   '#/purchase/sample/request': () => { location.replace('#/sales/sample/goods'); }, // 15.183 영업으로 옮김
@@ -653,7 +653,9 @@ const PAGES = {
   '#/admin/approval': main => pageApprovalRules(main), // 15.185 결재선 기본값
   '#/admin/bom': pageBoms,
   '#/logistics/warehouses': main => pageWarehouses(main), // 15.230 관리 › 창고 관리
-  '#/logistics/qr': main => pageQrBulk(main), // 15.230 QR 일괄 발행
+  '#/logistics/qr': main => managedPage(main, '#/logistics/qr', pageQrBulk), // 15.230 QR 일괄 발행
+  '#/logistics/pallets': main => managedPage(main, '#/logistics/pallets', pagePallets), // 15.231 파렛트 묶음 QR
+  '#/logistics/lots': main => managedPage(main, '#/logistics/lots', pageLots), // 15.231 LOT 관리
   '#/admin/bom-sheet': main => pageBomSheet(main), // 15.196
   '#/me': pageMe,
   '#/tasks': pageTasks,
@@ -681,6 +683,7 @@ function refreshFavNav() {
 // ── 15.170 「관리」 화면: 목록과 입력(만들기)을 한 메뉴로. 같은 화면 제목 아래 전환 단추, 입력 주소(/new)는 그대로 쓰되
 // 메뉴 강조·화면 탭·위치 표시는 관리 화면 하나로 묶는다(navRoute).
 const MANAGE = {
+  '#/logistics/lots': { title: 'LOT·QR 관리', tabs: [['#/logistics/lots', 'LOT 관리'], ['#/logistics/qr', 'QR 일괄 발행'], ['#/logistics/pallets', '파렛트 묶음'], ['#/logistics/scan', 'QR 스캔']] }, // 15.231
   '#/sales/bills': { title: '매출전표 관리', tabs: [['#/sales/bills', '전표 목록'], ['#/sales/bills/new', '전표 입력'], ['#/sales/calendar', '매출 달력'], ['#/sales/reps', '담당자별 현황']] },
   '#/sales/tax': { title: '세금계산서 관리', tabs: [['#/sales/tax', '계산서 목록'], ['#/sales/tax/new', '계산서 만들기']] },
   '#/sales/quotes': { title: '견적서 관리', tabs: [['#/sales/quotes', '견적서 목록'], ['#/sales/quotes/new', '견적서 작성']] },
@@ -703,7 +706,7 @@ const MANAGE = {
   '#/quality/voc/list': { title: 'VOC 관리', tabs: [['#/quality/voc/list', 'VOC 처리목록'], ['#/quality/voc/request', 'VOC 접수']] },
   '#/dev/list': { title: '개발 관리', tabs: [['#/dev/list', '개발리스트'], ['#/dev/request', '개발의뢰']] },
 };
-const ROUTE_ALIAS = { '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/calendar': '#/sales/bills', '#/sales/reps': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users', '#/logistics/receipt/new': '#/logistics/receive', '#/logistics/receipts': '#/logistics/receive', '#/logistics/ship/new': '#/logistics/ship', '#/purchase/laundry/new': '#/purchase/laundry', '#/prod/semi/new': '#/prod/semi', '#/prod/semi/cut/new': '#/prod/semi/cut', '#/prod/semi/wash/new': '#/prod/semi/wash', '#/quality/request': '#/quality/list', '#/quality/voc/request': '#/quality/voc/list', '#/dev/request': '#/dev/list' };
+const ROUTE_ALIAS = { '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/calendar': '#/sales/bills', '#/logistics/qr': '#/logistics/lots', '#/logistics/pallets': '#/logistics/lots', '#/logistics/scan': '#/logistics/lots', '#/sales/reps': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users', '#/logistics/receipt/new': '#/logistics/receive', '#/logistics/receipts': '#/logistics/receive', '#/logistics/ship/new': '#/logistics/ship', '#/purchase/laundry/new': '#/purchase/laundry', '#/prod/semi/new': '#/prod/semi', '#/prod/semi/cut/new': '#/prod/semi/cut', '#/prod/semi/wash/new': '#/prod/semi/wash', '#/quality/request': '#/quality/list', '#/quality/voc/request': '#/quality/voc/list', '#/dev/request': '#/dev/list' };
 const navRoute = r => ROUTE_ALIAS[String(r || '#/').split('?')[0]] || String(r || '#/').split('?')[0];
 function managedTabs(main, route) {
   const m = MANAGE[navRoute(route)], h1 = $('h1', main); if (!m || !h1 || $('.manage-tabs', main)) return;

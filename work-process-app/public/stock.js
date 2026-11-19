@@ -243,7 +243,7 @@ function parseLotScan(text) {
 }
 async function pageScan(main) {
   main.innerHTML = `<h1>QR 스캔 <span class="dept">물류</span></h1>
-  <p class="muted">LOT 라벨의 QR을 찍거나(휴대폰 카메라) USB 스캐너로 읽으면 그 LOT의 잔량·위치가 나오고, 바로 출하 기록이나 창고 이동을 합니다. LOT 번호를 직접 넣어도 됩니다.</p>
+  <p class="muted">LOT 라벨의 QR을 찍거나(휴대폰 카메라) USB 스캐너로 읽으면 그 LOT의 잔량·위치가 나오고, 바로 출하 기록이나 창고 이동을 합니다. LOT 번호를 직접 넣어도 됩니다. <b>파렛트 QR(PLT_…)</b>을 찍으면 묶인 LOT가 모두 나오고 「파렛트 출고」 한 번으로 LOT별 출하가 됩니다.</p>
   <form class="toolbar" id="scanForm" data-read-only><label class="grow">LOT · QR 내용<input name="code" autocomplete="off" autofocus placeholder="스캐너로 읽거나 LOT 입력 후 Enter"></label><button class="btn primary">찾기</button><button type="button" class="btn" id="scanCam">카메라로 스캔</button></form>
   <div id="scanCamBox" hidden><video id="scanVideo" playsinline muted style="width:100%;max-width:480px;border:1px solid var(--line)"></video><div class="actions" style="justify-content:flex-start"><button type="button" class="btn" id="scanStop">카메라 끄기</button></div></div>
   <div id="scanResult"></div><h3>이번에 찍은 것</h3><div id="scanLog" class="small muted">아직 없습니다.</div>`;
@@ -252,6 +252,9 @@ async function pageScan(main) {
   const stop = () => { clearInterval(timer); timer = null; stream?.getTracks().forEach(t => t.stop()); stream = null; $('#scanCamBox', main).hidden = true; };
   const addLog = text => { log.unshift(`${new Date().toTimeString().slice(0, 8)} · ${text}`); $('#scanLog', main).innerHTML = log.slice(0, 20).map(x => `<div>${esc(x)}</div>`).join(''); };
   const show = async text => {
+    // 15.231 파렛트 QR(PLT_…)이면 파렛트 창: 내용 확인 · 한 번에 출고
+    const raw = String(text || '').trim();
+    if (/^PLT_\d{8}_\d{3,}$/i.test(raw)) { try { const p = await api('GET', '/api/pallets/lookup?code=' + encodeURIComponent(raw)); addLog(`${p.pallet_no} — 파렛트 ${PLT_STATUS[p.status]} · ${palletText(p)} = ${fmtNum(p.total)}`); $('#scanResult', main).innerHTML = `<div class="card"><h3>파렛트 <span class="lot-tag">${esc(p.pallet_no)}</span> <span class="chip">${PLT_STATUS[p.status]}</span></h3><p>${esc(palletText(p))} = <b>${fmtNum(p.total)} ${esc(p.unit || '')}</b></p></div>`; await palletWindow(p.pallet_no, () => {}); } catch (error) { fail(error); addLog(`${raw} — 없음`); } return; }
     const scan = parseLotScan(text); if (!scan) return;
     const box = $('#scanResult', main); box.innerHTML = '<p class="muted">찾는 중…</p>';
     const data = await api('GET', '/api/inventory/lots?' + new URLSearchParams({ asof: todayStr(), q: scan.lot }));
@@ -296,4 +299,123 @@ async function pageScan(main) {
     } catch (error) { stop(); fail(new Error('카메라를 열 수 없습니다: ' + (error.message || error))); }
   };
   window.addEventListener('hashchange', stop, { once: true });
+}
+
+// ── 15.231 파렛트 묶음: LOT 여러 개를 한 파렛트(PLT_YYYYMMDD_NNN)로 묶고 QR 하나로 출고 ──
+const PLT_STATUS = { open: '묶음', shipped: '출고 완료', cancelled: '풀림' };
+const palletText = p => p.lines.filter(l => l.qty > 0).map(l => `${l.lot} ${fmtNum(l.qty)}`).join(' + ');
+const palletCard = p => { const items = [...new Set(p.lines.map(l => l.item))]; return { code: p.pallet_no, sub: `${items.join(', ')} · ${palletText(p)} = ${fmtNum(p.total)} ${p.unit || ''}`.trim() }; };
+// 파렛트 한 개 창: 내용·수량 고치기(꺼내 쓰기)·출고·풀기·QR. 스캔 화면과 목록에서 같이 쓴다.
+async function palletWindow(code, after) {
+  const p = await api('GET', '/api/pallets/lookup?code=' + encodeURIComponent(code)), can = ME.is_admin || ME.roles.includes('logistics') || ME.roles.includes('logistics_approver'), open = p.status === 'open';
+  const m = modal(`<h3>파렛트 <span class="lot-tag">${esc(p.pallet_no)}</span> <span class="chip ${p.status === 'open' ? 'green' : p.status === 'shipped' ? '' : 'yellow'}">${PLT_STATUS[p.status]}</span></h3>
+    <p class="small muted">${esc(p.created_by)} · ${esc(String(p.created_at).slice(0, 16))}${p.note ? ` · ${esc(p.note)}` : ''}${p.status === 'shipped' ? ` · 출고 ${esc(String(p.shipped_at).slice(0, 16))} ${esc(p.shipped_by || '')} → ${esc(p.customer)}` : ''}</p>
+    <form data-plt-edit><div class="table-wrap"><table class="grid keep-table"><thead><tr><th>품목</th><th>LOT</th><th class="r">묶을 때</th><th class="r">지금 수량</th></tr></thead><tbody>${p.lines.map(l => `<tr><td>${esc(l.item)}</td><td><span class="lot-tag">${esc(l.lot)}</span></td><td class="r small muted">${fmtNum(l.orig_qty)}</td><td class="r">${open && can ? `<input type="number" min="0" step="any" inputmode="decimal" data-plt-qty="${l.id}" value="${esc(l.qty)}" aria-label="${esc(l.lot)} 수량" style="width:7em">` : `<b>${fmtNum(l.qty)}</b>`} ${esc(l.unit)}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><th colspan="3" class="r">합계</th><td class="r"><b>${fmtNum(p.total)}</b> ${esc(p.unit || '')}</td></tr></tfoot></table></div>
+      ${open && can ? '<div class="form-grid"><label class="span2">바꾼 이유 <span class="hint">(예: 2박스 먼저 사용)</span><input name="reason" maxlength="200"></label></div><div class="actions" style="justify-content:flex-start"><button class="btn">수량 저장(QR 그대로)</button></div>' : ''}</form>
+    ${open && can ? `<form class="card form-grid" data-plt-ship><h4 class="span3">이 파렛트 출고 <span class="small muted">LOT마다 출하가 생기고 재고에서 빠집니다</span></h4><label>출고일 *<input type="date" name="ship_date" value="${todayStr()}" max="${todayStr()}" required></label><label>거래처 *<input name="customer" maxlength="100" required autocomplete="off"></label><label>메모<input name="note" maxlength="200"></label><div class="actions span3" style="justify-content:flex-start"><button class="btn primary">파렛트 출고 (${fmtNum(p.total)} ${esc(p.unit || '')})</button></div></form>` : ''}
+    ${(p.changes || []).length ? `<div class="doc-changes small muted"><b>이력</b> ${p.changes.map(c => `${esc(String(c.changed_at).slice(5, 16))} ${esc(c.changed_by)} · ${esc(c.summary)}`).join(' / ')}</div>` : ''}
+    <div class="actions"><button type="button" class="btn" data-x>닫기</button>${open && can ? '<button type="button" class="btn danger" data-plt-cancel>묶음 풀기</button>' : ''}<button type="button" class="btn qr-pdf-btn" data-plt-qr>QR코드 발행</button></div>`, { wide: true });
+  const reopen = async () => { m.close(); await after?.(); await palletWindow(p.pallet_no, after); };
+  $('[data-x]', m.el).onclick = m.close;
+  $('[data-plt-qr]', m.el).onclick = () => qrIssue([palletCard(p)], { title: 'QR코드 발행 · 파렛트', file: '파렛트' });
+  const ship = $('[data-plt-ship]', m.el);
+  if (ship) {
+    if (typeof bindPartnerPicker === 'function') bindPartnerPicker(ship.elements.customer, null, { type: 'sales' }).catch(() => {});
+    ship.onsubmit = async e => { e.preventDefault(); const b = $('button.primary', ship); b.disabled = true; try { const v = formObj(ship); await api('POST', `/api/pallets/${p.id}/ship`, v); toast(`${p.pallet_no} 출고 · ${palletText(p)} → ${v.customer}`); await reopen(); } catch (error) { fail(error); } finally { b.disabled = false; } };
+  }
+  const edit = $('[data-plt-edit]', m.el);
+  edit.onsubmit = async e => { e.preventDefault(); const lines = $$('[data-plt-qty]', edit).map(x => ({ id: Number(x.dataset.pltQty), qty: x.value })); try { await api('PUT', `/api/pallets/${p.id}`, { lines, reason: edit.elements.reason?.value || '' }); toast('파렛트 수량을 고쳤습니다(QR은 그대로 씁니다).'); await reopen(); } catch (error) { fail(error); } };
+  $('[data-plt-cancel]', m.el)?.addEventListener('click', async () => { if (!await confirmBox(`${p.pallet_no} 묶음을 풀까요? 재고는 그대로이고 이 QR은 더 쓸 수 없습니다.`)) return; try { await api('POST', `/api/pallets/${p.id}/cancel`); toast('묶음을 풀었습니다.'); await reopen(); } catch (error) { fail(error); } });
+  return m;
+}
+async function pagePallets(main) {
+  const can = ME.is_admin || ME.roles.includes('logistics') || ME.roles.includes('logistics_approver');
+  main.innerHTML = `<h1>파렛트 묶음 <span class="dept">물류</span></h1>
+  <p class="muted">한 파렛트에 올린 박스들을 LOT별 수량으로 묶어 <b>파렛트 QR</b> 하나를 붙입니다(예: 니트릴 S 2월 LOT 40 + 3월 LOT 20 = 60박스). 출고 때 그 QR만 찍으면(QR 스캔 화면) LOT별 출하가 한 번에 생기고 재고에서 LOT마다 빠집니다. 몇 박스를 먼저 꺼내 쓰면 파렛트를 열어 수량만 고치면 되고 QR은 다시 뽑지 않아도 됩니다. 묶기만 해서는 재고가 바뀌지 않습니다.</p>
+  ${can ? `<section class="card plt-new"><h2>새 파렛트 묶기</h2>
+    <form class="toolbar" data-read-only id="pltFind"><label class="grow">품목·LOT 찾기<input type="search" name="q" maxlength="200" placeholder="예) 니트릴, R2602"></label><button class="btn">찾기</button></form>
+    <div id="pltLots"><p class="small muted">품목이나 LOT를 찾으면 잔량 있는 LOT가 나옵니다. 담을 수량을 넣으세요.</p></div>
+    <div class="form-grid"><label class="span2">메모<input id="pltNote" maxlength="300" placeholder="예) 1번 파렛트 · 1동 A-1"></label></div>
+    <div class="actions" style="justify-content:flex-start"><span class="small" id="pltPick">담은 것 없음</span><button type="button" class="btn primary" id="pltMake" disabled>파렛트 만들고 QR 발행</button></div></section>` : ''}
+  <h2>파렛트 목록</h2>
+  <form class="list-filters toolbar" data-read-only id="pltFilters"><label>상태<select name="status"><option value="open">묶음(출고 전)</option><option value="shipped">출고 완료</option><option value="cancelled">풀림</option><option value="all">전체</option></select></label><label class="list-search">검색<input type="search" name="q" maxlength="100" placeholder="파렛트 번호·품목·LOT·거래처"></label><button class="btn primary">조회</button></form>
+  <div class="result-bar"><div class="counts" id="pltSum"></div><span class="result-tools"><button type="button" class="btn qr-pdf-btn" id="pltQrAll" disabled>QR코드 발행</button></span></div>
+  <div id="pltList"><p class="muted">불러오는 중…</p></div>`;
+  const filters = $('#pltFilters', main); let rows = [], lots = [], requestId = crypto.randomUUID();
+  const picked = () => $$('[data-plt-pick]:checked', main).map(x => rows[Number(x.dataset.pltPick)]);
+  const syncPick = () => { const n = picked().length; const b = $('#pltQrAll', main); b.disabled = !n; b.textContent = n ? `QR코드 발행 (${n})` : 'QR코드 발행'; };
+  const load = async () => {
+    const data = await api('GET', '/api/pallets?' + new URLSearchParams(formObj(filters))); if (!main.isConnected) return; rows = data.rows;
+    $('#pltSum', main).textContent = `파렛트 ${fmtNum(rows.length)}개 · 합계 ${fmtNum(rows.reduce((t, r) => t + r.total, 0))}`;
+    $('#pltList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid plt-grid"><thead><tr><th class="pick-cell"><input type="checkbox" data-plt-all aria-label="모두 고르기"></th><th>파렛트 번호</th><th>품목</th><th>LOT별 수량</th><th class="r">합계</th><th>상태</th><th>만든 날</th><th>메모·거래처</th><th></th></tr></thead><tbody>${rows.map((r, i) => `<tr><td class="pick-cell"><input type="checkbox" data-plt-pick="${i}" aria-label="${esc(r.pallet_no)} 고르기"></td><td class="nowrap"><button type="button" class="link-btn" data-plt-open="${esc(r.pallet_no)}"><b>${esc(r.pallet_no)}</b></button></td><td data-card-primary>${esc([...new Set(r.lines.map(l => l.item))].join(', '))}</td><td class="small">${r.lines.map(l => `<span class="lot-tag">${esc(l.lot)}</span> ${fmtNum(l.qty)}${l.qty !== l.orig_qty ? ` <span class="muted">(처음 ${fmtNum(l.orig_qty)})</span>` : ''}`).join('<br>')}</td><td class="r"><b>${fmtNum(r.total)}</b> ${esc(r.unit || '')}</td><td><span class="chip ${r.status === 'open' ? 'green' : r.status === 'shipped' ? '' : 'yellow'}">${PLT_STATUS[r.status]}</span></td><td class="small muted">${esc(String(r.created_at).slice(0, 10))}</td><td class="small">${esc(r.note || '')}${r.customer ? `<div>→ ${esc(r.customer)}</div>` : ''}</td><td class="nowrap"><button type="button" class="btn small" data-plt-open="${esc(r.pallet_no)}">열기</button> <button type="button" class="btn small" data-plt-one="${i}">QR</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">조건에 맞는 파렛트가 없습니다.</div>';
+    syncPick();
+  };
+  // 묶기: LOT 찾기 → 수량 넣기
+  const drawLots = () => {
+    const box = $('#pltLots', main); if (!box) return;
+    box.innerHTML = lots.length ? `<div class="table-wrap"><table class="grid keep-table plt-lots"><thead><tr><th>품목</th><th>LOT</th><th class="r">잔량</th><th>위치</th><th>처음 입고</th><th class="r">담을 수량</th></tr></thead><tbody>${lots.map((l, i) => `<tr><td><b>${esc(l.item)}</b></td><td><span class="lot-tag">${esc(l.lot)}</span></td><td class="r">${fmtNum(l.balance)} ${esc(l.unit)}</td><td class="small">${esc(l.places || '')}</td><td class="small muted">${esc(l.first_date || '')}</td><td class="r nowrap"><input type="number" min="0" step="any" inputmode="decimal" data-plt-take="${i}" value="${esc(l.take || '')}" placeholder="0" style="width:7em" aria-label="${esc(l.lot)} 담을 수량"> <button type="button" class="btn small" data-plt-allqty="${i}">전량</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="small muted">잔량 있는 LOT가 없습니다. 다른 이름으로 찾아 보세요.</p>';
+  };
+  const chosen = () => lots.filter(l => Number(l.take) > 0);
+  const syncNew = () => { const c = chosen(), units = [...new Set(c.map(l => l.unit))]; $('#pltPick', main).textContent = c.length ? `${c.length}개 LOT · ${c.map(l => `${l.lot} ${fmtNum(l.take)}`).join(' + ')} = ${fmtNum(c.reduce((t, l) => t + Number(l.take), 0))}${units.length === 1 ? ' ' + units[0] : ''}` : '담은 것 없음'; $('#pltMake', main).disabled = !c.length; };
+  $('#pltFind', main)?.addEventListener('submit', async e => {
+    e.preventDefault(); const q = e.target.elements.q.value.trim(); if (!q) return toast('품목이나 LOT를 넣으세요.', 'err');
+    const keep = new Map(chosen().map(l => [l.item + '|' + l.lot, l]));
+    const data = await api('GET', '/api/inventory/lots?' + new URLSearchParams({ asof: todayStr(), q, state: 'instock' })).catch(fail); if (!data) return;
+    lots = [...keep.values(), ...data.rows.filter(r => r.lot !== '(LOT 미지정)' && r.balance > 0 && !keep.has(r.item + '|' + r.lot))].sort((a, b) => (a.item > b.item) - (a.item < b.item) || String(a.first_date).localeCompare(String(b.first_date)));
+    drawLots(); syncNew();
+  });
+  main.addEventListener('input', e => { const t = e.target.closest('[data-plt-take]'); if (t) { lots[Number(t.dataset.pltTake)].take = t.value; syncNew(); } });
+  main.addEventListener('change', e => { if (e.target.matches('[data-plt-all]')) $$('[data-plt-pick]', main).forEach(x => { x.checked = e.target.checked; }); if (e.target.matches('[data-plt-all], [data-plt-pick]')) syncPick(); });
+  main.addEventListener('click', e => {
+    const all = e.target.closest('[data-plt-allqty]'); if (all) { const l = lots[Number(all.dataset.pltAllqty)]; l.take = l.balance; drawLots(); syncNew(); return; }
+    const o = e.target.closest('[data-plt-open]'); if (o) { palletWindow(o.dataset.pltOpen, load).catch(fail); return; }
+    const one = e.target.closest('[data-plt-one]'); if (one) qrIssue([palletCard(rows[Number(one.dataset.pltOne)])], { title: 'QR코드 발행 · 파렛트', file: '파렛트' });
+  });
+  $('#pltQrAll', main).onclick = () => { const list = picked(); if (list.length) qrIssue(list.map(palletCard), { title: 'QR코드 발행 · 파렛트', file: '파렛트' }); };
+  $('#pltMake', main)?.addEventListener('click', async e => {
+    const c = chosen(); if (!c.length) return; const btn = e.currentTarget; btn.disabled = true;
+    try {
+      const p = await api('POST', '/api/pallets', { request_id: requestId, note: $('#pltNote', main).value, lines: c.map(l => ({ item: l.item, unit: l.unit, lot: l.lot, qty: Number(l.take) })) });
+      requestId = crypto.randomUUID(); lots = []; drawLots(); $('#pltNote', main).value = ''; syncNew();
+      toast(`${p.pallet_no} 파렛트를 만들었습니다 · ${palletText(p)}`); await load(); qrIssue([palletCard(p)], { title: 'QR코드 발행 · 파렛트', file: '파렛트' });
+    } catch (error) { fail(error); } finally { syncNew(); }
+  });
+  filters.onsubmit = e => { e.preventDefault(); load().catch(fail); };
+  filters.elements.status.onchange = () => load().catch(fail);
+  await load();
+}
+
+// ── 15.231 LOT·QR 관리 › LOT 관리: 모든 LOT(입고·생산)를 한 표로 — 잔량·위치·파렛트에 묶인 수량, QR 발행·창고 이동·파렛트 바로가기 ──
+async function pageLots(main) {
+  main.innerHTML = `<h1>LOT 관리 <span class="dept">물류</span></h1>
+  <p class="muted">입고(발주·기타)·생산완료로 생긴 LOT마다 들어온 수량, 나간 수량(출하·생산 투입·반출), 잔량, 위치, 파렛트에 묶인 수량을 봅니다. 줄의 「QR」로 라벨을 다시 뽑고, 「이동」으로 창고·위치를 옮깁니다. 여러 LOT를 체크해 한 번에 QR을 발행할 수 있습니다.</p>
+  <form class="list-filters toolbar" data-read-only id="lotForm"><label>처음 입고<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label class="list-search">검색<input type="search" name="q" maxlength="200" placeholder="품목·LOT"></label><label class="lf-sel">상태<select name="state"><option value="instock">잔량 있음</option><option value="">전체</option><option value="empty">다 씀</option></select></label><button class="btn primary">조회</button></form>
+  <div class="result-bar"><div class="counts" id="lotSum"></div><span class="result-tools"><button type="button" class="btn" id="lotCsv">CSV 저장</button><button type="button" class="btn qr-pdf-btn" id="lotQr" disabled>QR코드 발행</button></span></div>
+  <div id="lotList"><p class="muted">불러오는 중…</p></div>`;
+  const form = $('#lotForm', main); let rows = [];
+  rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
+  const picked = () => $$('[data-lot-pick]:checked', main).map(x => rows[Number(x.dataset.lotPick)]);
+  const sync = () => { const n = picked().length, b = $('#lotQr', main); b.disabled = !n; b.textContent = n ? `QR코드 발행 (${n})` : 'QR코드 발행'; };
+  const load = async () => {
+    const v = formObj(form);
+    const [data, plts] = await Promise.all([api('GET', '/api/inventory/lots?' + new URLSearchParams({ asof: todayStr(), q: v.q || '', ...(v.state === 'instock' ? { state: 'instock' } : {}) })), api('GET', '/api/pallets?status=open').catch(() => ({ rows: [] }))]);
+    if (!main.isConnected) return;
+    const inPlt = new Map(); for (const p of plts.rows) for (const l of p.lines) { const k = l.item + '\u0001' + l.lot, x = inPlt.get(k) || { qty: 0, nos: [] }; x.qty += l.qty; x.nos.push(p.pallet_no); inPlt.set(k, x); }
+    rows = data.rows.filter(r => (!v.from || r.first_date >= v.from) && (!v.to || r.first_date <= v.to) && (v.state !== 'empty' || r.balance <= 0)).map(r => ({ ...r, plt: inPlt.get(r.item + '\u0001' + r.lot) || null }));
+    $('#lotSum', main).innerHTML = `LOT ${fmtNum(rows.length)}개${data.more ? ' · <span class="chip yellow">앞부분만 · 검색으로 좁히세요</span>' : ''}${rows.some(r => r.plt) ? ` · 파렛트에 묶인 LOT ${rows.filter(r => r.plt).length}` : ''}`;
+    $('#lotList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid lot-grid"><thead><tr><th class="pick-cell"><input type="checkbox" data-lot-all aria-label="모두 고르기"></th><th>LOT</th><th>품목</th><th class="r">입고·생산</th><th class="r">출고·투입</th><th class="r">잔량</th><th class="r">파렛트</th><th>위치</th><th>처음 입고</th><th>마지막</th><th></th></tr></thead><tbody>${rows.map((r, i) => `<tr class="${r.balance < 0 ? 'row-red' : r.balance === 0 ? 'row-off' : ''}"><td class="pick-cell"><input type="checkbox" data-lot-pick="${i}" aria-label="${esc(r.lot)} 고르기"></td><td class="nowrap"><span class="lot-tag">${esc(r.lot)}</span></td><td data-card-primary><b>${esc(r.item)}</b></td><td class="r">${fmtNum(r.received)}</td><td class="r">${fmtNum(r.shipped)}</td><td class="r"><b>${fmtNum(r.balance)}</b> ${esc(r.unit || '')}</td><td class="r small">${r.plt ? `<a href="#/logistics/pallets" title="${esc(r.plt.nos.join(', '))}">${fmtNum(r.plt.qty)}</a>` : '<span class="muted">—</span>'}</td><td class="small">${esc(r.places || '')}</td><td class="small muted">${esc(r.first_date || '')}</td><td class="small muted">${esc(r.last_date || '')}</td><td class="nowrap"><button type="button" class="btn small" data-lot-qr="${i}">QR</button>${r.balance > 0 && r.lot !== '(LOT 미지정)' ? ` <button type="button" class="btn small" data-lot-mv="${i}">이동</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">조건에 맞는 LOT가 없습니다.</div>';
+    sync();
+  };
+  const card = r => ({ code: r.lot, sub: [r.item, `잔량 ${fmtNum(r.balance)} ${r.unit || ''}`.trim(), r.places || '', r.first_date].filter(Boolean).join(' · ') });
+  main.addEventListener('change', e => { if (e.target.matches('[data-lot-all]')) $$('[data-lot-pick]', main).forEach(x => { x.checked = e.target.checked; }); if (e.target.matches('[data-lot-all], [data-lot-pick]')) sync(); });
+  main.addEventListener('click', e => {
+    const q = e.target.closest('[data-lot-qr]'); if (q) { qrIssue([card(rows[Number(q.dataset.lotQr)])], { file: 'LOT' }); return; }
+    const mv = e.target.closest('[data-lot-mv]'); if (mv) lotMoveWindow(rows[Number(mv.dataset.lotMv)], load).catch(fail);
+  });
+  $('#lotQr', main).onclick = () => { const l = picked(); if (l.length) qrIssue(l.map(card), { file: 'LOT' }); };
+  $('#lotCsv', main).onclick = () => { if (typeof xlsxDownload === 'function') xlsxDownload(`LOT관리_${todayStr()}.xlsx`, { sheet: 'LOT', columns: [['lot', 'LOT'], ['item', '품목'], ['received', '입고·생산'], ['shipped', '출고·투입'], ['balance', '잔량'], ['unit', '단위'], ['pallet', '파렛트'], ['places', '위치'], ['first_date', '처음 입고'], ['last_date', '마지막']], rows: rows.map(r => ({ ...r, pallet: r.plt ? r.plt.qty : '' })) }); };
+  form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
+  form.elements.state.onchange = () => load().catch(fail);
+  await load();
 }

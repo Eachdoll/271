@@ -442,6 +442,13 @@
       "when": 1797332013000,
       "tag": "0062_bom_sst_pack",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "6",
+      "when": 1797418413000,
+      "tag": "0063_pallets",
+      "breakpoints": true
     }
   ]
 }
