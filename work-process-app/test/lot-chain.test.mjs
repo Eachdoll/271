@@ -229,3 +229,40 @@ test('15.254 shipping within LOT balance, failed incoming inspection blocks use,
   assert.ok(dup.status === 200 || dup.status === 409);
   if (dup.status === 409) assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM production_actuals').get().n, before);
 });
+
+test('15.255 work in progress: cut/wash/pack save the LOT first with no quantity, entering the quantity completes them', async () => {
+  const raw = (await admin('POST', '/api/boms', { product: '작업중원단', product_code: 'WIP-R', item_category: '원자재', kind: 'finished', base_qty: 1, unit: 'yd', materials: [] })).body;
+  const semi = (await admin('POST', '/api/boms', { product: '작업중반', product_code: 'WIPS', item_category: '반제품', kind: 'semi', semi_type: '천와이퍼', base_qty: 1, unit: '매', materials: [{ item: '작업중원단', item_category: '원자재', qty: 0.01, unit: 'yd' }] })).body;
+  const fin = (await admin('POST', '/api/boms', { product: '작업중제품', product_code: 'WIPF', item_category: '제품', kind: 'finished', base_qty: 1, unit: 'BOX', materials: [{ item: '작업중반', item_category: '반제품', qty: 10, unit: '매' }] })).body;
+  await admin('POST', '/api/receipts', { receipt_date: today, vendor: '작업상사', request_id: rid(), lines: [{ bom_id: raw.id, lot: 'WIP-L', qty: 50, pieces: 2 }] });
+  const line = (await prod('GET', '/api/production-units?kind=line')).body[0], washer = (await prod('GET', '/api/production-units?kind=washer')).body[0];
+  // 커팅 작업중: 수량 없이 LOT·투입 절만
+  const c = await prod('POST', '/api/semi-batches', { process: 'cut', common: { work_date: today, unit_id: line.id }, request_id: rid(), items: [{ entry_mode: 'code', bom_id: semi.id, product_group: 'wiper', product_type: '천와이퍼', start_time: '08:00', work_status: 'progress', qty: '', inputs: [{ item: '작업중원단', lot: 'WIP-L', piece_nos: [1] }] }] });
+  assert.equal(c.status, 200, JSON.stringify(c.body));
+  const bag = c.body.rows[0]; assert.equal(bag.work_status, 'progress'); assert.equal(bag.qty, 0); assert.match(bag.lot, /_WIPS_1$/);
+  assert.ok(!(await prod('GET', '/api/semi-bags?state=unwashed')).body.rows.some(r => r.lot === bag.lot), 'in-progress bag is not ready for washing');
+  const early = await prod('POST', '/api/semi-batches', { process: 'wash', common: { work_date: today, unit_id: washer.id }, request_id: rid(), items: [{ entry_mode: 'wash_quantity', bom_id: semi.id, qty: 100, lot: bag.lot, bag_required: true, start_time: '10:00' }] });
+  assert.equal(early.status, 400); assert.match(early.body.error, /작업중/);
+  // 작업완료: 수량을 넣으면 원자재 사용량 BOM 계산
+  const done = await prod('POST', `/api/semi-records/${bag.id}/complete`, { qty: 1000, defect_qty: 0, end_time: '11:00' });
+  assert.equal(done.status, 200, JSON.stringify(done.body)); assert.equal(done.body.work_status, 'done'); assert.equal(done.body.work_hours, 3);
+  assert.equal(sqlite.prepare('SELECT qty FROM semi_lot_inputs WHERE record_id=?').get(bag.id).qty, 10);
+  assert.equal((await prod('POST', `/api/semi-records/${bag.id}/complete`, { qty: 1 })).status, 409, 'already done');
+  // 세탁 작업중 → 포장 대상 아님 → 완료
+  const w = await prod('POST', '/api/semi-batches', { process: 'wash', common: { work_date: today, unit_id: washer.id }, request_id: rid(), items: [{ entry_mode: 'wash_quantity', bom_id: semi.id, work_status: 'progress', qty: '', lot: bag.lot, bag_required: true, start_time: '10:00' }] });
+  assert.equal(w.status, 200, JSON.stringify(w.body)); assert.equal(w.body.rows[0].work_status, 'progress');
+  assert.ok(!(await prod('GET', '/api/semi-bags?state=washed')).body.rows.some(r => r.lot === bag.lot));
+  const plan = (await admin('POST', '/api/schedules', { kind: 'finished', period: 'day', start_date: today, qty: 100, bom_id: fin.id, product: '작업중제품' })).body;
+  await admin('POST', '/api/schedules/confirm', { ids: [plan.id] });
+  assert.equal((await prod('POST', `/api/schedules/${plan.id}/actuals`, { production_date: today, qty: '', work_status: 'progress', bags: [bag.lot], request_id: rid() })).status, 400, 'bag not washed yet');
+  assert.equal((await prod('POST', `/api/semi-records/${w.body.rows[0].id}/complete`, { qty: 1000 })).status, 200);
+  // 포장 작업중: 완제품 LOT 먼저, 수량은 나중에
+  assert.equal((await prod('POST', `/api/schedules/${plan.id}/actuals`, { production_date: today, qty: '', work_status: 'progress', request_id: rid() })).status, 400, 'needs bags');
+  const p = await prod('POST', `/api/schedules/${plan.id}/actuals`, { production_date: today, qty: '', work_status: 'progress', bags: [bag.lot], request_id: rid() });
+  assert.equal(p.status, 200, JSON.stringify(p.body)); assert.match(p.body.lot, /_WIPF_P1$/); assert.equal(p.body.qty, 0);
+  const list = (await prod('GET', '/api/actuals/progress')).body.rows; const it = list.find(r => r.id === p.body.id);
+  assert.ok(it); assert.deepEqual(it.bags.map(b => b.lot), [bag.lot]);
+  const pd = await prod('POST', `/api/actuals/${p.body.id}/complete`, { qty: 95 });
+  assert.equal(pd.status, 200, JSON.stringify(pd.body)); assert.equal(pd.body.qty, 95); assert.equal(pd.body.work_status, 'done'); assert.equal(pd.body.lot, p.body.lot);
+  assert.ok(!(await prod('GET', '/api/actuals/progress')).body.rows.some(r => r.id === p.body.id));
+});

@@ -484,6 +484,13 @@
       "when": 1797850413000,
       "tag": "0068_vendor_lot_alias",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "6",
+      "when": 1797936813000,
+      "tag": "0069_work_status",
+      "breakpoints": true
     }
   ]
 }

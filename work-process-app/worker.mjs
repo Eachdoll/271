@@ -181,8 +181,8 @@ function hasRole(user, role) { const roles = publicUser(user).roles; return !!us
 function isOperator(user) { return !!user && !user.is_admin && publicUser(user).roles.includes('operator'); }
 function operatorRequestAllowed(method, path) {
   if (method === 'GET' && (/^\/api\/requests\/[1-9]\d*\/inspection(?:\/history\/[1-9]\d*)?$/.test(path) || ['/api/inspections','/api/wash-summary'].includes(path))) return true;
-  if (method === 'GET') return ['/api/me', '/api/operator/catalog', '/api/operator/semi-records', '/api/operator/plans', '/api/operator/actuals', '/api/lots/available', '/api/semi-bags'].includes(path); // 15.249 오퍼레이터도 투입 LOT·봉투 LOT 고르기
-  return (method === 'PUT' && path === '/api/me/password') || (method === 'POST' && (['/api/auth/logout', '/api/auth/login', '/api/semi-batches'].includes(path) || /^\/api\/schedules\/[1-9]\d*\/actuals$/.test(path)));
+  if (method === 'GET') return ['/api/me', '/api/operator/catalog', '/api/operator/semi-records', '/api/operator/plans', '/api/operator/actuals', '/api/lots/available', '/api/semi-bags', '/api/actuals/progress'].includes(path); // 15.249 오퍼레이터도 투입 LOT·봉투 LOT 고르기
+  return (method === 'PUT' && path === '/api/me/password') || (method === 'POST' && (['/api/auth/logout', '/api/auth/login', '/api/semi-batches'].includes(path) || /^\/api\/schedules\/[1-9]\d*\/actuals$/.test(path) || /^\/api\/(?:operator\/semi-records|actuals)\/[1-9]\d*\/complete$/.test(path)));
 }
 function isRequestApprover(user, type) {
   return hasRole(user, { voc: 'quality_approver', analysis: 'quality_approver', development: 'dev_approver', sample: 'production', sample_goods: 'purchase' }[type]);
@@ -4271,7 +4271,7 @@ route('GET', '/api/schedules/:id/actuals', async ({ user, params, query }) => {
 route('POST', '/api/schedules/:id/actuals', async ({ user, params, body }) => {
   const schedule = await actualSchedule(user, params.id, true);
   if (schedule.kind === 'semi') throw bad('반제품 실적은 생산 → 반제품 · 커팅/융착 기록에서 자동으로 집계됩니다. 그 화면에서 입력하세요.');
-  const date = dateStr(body.production_date, '생산일'); const qty = num(body.qty, '실제 생산량');
+  const date = dateStr(body.production_date, '생산일'); const progress = body.work_status === 'progress' && (body.qty === '' || body.qty == null); const qty = progress ? 0 : num(body.qty, '실제 생산량'); // 15.255 작업중
   const end = await actualPeriodEnd(schedule);
   if (date < schedule.start_date || date > end) throw bad('생산일은 해당 계획의 기간 안에서 선택하세요.');
   if (date > today()) throw bad('아직 지나지 않은 날짜의 생산실적은 입력할 수 없습니다.');
@@ -4286,14 +4286,34 @@ route('POST', '/api/schedules/:id/actuals', async ({ user, params, body }) => {
   const bags = await packBags(body.bags); // 15.249 이날 포장에 쓴 세탁 완료 봉투 LOT
   // 15.249 완제품 LOT: 직접 적지 않으면 포장일_품목코드_P순번(261121_NX808_P1).
   const snap = JSON.parse(schedule.bom_snapshot || '{}');
-  const lot = qty > 0 ? (str(body.lot, 100) || await nextFinishedLot(date, lotCode(snap.product_code, schedule.product))) : '';
+  if (progress && !bags.length) throw bad('작업중으로 저장하려면 포장에 쓸 봉투 LOT을 고르세요.');
+  const lot = qty > 0 || progress ? (str(body.lot, 100) || await nextFinishedLot(date, lotCode(snap.product_code, schedule.product))) : '';
   const wo = `WOR_${date.replace(/-/g, '')}_`; // 15.230 작업지시번호 WOR_YYYYMMDD_001(실적 날짜 기준)
-  const cmds = [{ sql: "INSERT INTO production_actuals(schedule_id,production_date,qty,note,author_id,author_name,request_id,lot,work_order) VALUES(?,?,?,?,?,?,?,?,(SELECT ? || printf('%03d', COALESCE(MAX(CAST(substr(work_order, 14) AS INTEGER)), 0) + 1) FROM production_actuals WHERE substr(work_order, 1, 13)=?))", args: [schedule.id, date, qty, note, user.id, user.name, key, lot, wo, wo] },
+  const cmds = [{ sql: "INSERT INTO production_actuals(schedule_id,production_date,qty,note,author_id,author_name,request_id,lot,work_order,work_status) VALUES(?,?,?,?,?,?,?,?,(SELECT ? || printf('%03d', COALESCE(MAX(CAST(substr(work_order, 14) AS INTEGER)), 0) + 1) FROM production_actuals WHERE substr(work_order, 1, 13)=?),?)", args: [schedule.id, date, qty, note, user.id, user.name, key, lot, wo, wo, progress ? 'progress' : 'done'] },
     ...inputs.map(i => ({ sql: 'INSERT INTO production_lot_inputs(actual_id,item,unit,lot,qty,created_by) VALUES((SELECT id FROM production_actuals WHERE request_id=?),?,?,?,?,?)', args: [key, i.item, i.unit, i.lot, i.qty, user.name] })),
     ...bags.map(b => ({ sql: 'INSERT INTO pack_bag_links(actual_id,bag_lot,item,created_by) VALUES((SELECT id FROM production_actuals WHERE request_id=?),?,?,?)', args: [key, b.lot, b.item, user.name] }))];
-  if (qty > 0 && !str(body.lot, 100)) cmds.push({ sql: LOT_DUP_GUARD + '(SELECT COUNT(*) FROM production_actuals WHERE lot=? AND voided_at IS NULL) > 1', args: [lot] }); // 15.254
+  if ((qty > 0 || progress) && !str(body.lot, 100)) cmds.push({ sql: LOT_DUP_GUARD + '(SELECT COUNT(*) FROM production_actuals WHERE lot=? AND voided_at IS NULL) > 1', args: [lot] }); // 15.254
   try { await db.batch(cmds); return actualWithInputs(await db.prepare('SELECT * FROM production_actuals WHERE request_id=?').get(key)); }
   catch (error) { const saved = await db.prepare('SELECT * FROM production_actuals WHERE request_id=?').get(key); if (saved && matches(saved)) return actualWithInputs(saved); throw lotDupError(error); }
+});
+// 15.255 포장 작업중 목록·작업완료(수량을 넣으면 완료, 봉투 더하기 가능, 투입 자재 LOT 함께)
+route('GET', '/api/actuals/progress', async () => {
+  const rows = await db.prepare(`SELECT a.id, a.schedule_id, a.production_date, a.lot, a.work_order, a.note, a.author_name, s.product, s.spec, COALESCE(NULLIF(s.unit,''),json_extract(s.bom_snapshot,'$.unit'),'') AS unit, s.bom_snapshot
+    FROM production_actuals a JOIN schedules s ON s.id=a.schedule_id WHERE a.work_status='progress' AND a.voided_at IS NULL ORDER BY a.production_date, a.id LIMIT 200`).all();
+  for (const r of rows) { r.bags = await db.prepare('SELECT p.bag_lot AS lot, c.qty FROM pack_bag_links p LEFT JOIN semi_records c ON c.process=\'cut\' AND c.lot=p.bag_lot WHERE p.actual_id=? ORDER BY p.id').all(r.id); try { r.bom_snapshot = JSON.parse(r.bom_snapshot || '{}'); } catch { r.bom_snapshot = {}; } }
+  return { rows };
+});
+route('POST', '/api/actuals/:id/complete', async ({ user, params, body }) => {
+  const a = await mustGet('production_actuals', params.id);
+  if (a.work_status !== 'progress' || a.voided_at) throw new HttpError(409, '작업중인 포장 기록이 아닙니다.');
+  await actualSchedule(user, a.schedule_id, true);
+  const qty = num(body.qty, '실제 생산량'); if (!(qty > 0)) throw bad('생산 수량을 넣으세요.');
+  const inputs = await actualLotInputs(body.inputs), more = await packBags(body.bags), have = new Set((await db.prepare('SELECT bag_lot FROM pack_bag_links WHERE actual_id=?').all(a.id)).map(x => x.bag_lot));
+  const cmds = [{ sql: "UPDATE production_actuals SET qty=?,note=CASE WHEN ?<>'' THEN ? ELSE note END,work_status='done' WHERE id=? AND work_status='progress'", args: [qty, str(body.note, 1000), str(body.note, 1000), a.id] }, RC_GUARD,
+    ...inputs.map(i => ({ sql: 'INSERT INTO production_lot_inputs(actual_id,item,unit,lot,qty,created_by) VALUES(?,?,?,?,?,?)', args: [a.id, i.item, i.unit, i.lot, i.qty, user.name] })),
+    ...more.filter(b => !have.has(b.lot)).map(b => ({ sql: 'INSERT INTO pack_bag_links(actual_id,bag_lot,item,created_by) VALUES(?,?,?,?)', args: [a.id, b.lot, b.item, user.name] }))];
+  try { await db.batch(cmds); } catch (error) { if (isGuardError(error)) throw new HttpError(409, '이미 작업완료한 기록입니다.'); throw error; }
+  return actualWithInputs(await mustGet('production_actuals', a.id));
 });
 // 15.249 완제품 LOT: 포장일_품목코드_P순번(261121_NX808_P1). 같은 날·같은 품목마다 P1부터.
 async function nextFinishedLot(date, code) {
@@ -4308,7 +4328,7 @@ async function packBags(raw) {
   const out = [];
   for (const lot of list) {
     const bag = await semiBagRecord(lot); if (!bag) throw bad(`봉투 LOT ${lot}을 찾을 수 없습니다.`);
-    if (!await db.prepare("SELECT 1 FROM semi_records WHERE process='wash' AND lot=? LIMIT 1").get(lot)) throw bad(`봉투 LOT ${lot}은 아직 세탁·건조 기록이 없습니다. 세탁 입력 후 고르세요.`);
+    if (!await db.prepare("SELECT 1 FROM semi_records WHERE process='wash' AND lot=? AND work_status='done' LIMIT 1").get(lot)) throw bad(`봉투 LOT ${lot}은 아직 세탁·건조를 마치지 않았습니다(기록 없음 또는 작업중). 세탁을 작업완료한 뒤 고르세요.`); // 15.255
     out.push({ lot, item: bag.item_name || '' });
   }
   return out;
@@ -4537,7 +4557,11 @@ async function semiLotValue(process, body, previous) {
   if (await db.prepare("SELECT 1 WHERE EXISTS(SELECT 1 FROM semi_records WHERE process='wash' AND lot=?) OR EXISTS(SELECT 1 FROM pack_bag_links WHERE bag_lot=?)").get(previous.lot, previous.lot)) throw bad(`봉투 LOT ${previous.lot}은 이미 세탁·포장에 쓰여 바꿀 수 없습니다.`);
   return next;
 }
+// 15.255 작업중: 새 기록에 수량을 비우고 work_status='progress'로 보내면 수량 0으로 저장(나중에 「작업완료」로 수량을 넣음)
+const semiWip = body => body?.work_status === 'progress' && !(Number(body.qty) > 0);
+const semiProgress = body => body?.work_status === 'progress' && (body.qty === '' || body.qty == null);
 async function semiFields(body, process, previous = null) {
+  if (!previous && semiProgress(body)) body = { ...body, qty: 0 };
   const date = dateStr(body.work_date, '작업일'); if (date > today()) throw bad('작업일은 오늘 이전으로 선택하세요.');
   const unitId = Number(body.unit_id); if (!Number.isSafeInteger(unitId) || unitId <= 0) throw bad(process === 'cut' ? '라인을 선택하세요.' : '세탁 호기를 선택하세요.');
   const unit = await mustGet('production_units', unitId);
@@ -4549,7 +4573,7 @@ async function semiFields(body, process, previous = null) {
     // A run time is required for counting washer runs; left blank on a new record it means "now" (KST).
     if(!previous&&!str(body.start_time,5))body={...body,start_time:now().slice(11,16)};}
   const codeEntry = process === 'cut' && body.entry_mode === 'code';
-  if(codeEntry){if(!Number.isSafeInteger(Number(body.bom_id))||Number(body.bom_id)<=0)throw bad('제품코드를 선택하세요.');const model=await mustGet('boms',body.bom_id);if(!model.semi_type)throw bad('반제품으로 쓰는 제품코드를 선택하세요.');const group=Object.keys(SEMI_PRODUCTS).find(g=>SEMI_PRODUCTS[g].types.includes(model.semi_type));body={...body,product_group:group,product_type:model.semi_type,unit:previous?.bom_id===model.id?previous.unit:model.semi_unit||(group==='seamless'?'켤레':'매'),spec:previous?.bom_id===model.id?previous.spec:''};if(!previous)body={...body,break_minutes:0,workers:null};if(!body.start_time||!body.end_time)throw bad('시작 시각과 종료 시각을 입력하세요.');}
+  if(codeEntry){if(!Number.isSafeInteger(Number(body.bom_id))||Number(body.bom_id)<=0)throw bad('제품코드를 선택하세요.');const model=await mustGet('boms',body.bom_id);if(!model.semi_type)throw bad('반제품으로 쓰는 제품코드를 선택하세요.');const group=Object.keys(SEMI_PRODUCTS).find(g=>SEMI_PRODUCTS[g].types.includes(model.semi_type));body={...body,product_group:group,product_type:model.semi_type,unit:previous?.bom_id===model.id?previous.unit:model.semi_unit||(group==='seamless'?'켤레':'매'),spec:previous?.bom_id===model.id?previous.spec:''};if(!previous)body={...body,break_minutes:0,workers:null};if(!body.start_time||(!body.end_time&&!semiWip(body)))throw bad(semiWip(body)?'시작 시각을 입력하세요.':'시작 시각과 종료 시각을 입력하세요.');}
   const group = String(body.product_group || ''); if (!Object.hasOwn(SEMI_PRODUCTS, group)) throw bad('와이퍼/심리스글러브를 선택하세요.');
   const type = str(body.product_type, 40);
   if (process === 'cut' && !type) throw bad('품목(종류)을 선택하세요.');
@@ -4583,7 +4607,7 @@ function semiWorkDetails(body, previous, process) {
     return value;
   };
   const start = clock('start_time', '시작 시각'), end = clock('end_time', '종료 시각');
-  if (process !== 'wash' && !start !== !end) throw bad('시작 시각과 종료 시각을 함께 입력하세요.');
+  if (process !== 'wash' && !start !== !end && !(body.work_status === 'progress' && start && !end)) throw bad('시작 시각과 종료 시각을 함께 입력하세요.'); // 15.255 작업중은 시작만
   let hours = previous && body.end_time === undefined && (process === 'wash' || body.start_time === undefined) ? previous.work_hours : null;
   let breakMinutes = body.break_minutes === undefined ? (previous ? previous.break_minutes : 0) : num(body.break_minutes, '휴게시간', { required: false }) ?? 0;
   if (!Number.isInteger(breakMinutes)) throw bad('휴게시간은 분 단위 정수로 입력하세요.');
@@ -4604,7 +4628,7 @@ function semiProcess(value) { const process = String(value || ''); if (!Object.h
 async function listSemiRecords({ user, query, operator = false }) {
   const where = ['process=?'], args = [semiProcess(query.process)];
   if (operator) { where.push('created_by_id=?'); args.push(user.id); }
-  applyListDates(where, args, query, 'work_date');
+  if (query.work_status === 'progress') where.push("work_status='progress'"); else applyListDates(where, args, query, 'work_date'); // 15.255 작업중은 기간 없이
   if (query.unit_id) { if (!/^[1-9]\d*$/.test(query.unit_id)) throw bad('라인·호기를 확인하세요.'); where.push('unit_id=?'); args.push(Number(query.unit_id)); }
   if (query.product_group) { if (!Object.hasOwn(SEMI_PRODUCTS, query.product_group)) throw bad('품목 구분을 확인하세요.'); where.push('product_group=?'); args.push(query.product_group); }
   applyListKeyword(where, args, query.q, ['unit_name', 'product_type', 'item_name', 'product_code', 'spec', 'lot', 'note', 'created_by']);
@@ -4631,8 +4655,8 @@ route('GET', '/api/semi-bags', async ({ query }) => {
   applyListDates(where, args, query, 'c.work_date');
   const q = str(query.q, 100); if (q) { const like = '%' + q.replace(/[\\%_]/g, m => '\\' + m) + '%'; where.push("(c.lot LIKE ? ESCAPE '\\' OR c.item_name LIKE ? ESCAPE '\\' OR c.product_code LIKE ? ESCAPE '\\')"); args.push(like, like, like); }
   if (query.items) { const names = String(query.items).split('|').map(x => x.trim()).filter(Boolean).slice(0, 30); if (names.length) { where.push(`TRIM(c.item_name) IN (${names.map(() => '?').join(',')})`); args.push(...names); } }
-  if (state === 'unwashed') where.push("NOT EXISTS(SELECT 1 FROM semi_records w WHERE w.process='wash' AND w.lot=c.lot)");
-  if (state === 'washed') where.push("EXISTS(SELECT 1 FROM semi_records w WHERE w.process='wash' AND w.lot=c.lot)");
+  if (state === 'unwashed') where.push("c.work_status='done' AND NOT EXISTS(SELECT 1 FROM semi_records w WHERE w.process='wash' AND w.lot=c.lot)"); // 15.255
+  if (state === 'washed') where.push("EXISTS(SELECT 1 FROM semi_records w WHERE w.process='wash' AND w.lot=c.lot AND w.work_status='done')");
   const rows = await db.prepare(`SELECT c.id, c.lot, c.work_date, c.unit_name, c.bom_id, c.item_name, c.product_code, c.product_group, c.product_type, c.qty, c.unit,
       (SELECT COALESCE(SUM(w.qty + COALESCE(w.defect_qty,0)),0) FROM semi_records w WHERE w.process='wash' AND w.lot=c.lot) AS washed_qty,
       (SELECT MAX(w.work_date) FROM semi_records w WHERE w.process='wash' AND w.lot=c.lot) AS washed_date,
@@ -4646,14 +4670,14 @@ async function lotTrace(lot) {
   const addBag = async b => { if (!b || bags.has(b)) return false; const c = await semiBagRecord(b); if (!c) return false;
     const inputs = await db.prepare('SELECT item, unit, lot, qty, pieces, piece_nos FROM semi_lot_inputs WHERE record_id=? ORDER BY id').all(c.id);
     const washes = await db.prepare("SELECT work_date, unit_name, qty + COALESCE(defect_qty,0) AS qty, unit FROM semi_records WHERE process='wash' AND lot=? ORDER BY work_date, id").all(b);
-    bags.set(b, { lot: b, item: c.item_name, product_code: c.product_code, work_date: c.work_date, unit_name: c.unit_name, qty: c.qty, unit: c.unit, inputs, washes, finished: [] }); return true; };
+    bags.set(b, { lot: b, item: c.item_name, product_code: c.product_code, work_date: c.work_date, unit_name: c.unit_name, qty: c.qty, unit: c.unit, inputs, washes, finished: [], ...(c.work_status === 'progress' ? { wip: true } : {}) }); return true; };
   const addFin = async a => { if (!a || fins.has(a.lot)) return false;
     const s = await db.prepare('SELECT product, unit, bom_snapshot FROM schedules WHERE id=?').get(a.schedule_id) || {};
     const ships = await db.prepare("SELECT ship_date, customer, qty, unit FROM shipments WHERE lot=? ORDER BY ship_date, id").all(a.lot);
     const direct = await db.prepare('SELECT item, unit, lot, qty FROM production_lot_inputs WHERE actual_id=? ORDER BY id').all(a.id);
     const vocs = await db.prepare("SELECT req_no, customer, status, created_at FROM requests WHERE type='voc' AND (lot=? OR json_extract(data,'$.lot')=?) ORDER BY id DESC LIMIT 20").all(a.lot, a.lot); // 15.254
     const per = (() => { try { const sn = JSON.parse(s.bom_snapshot || '{}'), b = Number(sn.base_qty) || 1; return (sn.materials || []).filter(m => m.item_category === '반제품').reduce((t, m) => t + Number(m.qty) / b, 0) || null; } catch { return null; } })(); // 15.254 완제품 1개당 반제품 수량(예상 생산량 계산)
-    fins.set(a.lot, { vocs, per, lot: a.lot, item: s.product || '', product_code: (() => { try { return JSON.parse(s.bom_snapshot || '{}').product_code || ''; } catch { return ''; } })(), date: a.production_date, qty: a.qty, unit: s.unit || '', work_order: a.work_order || '', bags: [], direct, shipments: ships }); return true; };
+    fins.set(a.lot, { vocs, per, lot: a.lot, item: s.product || '', product_code: (() => { try { return JSON.parse(s.bom_snapshot || '{}').product_code || ''; } catch { return ''; } })(), date: a.production_date, qty: a.qty, unit: s.unit || '', ...(a.work_status === 'progress' ? { wip: true } : {}), work_order: a.work_order || '', bags: [], direct, shipments: ships }); return true; };
   const actualsOfBag = b => db.prepare('SELECT a.* FROM pack_bag_links p JOIN production_actuals a ON a.id=p.actual_id WHERE p.bag_lot=? AND a.voided_at IS NULL ORDER BY a.production_date, a.id').all(b);
   const bagsOfActual = id => db.prepare('SELECT bag_lot FROM pack_bag_links WHERE actual_id=? ORDER BY id').all(id);
   let kind = '';
@@ -4723,7 +4747,7 @@ route('POST', '/api/semi-records', async ({ user, body }) => {
   const old = await db.prepare('SELECT * FROM semi_records WHERE request_id=?').get(key);
   if (old) { if (old.created_by_id !== user.id || old.process !== process) throw new HttpError(409, '이미 사용된 요청 번호입니다.'); return old; } // 15.253 재요청은 투입 확인 전에 돌려줌
   const linked = await semiLotLink(process, await semiFields(body, process), body); const f = linked.f;
-  await db.batch([{ sql: 'INSERT INTO semi_records(process,work_date,unit_id,unit_name,product_group,product_type,bom_id,item_name,product_code,bom_snapshot,spec,start_time,end_time,break_minutes,work_hours,workers,defect_qty,defect_reason,qty,unit,lot,note,request_id,created_by_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', args: [process, f.work_date, f.unit_id, f.unit_name, f.product_group, f.product_type, f.bom_id, f.item_name, f.product_code, f.bom_snapshot, f.spec, f.start_time, f.end_time, f.break_minutes, f.work_hours, f.workers, f.defect_qty, f.defect_reason, f.qty, f.unit, f.lot, f.note, key, user.id, user.name] },
+  await db.batch([{ sql: 'INSERT INTO semi_records(work_status,process,work_date,unit_id,unit_name,product_group,product_type,bom_id,item_name,product_code,bom_snapshot,spec,start_time,end_time,break_minutes,work_hours,workers,defect_qty,defect_reason,qty,unit,lot,note,request_id,created_by_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', args: [semiProgress(body) ? 'progress' : 'done', process, f.work_date, f.unit_id, f.unit_name, f.product_group, f.product_type, f.bom_id, f.item_name, f.product_code, f.bom_snapshot, f.spec, f.start_time, f.end_time, f.break_minutes, f.work_hours, f.workers, f.defect_qty, f.defect_reason, f.qty, f.unit, f.lot, f.note, key, user.id, user.name] },
     ...linked.inputs.map(i => ({ sql: 'INSERT INTO semi_lot_inputs(record_id,item,unit,lot,qty,created_by,pieces,piece_nos) VALUES((SELECT id FROM semi_records WHERE request_id=?),?,?,?,?,?,?,?)', args: [key, i.item, i.unit, i.lot, i.qty, user.name, i.pieces ?? null, i.piece_nos || ''] })),
     ...(process === 'cut' && f.lot ? bagGuard([f.lot]) : [])]).catch(error => { throw lotDupError(error); }); // 15.253 기록·투입을 함께 · 15.254 번호 겹침
   const r = { lastInsertRowid: (await db.prepare('SELECT id FROM semi_records WHERE request_id=?').get(key)).id };
@@ -4792,7 +4816,9 @@ async function semiBagRecord(lot) { return db.prepare("SELECT * FROM semi_record
 async function semiLotLink(process, f, row, usedInputs = new Map(), bagNext = new Map()) {
   if (process === 'cut') {
     if (f.lot && await semiBagRecord(f.lot)) throw bad(`봉투 LOT ${f.lot}은 이미 있습니다. 비워 두면 자동으로 붙습니다.`); // 15.253
-    const inputs = await semiLotInputs(row.inputs, f.bom_snapshot, usedInputs, stockRound((Number(f.qty) || 0) + (Number(f.defect_qty) || 0)));
+    const progress = row.work_status === 'progress' && !(Number(f.qty) > 0);
+    let raw = row.inputs; if (progress) { try { raw = (typeof raw === 'string' ? (raw.trim() ? JSON.parse(raw) : []) : raw || []).map(l => ({ ...l, qty: l.qty === undefined || l.qty === '' || l.qty === null ? 0.000001 : l.qty })); } catch { throw bad('투입 원자재 LOT 형식을 확인하세요.'); } } // 15.255 작업중: 사용량은 완료 때
+    const inputs = await semiLotInputs(raw, f.bom_snapshot, usedInputs, progress ? null : stockRound((Number(f.qty) || 0) + (Number(f.defect_qty) || 0)));
     if (!f.lot) {
       const code = lotCode(f.product_code, f.item_name), key = f.work_date + '|' + code;
       if (!bagNext.has(key)) bagNext.set(key, (await nextBagLots(f.work_date, code, 1))[0].replace(/\d+$/, n => String(Number(n) - 1)));
@@ -4801,6 +4827,7 @@ async function semiLotLink(process, f, row, usedInputs = new Map(), bagNext = ne
     return { f, inputs };
   }
   if (f.lot && !(await semiBagRecord(f.lot)) && row.bag_required) throw bad(`봉투 LOT ${f.lot}을 찾을 수 없습니다. 「봉투 LOT 고르기」로 고르세요.`);
+  if (f.lot && row.bag_required && (await semiBagRecord(f.lot))?.work_status === 'progress') throw bad(`봉투 LOT ${f.lot}은 아직 커팅 작업중입니다. 커팅을 작업완료한 뒤 세탁하세요.`); // 15.255
   return { f, inputs: [] };
 }
 // 15.253 세탁·포장에 쓰인 봉투(커팅 기록)는 지우거나 품목·LOT을 바꿀 수 없다(연결이 끊김)
@@ -4840,8 +4867,8 @@ route('POST', '/api/semi-batches', async ({ user, body }) => {
     if (process === 'wash' && row.entry_mode === 'wash_quantity' && !str(row.start_time, 5)) row.start_time = washNow;
     let f, inputs = []; try { f = await semiFields(row, process); ({ f, inputs } = await semiLotLink(process, f, row, usedInputs, bagNext)); if (process === 'cut' && f.lot) autoBags.add(f.lot); }
     catch (error) { if (error.status === 400 || error.status === 404) throw bad(`${index + 1}번째 줄: ${error.message}`); throw error; }
-    commands.push({ sql: 'INSERT INTO semi_records(process,work_date,unit_id,unit_name,product_group,product_type,bom_id,item_name,product_code,bom_snapshot,spec,start_time,end_time,break_minutes,work_hours,workers,defect_qty,defect_reason,qty,unit,lot,note,request_id,created_by_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-      args: [process, f.work_date, f.unit_id, f.unit_name, f.product_group, f.product_type, f.bom_id, f.item_name, f.product_code, f.bom_snapshot, f.spec, f.start_time, f.end_time, f.break_minutes, f.work_hours, f.workers, f.defect_qty, f.defect_reason, f.qty, f.unit, f.lot, f.note, `${key}:${index}`, user.id, user.name] });
+    commands.push({ sql: 'INSERT INTO semi_records(work_status,process,work_date,unit_id,unit_name,product_group,product_type,bom_id,item_name,product_code,bom_snapshot,spec,start_time,end_time,break_minutes,work_hours,workers,defect_qty,defect_reason,qty,unit,lot,note,request_id,created_by_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      args: [semiProgress(row) ? 'progress' : 'done', process, f.work_date, f.unit_id, f.unit_name, f.product_group, f.product_type, f.bom_id, f.item_name, f.product_code, f.bom_snapshot, f.spec, f.start_time, f.end_time, f.break_minutes, f.work_hours, f.workers, f.defect_qty, f.defect_reason, f.qty, f.unit, f.lot, f.note, `${key}:${index}`, user.id, user.name] });
     commands.push(...inputs.map(i => ({ sql: 'INSERT INTO semi_lot_inputs(record_id,item,unit,lot,qty,created_by,pieces,piece_nos) VALUES((SELECT id FROM semi_records WHERE request_id=?),?,?,?,?,?,?,?)', args: [`${key}:${index}`, i.item, i.unit, i.lot, i.qty, user.name, i.pieces ?? null, i.piece_nos || ''] })));
   }
   if (process === 'cut') commands.push(...bagGuard([...autoBags])); // 15.254
@@ -4891,6 +4918,30 @@ route('PUT', '/api/semi-records/:id', async ({ user, params, body }) => {
   }
   return requestSemiChange(user, row, 'edit', f, body);
 });
+// 15.255 작업완료: 작업중 기록에 수량(커팅: 양품·불량·종료시각 / 세탁: 세탁수량)을 넣는다. 커팅은 원자재 사용량을 BOM으로 다시 계산.
+route('POST', '/api/operator/semi-records/:id/complete', context => semiComplete(context));
+route('POST', '/api/semi-records/:id/complete', context => semiComplete(context));
+async function semiComplete({ user, params, body }) {
+  const row = await mustGet('semi_records', params.id);
+  if (!canModify(user, row) && !canManageProduction(user)) throw new HttpError(403, '등록자 또는 생산 담당자만 작업완료할 수 있습니다.');
+  if (row.work_status !== 'progress') throw new HttpError(409, '이미 작업완료한 기록입니다. 고치려면 「수정」을 쓰세요.');
+  let qty = num(body.qty, row.process === 'wash' ? '세탁수량' : '양품수량'), defect = row.process === 'cut' ? num(body.defect_qty, '불량수량', { required: false }) ?? 0 : 0;
+  if (!(qty + defect > 0)) throw bad('수량을 넣으세요.');
+  const reason = defect ? str(body.defect_reason, 40) : ''; if (reason && !SEMI_DEFECT_REASONS[row.process].includes(reason)) throw bad('불량 사유를 다시 선택하세요.');
+  const d = semiWorkDetails({ start_time: body.start_time === undefined ? row.start_time : body.start_time, end_time: body.end_time === undefined ? row.end_time : body.end_time, break_minutes: body.break_minutes, workers: body.workers, defect_qty: defect, defect_reason: reason }, row, row.process);
+  const r = await db.prepare("UPDATE semi_records SET qty=?,defect_qty=?,defect_reason=?,start_time=?,end_time=?,break_minutes=?,work_hours=?,workers=?,work_status='done',updated_by=?,updated_at=? WHERE id=? AND work_status='progress'")
+    .run(qty, defect, reason, d.start_time, d.end_time, d.break_minutes, d.work_hours, d.workers, user.name, now(), row.id);
+  if (!r.changes) throw new HttpError(409, '이미 작업완료한 기록입니다.');
+  if (row.process === 'cut') {
+    await semiInputsRecalc(row.id);
+    if (await db.prepare('SELECT 1 FROM semi_lot_inputs WHERE record_id=? AND qty<0.00001 LIMIT 1').get(row.id)) { await db.prepare("UPDATE semi_records SET qty=0,defect_qty=0,work_status='progress' WHERE id=?").run(row.id); throw bad('투입 원자재 사용량을 BOM으로 계산할 수 없습니다(절 없이 넣은 줄). 「수정」에서 투입을 다시 고르세요.'); }
+    for (const i of await db.prepare('SELECT DISTINCT item, lot FROM semi_lot_inputs WHERE record_id=?').all(row.id)) {
+      const bal = (await lotBalances(i.item)).find(x => x.lot === i.lot) || (await lotStockReport({ q: i.lot })).rows.find(x => x.item === String(i.item).trim() && x.lot === i.lot);
+      if (bal && bal.balance < -0.000001) { await db.prepare("UPDATE semi_records SET qty=0,defect_qty=0,work_status='progress' WHERE id=?").run(row.id); await db.prepare('UPDATE semi_lot_inputs SET qty=0.000001 WHERE record_id=?').run(row.id); throw bad(`${i.item}: LOT ${i.lot} 재고가 모자랍니다(BOM 사용량이 잔량보다 많음). 수량이나 투입 절을 확인하세요.`); }
+    }
+  }
+  const done = await mustGet('semi_records', row.id); return isOperator(user) ? (({ bom_snapshot, request_id, ...x }) => x)(done) : done;
+}
 route('DELETE', '/api/semi-records/:id', async ({ user, params, body }) => {
   const row = await mustGet('semi_records', params.id);
   if (!canModify(user, row) && !canManageProduction(user)) throw new HttpError(403, '등록자 또는 생산 담당자만 삭제를 요청할 수 있습니다.');
