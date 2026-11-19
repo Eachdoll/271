@@ -47,7 +47,7 @@ async function pageReceiptEntry(main) {
         <span class="small muted" data-rc-picked>선택 0줄</span>
         <button type="button" class="btn small danger" data-rc-remove>선택 줄 삭제</button>
       </div>
-      <div class="table-wrap"><table class="grid rc-grid"><caption class="sr-only">입고 상세 줄</caption><thead><tr><th scope="col"><input type="checkbox" data-rc-all aria-label="전체 줄 선택"></th><th scope="col">No</th><th scope="col">구분</th><th scope="col">품목</th><th scope="col">규격</th><th scope="col">단위</th><th scope="col">업체 LOT</th><th scope="col">수량</th><th scope="col">입고창고</th><th scope="col">창고위치</th><th scope="col">비고</th><th scope="col">업체 정보(비고2)</th><th scope="col"><span class="sr-only">줄 작업</span></th></tr></thead><tbody data-rc-lines></tbody></table></div>
+      <div class="table-wrap"><table class="grid rc-grid"><caption class="sr-only">입고 상세 줄</caption><thead><tr><th scope="col"><input type="checkbox" data-rc-all aria-label="전체 줄 선택"></th><th scope="col">No</th><th scope="col">구분</th><th scope="col">품목</th><th scope="col">규격</th><th scope="col">단위</th><th scope="col">업체 LOT</th><th scope="col">수량 <span class="small muted">(거래 단위)</span></th><th scope="col" title="실물 개수(절). 마감은 거래 단위 수량으로">실물(절)</th><th scope="col">입고창고</th><th scope="col">창고위치</th><th scope="col">비고</th><th scope="col">업체 정보(비고2)</th><th scope="col"><span class="sr-only">줄 작업</span></th></tr></thead><tbody data-rc-lines></tbody></table></div>
       <p class="pr-totals" data-rc-total aria-live="polite"></p>
     </section>
     <div class="actions"><label class="inline" title="입고를 등록하면 LOT마다 QR코드 발행 창을 바로 엽니다"><input type="checkbox" data-rc-qr${(() => { try { return localStorage.getItem('wpa:rc-qr') === '0' ? '' : ' checked'; } catch { return ' checked'; } })()}> 등록하면 QR 바로 발행</label><button class="btn primary" data-rc-save>입고 등록</button></div>
@@ -79,13 +79,14 @@ async function pageReceiptEntry(main) {
       <td>${l.po_id || l.fixedSpec ? esc(l.spec || '') : (l.sizes || []).length ? `<select data-f="spec" aria-label="${i + 1}번째 줄 규격"><option value="">사이즈</option>${l.sizes.map(z => `<option${z === l.spec ? ' selected' : ''}>${esc(z)}</option>`).join('')}</select>` : `<input data-f="spec" value="${esc(l.spec || '')}" maxlength="100" aria-label="${i + 1}번째 줄 규격">`}</td>
       <td>${esc(l.unit || '')}</td>
       <td><input data-f="lot" value="${esc(l.lot || '')}" maxlength="100" aria-label="${i + 1}번째 줄 업체 LOT" placeholder="업체 LOT · 비우면 SST">${subHint(l)}</td>
-      <td><input data-f="qty" type="number" min="0" step="any" inputmode="decimal" value="${esc(l.qty ?? '')}" aria-label="${i + 1}번째 줄 수량" required></td>
+      <td><input data-f="qty" type="number" min="0" step="any" inputmode="decimal" value="${esc(l.qty ?? '')}" aria-label="${i + 1}번째 줄 수량(${esc(l.unit || '거래 단위')})" required></td>
+      <td><input data-f="pieces" type="number" min="0" step="any" inputmode="decimal" value="${esc(l.pieces ?? '')}" aria-label="${i + 1}번째 줄 실물(절)" placeholder="절"></td>
       <td><select data-f="warehouse" aria-label="${i + 1}번째 줄 창고"${(rcWarehouses || []).length ? '' : ' disabled'}>${rcWarehouseOptions(l.warehouse)}</select></td>
       <td><select data-f="location" aria-label="${i + 1}번째 줄 위치"${rcLocations(l.warehouse).length ? '' : ' disabled'}>${rcLocationOptions(l.warehouse, l.location)}</select></td>
       <td><input data-f="note" value="${esc(l.note || '')}" maxlength="200" aria-label="${i + 1}번째 줄 비고"></td>
       <td><input data-f="note2" value="${esc(l.note2 || '')}" maxlength="200" aria-label="${i + 1}번째 줄 업체 정보(비고2)"></td>
       <td class="nowrap"><button type="button" class="btn small" data-rc-split>LOT 나누기</button> <button type="button" class="btn small danger" data-rc-del aria-label="${i + 1}번째 줄 삭제">×</button></td></tr>`).join('')
-      || '<tr><td colspan="13" class="muted">아직 줄이 없습니다. 발주를 담거나 품목을 추가하세요.</td></tr>';
+      || '<tr><td colspan="14" class="muted">아직 줄이 없습니다. 발주를 담거나 품목을 추가하세요.</td></tr>';
     // 휴대폰 카드의 칸 이름(표는 처음 한 번만 이름표를 붙이므로 다시 그릴 때마다 붙인다)
     const heads = $$('thead th', body.closest('table')).map(th => th.textContent.trim());
     $$('tr', body).forEach(tr => [...tr.children].forEach((td, i) => { td.dataset.label = td.colSpan > 1 || i === 0 || i === heads.length - 1 ? '' : heads[i] || ''; }));
@@ -269,7 +270,7 @@ async function pageReceiptEntry(main) {
     const empty = lines.findIndex(l => !(Number(l.qty) > 0));
     if (empty >= 0) { $(`tr[data-rc-line="${lines[empty].key}"] [data-f=qty]`, body)?.focus(); return toast(`${empty + 1}번째 줄의 수량을 넣으세요.`, 'err'); }
     const v = formObj(form);
-    const payload = { receipt_date: v.receipt_date, vendor: v.vendor, note: v.note, request_id: requestId, lines: lines.map(l => ({ po_id: l.po_id || undefined, bom_id: l.po_id ? undefined : l.bom_id, spec: l.spec, lot: l.lot, qty: l.qty, warehouse: l.warehouse, location: l.location, note: l.note, note2: l.note2 || '' })) };
+    const payload = { receipt_date: v.receipt_date, vendor: v.vendor, note: v.note, request_id: requestId, lines: lines.map(l => ({ po_id: l.po_id || undefined, bom_id: l.po_id ? undefined : l.bom_id, spec: l.spec, lot: l.lot, qty: l.qty, pieces: l.pieces ?? '', warehouse: l.warehouse, location: l.location, note: l.note, note2: l.note2 || '' })) };
     busy = true; entryDraft.start(); const button = $('[data-rc-save]', form); button.disabled = true;
     try {
       const saved = await api('POST', '/api/receipts', payload);
@@ -299,9 +300,9 @@ function receiptSlip(r) {
         <tr><th>입고번호</th><td>${esc(r.receipt_no)}</td><th>입고일</th><td>${esc(r.receipt_date)}</td></tr>
         <tr><th>거래처</th><td><b>${esc(r.vendor)}</b></td><th>입고 담당</th><td>${esc(r.created_by)}</td></tr>
       </tbody></table>
-      <table class="po-items"><thead><tr><th>No</th><th>구분</th><th>품목</th><th>규격</th><th>LOT</th><th class="r">수량</th><th>단위</th><th>창고 · 위치</th><th>비고</th></tr></thead>
-      <tbody>${r.lines.map((l, i) => `<tr${l.voided_at ? ' class="rc-void"' : ''}><td class="c">${i + 1}</td><td class="c">${l.kind === 'po' ? '발주' : '기타'}</td><td>${esc(l.item)}${l.product_code ? `<div class="po-code">${esc(l.product_code)}</div>` : ''}${l.req_no ? `<div class="po-code">${esc(l.req_no)}</div>` : ''}</td><td>${esc(l.spec || '')}</td><td>${esc(lotFull(l))}</td><td class="r">${fmtNum(l.qty)}${l.voided_at ? ' (취소)' : ''}</td><td>${esc(l.unit || '')}</td><td>${esc([l.warehouse, l.location].filter(Boolean).join(' · '))}</td><td>${esc(l.note && l.note !== r.note ? l.note : '')}${l.note2 ? `<div class="small">업체 정보: ${esc(l.note2)}</div>` : ''}</td></tr>`).join('')}</tbody>
-      <tfoot><tr><th colspan="5" class="r">합계</th><td class="r" colspan="2"><b>${[...byUnit].map(([u, q]) => `${fmtNum(q)} ${esc(u)}`).join(' · ')}</b></td><td colspan="2"></td></tr></tfoot></table>
+      <table class="po-items"><thead><tr><th>No</th><th>구분</th><th>품목</th><th>규격</th><th>LOT</th><th class="r">수량</th><th>단위</th><th class="r">실물(절)</th><th>창고 · 위치</th><th>비고</th></tr></thead>
+      <tbody>${r.lines.map((l, i) => `<tr${l.voided_at ? ' class="rc-void"' : ''}><td class="c">${i + 1}</td><td class="c">${l.kind === 'po' ? '발주' : '기타'}</td><td>${esc(l.item)}${l.product_code ? `<div class="po-code">${esc(l.product_code)}</div>` : ''}${l.req_no ? `<div class="po-code">${esc(l.req_no)}</div>` : ''}</td><td>${esc(l.spec || '')}</td><td>${esc(lotFull(l))}</td><td class="r">${fmtNum(l.qty)}${l.voided_at ? ' (취소)' : ''}</td><td>${esc(l.unit || '')}</td><td class="r">${l.pieces != null ? fmtNum(l.pieces) : ''}</td><td>${esc([l.warehouse, l.location].filter(Boolean).join(' · '))}</td><td>${esc(l.note && l.note !== r.note ? l.note : '')}${l.note2 ? `<div class="small">업체 정보: ${esc(l.note2)}</div>` : ''}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><th colspan="5" class="r">합계</th><td class="r" colspan="2"><b>${[...byUnit].map(([u, q]) => `${fmtNum(q)} ${esc(u)}`).join(' · ')}</b></td><td class="r">${(() => { const p = r.lines.filter(l => !l.voided_at && l.pieces != null).reduce((t, l) => t + l.pieces, 0); return p ? `<b>${fmtNum(p)}</b>` : ''; })()}</td><td colspan="2"></td></tr></tfoot></table>
       <div class="po-memo"><b>비고</b><div class="po-memo-body">${esc(r.note || '')}</div></div>
       <table class="rc-sign"><tbody><tr><th>입고 담당</th><th>확인</th><th>승인</th></tr><tr><td></td><td></td><td></td></tr></tbody></table>
     </section>
@@ -570,9 +571,10 @@ async function pageOtherReceiptHeads(main) {
   };
   const drawLines = () => {
     // 15.245 상세 머리 옆 입고번호·날짜·거래처 표시는 없앰(위 표에서 고른 줄이 강조됨)
-    $('#otLines', main).innerHTML = !cur ? '<div class="empty">위 기타입고내역에서 입고번호를 고르거나 「추가」로 새 입고번호를 만드세요.</div>' : lines.length ? `<div class="table-wrap"><table class="grid keep-table ot-grid ot-lines" data-no-sort data-keep-cols><thead><tr><th class="c">No.</th><th class="pick-cell"><input type="checkbox" data-ot-all aria-label="모두 고르기"></th><th>업체 LOT</th><th>품목코드</th><th>품목명</th><th>품목분류</th><th class="r">입하수량</th><th>입고창고</th><th>로케이션</th><th>비고</th><th>업체정보</th></tr></thead><tbody>${lines.map((l, i) => `<tr data-ot-line="${l.key}" class="${l.isNew ? 'ot-new' : l.changed ? 'ot-changed' : ''}"><td class="c">${i + 1}</td><td class="pick-cell"><input type="checkbox" data-ot-pick="${l.key}" aria-label="${esc(l.item)} 고르기"></td>
+    $('#otLines', main).innerHTML = !cur ? '<div class="empty">위 기타입고내역에서 입고번호를 고르거나 「추가」로 새 입고번호를 만드세요.</div>' : lines.length ? `<div class="table-wrap"><table class="grid keep-table ot-grid ot-lines" data-no-sort data-keep-cols><thead><tr><th class="c">No.</th><th class="pick-cell"><input type="checkbox" data-ot-all aria-label="모두 고르기"></th><th>업체 LOT</th><th>품목코드</th><th>품목명</th><th>품목분류</th><th class="r">입하수량</th><th class="r" title="실물 개수(절). 마감은 입하수량(거래 단위)으로">실물(절)</th><th>입고창고</th><th>로케이션</th><th>비고</th><th>업체정보</th></tr></thead><tbody>${lines.map((l, i) => `<tr data-ot-line="${l.key}" class="${l.isNew ? 'ot-new' : l.changed ? 'ot-changed' : ''}"><td class="c">${i + 1}</td><td class="pick-cell"><input type="checkbox" data-ot-pick="${l.key}" aria-label="${esc(l.item)} 고르기"></td>
       <td class="nowrap"><input data-f="lot" value="${esc(l.lot || '')}" maxlength="100" aria-label="업체 LOT" placeholder="업체 LOT · 비우면 SST" class="ot-lot">${!l.isNew && l.sub_lot ? `<span class="small muted">-${esc(l.sub_lot)}</span>` : ''}</td><td class="nowrap">${esc(l.product_code || '')}</td><td><b>${esc(l.item)}</b>${l.spec ? ` <span class="small muted">${esc(l.spec)}</span>` : ''}</td><td>${esc(l.item_category || '')}</td>
       <td class="r">${l.isNew ? `<input type="number" data-f="qty" min="0" step="any" inputmode="decimal" value="${esc(l.qty ?? '')}" aria-label="입하수량" style="width:6em">` : `${fmtNum(l.qty)} <span class="small muted">${esc(l.unit || '')}</span>`}</td>
+      <td class="r">${l.isNew ? `<input type="number" data-f="pieces" min="0" step="any" inputmode="decimal" value="${esc(l.pieces ?? '')}" aria-label="실물(절)" placeholder="절" style="width:5em">` : l.pieces != null ? `${fmtNum(l.pieces)} <span class="small muted">절</span>` : '<span class="muted">—</span>'}</td>
       <td><select data-f="warehouse" aria-label="입고창고">${rcWarehouseOptions(l.warehouse || '')}</select></td><td><select data-f="location" aria-label="로케이션"${rcLocations(l.warehouse).length ? '' : ' disabled'}>${rcLocationOptions(l.warehouse, l.location || '')}</select></td>
       <td><input data-f="note" value="${esc(l.note || '')}" maxlength="200" aria-label="비고"></td><td><input data-f="note2" value="${esc(l.note2 || '')}" maxlength="200" aria-label="업체정보"></td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">상세 줄이 없습니다. 오른쪽 위 「추가」로 품목을 담으세요.</div>';
@@ -635,7 +637,7 @@ async function pageOtherReceiptHeads(main) {
     const bad = nw.find(l => !(Number(l.qty) > 0)); if (bad) { $(`[data-ot-line="${bad.key}"] [data-f="qty"]`, main)?.focus(); return toast(`${bad.item}: 입하수량을 넣으세요.`, 'err'); }
     btn.disabled = true;
     try {
-      if (nw.length) await api('POST', `/api/receipts/${cur.id}/lines`, { request_id: crypto.randomUUID(), lines: nw.map(l => ({ bom_id: l.bom_id, item: l.item, item_category: l.item_category, spec: l.spec, qty: l.qty, lot: l.lot, warehouse: l.warehouse, location: l.location, note: l.note, note2: l.note2 })) });
+      if (nw.length) await api('POST', `/api/receipts/${cur.id}/lines`, { request_id: crypto.randomUUID(), lines: nw.map(l => ({ bom_id: l.bom_id, item: l.item, item_category: l.item_category, spec: l.spec, qty: l.qty, pieces: l.pieces ?? '', lot: l.lot, warehouse: l.warehouse, location: l.location, note: l.note, note2: l.note2 })) });
       for (const l of ch) await api('PUT', `/api/other-receipts/${l.id}/place`, { lot: l.lot, warehouse: l.warehouse, location: l.location, note: l.note, note2: l.note2 });
       toast(`저장했습니다.${nw.length ? ` 새 줄 ${nw.length}` : ''}${ch.length ? ` · 고친 줄 ${ch.length}` : ''}`);
       await loadHeads(cur.id);

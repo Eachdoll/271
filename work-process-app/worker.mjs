@@ -966,12 +966,12 @@ async function warehouseRules() {
   };
 }
 function receiptLineSql() {
-  return `SELECT 'po' AS kind, l.id, l.receipt_id, l.po_id, NULL AS other_id, COALESCE(p.req_no,'') AS req_no, COALESCE(p.item,'(삭제된 발주)') AS item, COALESCE(p.spec,'') AS spec, COALESCE(p.unit,'') AS unit, COALESCE(p.product_code,'') AS product_code, COALESCE(p.item_category,'') AS item_category, l.lot, l.sub_lot, l.qty, l.received_date, l.warehouse, l.location, l.note, l.note2, l.voided_at, p.qty AS po_qty, p.recv_qty, p.recv_status
+  return `SELECT 'po' AS kind, l.id, l.receipt_id, l.po_id, NULL AS other_id, COALESCE(p.req_no,'') AS req_no, COALESCE(p.item,'(삭제된 발주)') AS item, COALESCE(p.spec,'') AS spec, COALESCE(p.unit,'') AS unit, COALESCE(p.product_code,'') AS product_code, COALESCE(p.item_category,'') AS item_category, l.lot, l.sub_lot, l.qty, l.pieces, l.received_date, l.warehouse, l.location, l.note, l.note2, l.voided_at, p.qty AS po_qty, p.recv_qty, p.recv_status
       FROM po_receipt_lots l LEFT JOIN purchase_orders p ON p.id=l.po_id`;
 }
 async function receiptDetail(r) {
   const po = await db.prepare(`${receiptLineSql()} WHERE l.receipt_id=? ORDER BY l.id`).all(r.id);
-  const other = await db.prepare(`SELECT 'other' AS kind, id, receipt_id, NULL AS po_id, id AS other_id, '' AS req_no, item, spec, COALESCE(NULLIF(unit,''), json_extract(bom_snapshot,'$.unit'), '') AS unit, json_extract(bom_snapshot,'$.product_code') AS product_code, item_category, lot, sub_lot, qty, received_date, warehouse, location, note, note2, NULL AS voided_at FROM other_receipts WHERE receipt_id=? ORDER BY id`).all(r.id);
+  const other = await db.prepare(`SELECT 'other' AS kind, id, receipt_id, NULL AS po_id, id AS other_id, '' AS req_no, item, spec, COALESCE(NULLIF(unit,''), json_extract(bom_snapshot,'$.unit'), '') AS unit, json_extract(bom_snapshot,'$.product_code') AS product_code, item_category, lot, sub_lot, qty, pieces, received_date, warehouse, location, note, note2, NULL AS voided_at FROM other_receipts WHERE receipt_id=? ORDER BY id`).all(r.id);
   return { ...r, lines: [...po, ...other] };
 }
 route('GET', '/api/receipts', async ({ query }) => {
@@ -1036,7 +1036,7 @@ route('POST', '/api/receipts', async ({ user, body }) => {
     const l = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
     try {
       const qty = num(l.qty, '수량'); if (!(qty > 0)) throw bad('수량은 0보다 커야 합니다.');
-      const line = { lot: str(l.lot, 100), qty, note: str(l.note, 200), note2: str(l.note2, 200), ...rules.check(l.warehouse, l.location), no: index + 1 }; // 15.199 note2 = 업체 정보(비고2)
+      const line = { lot: str(l.lot, 100), qty, pieces: piecesOf(l.pieces), note: str(l.note, 200), note2: str(l.note2, 200), ...rules.check(l.warehouse, l.location), no: index + 1 }; // 15.199 note2 = 업체 정보(비고2)
       if (l.po_id !== undefined && l.po_id !== null && l.po_id !== '') {
         const id = Number(l.po_id); if (!Number.isSafeInteger(id) || id <= 0) throw bad('발주를 다시 고르세요.');
         const group = poLines.get(id) || []; group.push(line); poLines.set(id, group);
@@ -1068,7 +1068,7 @@ route('POST', '/api/receipts', async ({ user, body }) => {
     const add = stockRound(group.reduce((t, l) => t + l.qty, 0)), total = stockRound(recorded + add), status = total === po.qty ? 'ok' : 'mismatch';
     // 예전 방식으로 기록된 입고(줄 없음)는 먼저 한 줄로 옮겨 recv_qty = 줄 합을 지킨다.
     if (!active.length && recorded) cmds.push({ sql: 'INSERT INTO po_receipt_lots(po_id,lot,qty,received_date,note,created_by) VALUES(?,?,?,?,?,?)', args: [poId, po.lot || '', recorded, (po.recv_at || '').slice(0, 10) || date, '이전 입고', po.recv_by || ''] });
-    for (const l of group) cmds.push({ sql: `INSERT INTO po_receipt_lots(po_id,receipt_id,lot,sub_lot,qty,received_date,warehouse,location,note,created_by,note2) VALUES(?,${RID},?,?,?,?,?,?,?,?,?)`, args: [poId, token, l.lot, l.sub_lot || '', l.qty, date, l.warehouse, l.location, l.note, user.name, l.note2 || ''] });
+    for (const l of group) cmds.push({ sql: `INSERT INTO po_receipt_lots(po_id,receipt_id,lot,sub_lot,qty,received_date,warehouse,location,note,created_by,note2,pieces) VALUES(?,${RID},?,?,?,?,?,?,?,?,?,${l.pieces == null ? 'NULL' : Number(l.pieces)})`, args: [poId, token, l.lot, l.sub_lot || '', l.qty, date, l.warehouse, l.location, l.note, user.name, l.note2 || ''] });
     const keepPoLot = !active.length && (recorded || !group.some(l => l.lot)); // 예전 입고를 옮기거나, 이번 줄에 LOT가 없으면 발주의 LOT 유지(15.77)
     const lots = [...new Set([...active.map(a => a.lot), ...(keepPoLot ? [po.lot] : []), ...group.map(l => l.lot)].filter(Boolean))].join(', ').slice(0, 100);
     cmds.push({ sql: `UPDATE purchase_orders SET recv_status=?,recv_qty=?,recv_by=?,recv_at=CASE WHEN recv_at IS NULL OR recv_status NOT IN ('ok','mismatch') OR recv_at<? THEN ? ELSE recv_at END,lot=? WHERE id=? AND recv_status=? AND recv_qty IS ? AND NOT EXISTS(SELECT 1 FROM receipt_qty_changes c WHERE c.po_id=purchase_orders.id AND c.status='pending')`, args: [status, total, user.name, at, at, lots, poId, po.recv_status, po.recv_qty] });
@@ -1084,7 +1084,7 @@ route('POST', '/api/receipts', async ({ user, body }) => {
     try { fields = await otherReceiptFields({ ...l.raw, received_date: date, vendor, note: l.note || note, qty: l.qty }); }
     catch (error) { if (error.status === 400 || error.status === 404) throw bad(`${l.no}번째 줄: ${error.message}`); throw error; }
     const snapshot = JSON.parse(fields[7]);
-    cmds.push({ sql: `INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,bom_id,bom_snapshot,created_by,spec,unit,lot,batch_id,receipt_id,warehouse,location,sub_lot,note2) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,${RID},?,?,?,?)`,
+    cmds.push({ sql: `INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,bom_id,bom_snapshot,created_by,spec,unit,lot,batch_id,receipt_id,warehouse,location,sub_lot,note2,pieces) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,${RID},?,?,?,?,${l.pieces == null ? 'NULL' : Number(l.pieces)})`,
       args: [...fields, user.name, await catalogSpec(fields[6], l.raw.spec), snapshot.unit || '', l.lot, token, token, l.warehouse, l.location, l.sub_lot || '', l.note2 || ''] });
     cmds.push(receiptAnalysisQuery('other_receipt', null, user));
   }
@@ -1138,7 +1138,7 @@ route('POST', '/api/receipts/:id/lines', async ({ user, params, body }) => {
   if (await db.prepare('SELECT 1 FROM other_receipts WHERE batch_id=? LIMIT 1').get(token)) return receiptDetail(r);
   const raw = Array.isArray(body.lines) ? body.lines : []; if (!raw.length || raw.length > 100) throw bad('담을 줄은 1~100줄입니다.');
   const rules = await warehouseRules(), lines = [];
-  for (const [i, x] of raw.entries()) { const l = x && typeof x === 'object' ? x : {}; try { const qty = num(l.qty, '입하수량'); if (!(qty > 0)) throw bad('입하수량은 0보다 커야 합니다.'); lines.push({ raw: l, qty, lot: str(l.lot, 100), note: str(l.note, 200), note2: str(l.note2, 200), ...rules.check(l.warehouse, l.location), no: i + 1 }); } catch (error) { if (error.status === 400 || error.status === 404) throw bad(`${i + 1}번째 줄: ${error.message}`); throw error; } }
+  for (const [i, x] of raw.entries()) { const l = x && typeof x === 'object' ? x : {}; try { const qty = num(l.qty, '입하수량'); if (!(qty > 0)) throw bad('입하수량은 0보다 커야 합니다.'); lines.push({ raw: l, qty, pieces: piecesOf(l.pieces), lot: str(l.lot, 100), note: str(l.note, 200), note2: str(l.note2, 200), ...rules.check(l.warehouse, l.location), no: i + 1 }); } catch (error) { if (error.status === 400 || error.status === 404) throw bad(`${i + 1}번째 줄: ${error.message}`); throw error; } }
   await fillSstLots(r.receipt_date, lines); // 15.249 업체 LOT 없으면 임시 SST LOT
   const subNext = new Map();
   for (const l of lines) { if (!l.lot) continue; if (!subNext.has(l.lot)) subNext.set(l.lot, (await db.prepare("SELECT MAX(n) AS n FROM (SELECT CAST(sub_lot AS INTEGER) AS n FROM po_receipt_lots WHERE lot=? AND voided_at IS NULL UNION ALL SELECT CAST(sub_lot AS INTEGER) FROM other_receipts WHERE lot=?)").get(l.lot, l.lot)).n || 0); const n = subNext.get(l.lot) + 1; subNext.set(l.lot, n); l.sub_lot = String(n).padStart(3, '0'); }
@@ -1146,8 +1146,8 @@ route('POST', '/api/receipts/:id/lines', async ({ user, params, body }) => {
   for (const l of lines) {
     let fields; try { fields = await otherReceiptFields({ ...l.raw, received_date: r.receipt_date, vendor: r.vendor, note: l.note, qty: l.qty }); } catch (error) { if (error.status === 400 || error.status === 404) throw bad(`${l.no}번째 줄: ${error.message}`); throw error; }
     const snapshot = JSON.parse(fields[7]);
-    cmds.push({ sql: 'INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,bom_id,bom_snapshot,created_by,spec,unit,lot,batch_id,receipt_id,warehouse,location,sub_lot,note2) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-      args: [...fields, user.name, await catalogSpec(fields[6], l.raw.spec), snapshot.unit || '', l.lot, token, r.id, l.warehouse, l.location, l.sub_lot || '', l.note2] });
+    cmds.push({ sql: 'INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,bom_id,bom_snapshot,created_by,spec,unit,lot,batch_id,receipt_id,warehouse,location,sub_lot,note2,pieces) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      args: [...fields, user.name, await catalogSpec(fields[6], l.raw.spec), snapshot.unit || '', l.lot, token, r.id, l.warehouse, l.location, l.sub_lot || '', l.note2, l.pieces] });
     cmds.push(receiptAnalysisQuery('other_receipt', null, user));
   }
   await db.batch(cmds);
@@ -4313,9 +4313,21 @@ async function actualLotInputs(raw) {
   return out;
 }
 // 품목 하나의 LOT별 남은 수량(먼저 들어온 순). 생산 투입·출하 LOT 고르기에 쓴다.
+// 15.250 실물 수량(절): 비우면 없음(NULL), 0 이상 숫자
+function piecesOf(v) { if (v === undefined || v === null || v === '') return null; const n = Number(v); if (!Number.isFinite(n) || n < 0) throw bad('실물(절) 수량은 0 이상 숫자로 넣으세요.'); return stockRound(n); }
+// LOT별 실물(절): 입고에 적은 절 − 커팅·융착에 투입한 절. 입고에 절을 안 적은 LOT은 null.
+async function lotPieces(item) {
+  const rows = await db.prepare(`SELECT lot, SUM(p) AS received FROM (SELECT l.lot, l.pieces AS p FROM po_receipt_lots l JOIN purchase_orders o ON o.id=l.po_id WHERE TRIM(o.item)=? AND l.voided_at IS NULL AND l.pieces IS NOT NULL
+    UNION ALL SELECT lot, pieces FROM other_receipts WHERE TRIM(item)=? AND pieces IS NOT NULL) GROUP BY lot`).all(item, item);
+  const used = await db.prepare('SELECT lot, SUM(COALESCE(pieces,0)) AS used FROM semi_lot_inputs WHERE TRIM(item)=? GROUP BY lot').all(item);
+  const map = new Map(rows.map(r => [r.lot, { received: stockRound(r.received), used: 0 }]));
+  for (const u of used) if (map.has(u.lot)) map.get(u.lot).used = stockRound(u.used);
+  return map;
+}
 async function lotBalances(item) {
   const r = await lotStockReport({ q: item, state: 'instock' });
-  return r.rows.filter(x => x.item === String(item).trim() && x.lot !== '(LOT 미지정)').sort((a, b) => stockCompare(a.first_date, b.first_date) || stockCompare(a.lot, b.lot));
+  const pcs = await lotPieces(String(item).trim()); // 15.250 실물(절)
+  return r.rows.filter(x => x.item === String(item).trim() && x.lot !== '(LOT 미지정)').map(x => { const p = pcs.get(x.lot); return p ? { ...x, pieces_in: p.received, pieces_left: stockRound(p.received - p.used) } : x; }).sort((a, b) => stockCompare(a.first_date, b.first_date) || stockCompare(a.lot, b.lot));
 }
 async function actualWithInputs(a) {
   if (!a) return a;
@@ -4590,7 +4602,7 @@ route('GET', '/api/semi-bags', async ({ query }) => {
 async function lotTrace(lot) {
   const mats = new Map(), bags = new Map(), fins = new Map();
   const addBag = async b => { if (!b || bags.has(b)) return false; const c = await semiBagRecord(b); if (!c) return false;
-    const inputs = await db.prepare('SELECT item, unit, lot, qty FROM semi_lot_inputs WHERE record_id=? ORDER BY id').all(c.id);
+    const inputs = await db.prepare('SELECT item, unit, lot, qty, pieces FROM semi_lot_inputs WHERE record_id=? ORDER BY id').all(c.id);
     const washes = await db.prepare("SELECT work_date, unit_name, qty + COALESCE(defect_qty,0) AS qty, unit FROM semi_records WHERE process='wash' AND lot=? ORDER BY work_date, id").all(b);
     bags.set(b, { lot: b, item: c.item_name, product_code: c.product_code, work_date: c.work_date, unit_name: c.unit_name, qty: c.qty, unit: c.unit, inputs, washes, finished: [] }); return true; };
   const addFin = async a => { if (!a || fins.has(a.lot)) return false;
@@ -4620,8 +4632,8 @@ async function lotTrace(lot) {
   return { lot, kind, materials: [...mats.values()], bags: [...bags.values()], finished: [...fins.values()] };
 }
 async function lotReceiptInfo(lot) {
-  return db.prepare(`SELECT 'po' AS src, TRIM(p.item) AS item, TRIM(p.unit) AS unit, l.qty, l.received_date AS date, p.vendor FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id WHERE l.lot=? AND l.voided_at IS NULL
-    UNION ALL SELECT 'other', TRIM(item), TRIM(unit), qty, received_date, vendor FROM other_receipts WHERE lot=? ORDER BY 5 LIMIT 20`).all(lot, lot);
+  return db.prepare(`SELECT 'po' AS src, TRIM(p.item) AS item, TRIM(p.unit) AS unit, l.qty, l.pieces, l.received_date AS date, p.vendor FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id WHERE l.lot=? AND l.voided_at IS NULL
+    UNION ALL SELECT 'other', TRIM(item), TRIM(unit), qty, pieces, received_date, vendor FROM other_receipts WHERE lot=? ORDER BY 6 LIMIT 20`).all(lot, lot);
 }
 route('GET', '/api/lot-trace', async ({ query }) => lotTrace(reqStr(query.lot, 'LOT', 100)));
 // 최근 LOT(완제품·봉투) — 조회 화면 첫 목록
@@ -4641,7 +4653,7 @@ route('POST', '/api/semi-records', async ({ user, body }) => {
   if (old) { if (old.created_by_id !== user.id || old.process !== process || old.unit_id !== f.unit_id || old.qty !== f.qty || old.work_date !== f.work_date) throw new HttpError(409, '이미 사용된 요청 번호입니다.'); return old; }
   const r = await db.prepare('INSERT INTO semi_records(process,work_date,unit_id,unit_name,product_group,product_type,bom_id,item_name,product_code,bom_snapshot,spec,start_time,end_time,break_minutes,work_hours,workers,defect_qty,defect_reason,qty,unit,lot,note,request_id,created_by_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
     .run(process, f.work_date, f.unit_id, f.unit_name, f.product_group, f.product_type, f.bom_id, f.item_name, f.product_code, f.bom_snapshot, f.spec, f.start_time, f.end_time, f.break_minutes, f.work_hours, f.workers, f.defect_qty, f.defect_reason, f.qty, f.unit, f.lot, f.note, key, user.id, user.name);
-  for (const i of linked.inputs) await db.prepare('INSERT INTO semi_lot_inputs(record_id,item,unit,lot,qty,created_by) VALUES(?,?,?,?,?,?)').run(r.lastInsertRowid, i.item, i.unit, i.lot, i.qty, user.name); // 15.249
+  for (const i of linked.inputs) await db.prepare('INSERT INTO semi_lot_inputs(record_id,item,unit,lot,qty,created_by,pieces) VALUES(?,?,?,?,?,?,?)').run(r.lastInsertRowid, i.item, i.unit, i.lot, i.qty, user.name, i.pieces ?? null); // 15.249·15.250
   return mustGet('semi_records', r.lastInsertRowid);
 });
 // 15.249 LOT 연결: 품목 코드(LOT에 들어감)는 영문·숫자·-만, 대문자.
@@ -4654,11 +4666,26 @@ async function nextBagLots(date, code, count) {
   return Array.from({ length: count }, (_, i) => head + (start + i + 1));
 }
 // 커팅·융착 투입 원자재 LOT: 그 반제품 BOM에 등록된 자재만, 그 자재의 재고 LOT 남은 수량 안에서(같은 LOT 여러 줄은 합쳐서).
-async function semiLotInputs(raw, snapshotText, used = new Map()) {
+async function semiLotInputs(raw, snapshotText, used = new Map(), made = null) {
   let list = raw; if (typeof list === 'string') { try { list = list.trim() ? JSON.parse(list) : []; } catch { throw bad('투입 원자재 LOT 형식을 확인하세요.'); } }
   if (list == null) list = []; if (!Array.isArray(list)) throw bad('투입 원자재 LOT 형식을 확인하세요.');
   if (list.length > 30) throw bad('투입 원자재 LOT은 30줄까지 넣을 수 있습니다.');
-  let mats = []; try { mats = JSON.parse(snapshotText || '{}').materials || []; } catch { mats = []; }
+  let mats = [], base = 1; try { const snap = JSON.parse(snapshotText || '{}'); mats = snap.materials || []; base = Number(snap.base_qty) || 1; } catch { mats = []; }
+  // 15.250 절(pieces)로 넣은 줄은 사용량(qty)을 BOM으로 계산: 그 자재 필요량을 절 비율로 LOT마다 나눈다
+  if (made !== null && list.some(l => l && typeof l === 'object' && l.pieces !== undefined && l.pieces !== '' && l.pieces !== null && (l.qty === undefined || l.qty === '' || l.qty === null))) {
+    const byItem = new Map();
+    for (const l of list) { if (!l || typeof l !== 'object') continue; const k = nameKey(str(l.item, 200)); if (!byItem.has(k)) byItem.set(k, []); byItem.get(k).push(l); }
+    list = list.map(l => ({ ...(l || {}) }));
+    for (const [k, ls] of byItem) {
+      const mat = mats.find(m => nameKey(m.item) === k); if (!mat) continue;
+      const need = stockRound(made * Number(mat.qty) / base), cells = list.filter(l => nameKey(str(l.item, 200)) === k);
+      const pcs = cells.map(l => Math.max(0, Number(l.pieces) || 0)), total = pcs.reduce((a, b) => a + b, 0);
+      let left = need;
+      cells.forEach((l, i) => { const share = i === cells.length - 1 ? left : stockRound(total ? need * pcs[i] / total : need / cells.length); left = stockRound(left - share); l.qty = share; l.pieces = piecesOf(l.pieces); });
+      void ls;
+    }
+    if (!(made > 0)) throw bad('양품·불량 수량을 넣어야 BOM으로 원자재 사용량을 계산할 수 있습니다.');
+  }
   const out = [];
   for (const [n, r] of list.entries()) {
     const l = r && typeof r === 'object' ? r : {}, item = str(l.item, 200), lot = str(l.lot, 100);
@@ -4671,7 +4698,9 @@ async function semiLotInputs(raw, snapshotText, used = new Map()) {
     if (!bal) throw bad(`${item}: LOT ${lot}은 이 자재의 재고 LOT이 아닙니다.`);
     if (total > bal.balance + 0.000001) throw bad(`${item}: LOT ${lot} 남은 수량 ${stockRound(bal.balance)}보다 많이 투입할 수 없습니다.`);
     used.set(key, total);
-    out.push({ item: bal.item, unit: bal.unit || mat.unit || '', lot, qty });
+    const pieces = piecesOf(l.pieces);
+    if (pieces !== null && bal.pieces_left !== undefined) { const pk = key + '\u0001', pt = stockRound((used.get(pk) || 0) + pieces); if (pt > bal.pieces_left + 0.000001) throw bad(`${item}: LOT ${lot} 남은 실물 ${stockRound(bal.pieces_left)}절보다 많이 투입할 수 없습니다.`); used.set(pk, pt); }
+    out.push({ item: bal.item, unit: bal.unit || mat.unit || '', lot, qty, pieces });
   }
   return out;
 }
@@ -4680,7 +4709,7 @@ async function semiBagRecord(lot) { return db.prepare("SELECT * FROM semi_record
 // 15.249 커팅·융착: 봉투 LOT 자동(직접 적으면 그것) + 투입 원자재 LOT. 세탁: 봉투 LOT이면 그 봉투가 있어야 한다.
 async function semiLotLink(process, f, row, usedInputs = new Map(), bagNext = new Map()) {
   if (process === 'cut') {
-    const inputs = await semiLotInputs(row.inputs, f.bom_snapshot, usedInputs);
+    const inputs = await semiLotInputs(row.inputs, f.bom_snapshot, usedInputs, stockRound((Number(f.qty) || 0) + (Number(f.defect_qty) || 0)));
     if (!f.lot) {
       const code = lotCode(f.product_code, f.item_name), key = f.work_date + '|' + code;
       if (!bagNext.has(key)) bagNext.set(key, (await nextBagLots(f.work_date, code, 1))[0].replace(/\d+$/, n => String(Number(n) - 1)));
@@ -4711,7 +4740,7 @@ route('POST', '/api/semi-batches', async ({ user, body }) => {
     catch (error) { if (error.status === 400 || error.status === 404) throw bad(`${index + 1}번째 줄: ${error.message}`); throw error; }
     commands.push({ sql: 'INSERT INTO semi_records(process,work_date,unit_id,unit_name,product_group,product_type,bom_id,item_name,product_code,bom_snapshot,spec,start_time,end_time,break_minutes,work_hours,workers,defect_qty,defect_reason,qty,unit,lot,note,request_id,created_by_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
       args: [process, f.work_date, f.unit_id, f.unit_name, f.product_group, f.product_type, f.bom_id, f.item_name, f.product_code, f.bom_snapshot, f.spec, f.start_time, f.end_time, f.break_minutes, f.work_hours, f.workers, f.defect_qty, f.defect_reason, f.qty, f.unit, f.lot, f.note, `${key}:${index}`, user.id, user.name] });
-    commands.push(...inputs.map(i => ({ sql: 'INSERT INTO semi_lot_inputs(record_id,item,unit,lot,qty,created_by) VALUES((SELECT id FROM semi_records WHERE request_id=?),?,?,?,?,?)', args: [`${key}:${index}`, i.item, i.unit, i.lot, i.qty, user.name] })));
+    commands.push(...inputs.map(i => ({ sql: 'INSERT INTO semi_lot_inputs(record_id,item,unit,lot,qty,created_by,pieces) VALUES((SELECT id FROM semi_records WHERE request_id=?),?,?,?,?,?,?)', args: [`${key}:${index}`, i.item, i.unit, i.lot, i.qty, user.name, i.pieces ?? null] })));
   }
   try { await db.batch(commands); }
   catch (error) { const rows = await saved(); if (rows.length) return replay(rows); throw error; }

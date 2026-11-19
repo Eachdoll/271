@@ -93,3 +93,26 @@ test('15.249 vendor LOT or temporary SST LOT, bag LOTs from BOM material LOTs, w
   const rec = sqlite.prepare("SELECT id FROM semi_records WHERE lot=? AND process='cut'").get(bags[0]);
   assert.equal((await prod('PUT', `/api/semi-records/${rec.id}`, { lot: 'X-1', note: '바꿈' })).status, 400);
 });
+
+test('15.250 receipt keeps trade qty (yd) and physical pieces; cutting takes pieces per LOT and BOM computes the yd usage', async () => {
+  const yarn = (await admin('POST', '/api/boms', { product: '야드원단', product_code: 'YD-1', item_category: '원자재', kind: 'finished', base_qty: 1, unit: 'yd', materials: [] })).body;
+  const rc = await admin('POST', '/api/receipts', { receipt_date: today, vendor: '야드상사', request_id: rid(), lines: [{ bom_id: yarn.id, lot: 'YD-A', qty: 300, pieces: 30 }, { bom_id: yarn.id, lot: 'YD-B', qty: 100, pieces: 10 }] });
+  assert.equal(rc.status, 200, JSON.stringify(rc.body));
+  assert.deepEqual(rc.body.lines.map(l => [l.lot, l.qty, l.pieces]), [['YD-A', 300, 30], ['YD-B', 100, 10]]);
+  assert.equal((await admin('POST', '/api/receipts', { receipt_date: today, vendor: '야드상사', request_id: rid(), lines: [{ bom_id: yarn.id, lot: 'YD-C', qty: 1, pieces: -1 }] })).status, 400);
+  const lots = (await prod('GET', '/api/lots/available?item=' + encodeURIComponent('야드원단'))).body.rows;
+  assert.deepEqual(lots.map(l => [l.lot, l.balance, l.pieces_left]), [['YD-A', 300, 30], ['YD-B', 100, 10]]);
+  // 반제품 1매에 0.05yd: 양품 900 + 불량 100 = 1000매 → 50yd. 절 3:1로 나눔 → YD-A 37.5yd, YD-B 12.5yd
+  const semi = (await admin('POST', '/api/boms', { product: 'YD 반제품', product_code: 'YDS', item_category: '반제품', kind: 'semi', semi_type: '천와이퍼', base_qty: 1, unit: '매', materials: [{ item: '야드원단', item_category: '원자재', qty: 0.05, unit: 'yd' }] })).body;
+  const line = (await prod('GET', '/api/production-units?kind=line')).body[0];
+  const c = await prod('POST', '/api/semi-batches', { process: 'cut', common: { work_date: today, unit_id: line.id }, request_id: rid(), items: [{ entry_mode: 'code', bom_id: semi.id, product_group: 'wiper', product_type: '천와이퍼', start_time: '08:00', end_time: '10:00', qty: 900, defect_qty: 100, defect_reason: '오염', inputs: [{ item: '야드원단', lot: 'YD-A', pieces: 3 }, { item: '야드원단', lot: 'YD-B', pieces: 1 }] }] });
+  assert.equal(c.status, 200, JSON.stringify(c.body));
+  const used = sqlite.prepare('SELECT lot, qty, pieces FROM semi_lot_inputs WHERE record_id=? ORDER BY id').all(c.body.rows[0].id);
+  assert.deepEqual(used.map(u => [u.lot, u.qty, u.pieces]), [['YD-A', 37.5, 3], ['YD-B', 12.5, 1]]);
+  const after = (await prod('GET', '/api/lots/available?item=' + encodeURIComponent('야드원단'))).body.rows;
+  assert.deepEqual(after.map(l => [l.lot, l.balance, l.pieces_left]), [['YD-A', 262.5, 27], ['YD-B', 87.5, 9]]);
+  const over = await prod('POST', '/api/semi-batches', { process: 'cut', common: { work_date: today, unit_id: line.id }, request_id: rid(), items: [{ entry_mode: 'code', bom_id: semi.id, product_group: 'wiper', product_type: '천와이퍼', start_time: '11:00', end_time: '12:00', qty: 10, inputs: [{ item: '야드원단', lot: 'YD-B', pieces: 10 }] }] });
+  assert.equal(over.status, 400); assert.match(over.body.error, /남은 실물 9절/);
+  const tr = (await prod('GET', '/api/lot-trace?lot=YD-A')).body;
+  assert.equal(tr.kind, 'material'); assert.equal(tr.bags[0].inputs.find(i => i.lot === 'YD-A').pieces, 3); assert.equal(tr.materials.find(m => m.lot === 'YD-A').receipts[0].pieces, 30);
+});
