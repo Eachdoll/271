@@ -3209,3 +3209,46 @@ form.list-filters .range-presets.rp-compact .rp-name { align-self: center; }
   .dense-wrap.tw-freeze table.grid.dense-grid > thead > tr > th:first-child { z-index: 4; }
 }
 @media print { .table-wrap.tw-freeze { max-height: none !important; overflow: visible !important; } }
+
+/* 15.233 휴대폰(좁은 화면·터치)에서는 ⚙ 열 설정이 표 머리글(날짜 칸 등)을 가리던 것 → 숨김(열 설정은 넓은 화면에서) */
+@media (max-width: 820px) { .table-wrap.has-gear > .gr-gear { display: none; } }
+
+/* 15.234 입고 구분 줄(발주입고 | 기타입고)·기타입고 내역/상세 */
+.rc-kind-tabs { display: flex; gap: 0; margin: 4px 0 12px; border-bottom: 2px solid var(--line); }
+.rc-kind-tabs a { padding: 9px 22px; font-weight: 700; color: var(--muted); text-decoration: none; border: 1px solid var(--line); border-bottom: 0; border-radius: 10px 10px 0 0; margin-right: 4px; background: var(--panel); display: inline-flex; align-items: center; gap: 6px; }
+.rc-kind-tabs a.on { color: var(--accent-ink, var(--accent)); background: var(--accent-soft); border-color: var(--accent); box-shadow: inset 0 3px 0 var(--accent); }
+.rc-form .rc-src-tabs, .rc-form [data-rc-source="other"] { display: none !important; }
+.ot-sec { margin: 6px 0 16px; }
+.ot-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
+.ot-head h2 { margin: 0; font-size: 17px; }
+.ot-head .grow { flex: 1; }
+.ot-head2 label.inline { gap: 6px; font-weight: 600; }
+.ot-head2 select { min-width: 8em; }
+.ot-grid tr.on > td { background: var(--sel-row-bg) !important; color: var(--sel-row-ink) !important; }
+.ot-lines input:not([type=checkbox]), .ot-lines select { min-height: 32px; padding: 4px 8px; }
+.ot-lines input.ot-lot { width: 11em; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.ot-lines tr.ot-new > td { background: color-mix(in srgb, var(--accent-soft) 70%, transparent); }
+.ot-lines tr.ot-changed > td { background: color-mix(in srgb, #ffe8a3 45%, transparent); }
+.ot-head2 label.inline { white-space: nowrap; flex-direction: row; align-items: center; }
+.ot-head2 h2 { white-space: nowrap; }
+
+/* 15.235 회원 관리 · 사용 권한/메뉴 보기: 넓은 화면은 표 그대로(권한 이름은 머리글), 휴대폰은 사람마다 카드 — 이름 맨 위, 아래에 「이름 붙은」 체크 단추 */
+.member-grid.matrix .mx-cell { display: inline-flex; align-items: center; gap: 4px; margin: 0; cursor: pointer; font-weight: 400; }
+.member-grid.matrix .mx-lab { display: none; }
+@media (max-width: 820px) {
+  table.member-grid.matrix { display: block; min-width: 0 !important; width: 100% !important; border: 0; }
+  table.member-grid.matrix > thead { display: none; }
+  table.member-grid.matrix > tbody { display: block; }
+  table.member-grid.matrix > tbody > tr { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 10px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  table.member-grid.matrix > tbody > tr:nth-child(even) { background: var(--zebra, var(--panel)); }
+  table.member-grid.matrix > tbody > tr > td { display: block; border: 0 !important; padding: 0 !important; background: transparent !important; width: auto; }
+  table.member-grid.matrix > tbody > tr > td:first-child { flex: 1 0 100%; font-size: 15.5px; margin-bottom: 4px; }
+  table.member-grid.matrix > tbody > tr > td:nth-child(2):has(select) { flex: 1 0 100%; }
+  table.member-grid.matrix > tbody > tr > td[colspan] { flex: 1 0 100%; }
+  table.member-grid.matrix .mx-lab { display: inline; font-size: 13.5px; }
+  table.member-grid.matrix .mx-cell { padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); min-height: 36px; }
+  table.member-grid.matrix .mx-cell:has(input:checked), table.member-grid.matrix .mx-cell:has(.mv-on) { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink, var(--accent)); font-weight: 700; }
+  table.member-grid.matrix .mx-cell:has(input:disabled) { opacity: .55; }
+  table.member-grid.matrix td.c input[type=checkbox] { width: 18px; height: 18px; }
+  .table-wrap:has(> table.member-grid.matrix) { overflow: visible; border: 1px solid var(--line); border-radius: var(--radius, 12px); }
+}

@@ -961,6 +961,8 @@ async function receiptDetail(r) {
 route('GET', '/api/receipts', async ({ query }) => {
   const where = [], args = [];
   applyListDates(where, args, query, 'receipt_date');
+  if (query.kind === 'other') where.push("(receipt_no LIKE 'OTS\\_%' ESCAPE '\\' OR (EXISTS(SELECT 1 FROM other_receipts o WHERE o.receipt_id=receipts.id) AND NOT EXISTS(SELECT 1 FROM po_receipt_lots l WHERE l.receipt_id=receipts.id)))"); // 15.234 기타입고 내역
+  if (query.vendor) { where.push("REPLACE(LOWER(vendor),' ','') LIKE ? ESCAPE '\\'"); args.push('%' + nameKey(str(query.vendor, 100)).replace(/[\\%_]/g, m => '\\' + m) + '%'); }
   if (query.q) { const q = '%' + String(query.q).slice(0, 200).replace(/[\\%_]/g, m => '\\' + m) + '%'; where.push(`(receipt_no LIKE ? ESCAPE '\\' OR vendor LIKE ? ESCAPE '\\' OR note LIKE ? ESCAPE '\\' OR created_by LIKE ? ESCAPE '\\' OR EXISTS(SELECT 1 FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id WHERE l.receipt_id=receipts.id AND (l.lot LIKE ? ESCAPE '\\' OR p.item LIKE ? ESCAPE '\\')) OR EXISTS(SELECT 1 FROM other_receipts o WHERE o.receipt_id=receipts.id AND (o.lot LIKE ? ESCAPE '\\' OR o.item LIKE ? ESCAPE '\\')))`); args.push(q, q, q, q, q, q, q, q); }
   const page = Math.max(0, Math.min(1000, Number(query.page) || 0));
   const rows = await db.prepare(`SELECT receipts.*,
@@ -1066,6 +1068,75 @@ route('POST', '/api/receipts', async ({ user, body }) => {
     throw error;
   }
   return receiptDetail(await db.prepare('SELECT * FROM receipts WHERE request_id=?').get(token));
+});
+// ── 15.234 기타입고 내역(머리) → 상세(줄): 입고번호 OTS_[입고일 YYMMDD]_[순번 4자리]를 먼저 만들고, 줄은 나중에 담는다 ──
+const canReceive = user => !!user.is_admin || hasRole(user, 'logistics') || hasRole(user, 'purchase');
+const isOtherHead = r => /^OTS_/.test(r.receipt_no);
+route('POST', '/api/receipts/other', async ({ user, body }) => {
+  if (!canReceive(user)) throw new HttpError(403, '기타입고는 물류·구매 담당자나 관리자가 합니다.');
+  const token = reqToken(body);
+  const prior = await db.prepare('SELECT * FROM receipts WHERE request_id=?').get(token); if (prior) { if (prior.created_by_id !== user.id) throw new HttpError(409, '이미 사용된 등록 요청입니다.'); return { ...await receiptDetail(prior), duplicate: true }; }
+  const date = dateStr(body.receipt_date || today(), '입고일'); if (date > today()) throw bad('입고일은 오늘 이전으로 선택하세요.');
+  const vendor = reqStr(body.vendor, '거래처(협력사)', 100), note = str(body.note, 500);
+  await ensureVendor(vendor, user, 'purchase');
+  const ymd = date.slice(2).replace(/-/g, '');
+  try { await db.prepare("INSERT INTO receipts(receipt_no,receipt_date,vendor,note,created_by,created_by_id,request_id) VALUES((SELECT 'OTS_' || ? || '_' || printf('%04d', COALESCE(MAX(CAST(substr(receipt_no, 12) AS INTEGER)), 0) + 1) FROM receipts WHERE substr(receipt_no, 1, 4)='OTS_' AND substr(receipt_no, 12) NOT GLOB '*[^0-9]*'),?,?,?,?,?,?)").run(ymd, date, vendor, note, user.name, user.id, token); }
+  catch (error) { const saved = await db.prepare('SELECT * FROM receipts WHERE request_id=?').get(token); if (saved) return receiptDetail(saved); if (/UNIQUE/i.test(String(error?.message))) throw new HttpError(409, '그 사이 같은 입고번호가 만들어졌습니다. 다시 눌러 주세요.'); throw error; }
+  return receiptDetail(await db.prepare('SELECT * FROM receipts WHERE request_id=?').get(token));
+});
+// 머리 고치기: 비고는 언제나, 입고일·거래처는 줄이 없을 때만(줄이 있으면 재고·매입 날짜가 바뀌므로 줄을 지우고 다시).
+route('PUT', '/api/receipts/:id', async ({ user, params, body }) => {
+  if (!canReceive(user)) throw new HttpError(403, '기타입고는 물류·구매 담당자나 관리자가 합니다.');
+  const r = await mustGet('receipts', params.id);
+  const n = (await db.prepare('SELECT (SELECT COUNT(*) FROM po_receipt_lots WHERE receipt_id=?) + (SELECT COUNT(*) FROM other_receipts WHERE receipt_id=?) AS n').get(r.id, r.id)).n;
+  const date = body.receipt_date === undefined ? r.receipt_date : dateStr(body.receipt_date, '입고일'), vendor = body.vendor === undefined ? r.vendor : reqStr(body.vendor, '거래처(협력사)', 100), note = body.note === undefined ? r.note : str(body.note, 500);
+  if (n && (date !== r.receipt_date || nameKey(vendor) !== nameKey(r.vendor))) throw bad('품목이 담긴 입고는 입고일·거래처를 바꿀 수 없습니다(비고만). 바꾸려면 상세 줄을 지운 뒤 고치세요.');
+  if (date > today()) throw bad('입고일은 오늘 이전으로 선택하세요.');
+  if (vendor !== r.vendor) await ensureVendor(vendor, user, 'purchase');
+  await db.prepare('UPDATE receipts SET receipt_date=?,vendor=?,note=? WHERE id=?').run(date, vendor, note, r.id);
+  return receiptDetail(await mustGet('receipts', r.id));
+});
+route('DELETE', '/api/receipts/:id', async ({ user, params }) => {
+  if (!canReceive(user)) throw new HttpError(403, '기타입고는 물류·구매 담당자나 관리자가 합니다.');
+  const r = await mustGet('receipts', params.id);
+  const res = await db.prepare('DELETE FROM receipts WHERE id=? AND NOT EXISTS(SELECT 1 FROM po_receipt_lots WHERE receipt_id=?) AND NOT EXISTS(SELECT 1 FROM other_receipts WHERE receipt_id=?)').run(r.id, r.id, r.id);
+  if (!res.changes) throw bad(`${r.receipt_no}에 상세 줄이 있습니다. 줄을 먼저 지우세요.`);
+  return { ok: true };
+});
+// 상세 줄 담기(기타입고): 같은 LOT끼리 서브 번호 001·002…, 줄마다 창고·위치. 입고일·거래처는 머리 것.
+route('POST', '/api/receipts/:id/lines', async ({ user, params, body }) => {
+  if (!canReceive(user)) throw new HttpError(403, '기타입고는 물류·구매 담당자나 관리자가 합니다.');
+  const r = await mustGet('receipts', params.id); const token = reqToken(body);
+  if (await db.prepare('SELECT 1 FROM other_receipts WHERE batch_id=? LIMIT 1').get(token)) return receiptDetail(r);
+  const raw = Array.isArray(body.lines) ? body.lines : []; if (!raw.length || raw.length > 100) throw bad('담을 줄은 1~100줄입니다.');
+  const rules = await warehouseRules(), lines = [];
+  for (const [i, x] of raw.entries()) { const l = x && typeof x === 'object' ? x : {}; try { const qty = num(l.qty, '입하수량'); if (!(qty > 0)) throw bad('입하수량은 0보다 커야 합니다.'); lines.push({ raw: l, qty, lot: str(l.lot, 100), note: str(l.note, 200), note2: str(l.note2, 200), ...rules.check(l.warehouse, l.location), no: i + 1 }); } catch (error) { if (error.status === 400 || error.status === 404) throw bad(`${i + 1}번째 줄: ${error.message}`); throw error; } }
+  const subNext = new Map();
+  for (const l of lines) { if (!l.lot) continue; if (!subNext.has(l.lot)) subNext.set(l.lot, (await db.prepare("SELECT MAX(n) AS n FROM (SELECT CAST(sub_lot AS INTEGER) AS n FROM po_receipt_lots WHERE lot=? AND voided_at IS NULL UNION ALL SELECT CAST(sub_lot AS INTEGER) FROM other_receipts WHERE lot=?)").get(l.lot, l.lot)).n || 0); const n = subNext.get(l.lot) + 1; subNext.set(l.lot, n); l.sub_lot = String(n).padStart(3, '0'); }
+  const cmds = [];
+  for (const l of lines) {
+    let fields; try { fields = await otherReceiptFields({ ...l.raw, received_date: r.receipt_date, vendor: r.vendor, note: l.note, qty: l.qty }); } catch (error) { if (error.status === 400 || error.status === 404) throw bad(`${l.no}번째 줄: ${error.message}`); throw error; }
+    const snapshot = JSON.parse(fields[7]);
+    cmds.push({ sql: 'INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,bom_id,bom_snapshot,created_by,spec,unit,lot,batch_id,receipt_id,warehouse,location,sub_lot,note2) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      args: [...fields, user.name, await catalogSpec(fields[6], l.raw.spec), snapshot.unit || '', l.lot, token, r.id, l.warehouse, l.location, l.sub_lot || '', l.note2] });
+    cmds.push(receiptAnalysisQuery('other_receipt', null, user));
+  }
+  await db.batch(cmds);
+  return receiptDetail(r);
+});
+// 상세 줄 LOT·창고·로케이션·비고·업체정보 고치기. LOT은 출하·생산 투입에 쓰이지 않았을 때만(바꾸면 서브 번호를 그 LOT 다음으로).
+route('PUT', '/api/other-receipts/:id/place', async ({ user, params, body }) => {
+  if (!canReceive(user)) throw new HttpError(403, '기타입고는 물류·구매 담당자나 관리자가 합니다.');
+  const row = await mustGet('other_receipts', params.id); const rules = await warehouseRules();
+  const lot = body.lot === undefined ? row.lot : str(body.lot, 100), place = rules.check(body.warehouse === undefined ? row.warehouse : body.warehouse, body.location === undefined ? row.location : body.location);
+  let sub = row.sub_lot;
+  if (lot !== row.lot) {
+    const u = await lotUsage(row.item, row.lot); if (u) throw new HttpError(409, lotUsedMessage(row.item, row.lot, u));
+    if (await db.prepare('SELECT 1 FROM stock_transfers WHERE status=\'confirmed\' AND item=? AND lot=?').get(row.item, row.lot)) throw new HttpError(409, `${row.item}: LOT ${row.lot}은 창고 이동 기록이 있어 바꿀 수 없습니다.`);
+    sub = lot ? String(((await db.prepare("SELECT MAX(n) AS n FROM (SELECT CAST(sub_lot AS INTEGER) AS n FROM po_receipt_lots WHERE lot=? AND voided_at IS NULL UNION ALL SELECT CAST(sub_lot AS INTEGER) FROM other_receipts WHERE lot=? AND id<>?)").get(lot, lot, row.id)).n || 0) + 1).padStart(3, '0') : '';
+  }
+  await db.prepare('UPDATE other_receipts SET lot=?,sub_lot=?,warehouse=?,location=?,note=?,note2=? WHERE id=?').run(lot, sub, place.warehouse, place.location, body.note === undefined ? row.note : str(body.note, 200), body.note2 === undefined ? row.note2 || '' : str(body.note2, 200), row.id);
+  return mustGet('other_receipts', row.id);
 });
 // 창고·위치(15.72): 조회는 로그인 사용자, 등록·수정은 물류팀장·관리자. 삭제 없이 사용 중지만 한다.
 route('GET', '/api/warehouses', async ({ query }) => db.prepare(`SELECT * FROM warehouses ${query.all === '1' ? '' : 'WHERE active=1'} ORDER BY sort, name`).all());

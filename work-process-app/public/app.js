@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.232';
+const APP_VERSION = '15.235';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -591,6 +591,7 @@ const PAGES = {
   '#/logistics/other': main => pageReceipts(main, 'other'),
   '#/logistics/other/new': main => pageReceipts(main, 'other-entry'),
   '#/logistics/receipt/new': main => pageReceiptEntry(main),
+  '#/logistics/receipt/other': main => pageOtherReceiptHeads(main), // 15.234 기타입고(내역 → 상세)
   '#/logistics/receipts': main => pageReceiptList(main),
   '#/purchase/bills/new': main => managedPage(main, '#/purchase/bills/new', pageBillEntry), // 15.177 매입전표 관리(입력)
   '#/purchase/bills': main => managedPage(main, '#/purchase/bills', pageBillList), // 15.177 매입전표 관리(목록)
@@ -706,9 +707,11 @@ const MANAGE = {
   '#/quality/voc/list': { title: 'VOC 관리', tabs: [['#/quality/voc/list', 'VOC 처리목록'], ['#/quality/voc/request', 'VOC 접수']] },
   '#/dev/list': { title: '개발 관리', tabs: [['#/dev/list', '개발리스트'], ['#/dev/request', '개발의뢰']] },
 };
-const ROUTE_ALIAS = { '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/calendar': '#/sales/bills', '#/logistics/qr': '#/logistics/lots', '#/logistics/pallets': '#/logistics/lots', '#/logistics/scan': '#/logistics/lots', '#/sales/reps': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users', '#/logistics/receipt/new': '#/logistics/receive', '#/logistics/receipts': '#/logistics/receive', '#/logistics/ship/new': '#/logistics/ship', '#/purchase/laundry/new': '#/purchase/laundry', '#/prod/semi/new': '#/prod/semi', '#/prod/semi/cut/new': '#/prod/semi/cut', '#/prod/semi/wash/new': '#/prod/semi/wash', '#/quality/request': '#/quality/list', '#/quality/voc/request': '#/quality/voc/list', '#/dev/request': '#/dev/list' };
+const ROUTE_ALIAS = { '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/calendar': '#/sales/bills', '#/logistics/qr': '#/logistics/lots', '#/logistics/pallets': '#/logistics/lots', '#/logistics/scan': '#/logistics/lots', '#/sales/reps': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users', '#/logistics/receipt/new': '#/logistics/receive', '#/logistics/receipt/other': '#/logistics/receive', '#/logistics/receipts': '#/logistics/receive', '#/logistics/ship/new': '#/logistics/ship', '#/purchase/laundry/new': '#/purchase/laundry', '#/prod/semi/new': '#/prod/semi', '#/prod/semi/cut/new': '#/prod/semi/cut', '#/prod/semi/wash/new': '#/prod/semi/wash', '#/quality/request': '#/quality/list', '#/quality/voc/request': '#/quality/voc/list', '#/dev/request': '#/dev/list' };
 const navRoute = r => ROUTE_ALIAS[String(r || '#/').split('?')[0]] || String(r || '#/').split('?')[0];
+const TAB_ON = { '#/logistics/receipt/other': '#/logistics/receipt/new' }; // 15.234 기타입고도 「입고 입력」 탭에 불
 function managedTabs(main, route) {
+  route = TAB_ON[route] || route;
   const m = MANAGE[navRoute(route)], h1 = $('h1', main); if (!m || !h1 || $('.manage-tabs', main)) return;
   const t = [...h1.childNodes].find(n => n.nodeType === 3 && n.nodeValue.trim());
   if (t) t.nodeValue = /수정|고치기/.test(t.nodeValue) ? `${m.title} · ${t.nodeValue.trim()} ` : m.title + ' '; else h1.prepend(m.title + ' '); // 15.178 고치는 중 표시 유지
@@ -1270,6 +1273,7 @@ function grWidths(table, widths, dragging = '') {
 // 15.180 ⚙ 열 설정: 표 오른쪽 위 작은 단추 → 보일 열 체크·열 배치 초기화(너비·순서·숨김). 저장은 열 너비·순서와 같은 곳.
 function grReset(table) {
   const host = table.closest('.table-wrap'); if (!host || host.querySelector(':scope > .gr-gear')) return;
+  if (table.hasAttribute('data-no-reorder') && table.hasAttribute('data-keep-cols')) return; // 15.233 열을 고정한 표(계획표 등)에는 ⚙를 달지 않음
   host.classList.add('has-gear');
   host.insertAdjacentHTML('afterbegin', `<button type="button" class="gr-gear" title="열 설정(보일 열·초기화)" aria-label="열 설정">⚙</button>`);
   host.querySelector(':scope > .gr-gear').onclick = e => { e.stopPropagation(); grSettings(table, e.currentTarget); };
@@ -2463,9 +2467,9 @@ async function pageBoms(main) {
     // 15.74 가독성: 코드 칸을 맨 앞에, 한 줄 높이·줄무늬, 버튼은 「수정」 + 「⋯」(진행 코멘트·사용 중지/다시 사용·합치기·삭제), 사용 중 품목을 위로.
     const sorted = boms.slice().sort((a, b) => (b.active - a.active));
     const classPath = bom => [bom.item_category || '미분류', bom.cat1, bom.cat2, bom.cat3].filter(Boolean).join(' › ');
-    $('#bomList').innerHTML = sorted.length ? `<div class="table-wrap"><table class="grid bom-table"><caption class="sr-only">제품 목록</caption><thead><tr><th scope="col">코드</th><th scope="col" class="c">NO</th><th scope="col">품목명</th><th scope="col">분류</th><th scope="col">단위 · 기준</th><th scope="col">구성자재</th><th scope="col">업체 정보</th><th scope="col">비고</th><th scope="col">상태</th><th scope="col"><span class="sr-only">작업</span></th></tr></thead><tbody>${sorted.map((bom, bi) => `<tr class="bom-row${bom.active ? '' : ' row-off'}" title="입력: ${esc(bom.created_by || '미기록')} · ${esc(String(bom.created_at || '').slice(0, 16))}">
-      <td class="bom-code nowrap">${bom.product_code ? `<b>${esc(bom.product_code)}</b>` : '<span class="muted">코드 없음</span>'}${bom.is_temp ? ' <span class="chip yellow">임시</span>' : ''}</td>
+    $('#bomList').innerHTML = sorted.length ? `<div class="table-wrap"><table class="grid bom-table"><caption class="sr-only">제품 목록</caption><thead><tr><th scope="col" class="c">NO</th><th scope="col">코드</th><th scope="col">품목명</th><th scope="col">분류</th><th scope="col">단위 · 기준</th><th scope="col">구성자재</th><th scope="col">업체 정보</th><th scope="col">비고</th><th scope="col">상태</th><th scope="col"><span class="sr-only">작업</span></th></tr></thead><tbody>${sorted.map((bom, bi) => `<tr class="bom-row${bom.active ? '' : ' row-off'}" title="입력: ${esc(bom.created_by || '미기록')} · ${esc(String(bom.created_at || '').slice(0, 16))}">
       <td class="c small muted bom-no">${bi + 1}</td>
+      <td class="bom-code nowrap">${bom.product_code ? `<b>${esc(bom.product_code)}</b>` : '<span class="muted">코드 없음</span>'}${bom.is_temp ? ' <span class="chip yellow">임시</span>' : ''}</td>
       <td data-card-primary class="bom-name"><b>${esc(bom.product)}</b>${bom.spec ? ` <span class="small muted">${esc(bom.spec)}</span>` : ''}${bom.sst_name ? `<div class="small"><span class="chip">SST</span> ${esc(bom.sst_name)}</div>` : ''}${bom.pack_info ? `<div class="small muted" title="포장정보">📦 ${esc(bom.pack_info)}</div>` : ''}${bom.skip_incoming ? ' <span class="chip">수입검사 제외</span>' : ''}${bom.skip_outgoing ? ' <span class="chip">출하검사 제외</span>' : ''}</td>
       <td class="bom-class">${esc(classPath(bom))}${bom.semi_type ? ` <span class="chip green">생산: ${esc(bom.semi_type)}</span>` : ''}${bom.sizes?.length ? ` <span class="small muted">사이즈 ${esc(bom.sizes.join('·'))}</span>` : ''}</td>
       <td class="nowrap">${esc(bom.unit || '—')}${['제품', '반제품'].includes(bom.item_category) ? ` <span class="small muted">· ${bom.kind === 'finished' ? '완제품' : '반제품'} 기준 ${fmtNum(bom.base_qty)}</span>` : ''}${bom.pack_qty ? `<div class="small muted">1${esc(bom.unit)} = ${fmtNum(bom.pack_qty)}${esc(bom.semi_unit)}</div>` : ''}</td>
