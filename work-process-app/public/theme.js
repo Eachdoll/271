@@ -25,7 +25,7 @@ function applyDensity(mode) {
   for (const b of document.querySelectorAll('.density-toggle')) { b.innerHTML = `<span class="theme-icon" aria-hidden="true">${mode === 'compact' ? '☰' : '≡'}</span> <span>${DENSITY_LABEL[mode]}</span>`; b.title = '화면 밀도(촘촘 ↔ 보통)'; b.setAttribute('aria-label', `화면 밀도: ${DENSITY_LABEL[mode]}`); }
 }
 // 15.220 디자인 스킨(사용자별): 기본 · 크리스마스. <html data-skin="christmas">. 계정 설정(ME.ui.skin)에 저장, 이 기기에도 기억(첫 화면 깜빡임 없이).
-const SKIN_KEY = 'wpa:skin', SKINS = [['default', '기본'], ['christmas', '🎄 크리스마스'], ['ribbon', '🎀 핑크 리본'], ['bunny', '🐰 분홍 토끼']]; // 15.222 핑크 리본, 15.223 분홍 토끼(자체 캐릭터)
+const SKIN_KEY = 'wpa:skin', SKINS = [['default', '기본'], ['christmas', '🎄 크리스마스'], ['ribbon', '🎀 핑크 리본'], ['cat', '🐱 리본 고양이']]; // 15.222 핑크 리본, 15.224 리본 고양이(자체 캐릭터)
 function skinMode() { try { const v = localStorage.getItem(SKIN_KEY); return SKINS.some(([k]) => k === v) ? v : 'default'; } catch { return 'default'; } }
 function applySkin(skin, { save = false } = {}) {
   const v = SKINS.some(([k]) => k === skin) ? skin : 'default';

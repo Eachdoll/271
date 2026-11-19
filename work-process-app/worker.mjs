@@ -125,7 +125,7 @@ async function baseMenus(u, departments = null) { // 15.179 departments를 넘�
   return list || null;
 }
 // 사람별 화면 설정(15.62): 자주 쓰는 화면(★)과 목록 조건(상태·구분 같은 선택값). settings 표의 'prefs:<id>' 한 줄에 둔다(마이그레이션 없음).
-const SKINS_ALLOWED = ['default', 'christmas', 'ribbon', 'bunny']; // 15.220 디자인 스킨(15.222 핑크 리본, 15.223 분홍 토끼)
+const SKINS_ALLOWED = ['default', 'christmas', 'ribbon', 'cat']; // 15.220 디자인 스킨(15.222 핑크 리본, 15.224 리본 고양이)
 async function userPrefs(id) {
   const row = await db.prepare('SELECT value FROM settings WHERE key=?').get('prefs:' + id);
   try { const v = row ? JSON.parse(row.value) : {}; return { favorites: Array.isArray(v.favorites) ? v.favorites : [], filters: v.filters && typeof v.filters === 'object' ? v.filters : {}, ...(SKINS_ALLOWED.includes(v.skin) ? { skin: v.skin } : {}) }; } catch { return { favorites: [], filters: {} }; } // 15.220 skin
@@ -569,6 +569,7 @@ function freightMap(value) {
   return out;
 }
 function vendorFields(body) { return [reqStr(body.name, '거래처 이름', 100), str(body.contact_name, 50), str(body.phone, 30)]; }
+const repName = v => str(v, 50); // 15.224 영업담당자(사용자 이름 또는 직접 입력)
 // 체크 값: true/false(화면), 1/0, '1'/'on', ['1'](폼 배열). 보내지 않으면 undefined(고치기에서는 기존 값 유지).
 function vendorFlag(value) {
   if (value === undefined) return undefined;
@@ -581,7 +582,7 @@ route('POST', '/api/vendors', async ({ user, body }) => {
   const code = vendorCode(body.code);
   if (code && await db.prepare('SELECT 1 FROM vendors WHERE code=?').get(code)) throw new HttpError(409, `거래처코드 ${code}는 이미 쓰고 있습니다.`);
   let r;
-  try { r = await db.prepare(`INSERT INTO vendors(name,name_key,contact_name,phone,created_by,is_purchase,is_sales,freight_terms,code) VALUES(?,?,?,?,?,?,?,?,${code ? '?' : VENDOR_AUTO_CODE})`).run(name, nameKey(name), contact, phone, user.name, vendorFlag(body.is_purchase) || 0, vendorFlag(body.is_sales) || 0, JSON.stringify(freightTerms(body.freight_terms) || []), ...(code ? [code] : [])); }
+  try { r = await db.prepare(`INSERT INTO vendors(name,name_key,contact_name,phone,created_by,is_purchase,is_sales,freight_terms,sales_rep,code) VALUES(?,?,?,?,?,?,?,?,?,${code ? '?' : VENDOR_AUTO_CODE})`).run(name, nameKey(name), contact, phone, user.name, vendorFlag(body.is_purchase) || 0, vendorFlag(body.is_sales) || 0, JSON.stringify(freightTerms(body.freight_terms) || []), repName(body.sales_rep), ...(code ? [code] : [])); }
   catch (error) { if (/UNIQUE/i.test(String(error && error.message))) throw new HttpError(409, '그 사이 같은 이름이나 코드의 거래처가 등록되었습니다. 새로 불러오세요.'); throw error; }
   return decodeVendor(await mustGet('vendors', r.lastInsertRowid));
 });
@@ -596,7 +597,8 @@ route('PUT', '/api/vendors/:id', async ({ user, params, body }) => {
   if (code && code !== row.code && await db.prepare('SELECT 1 FROM vendors WHERE code=? AND id<>?').get(code, row.id)) throw new HttpError(409, `거래처코드 ${code}는 이미 쓰고 있습니다.`);
   // 15.101 이름을 바꾸면 그 이름으로 저장된 문서(수주·전표·출하지시·세금계산서 초안·발주·출하·마감 키)도 따라 바꾼다.
   // 문서는 거래처 이름 글자를 들고 있어 그대로 두면 수주 잔량·전표 없는 출하·마감 확인이 새 이름과 맞지 않는다.
-  const cmds = [{ sql: 'UPDATE vendors SET name=?,name_key=?,contact_name=?,phone=?,is_purchase=?,is_sales=?,freight_terms=?,code=?,updated_by=?,updated_at=? WHERE id=?', args: [name, nameKey(name), contact, phone, purchase, sales, terms === undefined ? row.freight_terms : JSON.stringify(terms), code || '', user.name, now(), row.id] }];
+  const rep = body.sales_rep === undefined ? row.sales_rep || '' : repName(body.sales_rep); // 15.224
+  const cmds = [{ sql: 'UPDATE vendors SET name=?,name_key=?,contact_name=?,phone=?,is_purchase=?,is_sales=?,freight_terms=?,code=?,sales_rep=?,updated_by=?,updated_at=? WHERE id=?', args: [name, nameKey(name), contact, phone, purchase, sales, terms === undefined ? row.freight_terms : JSON.stringify(terms), code || '', rep, user.name, now(), row.id] }];
   if ((code || '') !== (row.code || '')) cmds.push({ sql: "UPDATE sales_orders SET customer_code=? WHERE status='open' AND REPLACE(LOWER(customer),' ','')=?", args: [code || '', row.name_key] }); // 15.104 열린 수주만 새 코드로(끝난 수주는 당시 코드)
   if (nameKey(name) !== row.name_key || name !== row.name) {
     const k = row.name_key;
@@ -1750,11 +1752,12 @@ route('GET', '/api/sales-bills', async ({ user, query }) => {
   applyListDates(where, args, query, 'bill_date');
   if (query.customer) { where.push(`${customerKey('customer')}=?`); args.push(nameKey(str(query.customer, 100))); }
   if (query.status) { if (!['confirmed', 'cancelled'].includes(query.status)) throw bad('상태를 확인하세요.'); where.push('status=?'); args.push(query.status); }
-  applyListKeyword(where, args, query.q, ['bill_no', 'customer', 'note', 'created_by', "(SELECT group_concat(o.customer_po || ' ' || o.note || ' ' || o.order_no, ' ') FROM sales_bill_lines l JOIN sales_order_lines ol ON ol.id=l.order_line_id JOIN sales_orders o ON o.id=ol.order_id WHERE l.bill_id=sales_bills.id)"]);
+  if (query.rep !== undefined && query.rep !== '') { where.push(`${BILL_REP('sales_bills')}=?`); args.push(query.rep === '미지정' ? '' : repName(query.rep)); } // 15.224
+  applyListKeyword(where, args, query.q, ['bill_no', 'customer', 'note', 'created_by', 'sales_rep', "(SELECT group_concat(o.customer_po || ' ' || o.note || ' ' || o.order_no, ' ') FROM sales_bill_lines l JOIN sales_order_lines ol ON ol.id=l.order_line_id JOIN sales_orders o ON o.id=ol.order_id WHERE l.bill_id=sales_bills.id)"]);
   if (query.category) { const c = query.category === '미분류' ? '' : itemCategory(query.category); where.push(BILL_CATEGORY_FILTER('sales_bill_lines', 'sales_bills')); args.push(c); }
   const page = Math.max(0, Math.min(1000, Number(query.page) || 0));
   const by_category = await billCategoryTotals('sales_bill_lines', 'sales_bills', where, args);
-  const rows = await db.prepare(`SELECT sales_bills.*, (SELECT return_no || '|' || id FROM stock_returns WHERE side='in' AND bill_id=sales_bills.id AND status='confirmed') AS return_ref, (SELECT COUNT(*) FROM sales_bill_lines l WHERE l.bill_id=sales_bills.id) AS line_count, (SELECT group_concat(DISTINCT c) FROM (SELECT ${LINE_CAT('l')} AS c FROM sales_bill_lines l WHERE l.bill_id=sales_bills.id AND l.active=1)) AS categories, (SELECT i.invoice_no || '|' || i.status || '|' || i.id FROM tax_invoice_bills t JOIN tax_invoices i ON i.id=t.invoice_id WHERE t.bill_id=sales_bills.id AND t.active=1) AS invoice FROM sales_bills ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY bill_date DESC, id DESC LIMIT 201 OFFSET ?`).all(...args, page * 200);
+  const rows = await db.prepare(`SELECT sales_bills.*, ${BILL_REP('sales_bills')} AS rep, (SELECT return_no || '|' || id FROM stock_returns WHERE side='in' AND bill_id=sales_bills.id AND status='confirmed') AS return_ref, (SELECT COUNT(*) FROM sales_bill_lines l WHERE l.bill_id=sales_bills.id) AS line_count, (SELECT group_concat(DISTINCT c) FROM (SELECT ${LINE_CAT('l')} AS c FROM sales_bill_lines l WHERE l.bill_id=sales_bills.id AND l.active=1)) AS categories, (SELECT i.invoice_no || '|' || i.status || '|' || i.id FROM tax_invoice_bills t JOIN tax_invoices i ON i.id=t.invoice_id WHERE t.bill_id=sales_bills.id AND t.active=1) AS invoice FROM sales_bills ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY bill_date DESC, id DESC LIMIT 201 OFFSET ?`).all(...args, page * 200);
   return { rows: rows.slice(0, 200), page, more: rows.length > 200, by_category };
 });
 // 15.166 매출 달력: 그 달 확정 매출전표를 일자별로(건수·공급가액·세액·합계). 거래처로 거를 수 있다.
@@ -1763,6 +1766,7 @@ route('GET', '/api/sales-calendar', async ({ user, query }) => {
   const month = String(query.month || today().slice(0, 7)); if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw bad('연·월을 확인하세요.');
   const where = ["status='confirmed'", 'bill_date>=?', 'bill_date<=?'], args = [`${month}-01`, monthEnd(month)];
   if (query.customer) { where.push(`${customerKey('customer')}=?`); args.push(nameKey(str(query.customer, 100))); }
+  if (query.rep !== undefined && query.rep !== '') { where.push(`${BILL_REP('sales_bills')}=?`); args.push(query.rep === '미지정' ? '' : repName(query.rep)); } // 15.224
   const days = await db.prepare(`SELECT bill_date AS date, COUNT(*) AS n, COALESCE(SUM(supply_total),0) AS supply, COALESCE(SUM(vat_total),0) AS vat, COALESCE(SUM(total),0) AS total FROM sales_bills WHERE ${where.join(' AND ')} GROUP BY bill_date ORDER BY bill_date`).all(...args);
   const sum = k => days.reduce((t, d) => t + d[k], 0);
   return { month, days, totals: { n: sum('n'), supply: sum('supply'), vat: sum('vat'), total: sum('total') } };
@@ -1778,6 +1782,49 @@ route('GET', '/api/purchase-calendar', async ({ user, query }) => {
   return { month, days, totals: { n: sum('n'), supply: sum('supply'), vat: sum('vat'), total: sum('total') } };
 });
 route('GET', '/api/sales-bills/:id', async ({ user, params }) => { requireSales(user); return salesBillDetail(await mustGet('sales_bills', params.id)); });
+// ── 15.224 영업담당자 ──
+// 전표 담당자가 비어 있으면 거래처 기본 담당자로 본다(기존 전표를 고치지 않고 집계).
+function BILL_REP(t) { return `COALESCE(NULLIF(${t}.sales_rep,''), (SELECT v.sales_rep FROM vendors v WHERE v.name_key=${customerKey(t + '.customer')}), '')`; }
+// 담당자는 금액과 상관없어 마감·세금계산서와 관계없이 바꿀 수 있다(이력에 남김).
+route('PUT', '/api/sales-bills/:id/rep', async ({ user, params, body }) => {
+  requireSales(user);
+  const bill = await mustGet('sales_bills', params.id), rep = repName(body.sales_rep);
+  if (rep === (bill.sales_rep || '')) return salesBillDetail(bill);
+  await db.batch([{ sql: 'UPDATE sales_bills SET sales_rep=? WHERE id=?', args: [rep, bill.id] }, docChange('sales_bill', bill.id, `영업담당자 ${bill.sales_rep || '(없음)'}→${rep || '(없음)'}`, user)]);
+  return salesBillDetail(await mustGet('sales_bills', bill.id));
+});
+// 고를 수 있는 담당자: 영업 권한 사용자 + 거래처·전표에 이미 쓰인 이름
+route('GET', '/api/sales-reps', async ({ user }) => {
+  requireSales(user);
+  const names = new Set();
+  for (const u of await db.prepare("SELECT name, is_admin, roles FROM users WHERE approval_status='approved' ORDER BY name").all()) if ((u.roles || '').split(',').includes('sales')) names.add(u.name);
+  for (const r of await db.prepare("SELECT sales_rep AS n FROM vendors WHERE sales_rep<>'' UNION SELECT sales_rep FROM sales_bills WHERE sales_rep<>''").all()) names.add(r.n);
+  return { reps: [...names].sort((a, b) => a.localeCompare(b, 'ko')) };
+});
+// 담당자별 담당업체 현황: 기간 안 확정 매출(건수·공급가액·세액·합계·마지막 일자) + 담당 거래처(매출 없어도) + 미수 잔액
+route('GET', '/api/sales-reps/summary', async ({ user, query }) => {
+  requireSales(user);
+  const where = ["b.status='confirmed'"], args = [];
+  applyListDates(where, args, query, 'b.bill_date');
+  const repF = query.rep !== undefined && query.rep !== '' ? (query.rep === '미지정' ? '' : repName(query.rep)) : null;
+  const sales = await db.prepare(`SELECT ${BILL_REP('b')} AS rep, ${customerKey('b.customer')} AS k, MIN(b.customer) AS customer, COUNT(*) AS n, COALESCE(SUM(b.supply_total),0) AS supply, COALESCE(SUM(b.vat_total),0) AS vat, COALESCE(SUM(b.total),0) AS total, MAX(b.bill_date) AS last_date FROM sales_bills b WHERE ${where.join(' AND ')} GROUP BY rep, k LIMIT 5001`).all(...args);
+  const vendors = await db.prepare("SELECT name, name_key AS k, sales_rep AS rep, code FROM vendors WHERE sales_rep<>'' OR is_sales=1").all();
+  const balance = new Map((await agingData('sales', today())).rows.map(r => [nameKey(r.name), r.balance]));
+  const map = new Map(), key = (rep, k) => rep + '\u0001' + k;
+  for (const v of vendors) if (v.rep) map.set(key(v.rep, v.k), { rep: v.rep, customer: v.name, code: v.code || '', assigned: true, n: 0, supply: 0, vat: 0, total: 0, last_date: null });
+  const assignedOf = new Map(vendors.map(v => [v.k, v]));
+  for (const s of sales) {
+    const id = key(s.rep, s.k), v = assignedOf.get(s.k), row = map.get(id) || { rep: s.rep, customer: v ? v.name : s.customer, code: v?.code || '', assigned: !!(v && v.rep === s.rep), n: 0, supply: 0, vat: 0, total: 0, last_date: null };
+    Object.assign(row, { n: s.n, supply: s.supply, vat: s.vat, total: s.total, last_date: s.last_date }); map.set(id, row);
+  }
+  let rows = [...map.values()].map(r => ({ ...r, balance: balance.get(nameKey(r.customer)) || 0 }));
+  if (repF !== null) rows = rows.filter(r => r.rep === repF);
+  const reps = new Map();
+  for (const r of rows) { const g = reps.get(r.rep) || { rep: r.rep, customers: 0, active: 0, n: 0, supply: 0, vat: 0, total: 0, balance: 0 }; g.customers++; if (r.n) g.active++; for (const f of ['n', 'supply', 'vat', 'total', 'balance']) g[f] += r[f]; reps.set(r.rep, g); }
+  const order = (a, b) => (a.rep === '') - (b.rep === '') || b.total - a.total || a.rep.localeCompare(b.rep, 'ko');
+  rows.sort((a, b) => order(a, b) || b.total - a.total || a.customer.localeCompare(b.customer, 'ko'));
+  return { reps: [...reps.values()].sort(order), rows };
+});
 // 부가세를 줄마다 나눈다: 줄 공급가액의 10% 절사, 합이 전표 부가세와 다르면 금액이 가장 큰 줄이 차이를 받는다.
 function splitVat(lines, vat) {
   const out = lines.map(l => (vat ? billTrunc(l.supply * 0.1) : 0));
@@ -1838,8 +1885,9 @@ route('POST', '/api/sales-bills', async ({ user, body }) => {
   const supply = lines.reduce((t, l) => t + l.supply, 0);
   const vat = taxType === 'zero' ? 0 : billTrunc(supply * 0.1), total = supply + vat, vats = splitVat(lines, vat);
   const prefix = `SB-${today().slice(2).replace(/-/g, '')}-`, BID = '(SELECT id FROM sales_bills WHERE request_id=?)';
-  const cmds = [{ sql: `INSERT INTO sales_bills(bill_no,bill_date,customer,tax_type,supply_total,vat_total,total,note,created_by,created_by_id,request_id) VALUES(${nextDocNo('sales_bills', 'bill_no')},?,?,?,?,?,?,?,?,?,?)`,
-    args: [prefix, prefix, prefix, date, customer, taxType, supply, vat, total, str(body.note, 500), user.name, user.id, token] }];
+  const rep = repName(body.sales_rep) || (await db.prepare('SELECT sales_rep FROM vendors WHERE name_key=?').get(nameKey(customer)))?.sales_rep || ''; // 15.224 영업담당자
+  const cmds = [{ sql: `INSERT INTO sales_bills(bill_no,bill_date,customer,tax_type,supply_total,vat_total,total,note,created_by,created_by_id,request_id,sales_rep) VALUES(${nextDocNo('sales_bills', 'bill_no')},?,?,?,?,?,?,?,?,?,?,?)`,
+    args: [prefix, prefix, prefix, date, customer, taxType, supply, vat, total, str(body.note, 500), user.name, user.id, token, rep] }];
   lines.forEach((l, i) => {
     if (!l.order_line_id && l.source_type === 'ship') {
       cmds.push({ sql: `INSERT INTO sales_bill_lines(bill_id,item_category,source_type,source_id,item,spec,unit,product_code,lot,ship_date,qty,unit_price,supply,vat,note,order_line_id) SELECT ${BID},?,?,?,?,?,?,?,?,?,?,?,?,?,?,
