@@ -347,3 +347,28 @@ test('15.208 Ship less than instructed: ships that qty, splits the bill line, le
   const full = await staff('POST', '/api/ship-instructions/ship', { ids: [rest[0].id], qtys: { [rest[0].id]: 4 }, ship_date: today });
   assert.equal(full.body.partial, 0, 'full qty is not a split');
 });
+
+test('15.245 Ship one instruction with several LOTs: bill line and instruction split per LOT, rest stays pending, totals kept', async () => {
+  await admin('POST', '/api/vendors', { name: '차카상사', is_sales: true });
+  const so = (await seller('POST', '/api/sales-orders', { customer: '차카상사', order_date: today, request_id: rid(), lines: [{ bom_id: mask.id, qty: 100, unit_price: 33 }] })).body;
+  const b = (await seller('POST', '/api/sales-bills', { customer: '차카상사', bill_date: today, request_id: rid(), lines: [{ source_type: 'order', order_line_id: so.lines[0].id, qty: 100 }] })).body;
+  const inst = (await staff('GET', '/api/ship-instructions?customer=' + encodeURIComponent('차카상사'))).body.rows[0];
+  const url = `/api/ship-instructions/${inst.id}/ship-lots`;
+  assert.equal((await seller('POST', url, { lines: [{ lot: '', qty: 1 }] })).status, 403, 'logistics only');
+  assert.equal((await staff('POST', url, { lines: [{ lot: '', qty: 60 }, { lot: '', qty: 50 }] })).status, 400, 'more than instruction');
+  assert.equal((await staff('POST', url, { lines: [] })).status, 400);
+  const r = await staff('POST', url, { lines: [{ lot: '', qty: 40, ship_date: today, note: '1차' }, { lot: '', qty: 30, ship_date: today }] });
+  assert.equal(r.status, 200, JSON.stringify(r.body)); assert.equal(r.body.shipped, 2); assert.equal(r.body.rest, 30);
+  const all = sqlite.prepare('SELECT * FROM ship_instructions WHERE bill_id=? ORDER BY id').all(b.id);
+  assert.deepEqual(all.map(x => [x.qty, x.status]), [[40, 'shipped'], [30, 'shipped'], [30, 'pending']]);
+  const lines = sqlite.prepare('SELECT * FROM sales_bill_lines WHERE bill_id=? AND active=1 ORDER BY id').all(b.id);
+  assert.deepEqual(lines.map(l => l.qty), [40, 30, 30]);
+  assert.equal(lines.reduce((t, l) => t + l.supply, 0), b.supply_total ?? 3300, 'supply total kept');
+  const ships = sqlite.prepare('SELECT * FROM shipments WHERE id IN (?,?)').all(all[0].shipment_id, all[1].shipment_id);
+  assert.deepEqual(ships.map(s => s.qty).sort(), [30, 40]); assert.equal(ships.find(s => s.qty === 40).note, '1차');
+  assert.equal(lines[0].source_type, 'ship'); assert.equal(lines[1].source_type, 'ship'); assert.notEqual(lines[2].source_type, 'ship', 'rest line not shipped');
+  assert.equal((await staff('POST', url, { lines: [{ lot: '', qty: 1 }] })).status, 409, 'already shipped');
+  // 남은 30을 한 LOT로 전부: 나누지 않고 그대로 출하
+  assert.equal((await staff('POST', `/api/ship-instructions/${all[2].id}/ship-lots`, { lines: [{ lot: '', qty: 30 }] })).status, 200);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM ship_instructions WHERE bill_id=?').get(b.id).n, 3);
+});

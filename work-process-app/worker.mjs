@@ -181,7 +181,7 @@ function hasRole(user, role) { const roles = publicUser(user).roles; return !!us
 function isOperator(user) { return !!user && !user.is_admin && publicUser(user).roles.includes('operator'); }
 function operatorRequestAllowed(method, path) {
   if (method === 'GET' && (/^\/api\/requests\/[1-9]\d*\/inspection(?:\/history\/[1-9]\d*)?$/.test(path) || ['/api/inspections','/api/wash-summary'].includes(path))) return true;
-  if (method === 'GET') return ['/api/me', '/api/operator/catalog', '/api/operator/semi-records', '/api/operator/plans', '/api/operator/actuals'].includes(path);
+  if (method === 'GET') return ['/api/me', '/api/operator/catalog', '/api/operator/semi-records', '/api/operator/plans', '/api/operator/actuals', '/api/lots/available', '/api/semi-bags'].includes(path); // 15.249 오퍼레이터도 투입 LOT·봉투 LOT 고르기
   return (method === 'PUT' && path === '/api/me/password') || (method === 'POST' && (['/api/auth/logout', '/api/auth/login', '/api/semi-batches'].includes(path) || /^\/api\/schedules\/[1-9]\d*\/actuals$/.test(path)));
 }
 function isRequestApprover(user, type) {
@@ -502,7 +502,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -966,12 +966,12 @@ async function warehouseRules() {
   };
 }
 function receiptLineSql() {
-  return `SELECT 'po' AS kind, l.id, l.receipt_id, l.po_id, NULL AS other_id, COALESCE(p.req_no,'') AS req_no, COALESCE(p.item,'(삭제된 발주)') AS item, COALESCE(p.spec,'') AS spec, COALESCE(p.unit,'') AS unit, COALESCE(p.product_code,'') AS product_code, COALESCE(p.item_category,'') AS item_category, l.lot, l.sub_lot, l.qty, l.received_date, l.warehouse, l.location, l.note, l.note2, l.voided_at, p.qty AS po_qty, p.recv_qty, p.recv_status
+  return `SELECT 'po' AS kind, l.id, l.receipt_id, l.po_id, NULL AS other_id, COALESCE(p.req_no,'') AS req_no, COALESCE(p.item,'(삭제된 발주)') AS item, COALESCE(p.spec,'') AS spec, COALESCE(p.unit,'') AS unit, COALESCE(p.product_code,'') AS product_code, COALESCE(p.item_category,'') AS item_category, l.lot, l.sub_lot, l.qty, l.pieces, l.pieces_temp, CASE WHEN l.pieces IS NULL THEN NULL ELSE 1 + COALESCE((SELECT SUM(x.pieces) FROM po_receipt_lots x JOIN purchase_orders px ON px.id=x.po_id WHERE x.lot=l.lot AND x.lot<>'' AND TRIM(px.item)=TRIM(p.item) AND x.id<l.id),0) END AS piece_from, l.received_date, l.warehouse, l.location, l.note, l.note2, l.voided_at, p.qty AS po_qty, p.recv_qty, p.recv_status
       FROM po_receipt_lots l LEFT JOIN purchase_orders p ON p.id=l.po_id`;
 }
 async function receiptDetail(r) {
   const po = await db.prepare(`${receiptLineSql()} WHERE l.receipt_id=? ORDER BY l.id`).all(r.id);
-  const other = await db.prepare(`SELECT 'other' AS kind, id, receipt_id, NULL AS po_id, id AS other_id, '' AS req_no, item, spec, COALESCE(NULLIF(unit,''), json_extract(bom_snapshot,'$.unit'), '') AS unit, json_extract(bom_snapshot,'$.product_code') AS product_code, item_category, lot, sub_lot, qty, received_date, warehouse, location, note, note2, NULL AS voided_at FROM other_receipts WHERE receipt_id=? ORDER BY id`).all(r.id);
+  const other = await db.prepare(`SELECT 'other' AS kind, id, receipt_id, NULL AS po_id, id AS other_id, '' AS req_no, item, spec, COALESCE(NULLIF(unit,''), json_extract(bom_snapshot,'$.unit'), '') AS unit, json_extract(bom_snapshot,'$.product_code') AS product_code, item_category, lot, sub_lot, qty, pieces, pieces_temp, CASE WHEN pieces IS NULL THEN NULL ELSE 1 + COALESCE((SELECT SUM(x.pieces) FROM po_receipt_lots x JOIN purchase_orders px ON px.id=x.po_id WHERE x.lot=other_receipts.lot AND TRIM(px.item)=TRIM(other_receipts.item)),0) + COALESCE((SELECT SUM(o.pieces) FROM other_receipts o WHERE o.lot=other_receipts.lot AND TRIM(o.item)=TRIM(other_receipts.item) AND o.id<other_receipts.id),0) END AS piece_from, received_date, warehouse, location, note, note2, NULL AS voided_at FROM other_receipts WHERE receipt_id=? ORDER BY id`).all(r.id);
   return { ...r, lines: [...po, ...other] };
 }
 route('GET', '/api/receipts', async ({ query }) => {
@@ -1010,6 +1010,16 @@ route('GET', '/api/lots/next', async ({ query }) => {
   return { lots: Array.from({ length: count }, (_, i) => head + String(start + i + 1).padStart(4, '0')) };
 });
 route('GET', '/api/receipts/:id', async ({ params }) => receiptDetail(await mustGet('receipts', params.id)));
+// 15.249 입고 LOT = 업체 LOT. 비우면 입고일 기준 임시 SST LOT(SST-YYMMDD-01, 02 …)를 줄마다 붙인다.
+async function nextSstLots(date, count) {
+  if (!count) return [];
+  const head = `SST-${String(date).slice(2).replace(/-/g, '')}-`;
+  const match = "substr(lot,1,length(?))=? AND length(lot)>length(?) AND substr(lot,length(?)+1) NOT GLOB '*[^0-9]*'";
+  const used = await db.prepare(`SELECT MAX(n) AS n FROM (SELECT CAST(substr(lot, length(?) + 1) AS INTEGER) AS n FROM po_receipt_lots WHERE ${match} UNION ALL SELECT CAST(substr(lot, length(?) + 1) AS INTEGER) FROM other_receipts WHERE ${match})`).get(head, head, head, head, head, head, head, head, head, head);
+  const start = (used && used.n) || 0;
+  return Array.from({ length: count }, (_, i) => head + String(start + i + 1).padStart(2, '0'));
+}
+async function fillSstLots(date, lines) { const blank = lines.filter(l => !l.lot); const lots = await nextSstLots(date, blank.length); blank.forEach((l, i) => { l.lot = lots[i]; l.temp_lot = true; }); }
 route('POST', '/api/receipts', async ({ user, body }) => {
   const token = String(body.request_id || '');
   if (!/^[a-zA-Z0-9-]{16,80}$/.test(token)) throw bad('등록 요청 번호를 확인하세요.');
@@ -1026,13 +1036,15 @@ route('POST', '/api/receipts', async ({ user, body }) => {
     const l = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
     try {
       const qty = num(l.qty, '수량'); if (!(qty > 0)) throw bad('수량은 0보다 커야 합니다.');
-      const line = { lot: str(l.lot, 100), qty, note: str(l.note, 200), note2: str(l.note2, 200), ...rules.check(l.warehouse, l.location), no: index + 1 }; // 15.199 note2 = 업체 정보(비고2)
+      const line = { lot: str(l.lot, 100), qty, pieces: piecesOf(l.pieces), note: str(l.note, 200), note2: str(l.note2, 200), ...rules.check(l.warehouse, l.location), no: index + 1 }; // 15.199 note2 = 업체 정보(비고2)
       if (l.po_id !== undefined && l.po_id !== null && l.po_id !== '') {
         const id = Number(l.po_id); if (!Number.isSafeInteger(id) || id <= 0) throw bad('발주를 다시 고르세요.');
         const group = poLines.get(id) || []; group.push(line); poLines.set(id, group);
       } else otherLines.push({ ...line, raw: l });
     } catch (error) { if (error.status === 400 || error.status === 404) throw bad(`${index + 1}번째 줄: ${error.message}`); throw error; }
   }
+  for (const [poId, group] of poLines) { const pl = (await db.prepare('SELECT lot FROM purchase_orders WHERE id=?').get(poId))?.lot || ''; if (pl && !pl.includes(',')) group.forEach(l => { if (!l.lot) l.lot = pl; }); } // 발주에 미리 적은 업체 LOT
+  await fillSstLots(date, [...[...poLines.values()].flat(), ...otherLines].sort((a, b) => a.no - b.no)); // 15.249 업체 LOT 없으면 임시 SST LOT
   // 15.133 서브 LOT: 같은 LOT로 받은 줄(포장)마다 001, 002 … 이 LOT에 이미 쓴 서브 번호 다음부터 잇는다.
   const subNext = new Map();
   for (const l of [...[...poLines.values()].flat(), ...otherLines].sort((a, b) => a.no - b.no)) {
@@ -1056,7 +1068,7 @@ route('POST', '/api/receipts', async ({ user, body }) => {
     const add = stockRound(group.reduce((t, l) => t + l.qty, 0)), total = stockRound(recorded + add), status = total === po.qty ? 'ok' : 'mismatch';
     // 예전 방식으로 기록된 입고(줄 없음)는 먼저 한 줄로 옮겨 recv_qty = 줄 합을 지킨다.
     if (!active.length && recorded) cmds.push({ sql: 'INSERT INTO po_receipt_lots(po_id,lot,qty,received_date,note,created_by) VALUES(?,?,?,?,?,?)', args: [poId, po.lot || '', recorded, (po.recv_at || '').slice(0, 10) || date, '이전 입고', po.recv_by || ''] });
-    for (const l of group) cmds.push({ sql: `INSERT INTO po_receipt_lots(po_id,receipt_id,lot,sub_lot,qty,received_date,warehouse,location,note,created_by,note2) VALUES(?,${RID},?,?,?,?,?,?,?,?,?)`, args: [poId, token, l.lot, l.sub_lot || '', l.qty, date, l.warehouse, l.location, l.note, user.name, l.note2 || ''] });
+    for (const l of group) { const tp = tempPieces(l, po.item_category); cmds.push({ sql: `INSERT INTO po_receipt_lots(po_id,receipt_id,lot,sub_lot,qty,received_date,warehouse,location,note,created_by,note2,pieces,pieces_temp) VALUES(?,${RID},?,?,?,?,?,?,?,?,?,${tp.pieces == null ? 'NULL' : Number(tp.pieces)},${tp.temp})`, args: [poId, token, l.lot, l.sub_lot || '', l.qty, date, l.warehouse, l.location, l.note, user.name, l.note2 || ''] }); }
     const keepPoLot = !active.length && (recorded || !group.some(l => l.lot)); // 예전 입고를 옮기거나, 이번 줄에 LOT가 없으면 발주의 LOT 유지(15.77)
     const lots = [...new Set([...active.map(a => a.lot), ...(keepPoLot ? [po.lot] : []), ...group.map(l => l.lot)].filter(Boolean))].join(', ').slice(0, 100);
     cmds.push({ sql: `UPDATE purchase_orders SET recv_status=?,recv_qty=?,recv_by=?,recv_at=CASE WHEN recv_at IS NULL OR recv_status NOT IN ('ok','mismatch') OR recv_at<? THEN ? ELSE recv_at END,lot=? WHERE id=? AND recv_status=? AND recv_qty IS ? AND NOT EXISTS(SELECT 1 FROM receipt_qty_changes c WHERE c.po_id=purchase_orders.id AND c.status='pending')`, args: [status, total, user.name, at, at, lots, poId, po.recv_status, po.recv_qty] });
@@ -1072,7 +1084,8 @@ route('POST', '/api/receipts', async ({ user, body }) => {
     try { fields = await otherReceiptFields({ ...l.raw, received_date: date, vendor, note: l.note || note, qty: l.qty }); }
     catch (error) { if (error.status === 400 || error.status === 404) throw bad(`${l.no}번째 줄: ${error.message}`); throw error; }
     const snapshot = JSON.parse(fields[7]);
-    cmds.push({ sql: `INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,bom_id,bom_snapshot,created_by,spec,unit,lot,batch_id,receipt_id,warehouse,location,sub_lot,note2) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,${RID},?,?,?,?)`,
+    const tp = tempPieces(l, fields[2]);
+    cmds.push({ sql: `INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,bom_id,bom_snapshot,created_by,spec,unit,lot,batch_id,receipt_id,warehouse,location,sub_lot,note2,pieces,pieces_temp) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,${RID},?,?,?,?,${tp.pieces == null ? 'NULL' : Number(tp.pieces)},${tp.temp})`,
       args: [...fields, user.name, await catalogSpec(fields[6], l.raw.spec), snapshot.unit || '', l.lot, token, token, l.warehouse, l.location, l.sub_lot || '', l.note2 || ''] });
     cmds.push(receiptAnalysisQuery('other_receipt', null, user));
   }
@@ -1126,15 +1139,17 @@ route('POST', '/api/receipts/:id/lines', async ({ user, params, body }) => {
   if (await db.prepare('SELECT 1 FROM other_receipts WHERE batch_id=? LIMIT 1').get(token)) return receiptDetail(r);
   const raw = Array.isArray(body.lines) ? body.lines : []; if (!raw.length || raw.length > 100) throw bad('담을 줄은 1~100줄입니다.');
   const rules = await warehouseRules(), lines = [];
-  for (const [i, x] of raw.entries()) { const l = x && typeof x === 'object' ? x : {}; try { const qty = num(l.qty, '입하수량'); if (!(qty > 0)) throw bad('입하수량은 0보다 커야 합니다.'); lines.push({ raw: l, qty, lot: str(l.lot, 100), note: str(l.note, 200), note2: str(l.note2, 200), ...rules.check(l.warehouse, l.location), no: i + 1 }); } catch (error) { if (error.status === 400 || error.status === 404) throw bad(`${i + 1}번째 줄: ${error.message}`); throw error; } }
+  for (const [i, x] of raw.entries()) { const l = x && typeof x === 'object' ? x : {}; try { const qty = num(l.qty, '입하수량'); if (!(qty > 0)) throw bad('입하수량은 0보다 커야 합니다.'); lines.push({ raw: l, qty, pieces: piecesOf(l.pieces), lot: str(l.lot, 100), note: str(l.note, 200), note2: str(l.note2, 200), ...rules.check(l.warehouse, l.location), no: i + 1 }); } catch (error) { if (error.status === 400 || error.status === 404) throw bad(`${i + 1}번째 줄: ${error.message}`); throw error; } }
+  await fillSstLots(r.receipt_date, lines); // 15.249 업체 LOT 없으면 임시 SST LOT
   const subNext = new Map();
   for (const l of lines) { if (!l.lot) continue; if (!subNext.has(l.lot)) subNext.set(l.lot, (await db.prepare("SELECT MAX(n) AS n FROM (SELECT CAST(sub_lot AS INTEGER) AS n FROM po_receipt_lots WHERE lot=? AND voided_at IS NULL UNION ALL SELECT CAST(sub_lot AS INTEGER) FROM other_receipts WHERE lot=?)").get(l.lot, l.lot)).n || 0); const n = subNext.get(l.lot) + 1; subNext.set(l.lot, n); l.sub_lot = String(n).padStart(3, '0'); }
   const cmds = [];
   for (const l of lines) {
     let fields; try { fields = await otherReceiptFields({ ...l.raw, received_date: r.receipt_date, vendor: r.vendor, note: l.note, qty: l.qty }); } catch (error) { if (error.status === 400 || error.status === 404) throw bad(`${l.no}번째 줄: ${error.message}`); throw error; }
     const snapshot = JSON.parse(fields[7]);
-    cmds.push({ sql: 'INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,bom_id,bom_snapshot,created_by,spec,unit,lot,batch_id,receipt_id,warehouse,location,sub_lot,note2) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-      args: [...fields, user.name, await catalogSpec(fields[6], l.raw.spec), snapshot.unit || '', l.lot, token, r.id, l.warehouse, l.location, l.sub_lot || '', l.note2] });
+    const tp = tempPieces(l, fields[2]);
+    cmds.push({ sql: 'INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,bom_id,bom_snapshot,created_by,spec,unit,lot,batch_id,receipt_id,warehouse,location,sub_lot,note2,pieces,pieces_temp) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      args: [...fields, user.name, await catalogSpec(fields[6], l.raw.spec), snapshot.unit || '', l.lot, token, r.id, l.warehouse, l.location, l.sub_lot || '', l.note2, tp.pieces, tp.temp] });
     cmds.push(receiptAnalysisQuery('other_receipt', null, user));
   }
   await db.batch(cmds);
@@ -3855,7 +3870,7 @@ function decodeSchedule(row) { return { ...row, bom_snapshot: JSON.parse(row.bom
 // Narrow read models for the operator UI. No prices, BOM recipes, or other users' logs.
 route('GET', '/api/operator/catalog', async () => ({
   units: await db.prepare('SELECT id,kind,name,active FROM production_units WHERE active=1 ORDER BY sort_order,name').all(),
-  models: await db.prepare("SELECT id,product,product_code,semi_type,CASE WHEN semi_unit<>'' THEN semi_unit ELSE unit END AS unit FROM boms WHERE active=1 AND is_temp=0 AND semi_type<>'' ORDER BY product").all(),
+  models: (await db.prepare("SELECT id,product,product_code,semi_type,CASE WHEN semi_unit<>'' THEN semi_unit ELSE unit END AS unit,materials FROM boms WHERE active=1 AND is_temp=0 AND semi_type<>'' ORDER BY product").all()).map(m => ({ ...m, materials: (() => { try { return JSON.parse(m.materials || '[]'); } catch { return []; } })() })), // 15.249 BOM 자재(투입 LOT 고르기)
 }));
 function operatorDate(value) {
   const date = listFilterDate(value, '생산일');
@@ -3865,7 +3880,7 @@ function operatorDate(value) {
 route('GET', '/api/operator/plans', async ({ query }) => {
   const date = operatorDate(query.date);
   return db.prepare(`SELECT s.id,s.period,s.start_date,s.product,s.spec,s.qty,s.done,
-    COALESCE(NULLIF(s.unit,''),json_extract(s.bom_snapshot,'$.unit'),'') AS unit,
+    COALESCE(NULLIF(s.unit,''),json_extract(s.bom_snapshot,'$.unit'),'') AS unit, COALESCE(json_extract(s.bom_snapshot,'$.materials'),'[]') AS materials_json,
     COALESCE((SELECT SUM(a.qty) FROM production_actuals a WHERE a.schedule_id=s.id AND a.voided_at IS NULL),0) AS actual_qty
     FROM schedules s WHERE s.kind='finished' AND s.confirmed_at<>'' AND s.start_date<=? AND -- 15.204 확정 계획만(실적 입력 화면과 같게)
     CASE s.period WHEN 'day' THEN s.start_date WHEN 'week' THEN date(s.start_date,'+6 days') ELSE date(s.start_date,'+1 month','-1 day') END>=?
@@ -3985,8 +4000,10 @@ route('POST', '/api/other-receipts', async ({ user, body }) => {
   const token = reqToken(body);
   { const old = await replayed('other_receipts', token, user); if (old) return { ...old, duplicate: true }; }
   const fields = await otherReceiptFields(body); await ensureVendor(fields[4], user, 'purchase');
+  // 15.252 예전 단건 입력도 LOT 체계를 따른다: 업체 LOT(비우면 임시 SST), 원자재는 실물(절) 없으면 임시 1절
+  const one = { lot: str(body.lot, 100), pieces: piecesOf(body.pieces) }; await fillSstLots(fields[0], [one]); const tp = tempPieces(one, fields[2]);
   const r = await onceInsert('other_receipts', token, user, async () => (await db.batch([
-    { sql: 'INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,bom_id,bom_snapshot,created_by,request_id) VALUES(?,?,?,?,?,?,?,?,?,?)', args: [...fields, user.name, token] },
+    { sql: 'INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,bom_id,bom_snapshot,created_by,request_id,lot,pieces,pieces_temp) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)', args: [...fields, user.name, token, one.lot, tp.pieces, tp.temp] },
     receiptAnalysisQuery('other_receipt', null, user),
   ]))[0].meta.last_row_id);
   if (r.duplicate) return { ...r.row, duplicate: true };
@@ -4155,8 +4172,9 @@ route('POST', '/api/batches/:entity', async ({ user, params, body }) => {
 // 생산 투입·출하에 쓰인 LOT: 그 입고의 품목·수량·LOT을 바꾸거나 지우지 못한다(쓴 생산실적·출하를 먼저 취소).
 async function lotUsage(item, lot) {
   if (!lot) return null;
-  const r = await db.prepare(`SELECT (SELECT COALESCE(SUM(i.qty),0) FROM production_lot_inputs i JOIN production_actuals a ON a.id=i.actual_id WHERE a.voided_at IS NULL AND TRIM(i.item)=TRIM(?) AND i.lot=?) AS used,
-    (SELECT COALESCE(SUM(qty),0) FROM shipments WHERE TRIM(item)=TRIM(?) AND lot=?) AS shipped`).get(item, lot, item, lot);
+  const r = await db.prepare(`SELECT (SELECT COALESCE(SUM(i.qty),0) FROM production_lot_inputs i JOIN production_actuals a ON a.id=i.actual_id WHERE a.voided_at IS NULL AND TRIM(i.item)=TRIM(?) AND i.lot=?)
+      + (SELECT COALESCE(SUM(qty),0) FROM semi_lot_inputs WHERE TRIM(item)=TRIM(?) AND lot=?) AS used,
+    (SELECT COALESCE(SUM(qty),0) FROM shipments WHERE TRIM(item)=TRIM(?) AND lot=?) AS shipped`).get(item, lot, item, lot, item, lot); // 15.253 커팅·융착 투입 포함
   return r.used || r.shipped ? r : null;
 }
 const lotUsedMessage = (item, lot, u) => `${item}: LOT ${lot}은 ${[u.used ? `생산 투입 ${stockRound(u.used)}` : '', u.shipped ? `출하 ${stockRound(u.shipped)}` : ''].filter(Boolean).join(' · ')}에 쓰였습니다. 바꾸려면 그 생산실적·출하를 먼저 취소하세요.`;
@@ -4242,15 +4260,35 @@ route('POST', '/api/schedules/:id/actuals', async ({ user, params, body }) => {
   if (old) { if (!matches(old)) throw new HttpError(409, '이미 사용된 실적 요청 번호입니다.'); return old; }
   // 15.135 투입 자재 LOT: 그 LOT의 남은 수량 안에서만(같은 LOT 여러 줄은 합쳐서 확인).
   const inputs = await actualLotInputs(body.inputs);
-  // 완제품 생산 LOT: 직접 적지 않으면 [식별문자(제품 P·상품 G)][생산일]-[순번] 자동.
+  const bags = await packBags(body.bags); // 15.249 이날 포장에 쓴 세탁 완료 봉투 LOT
+  // 15.249 완제품 LOT: 직접 적지 않으면 포장일_품목코드_P순번(261121_NX808_P1).
   const snap = JSON.parse(schedule.bom_snapshot || '{}');
-  const lot = qty > 0 ? (str(body.lot, 100) || await nextProductionLot(lotPrefixOf(snap.item_category || '제품'), date)) : '';
+  const lot = qty > 0 ? (str(body.lot, 100) || await nextFinishedLot(date, lotCode(snap.product_code, schedule.product))) : '';
   const wo = `WOR_${date.replace(/-/g, '')}_`; // 15.230 작업지시번호 WOR_YYYYMMDD_001(실적 날짜 기준)
   const cmds = [{ sql: "INSERT INTO production_actuals(schedule_id,production_date,qty,note,author_id,author_name,request_id,lot,work_order) VALUES(?,?,?,?,?,?,?,?,(SELECT ? || printf('%03d', COALESCE(MAX(CAST(substr(work_order, 14) AS INTEGER)), 0) + 1) FROM production_actuals WHERE substr(work_order, 1, 13)=?))", args: [schedule.id, date, qty, note, user.id, user.name, key, lot, wo, wo] },
-    ...inputs.map(i => ({ sql: 'INSERT INTO production_lot_inputs(actual_id,item,unit,lot,qty,created_by) VALUES((SELECT id FROM production_actuals WHERE request_id=?),?,?,?,?,?)', args: [key, i.item, i.unit, i.lot, i.qty, user.name] }))];
+    ...inputs.map(i => ({ sql: 'INSERT INTO production_lot_inputs(actual_id,item,unit,lot,qty,created_by) VALUES((SELECT id FROM production_actuals WHERE request_id=?),?,?,?,?,?)', args: [key, i.item, i.unit, i.lot, i.qty, user.name] })),
+    ...bags.map(b => ({ sql: 'INSERT INTO pack_bag_links(actual_id,bag_lot,item,created_by) VALUES((SELECT id FROM production_actuals WHERE request_id=?),?,?,?)', args: [key, b.lot, b.item, user.name] }))];
   try { await db.batch(cmds); return actualWithInputs(await db.prepare('SELECT * FROM production_actuals WHERE request_id=?').get(key)); }
   catch (error) { const saved = await db.prepare('SELECT * FROM production_actuals WHERE request_id=?').get(key); if (saved && matches(saved)) return actualWithInputs(saved); throw error; }
 });
+// 15.249 완제품 LOT: 포장일_품목코드_P순번(261121_NX808_P1). 같은 날·같은 품목마다 P1부터.
+async function nextFinishedLot(date, code) {
+  const head = `${String(date).slice(2).replace(/-/g, '')}_${code}_P`;
+  const used = await db.prepare("SELECT MAX(CAST(substr(lot, length(?) + 1) AS INTEGER)) AS n FROM production_actuals WHERE substr(lot,1,length(?))=? AND length(lot)>length(?) AND substr(lot,length(?)+1) NOT GLOB '*[^0-9]*'").get(head, head, head, head, head);
+  return head + (((used && used.n) || 0) + 1);
+}
+// 포장에 쓴 봉투: 세탁을 마친 봉투 LOT만(남은 봉투는 다음 포장에 다시 고를 수 있음).
+async function packBags(raw) {
+  const list = Array.isArray(raw) ? [...new Set(raw.map(x => str(typeof x === 'object' && x ? x.lot : x, 100)).filter(Boolean))] : [];
+  if (list.length > 60) throw bad('봉투 LOT은 한 번에 60개까지 고를 수 있습니다.');
+  const out = [];
+  for (const lot of list) {
+    const bag = await semiBagRecord(lot); if (!bag) throw bad(`봉투 LOT ${lot}을 찾을 수 없습니다.`);
+    if (!await db.prepare("SELECT 1 FROM semi_records WHERE process='wash' AND lot=? LIMIT 1").get(lot)) throw bad(`봉투 LOT ${lot}은 아직 세탁·건조 기록이 없습니다. 세탁 입력 후 고르세요.`);
+    out.push({ lot, item: bag.item_name || '' });
+  }
+  return out;
+}
 // 15.190 생산 완제품 포장 LOT: [P][생산일]-[순번 3자리] (P261113-001).
 async function nextProductionLot(prefix, date) {
   const head = `${prefix}${date.slice(2).replace(/-/g, '')}-`;
@@ -4280,9 +4318,31 @@ async function actualLotInputs(raw) {
   return out;
 }
 // 품목 하나의 LOT별 남은 수량(먼저 들어온 순). 생산 투입·출하 LOT 고르기에 쓴다.
+// 15.252 원자재 입고에 실물(절)을 안 적으면 임시 1절(코드 LOT-1, 여러 번 투입 가능)으로 LOT 추적이 끊기지 않게
+function tempPieces(line, category) { if (!line.pieces) return String(category || '') === '원자재' ? { pieces: 1, temp: 1 } : { pieces: null, temp: 0 }; return { pieces: line.pieces, temp: 0 }; } // 15.253 0절도 안 적은 것으로
+// 15.250 실물 수량(절): 비우면 없음(NULL), 0 이상 숫자
+function piecesOf(v) { if (v === undefined || v === null || v === '') return null; const n = Number(v); if (!Number.isInteger(n) || n < 0) throw bad('실물(절) 수량은 0 이상 정수로 넣으세요.'); return n; }
+// LOT별 실물(절): 입고에 적은 절 − 커팅·융착에 투입한 절. 입고에 절을 안 적은 LOT은 null.
+async function lotPieces(item) {
+  // 줄마다 절 번호(발주입고 줄 먼저, 그다음 기타입고, 각각 id 순 — 입고 상세의 piece_from과 같은 순서). 취소한 입고 줄은 번호만 차지하고 쓸 수 없음.
+  const rows = await db.prepare(`SELECT l.lot AS lot, l.pieces AS pieces, l.pieces_temp AS pieces_temp, 0 AS src, l.id AS id, CASE WHEN l.voided_at IS NULL THEN 0 ELSE 1 END AS voided FROM po_receipt_lots l JOIN purchase_orders o ON o.id=l.po_id WHERE TRIM(o.item)=? AND l.pieces IS NOT NULL
+    UNION ALL SELECT lot, pieces, pieces_temp, 1, id, 0 FROM other_receipts WHERE TRIM(item)=? AND pieces IS NOT NULL ORDER BY 1, 4, 5`).all(item, item);
+  const map = new Map();
+  for (const r of rows) { const m = map.get(r.lot) || { received: 0, total: 0, used: 0, nos: new Set(), temp: new Set() }; const from = m.total + 1; m.total += Math.floor(r.pieces);
+    if (r.voided) { for (let n = from; n <= m.total; n++) m.nos.add(n); } else { m.received = stockRound(m.received + r.pieces); if (r.pieces_temp) for (let n = from; n <= m.total; n++) m.temp.add(n); } map.set(r.lot, m); }
+  const used = await db.prepare("SELECT lot, pieces, piece_nos FROM semi_lot_inputs WHERE TRIM(item)=? ORDER BY id").all(item);
+  const counted = new Map();
+  for (const u of used) { const m = map.get(u.lot); if (!m) continue; const nos = String(u.piece_nos || '').split(',').filter(n => /^\d+$/.test(n)).map(Number);
+    if (nos.length) { for (const n of nos) if (!m.temp.has(n)) { m.nos.add(n); m.used = stockRound(m.used + 1); } } else counted.set(u.lot, (counted.get(u.lot) || 0) + (Math.floor(Number(u.pieces)) || 0)); }
+  // 절 수만 적은 투입(번호 없음)은 남은 번호 중 앞에서부터 쓴 것으로 친다(번호로 다시 고를 수 없게)
+  for (const [lot, c] of counted) { const m = map.get(lot); let left = c; for (let n = 1; n <= m.total && left > 0; n++) if (!m.nos.has(n) && !m.temp.has(n)) { m.nos.add(n); left--; m.used = stockRound(m.used + 1); } }
+  return map;
+}
 async function lotBalances(item) {
   const r = await lotStockReport({ q: item, state: 'instock' });
-  return r.rows.filter(x => x.item === String(item).trim() && x.lot !== '(LOT 미지정)').sort((a, b) => stockCompare(a.first_date, b.first_date) || stockCompare(a.lot, b.lot));
+  const pcs = await lotPieces(String(item).trim()); // 15.250 실물(절)
+  // 15.251 절 코드 LOT-1 … LOT-N: 아직 안 쓴 번호(pieces_free)
+  return r.rows.filter(x => x.item === String(item).trim() && x.lot !== '(LOT 미지정)').map(x => { const p = pcs.get(x.lot); if (!p) return x; const free = Array.from({ length: Math.min(p.total, 2000) }, (_, i) => i + 1).filter(n => !p.nos.has(n)); return { ...x, pieces_in: p.received, pieces_left: free.filter(n => !p.temp.has(n)).length + (p.temp.size ? p.temp.size : 0), pieces_free: free, pieces_temp: [...p.temp] }; }).sort((a, b) => stockCompare(a.first_date, b.first_date) || stockCompare(a.lot, b.lot));
 }
 async function actualWithInputs(a) {
   if (!a) return a;
@@ -4442,6 +4502,15 @@ route('PUT', '/api/production-units/:id', async ({ user, params, body }) => {
   await db.prepare('UPDATE production_units SET name=?,name_key=?,active=?,sort_order=?,yield_target=?,updated_by=?,updated_at=? WHERE id=?').run(name, nameKey(name), active, order, target, user.name, now(), row.id);
   return mustGet('production_units', row.id);
 });
+// 15.249 기록의 LOT: 비우거나 안 보내면 그대로. 커팅 봉투 LOT은 세탁·포장에 쓰이기 전까지만 바꿀 수 있다.
+async function semiLotValue(process, body, previous) {
+  const next = body.lot === undefined ? previous?.lot ?? '' : str(body.lot, 100);
+  if (process !== 'cut' || !previous?.lot || next === previous.lot) return next;
+  if (!next) return previous.lot;
+  if (await db.prepare("SELECT 1 FROM semi_records WHERE process='cut' AND lot=? AND id<>?").get(next, previous.id)) throw bad(`봉투 LOT ${next}은 이미 다른 커팅 기록에 있습니다.`);
+  if (await db.prepare("SELECT 1 WHERE EXISTS(SELECT 1 FROM semi_records WHERE process='wash' AND lot=?) OR EXISTS(SELECT 1 FROM pack_bag_links WHERE bag_lot=?)").get(previous.lot, previous.lot)) throw bad(`봉투 LOT ${previous.lot}은 이미 세탁·포장에 쓰여 바꿀 수 없습니다.`);
+  return next;
+}
 async function semiFields(body, process, previous = null) {
   const date = dateStr(body.work_date, '작업일'); if (date > today()) throw bad('작업일은 오늘 이전으로 선택하세요.');
   const unitId = Number(body.unit_id); if (!Number.isSafeInteger(unitId) || unitId <= 0) throw bad(process === 'cut' ? '라인을 선택하세요.' : '세탁 호기를 선택하세요.');
@@ -4476,7 +4545,7 @@ async function semiFields(body, process, previous = null) {
     if (kind !== type) throw bad(`선택한 품목(모델)은 ${type ? '이 종류의 품목이 아닙니다' : '종류를 함께 선택해야 합니다'}.`);
   } else if (process === 'cut' && await db.prepare('SELECT 1 FROM boms WHERE active=1 AND semi_type=?').get(type)) throw bad('품목(모델)을 선택하세요.');
   const unitText = str(body.unit, 20) || modelUnit;
-  return { ...link, work_date: date, unit_id: unit.id, unit_name: previous?.unit_id === unit.id ? previous.unit_name : unit.name, product_group: group, product_type: type, spec: semiSpec(group, body.spec, process === 'cut' && !codeEntry && (group === 'seamless' || !link.bom_id)), ...semiWorkDetails(body, previous, process), qty: num(body.qty, '수량'), unit: unitText, lot: str(body.lot, 100), note: str(body.note, 500) };
+  return { ...link, work_date: date, unit_id: unit.id, unit_name: previous?.unit_id === unit.id ? previous.unit_name : unit.name, product_group: group, product_type: type, spec: semiSpec(group, body.spec, process === 'cut' && !codeEntry && (group === 'seamless' || !link.bom_id)), ...semiWorkDetails(body, previous, process), qty: num(body.qty, '수량'), unit: unitText, lot: await semiLotValue(process, body, previous), note: str(body.note, 500) };
 }
 // 수량(qty)은 양품 수량이고 불량수량은 따로 셉니다. 총 수량 = 양품 + 불량.
 // 작업시간은 시작·종료 시각에서 계산합니다(종료가 시작보다 이르면 자정을 넘긴 작업).
@@ -4528,18 +4597,180 @@ function summarizeWasherRuns(rows) {
 }
 route('GET','/api/wash-summary',async context=>summarizeWasherRuns(await listSemiRecords({...context,query:{...context.query,process:'wash'}})));
 
+// ── 15.249 봉투(반제품) LOT 목록과 LOT 연결 조회 ──
+// 봉투 = 커팅·융착 기록 1줄(LOT 있는 것). 세탁 기록(같은 LOT)과 포장 연결(pack_bag_links)을 붙여 상태를 만든다.
+route('GET', '/api/semi-bags', async ({ query }) => {
+  const state = String(query.state || 'all'); if (!['all', 'unwashed', 'washed'].includes(state)) throw bad('상태를 확인하세요.');
+  const where = ["c.process='cut'", "c.lot<>''"], args = [];
+  applyListDates(where, args, query, 'c.work_date');
+  const q = str(query.q, 100); if (q) { const like = '%' + q.replace(/[\\%_]/g, m => '\\' + m) + '%'; where.push("(c.lot LIKE ? ESCAPE '\\' OR c.item_name LIKE ? ESCAPE '\\' OR c.product_code LIKE ? ESCAPE '\\')"); args.push(like, like, like); }
+  if (query.items) { const names = String(query.items).split('|').map(x => x.trim()).filter(Boolean).slice(0, 30); if (names.length) { where.push(`TRIM(c.item_name) IN (${names.map(() => '?').join(',')})`); args.push(...names); } }
+  if (state === 'unwashed') where.push("NOT EXISTS(SELECT 1 FROM semi_records w WHERE w.process='wash' AND w.lot=c.lot)");
+  if (state === 'washed') where.push("EXISTS(SELECT 1 FROM semi_records w WHERE w.process='wash' AND w.lot=c.lot)");
+  const rows = await db.prepare(`SELECT c.id, c.lot, c.work_date, c.unit_name, c.bom_id, c.item_name, c.product_code, c.product_group, c.product_type, c.qty, c.unit,
+      (SELECT COALESCE(SUM(w.qty + COALESCE(w.defect_qty,0)),0) FROM semi_records w WHERE w.process='wash' AND w.lot=c.lot) AS washed_qty,
+      (SELECT MAX(w.work_date) FROM semi_records w WHERE w.process='wash' AND w.lot=c.lot) AS washed_date,
+      (SELECT group_concat(DISTINCT a.lot) FROM pack_bag_links p JOIN production_actuals a ON a.id=p.actual_id AND a.voided_at IS NULL WHERE p.bag_lot=c.lot) AS packed_lots
+    FROM semi_records c WHERE ${where.join(' AND ')} ORDER BY c.work_date DESC, c.id DESC LIMIT 501`).all(...args);
+  return { rows: rows.slice(0, 500), more: rows.length > 500 };
+});
+// LOT 하나를 넣으면 원자재 LOT ↔ 봉투 LOT ↔ 완제품 LOT ↔ 출하를 앞뒤로 모두 찾는다(봉투 묶음 단위).
+async function lotTrace(lot) {
+  const mats = new Map(), bags = new Map(), fins = new Map();
+  const addBag = async b => { if (!b || bags.has(b)) return false; const c = await semiBagRecord(b); if (!c) return false;
+    const inputs = await db.prepare('SELECT item, unit, lot, qty, pieces, piece_nos FROM semi_lot_inputs WHERE record_id=? ORDER BY id').all(c.id);
+    const washes = await db.prepare("SELECT work_date, unit_name, qty + COALESCE(defect_qty,0) AS qty, unit FROM semi_records WHERE process='wash' AND lot=? ORDER BY work_date, id").all(b);
+    bags.set(b, { lot: b, item: c.item_name, product_code: c.product_code, work_date: c.work_date, unit_name: c.unit_name, qty: c.qty, unit: c.unit, inputs, washes, finished: [] }); return true; };
+  const addFin = async a => { if (!a || fins.has(a.lot)) return false;
+    const s = await db.prepare('SELECT product, unit, bom_snapshot FROM schedules WHERE id=?').get(a.schedule_id) || {};
+    const ships = await db.prepare("SELECT ship_date, customer, qty, unit FROM shipments WHERE lot=? ORDER BY ship_date, id").all(a.lot);
+    const direct = await db.prepare('SELECT item, unit, lot, qty FROM production_lot_inputs WHERE actual_id=? ORDER BY id').all(a.id);
+    fins.set(a.lot, { lot: a.lot, item: s.product || '', product_code: (() => { try { return JSON.parse(s.bom_snapshot || '{}').product_code || ''; } catch { return ''; } })(), date: a.production_date, qty: a.qty, unit: s.unit || '', work_order: a.work_order || '', bags: [], direct, shipments: ships }); return true; };
+  const actualsOfBag = b => db.prepare('SELECT a.* FROM pack_bag_links p JOIN production_actuals a ON a.id=p.actual_id WHERE p.bag_lot=? AND a.voided_at IS NULL ORDER BY a.production_date, a.id').all(b);
+  const bagsOfActual = id => db.prepare('SELECT bag_lot FROM pack_bag_links WHERE actual_id=? ORDER BY id').all(id);
+  let kind = '';
+  const fin = await db.prepare('SELECT * FROM production_actuals WHERE lot=? AND voided_at IS NULL ORDER BY id').all(lot);
+  if (fin.length) { kind = 'finished'; for (const a of fin) { await addFin(a); for (const b of await bagsOfActual(a.id)) await addBag(b.bag_lot); } }
+  else if (await semiBagRecord(lot)) { kind = 'bag'; await addBag(lot); for (const a of await actualsOfBag(lot)) await addFin(a); }
+  else if (/-\d+$/.test(lot) && await db.prepare('SELECT 1 FROM semi_lot_inputs WHERE lot=? LIMIT 1').get(lot.replace(/-\d+$/, ''))) {
+    // 15.251 절 코드(LOT-3): 그 절을 넣은 봉투만
+    const base = lot.replace(/-\d+$/, ''), no = String(Number(lot.match(/-(\d+)$/)[1]));
+    const uses = await db.prepare("SELECT DISTINCT r.lot FROM semi_lot_inputs i JOIN semi_records r ON r.id=i.record_id WHERE i.lot=? AND (',' || i.piece_nos || ',') LIKE ? AND r.lot<>''").all(base, `%,${no},%`);
+    kind = 'piece'; for (const u of uses) { await addBag(u.lot); for (const a of await actualsOfBag(u.lot)) await addFin(a); }
+  }
+  else {
+    const uses = await db.prepare('SELECT DISTINCT r.lot FROM semi_lot_inputs i JOIN semi_records r ON r.id=i.record_id WHERE i.lot=? AND r.lot<>\'\'').all(lot);
+    const direct = await db.prepare('SELECT a.* FROM production_lot_inputs i JOIN production_actuals a ON a.id=i.actual_id WHERE i.lot=? AND a.voided_at IS NULL').all(lot);
+    const rec = await lotReceiptInfo(lot);
+    if (uses.length || direct.length || rec.length) { kind = 'material'; for (const u of uses) { await addBag(u.lot); for (const a of await actualsOfBag(u.lot)) await addFin(a); } for (const a of direct) await addFin(a); }
+  }
+  if (!kind) return { lot, kind: '', materials: [], bags: [], finished: [] };
+  // 완제품 ↔ 봉투 연결(같은 묶음에서 이어진 다른 완제품까지는 넓히지 않음: 고른 LOT 기준 앞뒤만)
+  for (const f of fins.values()) f.bags = [...new Set((await db.prepare('SELECT p.bag_lot FROM pack_bag_links p JOIN production_actuals a ON a.id=p.actual_id WHERE a.lot=? AND a.voided_at IS NULL ORDER BY p.id').all(f.lot)).map(x => x.bag_lot))];
+  for (const b of bags.values()) b.finished = (await actualsOfBag(b.lot)).map(a => a.lot);
+  for (const b of bags.values()) for (const i of b.inputs) { const k = i.item + '\u0000' + i.lot; if (!mats.has(k)) mats.set(k, { item: i.item, lot: i.lot, unit: i.unit, receipts: await lotReceiptInfo(i.lot), bags: [] }); mats.get(k).bags.push(b.lot); }
+  for (const f of fins.values()) for (const i of f.direct) { const k = i.item + '\u0000' + i.lot; if (!mats.has(k)) mats.set(k, { item: i.item, lot: i.lot, unit: i.unit, receipts: await lotReceiptInfo(i.lot), bags: [], finished: [] }); (mats.get(k).finished ||= []).push(f.lot); }
+  if (kind === 'material' && ![...mats.values()].some(m => m.lot === lot)) { const r = await lotReceiptInfo(lot); mats.set('root', { item: r[0]?.item || '', lot, unit: r[0]?.unit || '', receipts: r, bags: [] }); }
+  return { lot, kind, materials: [...mats.values()], bags: [...bags.values()], finished: [...fins.values()] };
+}
+async function lotReceiptInfo(lot) {
+  return db.prepare(`SELECT 'po' AS src, TRIM(p.item) AS item, TRIM(p.unit) AS unit, l.qty, l.pieces, l.received_date AS date, p.vendor FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id WHERE l.lot=? AND l.voided_at IS NULL
+    UNION ALL SELECT 'other', TRIM(item), TRIM(unit), qty, pieces, received_date, vendor FROM other_receipts WHERE lot=? ORDER BY 6 LIMIT 20`).all(lot, lot);
+}
+route('GET', '/api/lot-trace', async ({ query }) => lotTrace(reqStr(query.lot, 'LOT', 100)));
+// 최근 LOT(완제품·봉투) — 조회 화면 첫 목록
+route('GET', '/api/lot-trace/recent', async ({ query }) => {
+  const q = str(query.q, 100), like = q ? '%' + q.replace(/[\\%_]/g, m => '\\' + m) + '%' : null;
+  const fin = await db.prepare(`SELECT a.lot, a.production_date AS date, a.qty, s.product AS item, s.unit, (SELECT COUNT(*) FROM pack_bag_links p WHERE p.actual_id=a.id) AS bags FROM production_actuals a JOIN schedules s ON s.id=a.schedule_id WHERE a.lot<>'' AND a.voided_at IS NULL${like ? " AND (a.lot LIKE ? ESCAPE '\\' OR s.product LIKE ? ESCAPE '\\')" : ''} ORDER BY a.production_date DESC, a.id DESC LIMIT 60`).all(...(like ? [like, like] : []));
+  const bag = await db.prepare(`SELECT c.lot, c.work_date AS date, c.qty, c.item_name AS item, c.unit, (SELECT COUNT(*) FROM semi_lot_inputs i WHERE i.record_id=c.id) AS inputs, EXISTS(SELECT 1 FROM semi_records w WHERE w.process='wash' AND w.lot=c.lot) AS washed FROM semi_records c WHERE c.process='cut' AND c.lot<>''${like ? " AND (c.lot LIKE ? ESCAPE '\\' OR c.item_name LIKE ? ESCAPE '\\')" : ''} ORDER BY c.work_date DESC, c.id DESC LIMIT 60`).all(...(like ? [like, like] : []));
+  return { finished: fin, bags: bag };
+});
 route('GET', '/api/semi-records', listSemiRecords);
 route('GET', '/api/operator/semi-records', context => listSemiRecords({ ...context, operator: true }));
 route('POST', '/api/semi-records', async ({ user, body }) => {
-  const process = semiProcess(body.process); const f = await semiFields(body, process);
+  const process = semiProcess(body.process);
   const key = body.request_id === undefined ? randomHex(16) : String(body.request_id);
   if (!/^[a-zA-Z0-9-]{16,80}$/.test(key)) throw bad('요청 번호를 확인하세요.');
   const old = await db.prepare('SELECT * FROM semi_records WHERE request_id=?').get(key);
-  if (old) { if (old.created_by_id !== user.id || old.process !== process || old.unit_id !== f.unit_id || old.qty !== f.qty || old.work_date !== f.work_date) throw new HttpError(409, '이미 사용된 요청 번호입니다.'); return old; }
-  const r = await db.prepare('INSERT INTO semi_records(process,work_date,unit_id,unit_name,product_group,product_type,bom_id,item_name,product_code,bom_snapshot,spec,start_time,end_time,break_minutes,work_hours,workers,defect_qty,defect_reason,qty,unit,lot,note,request_id,created_by_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-    .run(process, f.work_date, f.unit_id, f.unit_name, f.product_group, f.product_type, f.bom_id, f.item_name, f.product_code, f.bom_snapshot, f.spec, f.start_time, f.end_time, f.break_minutes, f.work_hours, f.workers, f.defect_qty, f.defect_reason, f.qty, f.unit, f.lot, f.note, key, user.id, user.name);
+  if (old) { if (old.created_by_id !== user.id || old.process !== process) throw new HttpError(409, '이미 사용된 요청 번호입니다.'); return old; } // 15.253 재요청은 투입 확인 전에 돌려줌
+  const linked = await semiLotLink(process, await semiFields(body, process), body); const f = linked.f;
+  await db.batch([{ sql: 'INSERT INTO semi_records(process,work_date,unit_id,unit_name,product_group,product_type,bom_id,item_name,product_code,bom_snapshot,spec,start_time,end_time,break_minutes,work_hours,workers,defect_qty,defect_reason,qty,unit,lot,note,request_id,created_by_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', args: [process, f.work_date, f.unit_id, f.unit_name, f.product_group, f.product_type, f.bom_id, f.item_name, f.product_code, f.bom_snapshot, f.spec, f.start_time, f.end_time, f.break_minutes, f.work_hours, f.workers, f.defect_qty, f.defect_reason, f.qty, f.unit, f.lot, f.note, key, user.id, user.name] },
+    ...linked.inputs.map(i => ({ sql: 'INSERT INTO semi_lot_inputs(record_id,item,unit,lot,qty,created_by,pieces,piece_nos) VALUES((SELECT id FROM semi_records WHERE request_id=?),?,?,?,?,?,?,?)', args: [key, i.item, i.unit, i.lot, i.qty, user.name, i.pieces ?? null, i.piece_nos || ''] }))]); // 15.253 기록·투입을 함께
+  const r = { lastInsertRowid: (await db.prepare('SELECT id FROM semi_records WHERE request_id=?').get(key)).id };
   return mustGet('semi_records', r.lastInsertRowid);
 });
+// 15.249 LOT 연결: 품목 코드(LOT에 들어감)는 영문·숫자·-만, 대문자.
+const lotCode = (code, name) => (String(code || '').toUpperCase().replace(/[^A-Z0-9-]/g, '') || String(name || '').toUpperCase().replace(/[^A-Z0-9-]/g, '') || 'ITEM').slice(0, 20);
+// 봉투(반제품) LOT: 생산일_품목코드_봉투번호(261119_NX808_1). 같은 날·같은 품목마다 1부터.
+async function nextBagLots(date, code, count) {
+  const head = `${String(date).slice(2).replace(/-/g, '')}_${code}_`;
+  const used = await db.prepare("SELECT MAX(CAST(substr(lot, length(?) + 1) AS INTEGER)) AS n FROM semi_records WHERE process='cut' AND substr(lot,1,length(?))=? AND length(lot)>length(?) AND substr(lot,length(?)+1) NOT GLOB '*[^0-9]*'").get(head, head, head, head, head);
+  const start = (used && used.n) || 0;
+  return Array.from({ length: count }, (_, i) => head + (start + i + 1));
+}
+// 커팅·융착 투입 원자재 LOT: 그 반제품 BOM에 등록된 자재만, 그 자재의 재고 LOT 남은 수량 안에서(같은 LOT 여러 줄은 합쳐서).
+async function semiLotInputs(raw, snapshotText, used = new Map(), made = null) {
+  let list = raw; if (typeof list === 'string') { try { list = list.trim() ? JSON.parse(list) : []; } catch { throw bad('투입 원자재 LOT 형식을 확인하세요.'); } }
+  if (list == null) list = []; if (!Array.isArray(list)) throw bad('투입 원자재 LOT 형식을 확인하세요.');
+  if (list.length > 30) throw bad('투입 원자재 LOT은 30줄까지 넣을 수 있습니다.');
+  let mats = [], base = 1; try { const snap = JSON.parse(snapshotText || '{}'); mats = snap.materials || []; base = Number(snap.base_qty) || 1; } catch { mats = []; }
+  // 15.250 절(pieces)로 넣은 줄은 사용량(qty)을 BOM으로 계산: 그 자재 필요량을 절 비율로 LOT마다 나눈다
+  list = list.map(l => { if (!l || typeof l !== 'object' || l.piece_nos === undefined || l.piece_nos === '' || l.piece_nos === null) return l; const nos = (Array.isArray(l.piece_nos) ? l.piece_nos : String(l.piece_nos).split(',')).map(x => Number(String(x).trim())).filter(x => x !== 0 || true);
+    if (nos.some(n => !Number.isInteger(n) || n < 1)) throw bad(`${str(l.item, 200)} ${str(l.lot, 100)}: 절 번호를 확인하세요.`); const uniq = [...new Set(nos)].sort((a, b) => a - b); return { ...l, piece_nos: uniq, pieces: uniq.length }; });
+  if (made !== null && list.some(l => l && typeof l === 'object' && l.pieces !== undefined && l.pieces !== '' && l.pieces !== null && (l.qty === undefined || l.qty === '' || l.qty === null))) {
+    const byItem = new Map();
+    for (const l of list) { if (!l || typeof l !== 'object') continue; const k = nameKey(str(l.item, 200)); if (!byItem.has(k)) byItem.set(k, []); byItem.get(k).push(l); }
+    list = list.map(l => ({ ...(l || {}) }));
+    for (const [k, ls] of byItem) {
+      const mat = mats.find(m => nameKey(m.item) === k); if (!mat) continue;
+      const need = stockRound(made * Number(mat.qty) / base), cells = list.filter(l => nameKey(str(l.item, 200)) === k);
+      const pcs = cells.map(l => Math.max(0, Number(l.pieces) || 0)), total = pcs.reduce((a, b) => a + b, 0);
+      let left = need;
+      cells.forEach((l, i) => { const share = i === cells.length - 1 ? left : stockRound(total ? need * pcs[i] / total : need / cells.length); left = stockRound(left - share); l.qty = share; l.pieces = piecesOf(l.pieces); });
+      void ls;
+    }
+    if (!(made > 0)) throw bad('양품·불량 수량을 넣어야 BOM으로 원자재 사용량을 계산할 수 있습니다.');
+  }
+  const out = [];
+  for (const [n, r] of list.entries()) {
+    const l = r && typeof r === 'object' ? r : {}, item = str(l.item, 200), lot = str(l.lot, 100);
+    if (!item || !lot) throw bad(`투입 ${n + 1}번째 줄: 원자재와 LOT을 고르세요.`);
+    const qty = num(l.qty, `투입 ${n + 1}번째 줄 수량`); if (!(qty > 0)) throw bad(`투입 ${n + 1}번째 줄(${item} ${lot}): 수량은 0보다 커야 합니다.`);
+    const mat = mats.find(m => nameKey(m.item) === nameKey(item));
+    if (!mat) throw bad(`${item}은(는) 이 반제품 BOM에 없는 자재입니다. 제품등록에서 BOM에 먼저 넣으세요.`);
+    const key = nameKey(item) + '\u0000' + lot, total = stockRound((used.get(key) || 0) + qty);
+    const bal = (await lotBalances(mat.item)).find(x => x.lot === lot);
+    if (!bal) throw bad(`${item}: LOT ${lot}은 이 자재의 재고 LOT이 아닙니다.`);
+    if (total > bal.balance + 0.000001) throw bad(`${item}: LOT ${lot} 남은 수량 ${stockRound(bal.balance)}보다 많이 투입할 수 없습니다.`);
+    used.set(key, total);
+    const pieces = piecesOf(l.pieces), nos = Array.isArray(l.piece_nos) ? l.piece_nos : [];
+    if (nos.length) {
+      if (bal.pieces_free === undefined) throw bad(`${item}: LOT ${lot}은 입고 때 실물(절)을 적지 않아 절 번호로 고를 수 없습니다.`);
+      const free = new Set(bal.pieces_free), nk = key + '\u0002', taken = used.get(nk) || new Set();
+      const tmp = new Set(bal.pieces_temp || []), bad1 = nos.find(n => !free.has(n) || (taken.has(n) && !tmp.has(n))); if (bad1) throw bad(`${item}: ${lot}-${bad1}은 없는 절이거나 이미 투입한 절입니다.`);
+      nos.forEach(n => taken.add(n)); used.set(nk, taken);
+    }
+    if (pieces !== null && bal.pieces_left !== undefined && !nos.length) { const pk = key + '\u0001', pt = stockRound((used.get(pk) || 0) + pieces); if (pt > bal.pieces_left + 0.000001) throw bad(`${item}: LOT ${lot} 남은 실물 ${stockRound(bal.pieces_left)}절보다 많이 투입할 수 없습니다.`); used.set(pk, pt); }
+    out.push({ item: bal.item, unit: bal.unit || mat.unit || '', lot, qty, pieces, piece_nos: nos.join(',') });
+  }
+  return out;
+}
+// 세탁: 봉투 LOT(커팅·융착 기록의 LOT)을 고른다.
+async function semiBagRecord(lot) { return db.prepare("SELECT * FROM semi_records WHERE process='cut' AND lot=? ORDER BY id LIMIT 1").get(lot); }
+// 15.249 커팅·융착: 봉투 LOT 자동(직접 적으면 그것) + 투입 원자재 LOT. 세탁: 봉투 LOT이면 그 봉투가 있어야 한다.
+async function semiLotLink(process, f, row, usedInputs = new Map(), bagNext = new Map()) {
+  if (process === 'cut') {
+    if (f.lot && await semiBagRecord(f.lot)) throw bad(`봉투 LOT ${f.lot}은 이미 있습니다. 비워 두면 자동으로 붙습니다.`); // 15.253
+    const inputs = await semiLotInputs(row.inputs, f.bom_snapshot, usedInputs, stockRound((Number(f.qty) || 0) + (Number(f.defect_qty) || 0)));
+    if (!f.lot) {
+      const code = lotCode(f.product_code, f.item_name), key = f.work_date + '|' + code;
+      if (!bagNext.has(key)) bagNext.set(key, (await nextBagLots(f.work_date, code, 1))[0].replace(/\d+$/, n => String(Number(n) - 1)));
+      const prev = bagNext.get(key), next = prev.replace(/\d+$/, n => String(Number(n) + 1)); bagNext.set(key, next); f = { ...f, lot: next };
+    }
+    return { f, inputs };
+  }
+  if (f.lot && !(await semiBagRecord(f.lot)) && row.bag_required) throw bad(`봉투 LOT ${f.lot}을 찾을 수 없습니다. 「봉투 LOT 고르기」로 고르세요.`);
+  return { f, inputs: [] };
+}
+// 15.253 세탁·포장에 쓰인 봉투(커팅 기록)는 지우거나 품목·LOT을 바꿀 수 없다(연결이 끊김)
+async function semiBagGuard(row, what = '지울') {
+  if (row.process !== 'cut' || !row.lot) return;
+  if (await db.prepare("SELECT 1 WHERE EXISTS(SELECT 1 FROM semi_records WHERE process='wash' AND lot=?) OR EXISTS(SELECT 1 FROM pack_bag_links WHERE bag_lot=?)").get(row.lot, row.lot)) throw new HttpError(409, `봉투 LOT ${row.lot}은 이미 세탁·포장에 쓰여 ${what} 수 없습니다. 세탁·포장 기록을 먼저 정리하세요.`);
+}
+// 커팅 기록의 양품·불량이 바뀌면 투입 원자재 사용량(BOM × (양품+불량), 같은 자재 여러 LOT은 절 비율)을 다시 계산
+async function semiInputsRecalc(recordId) {
+  const r = await db.prepare('SELECT * FROM semi_records WHERE id=?').get(recordId); if (!r) return;
+  const inputs = await db.prepare('SELECT * FROM semi_lot_inputs WHERE record_id=? ORDER BY id').all(recordId); if (!inputs.length) return;
+  let mats = [], base = 1; try { const snap = JSON.parse(r.bom_snapshot || '{}'); mats = snap.materials || []; base = Number(snap.base_qty) || 1; } catch { return; }
+  const made = stockRound((Number(r.qty) || 0) + (Number(r.defect_qty) || 0)), cmds = [];
+  const byItem = new Map(); for (const i of inputs) { const k = nameKey(i.item); if (!byItem.has(k)) byItem.set(k, []); byItem.get(k).push(i); }
+  for (const [k, list] of byItem) {
+    const mat = mats.find(m => nameKey(m.item) === k); if (!mat || list.some(i => i.pieces == null)) continue;
+    const need = stockRound(made * Number(mat.qty) / base), total = list.reduce((t, i) => t + (Number(i.pieces) || 0), 0); let left = need;
+    list.forEach((i, n) => { const share = n === list.length - 1 ? left : stockRound(total ? need * i.pieces / total : need / list.length); left = stockRound(left - share); cmds.push({ sql: 'UPDATE semi_lot_inputs SET qty=? WHERE id=?', args: [share > 0 ? share : 0.000001, i.id] }); });
+  }
+  if (cmds.length) await db.batch(cmds);
+}
 // ── 1) several lines for one date and line/washer in a single, all-or-nothing submission ──
 route('POST', '/api/semi-batches', async ({ user, body }) => {
   const process = semiProcess(body.process);
@@ -4551,15 +4782,16 @@ route('POST', '/api/semi-batches', async ({ user, body }) => {
   const saved = () => db.prepare("SELECT * FROM semi_records WHERE request_id LIKE ? ESCAPE '\\' ORDER BY id").all(key.replace(/[\\%_]/g, '\\$&') + ':%');
   const replay = rows => { if (rows.some(r => r.created_by_id !== user.id || r.process !== process) || rows.length !== body.items.length) throw new HttpError(409, '이미 사용된 요청 번호입니다. 새로 열어 등록하세요.'); return { rows: resultRows(rows), replayed: true }; };
   const existing = await saved(); if (existing.length) return replay(existing);
-  const commands = [], washNow = now().slice(11, 16);
+  const commands = [], washNow = now().slice(11, 16), usedInputs = new Map(), bagNext = new Map();
   for (const [index, item] of body.items.entries()) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) throw bad(`${index + 1}번째 줄을 확인하세요.`);
     const row = { ...(body.common || {}), ...item };
     if (process === 'wash' && row.entry_mode === 'wash_quantity' && !str(row.start_time, 5)) row.start_time = washNow;
-    let f; try { f = await semiFields(row, process); }
+    let f, inputs = []; try { f = await semiFields(row, process); ({ f, inputs } = await semiLotLink(process, f, row, usedInputs, bagNext)); }
     catch (error) { if (error.status === 400 || error.status === 404) throw bad(`${index + 1}번째 줄: ${error.message}`); throw error; }
     commands.push({ sql: 'INSERT INTO semi_records(process,work_date,unit_id,unit_name,product_group,product_type,bom_id,item_name,product_code,bom_snapshot,spec,start_time,end_time,break_minutes,work_hours,workers,defect_qty,defect_reason,qty,unit,lot,note,request_id,created_by_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
       args: [process, f.work_date, f.unit_id, f.unit_name, f.product_group, f.product_type, f.bom_id, f.item_name, f.product_code, f.bom_snapshot, f.spec, f.start_time, f.end_time, f.break_minutes, f.work_hours, f.workers, f.defect_qty, f.defect_reason, f.qty, f.unit, f.lot, f.note, `${key}:${index}`, user.id, user.name] });
+    commands.push(...inputs.map(i => ({ sql: 'INSERT INTO semi_lot_inputs(record_id,item,unit,lot,qty,created_by,pieces,piece_nos) VALUES((SELECT id FROM semi_records WHERE request_id=?),?,?,?,?,?,?,?)', args: [`${key}:${index}`, i.item, i.unit, i.lot, i.qty, user.name, i.pieces ?? null, i.piece_nos || ''] })));
   }
   try { await db.batch(commands); }
   catch (error) { const rows = await saved(); if (rows.length) return replay(rows); throw error; }
@@ -4600,7 +4832,9 @@ route('PUT', '/api/semi-records/:id', async ({ user, params, body }) => {
   if (SEMI_APPROVAL_FIELDS.every(key => f[key] === row[key])) {
     if (SEMI_DIRECT_FIELDS.every(key => f[key] === row[key])) throw bad('바뀐 내용이 없습니다.');
     if (await semiPending(row.id)) throw new HttpError(409, '승인 대기 중인 요청이 처리된 뒤에 수정하세요.');
+    if (row.process === 'cut' && f.lot !== row.lot) await semiBagGuard(row, '봉투 LOT을 바꿀');
     await db.prepare('UPDATE semi_records SET defect_qty=?,defect_reason=?,start_time=?,end_time=?,break_minutes=?,work_hours=?,workers=?,lot=?,note=?,updated_by=?,updated_at=? WHERE id=?').run(f.defect_qty, f.defect_reason, f.start_time, f.end_time, f.break_minutes, f.work_hours, f.workers, f.lot, f.note, user.name, now(), row.id);
+    if (row.process === 'cut' && f.defect_qty !== row.defect_qty) await semiInputsRecalc(row.id); // 15.253
     return { pending: false, record: await mustGet('semi_records', row.id) };
   }
   return requestSemiChange(user, row, 'edit', f, body);
@@ -4608,6 +4842,7 @@ route('PUT', '/api/semi-records/:id', async ({ user, params, body }) => {
 route('DELETE', '/api/semi-records/:id', async ({ user, params, body }) => {
   const row = await mustGet('semi_records', params.id);
   if (!canModify(user, row) && !canManageProduction(user)) throw new HttpError(403, '등록자 또는 생산 담당자만 삭제를 요청할 수 있습니다.');
+  await semiBagGuard(row);
   return requestSemiChange(user, row, 'delete', null, body);
 });
 const decodeSemiChange = c => c && ({ ...c, old_data: JSON.parse(c.old_data), new_data: c.new_data ? JSON.parse(c.new_data) : null });
@@ -4633,6 +4868,7 @@ route('POST', '/api/semi-changes/:id/approve', async ({ user, params, body }) =>
   const applied = "EXISTS(SELECT 1 FROM semi_record_changes WHERE id=? AND status='pending')";
   const next = change.new_data ? JSON.parse(change.new_data) : null;
   if (next && next.work_date > today()) throw bad('아직 지나지 않은 날짜로는 승인할 수 없습니다.');
+  if (change.action !== 'edit' || (next && (next.bom_id !== row.bom_id))) await semiBagGuard(row); // 15.253
   const results = await db.batch([
     change.action === 'edit'
       ? { sql: `UPDATE semi_records SET ${SEMI_FIELDS.filter(k => k in next).map(k => k + '=?').join(',')},updated_by=?,updated_at=? WHERE id=? AND ${applied}`, args: [...SEMI_FIELDS.filter(k => k in next).map(k => next[k]), `${change.requested_by} (승인: ${user.name})`, stamp, row.id, change.id] }
@@ -4640,6 +4876,7 @@ route('POST', '/api/semi-changes/:id/approve', async ({ user, params, body }) =>
     { sql: "UPDATE semi_record_changes SET status='approved',reviewed_by=?,reviewed_at=?,review_note=? WHERE id=? AND status='pending'", args: [user.name, stamp, str(body.note, 500), change.id] },
   ]);
   if (!results.at(-1).meta.changes) throw new HttpError(409, '이미 처리된 요청입니다.');
+  if (change.action === 'edit' && row.process === 'cut') await semiInputsRecalc(row.id); // 15.253 수량 바뀌면 원자재 사용량 다시 계산
   return decodeSemiChange(await db.prepare('SELECT * FROM semi_record_changes WHERE id=?').get(change.id));
 });
 route('POST', '/api/semi-changes/:id/reject', async ({ user, params, body }) => {
@@ -5062,6 +5299,7 @@ async function lotStockReport(query) {
     // 15.135 완제품 생산 LOT(입고)과 생산에 투입한 자재 LOT(출고)
     wrap(`SELECT TRIM(s.product) AS item, TRIM(COALESCE(NULLIF(s.unit,''), json_extract(s.bom_snapshot,'$.unit'), '')) AS unit, a.lot AS lot, 'in' AS kind, a.qty AS qty, a.production_date AS d, '' AS place FROM production_actuals a JOIN schedules s ON s.id=a.schedule_id WHERE a.lot<>'' AND a.voided_at IS NULL`),
     wrap(`SELECT TRIM(i.item) AS item, TRIM(i.unit) AS unit, i.lot AS lot, 'out' AS kind, i.qty AS qty, a.production_date AS d, '' AS place FROM production_lot_inputs i JOIN production_actuals a ON a.id=i.actual_id WHERE a.voided_at IS NULL`),
+    wrap(`SELECT TRIM(i.item) AS item, TRIM(i.unit) AS unit, i.lot AS lot, 'out' AS kind, i.qty AS qty, r.work_date AS d, '' AS place FROM semi_lot_inputs i JOIN semi_records r ON r.id=i.record_id`), // 15.249 커팅·융착에 투입한 원자재 LOT
     wrap(`SELECT item, unit, lot, 'move' AS kind, 0 AS qty, transfer_date AS d, to_place AS place FROM stock_transfers WHERE status='confirmed'`), // 15.114 이동한 위치
   ]);
   const map = new Map(); let truncated = false;
@@ -5964,6 +6202,63 @@ route('POST', '/api/ship-instructions/ship', async ({ user, body }) => {
   try { await db.batch(cmds); }
   catch (error) { if (isGuardError(error)) throw new HttpError(409, '그 사이 출하지시나 매출전표가 바뀌었습니다. 새로 불러오세요.'); throw error; }
   return { shipped: ids.length, partial };
+});
+// 15.245 출하지시 한 줄을 여러 LOT로 출하: 상세 내역(LOT · 납품일자 · 담당자 · 납품수량 · 비고)마다 출하 1건.
+// 지시·전표 줄을 LOT별로 나누고(첫 LOT은 원래 줄, 나머지는 같은 전표의 새 줄 + 새 지시), 남는 수량은 새 줄로 출하 대기에 남는다.
+// 공급가액·세액은 수량 비율로 나누고 끝 줄에 나머지를 몰아 전표 합계는 그대로. 한 batch로 처리(중간 실패 시 모두 되돌림).
+route('POST', '/api/ship-instructions/:id/ship-lots', async ({ user, params, body }) => {
+  if (!hasRole(user, 'logistics')) throw new HttpError(403, '출하 처리는 물류 담당자가 합니다.');
+  const ins = await mustGet('ship_instructions', params.id);
+  if (ins.status !== 'pending') throw new HttpError(409, '이미 처리됐거나 취소된 출하지시입니다. 새로 불러오세요.');
+  if (ins.held) throw new HttpError(409, `${ins.item}: 보류 중인 지시입니다. 보류를 풀고 출하 처리하세요.`);
+  const raw = Array.isArray(body.lines) ? body.lines : [];
+  if (!raw.length || raw.length > 30) throw bad('출하할 LOT을 1~30줄 넣으세요.');
+  const bill = await db.prepare('SELECT * FROM sales_bills WHERE id=?').get(ins.bill_id), line = await db.prepare('SELECT * FROM sales_bill_lines WHERE id=?').get(ins.bill_line_id);
+  if (!bill || bill.status !== 'confirmed' || !line || !line.active) throw new HttpError(409, `${ins.item}: 매출전표가 취소됐거나 바뀌었습니다. 새로 불러오세요.`);
+  const billFloor = (([y, m]) => m === 1 ? `${y - 1}-12-01` : `${y}-${String(m - 1).padStart(2, '0')}-01`)(String(bill.bill_date).split('-').map(Number));
+  const parts = [];
+  for (const [n, r] of raw.entries()) {
+    const lot = str(r?.lot, 100), qty = stockRound(Number(r?.qty)), date = dateStr(r?.ship_date || today(), '납품일자'), note = str(r?.note, 200);
+    if (!(qty > 0)) throw bad(`${n + 1}번째 줄: 납품수량을 0보다 크게 넣으세요.`);
+    if (date > today()) throw bad(`${n + 1}번째 줄: 납품일자는 오늘 이전으로 넣으세요.`);
+    if (date < billFloor) throw bad(`${n + 1}번째 줄: 납품일자는 전표 달(${String(bill.bill_date).slice(0, 7)})의 앞 달 이후여야 합니다.`);
+    if (await salesClosed(ins.customer, date)) throw bad(closedMessage(ins.customer, date, '출하 처리하세요'));
+    await checkShipLot(ins.item, lot);
+    parts.push({ lot, qty, date, note });
+  }
+  const total = stockRound(parts.reduce((t, p) => t + p.qty, 0)), Q = Number(ins.qty);
+  if (total > Q + 0.000001) throw bad(`납품수량 합계 ${total}이 지시 수량 ${stockRound(Q)}보다 많습니다.`);
+  if (Math.abs(Number(line.qty) - Q) > 0.000001) throw new HttpError(409, `${ins.item}: 전표 수량(${stockRound(line.qty)})과 지시 수량(${stockRound(Q)})이 달라 나눌 수 없습니다. 전표를 확인하세요.`);
+  const rest = stockRound(Q - total), segs = [...parts.map(p => p.qty), ...(rest > 0.000001 ? [rest] : [])];
+  // 줄마다 공급가액·세액(끝 줄이 나머지)
+  let sLeft = Number(line.supply), vLeft = Number(line.vat);
+  const money = segs.map((q, k) => { if (k === segs.length - 1) return { supply: sLeft, vat: vLeft }; const supply = Math.round(Number(line.supply) * q / Q), vat = Math.round(Number(line.vat) * q / Q); sLeft -= supply; vLeft -= vat; return { supply, vat }; });
+  const cmds = [], stamp = now(), base = `sl:${ins.id}:${Date.now().toString(36)}`;
+  const ship = (p, k, insRef, lineRef) => {
+    const tag = `${base}:${k}`;
+    cmds.push(
+      { sql: 'INSERT INTO shipments(ship_date,item,qty,customer,note,lot,created_by,product_code,unit,spec,batch_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)', args: [p.date, ins.item, p.qty, ins.customer, p.note || ins.note || '', p.lot, user.name, ins.product_code, ins.unit, ins.spec, tag] },
+      { sql: `UPDATE ship_instructions SET status='shipped',processed_by=?,processed_at=?,shipment_id=(SELECT id FROM shipments WHERE batch_id=?) WHERE id=${insRef} AND status='pending' AND held=0`, args: [user.name, stamp, tag] }, RC_GUARD,
+      { sql: `UPDATE sales_bill_lines SET source_type='ship',source_id=(SELECT id FROM shipments WHERE batch_id=?),ship_date=?,lot=? WHERE id=${lineRef} AND active=1`, args: [tag, p.date, p.lot] }, RC_GUARD);
+  };
+  // 첫 LOT: 원래 지시·전표 줄
+  if (segs.length > 1) cmds.push(
+    { sql: 'UPDATE sales_bill_lines SET qty=?,supply=?,vat=? WHERE id=? AND active=1 AND qty=? AND supply=? AND vat=?', args: [segs[0], money[0].supply, money[0].vat, line.id, line.qty, line.supply, line.vat] }, RC_GUARD,
+    { sql: "UPDATE ship_instructions SET qty=? WHERE id=? AND status='pending' AND qty=?", args: [segs[0], ins.id, ins.qty] }, RC_GUARD);
+  ship(parts[0], 0, String(Number(ins.id)), String(Number(line.id)));
+  // 나머지 LOT·남는 수량: 같은 전표의 새 줄 + 새 지시
+  for (let k = 1; k < segs.length; k++) {
+    cmds.push(
+      { sql: `INSERT INTO sales_bill_lines(bill_id,item_category,source_type,source_id,item,spec,unit,product_code,lot,ship_date,qty,unit_price,supply,vat,note,order_line_id)
+        SELECT bill_id,item_category,?,?,item,spec,unit,product_code,?,?,?,unit_price,?,?,note,order_line_id FROM sales_bill_lines WHERE id=?`, args: [line.source_type, line.source_id, line.lot || '', line.ship_date, segs[k], money[k].supply, money[k].vat, line.id] }, // 원래 줄의 출하 전 값(첫 LOT 출하로 바뀌기 전)
+      { sql: `INSERT INTO ship_instructions(bill_id,bill_line_id,order_line_id,customer,bom_id,product_code,item,spec,unit,qty,ship_date,note,created_by,held)
+        SELECT bill_id,(SELECT MAX(id) FROM sales_bill_lines WHERE bill_id=?),order_line_id,customer,bom_id,product_code,item,spec,unit,?,ship_date,note,created_by,0 FROM ship_instructions WHERE id=?`, args: [bill.id, segs[k], ins.id] });
+    if (k < parts.length) ship(parts[k], k, '(SELECT MAX(id) FROM ship_instructions)', `(SELECT MAX(id) FROM sales_bill_lines WHERE bill_id=${Number(bill.id)})`);
+  }
+  if (segs.length > 1) cmds.push(docChange('sales_bill', bill.id, `출하 LOT별 나눔: ${ins.item} ${stockRound(Q)} → ${parts.map(p => `${p.lot || 'LOT 없음'} ${p.qty}`).join(' + ')}${rest > 0.000001 ? ` + ${rest}(출하 대기)` : ''}`, user));
+  try { await db.batch(cmds); }
+  catch (error) { if (isGuardError(error)) throw new HttpError(409, '그 사이 출하지시나 매출전표가 바뀌었습니다. 새로 불러오세요.'); throw error; }
+  return { shipped: parts.length, rest };
 });
 // 15.208 출하지시 수량 나누기(묶음 15.154와 같은 방식): 지시·전표 줄을 q와 나머지로 나눈다. 나머지는 같은 전표의 새 줄 + 새 출하지시(대기, 묶음 없음).
 // 공급가액·세액은 비율로 나누고 남는 줄에 나머지를 몰아 전표 합계는 그대로. 검증하고 명령들을 돌려준다.

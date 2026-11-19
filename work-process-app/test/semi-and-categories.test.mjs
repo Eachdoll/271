@@ -220,7 +220,7 @@ test('Good and defect quantities are counted separately; clock times give work h
   assert.equal((await staff('GET', '/api/reports?from=2026-10-01&to=2026-10-31&item_category=' + q('상품'))).body.semi.by_product.length, 0);
   assert.equal((await staff('GET', '/api/reports?from=2026-10-01&to=2026-10-31&q=' + q('수율라인'))).body.semi.by_line.length, 1);
   // a request saved before these fields existed can still be approved
-  const oldShape = qty => JSON.stringify({ work_date: a.work_date, unit_id: a.unit_id, unit_name: a.unit_name, product_group: 'wiper', product_type: '천와이퍼', spec: '6인치', qty, unit: '매', lot: '', note: '' });
+  const oldShape = qty => JSON.stringify({ work_date: a.work_date, unit_id: a.unit_id, unit_name: a.unit_name, product_group: 'wiper', product_type: '천와이퍼', spec: '6인치', qty, unit: '매', lot: a.lot, note: '' }); // 15.249 커팅 기록은 봉투 LOT이 자동으로 붙음
   sqlite.prepare("INSERT INTO semi_record_changes(record_id,process,action,old_data,new_data,reason,requested_by) VALUES(?,?,?,?,?,?,?)").run(a.id, 'cut', 'edit', oldShape(1000), oldShape(990), '이전 형식', '직원');
   const legacy = sqlite.prepare("SELECT id FROM semi_record_changes WHERE reason='이전 형식'").get();
   assert.equal((await admin('POST', `/api/semi-changes/${legacy.id}/approve`, {})).status, 200);

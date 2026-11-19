@@ -449,6 +449,34 @@
       "when": 1797418413000,
       "tag": "0063_pallets",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "6",
+      "when": 1797504813000,
+      "tag": "0064_lot_chain",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "6",
+      "when": 1797591213000,
+      "tag": "0065_lot_pieces",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "6",
+      "when": 1797677613000,
+      "tag": "0066_lot_piece_nos",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "6",
+      "when": 1797764013000,
+      "tag": "0067_lot_pieces_temp",
+      "breakpoints": true
     }
   ]
 }

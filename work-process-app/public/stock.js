@@ -257,13 +257,15 @@ async function pageScan(main) {
     if (/^PLT_\d{8}_\d{3,}$/i.test(raw)) { try { const p = await api('GET', '/api/pallets/lookup?code=' + encodeURIComponent(raw)); addLog(`${p.pallet_no} — 파렛트 ${PLT_STATUS[p.status]} · ${palletText(p)} = ${fmtNum(p.total)}`); $('#scanResult', main).innerHTML = `<div class="card"><h3>파렛트 <span class="lot-tag">${esc(p.pallet_no)}</span> <span class="chip">${PLT_STATUS[p.status]}</span></h3><p>${esc(palletText(p))} = <b>${fmtNum(p.total)} ${esc(p.unit || '')}</b></p></div>`; await palletWindow(p.pallet_no, () => {}); } catch (error) { fail(error); addLog(`${raw} — 없음`); } return; }
     const scan = parseLotScan(text); if (!scan) return;
     const box = $('#scanResult', main); box.innerHTML = '<p class="muted">찾는 중…</p>';
-    const data = await api('GET', '/api/inventory/lots?' + new URLSearchParams({ asof: todayStr(), q: scan.lot }));
-    let rows = data.rows.filter(r => r.lot === scan.lot);
+    let data = await api('GET', '/api/inventory/lots?' + new URLSearchParams({ asof: todayStr(), q: scan.lot }));
+    let rows = data.rows.filter(r => r.lot === scan.lot), piece = '';
+    // 15.252 절 코드(L1-3, LOT-1 임시 절): 재고는 LOT 단위라 뒤 -번호를 떼어 다시 찾는다
+    if (!rows.length && /-\d+$/.test(scan.lot)) { const base = scan.lot.replace(/-\d+$/, ''); data = await api('GET', '/api/inventory/lots?' + new URLSearchParams({ asof: todayStr(), q: base })); rows = data.rows.filter(r => r.lot === base); if (rows.length) { piece = scan.lot; scan.lot = base; } }
     let boms = [];
     if (scan.code) { boms = (await api('GET', '/api/boms?' + new URLSearchParams({ q: scan.code }))).filter(b => String(b.product_code).toUpperCase() === scan.code.toUpperCase()); if (boms.length) rows = rows.filter(r => boms.some(b => b.product.replace(/\s+/g, '').toLowerCase() === r.item.replace(/\s+/g, '').toLowerCase())); }
     if (!main.isConnected) return;
-    if (!rows.length) { box.innerHTML = `<div class="empty">LOT ${esc(scan.lot)}를 찾지 못했습니다.${scan.code ? ` (코드 ${esc(scan.code)})` : ''}</div>`; addLog(`${scan.lot} — 없음`); return; }
-    box.innerHTML = rows.map((r, i) => `<div class="card" data-scan-row="${i}"><h3>${esc(r.item)} <span class="tag">LOT ${esc(r.lot)}</span></h3>
+    if (!rows.length) { box.innerHTML = `<div class="empty">재고 LOT ${esc(scan.lot)}를 찾지 못했습니다.${scan.code ? ` (코드 ${esc(scan.code)})` : ''} 봉투(반제품)·완제품 LOT이면 <button type="button" class="link-btn" data-scan-trace>LOT 연결 조회</button>에서 보세요.</div>`; $('[data-scan-trace]', box).onclick = () => { try { sessionStorage.setItem('wpa:lot-trace', scan.lot); } catch { /* */ } location.hash = '#/prod/lot-trace'; }; addLog(`${scan.lot} — 재고 없음`); return; }
+    box.innerHTML = rows.map((r, i) => `<div class="card" data-scan-row="${i}"><h3>${esc(r.item)} <span class="tag">LOT ${esc(r.lot)}</span>${piece ? ` <span class="tag">절 ${esc(piece)}</span>` : ''}</h3>
       <p>잔량 <b class="${r.balance <= 0 ? 'red-text' : ''}">${fmtNum(r.balance)} ${esc(r.unit)}</b> · 입고 ${fmtNum(r.received)} · 출하 ${fmtNum(r.shipped)} · 입고일 ${esc(r.first_date)}${r.places ? ` · 위치 ${esc(r.places)}` : ''}</p>
       <form class="form-grid" data-scan-ship><label>출하 수량 *<input name="qty" type="number" step="any" min="0" required value="${r.balance > 0 ? r.balance : ''}"></label><label>거래처 *<input name="customer" maxlength="100" required></label><label>출하일 *<input name="ship_date" type="date" required value="${todayStr()}" max="${todayStr()}"></label>
         <div class="actions span3" style="justify-content:flex-start"><button class="btn primary">출하 기록</button><button type="button" class="btn" data-scan-move>위치 · 이동</button></div></form></div>`).join('');
