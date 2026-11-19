@@ -1111,3 +1111,5 @@ INVITE_CODE=local-test-code npm start
 - 15.233 ⚙ 열 설정 단추: 휴대폰(820px 이하)에서는 숨김(계획표 날짜 칸 등 머리글을 가리던 것). 열을 고정한 표(data-keep-cols + data-no-reorder, 계획표 등)에는 넓은 화면에서도 달지 않음.
 
 - 15.234 ① 입고 관리: 입고목록·입고 입력·입고증 목록 탭 아래 「발주입고 | 기타입고」 줄(rcKindTabs). 입고 입력 안 옛 구분 탭·기타입고 담기는 숨김(발주입고 전용). ② 기타입고(#/logistics/receipt/other, pageOtherReceiptHeads): 위 기타입고내역(NO·입고번호·입고일·거래처·입고담당자·품목 수·비고, 추가·삭제, 두 번 누르면 고치기) → 아래 상세내역(NO·체크·LOT NO·품목코드·품목명·품목분류·입하수량·입고창고·로케이션·비고·업체정보, 입고창고·위치 일괄적용, 추가·삭제·QR코드·저장). 서버: POST /api/receipts/other(OTS_[입고일 YYMMDD]_[순번 4자리], 한 문장 안에서 번호), PUT/DELETE /api/receipts/:id(줄 있으면 날짜·거래처 못 바꿈·삭제 막음), POST /api/receipts/:id/lines(서브 LOT 001…), PUT /api/other-receipts/:id/place(LOT·창고·로케이션·비고·업체정보, LOT은 쓰였거나 이동 기록 있으면 막음), GET /api/receipts?kind=other&vendor=. ③ 제품등록 표 NO → 코드 순서.
+
+- 15.235 회원 관리 사용 권한·메뉴 보기(휴대폰): 표가 카드로 바뀌며 체크칸 머리글(권한 이름)이 사라져 무엇을 체크하는지 알 수 없던 것 → 표는 keep-table로 자동 3줄 그리드에서 빼고, 휴대폰에서는 사람마다 이름 맨 위 + 「영업」「구매」처럼 이름 붙은 체크 단추(체크하면 강조). 넓은 화면은 표 그대로.

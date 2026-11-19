@@ -3231,3 +3231,24 @@ form.list-filters .range-presets.rp-compact .rp-name { align-self: center; }
 .ot-lines tr.ot-changed > td { background: color-mix(in srgb, #ffe8a3 45%, transparent); }
 .ot-head2 label.inline { white-space: nowrap; flex-direction: row; align-items: center; }
 .ot-head2 h2 { white-space: nowrap; }
+
+/* 15.235 회원 관리 · 사용 권한/메뉴 보기: 넓은 화면은 표 그대로(권한 이름은 머리글), 휴대폰은 사람마다 카드 — 이름 맨 위, 아래에 「이름 붙은」 체크 단추 */
+.member-grid.matrix .mx-cell { display: inline-flex; align-items: center; gap: 4px; margin: 0; cursor: pointer; font-weight: 400; }
+.member-grid.matrix .mx-lab { display: none; }
+@media (max-width: 820px) {
+  table.member-grid.matrix { display: block; min-width: 0 !important; width: 100% !important; border: 0; }
+  table.member-grid.matrix > thead { display: none; }
+  table.member-grid.matrix > tbody { display: block; }
+  table.member-grid.matrix > tbody > tr { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 10px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  table.member-grid.matrix > tbody > tr:nth-child(even) { background: var(--zebra, var(--panel)); }
+  table.member-grid.matrix > tbody > tr > td { display: block; border: 0 !important; padding: 0 !important; background: transparent !important; width: auto; }
+  table.member-grid.matrix > tbody > tr > td:first-child { flex: 1 0 100%; font-size: 15.5px; margin-bottom: 4px; }
+  table.member-grid.matrix > tbody > tr > td:nth-child(2):has(select) { flex: 1 0 100%; }
+  table.member-grid.matrix > tbody > tr > td[colspan] { flex: 1 0 100%; }
+  table.member-grid.matrix .mx-lab { display: inline; font-size: 13.5px; }
+  table.member-grid.matrix .mx-cell { padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); min-height: 36px; }
+  table.member-grid.matrix .mx-cell:has(input:checked), table.member-grid.matrix .mx-cell:has(.mv-on) { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink, var(--accent)); font-weight: 700; }
+  table.member-grid.matrix .mx-cell:has(input:disabled) { opacity: .55; }
+  table.member-grid.matrix td.c input[type=checkbox] { width: 18px; height: 18px; }
+  .table-wrap:has(> table.member-grid.matrix) { overflow: visible; border: 1px solid var(--line); border-radius: var(--radius, 12px); }
+}
