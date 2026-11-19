@@ -3370,3 +3370,26 @@ table.insp-v thead th.insp-n-c, table.insp-v thead th.insp-item-c { vertical-ali
 table.insp-v tr.insp-judge-row th.insp-item-c { width: auto; max-width: none; }
 table.insp-v thead th.insp-sample-h { text-align: center; }
 @media (max-width: 700px) { table.insp-v th.insp-item-c { width: 84px; min-width: 84px; max-width: 84px; } table.insp-v .insp-n-c { left: 84px; } table.insp-v .insp-range-in { font-size: 11px; } }
+/* 15.243 측정값 입력: 분석 항목(또는 시료)마다 묶음 행, 원 데이터 한 줄 10칸. 위에 LOT·시료 입력 줄 */
+.insp-samples { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--total-bg, var(--bg)); }
+.insp-samples-h { font-weight: 800; font-size: 13px; margin-right: 4px; }
+.insp-s { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.insp-s > b { color: var(--muted); font-size: 12.5px; }
+.insp-s input[data-lot] { width: 11em; min-height: 32px; padding: 4px 8px; }
+.insp-s .btn.small { min-height: 28px; padding: 0 8px; }
+table.insp-r { table-layout: auto; }
+table.insp-r thead th { text-align: center; }
+table.insp-r th.insp-item-c { width: 160px; min-width: 140px; text-align: center; vertical-align: middle; background: var(--erp-head, var(--bg)); padding: 6px 8px !important; font-size: 13px; font-weight: 700; white-space: normal; }
+table.insp-r .insp-range-in { display: block; font-size: 12px; font-weight: 400; margin-top: 2px; }
+table.insp-r th.insp-samp-c { width: 120px; min-width: 96px; text-align: center; vertical-align: middle; background: var(--panel); padding: 4px 8px !important; font-weight: 600; white-space: normal; }
+table.insp-r thead th.insp-samp-c { background: var(--erp-head, var(--bg)); }
+table.insp-r .insp-sno { display: block; font-size: 11.5px; color: var(--muted); font-weight: 400; }
+table.insp-r .insp-lot-t { font-size: 13px; word-break: break-all; }
+table.insp-r td.insp-cell input { min-width: 4.2em; }
+table.insp-r td.insp-cell input::placeholder { color: color-mix(in srgb, var(--muted) 45%, transparent); font-size: 11px; }
+table.insp-r td.insp-blank { background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--line) 45%, transparent) 6px 7px); }
+table.insp-r td.insp-avg { vertical-align: middle; }
+table.insp-r tbody.insp-grp > tr:first-child > * { border-top: 2px solid var(--line-strong, #94a3b8); }
+table.insp-r tbody.insp-grp:nth-of-type(even) td.insp-cell { background: color-mix(in srgb, var(--accent) 3%, var(--panel)); }
+table.insp-r tbody tr.insp-sub > * { border-top: 1px dashed var(--line); }
+@media (max-width: 700px) { .insp-s { flex: 1 1 100%; } .insp-s input[data-lot] { flex: 1; width: auto; } table.insp-r th.insp-item-c { min-width: 84px; width: 84px; font-size: 12px; } table.insp-r th.insp-samp-c { min-width: 64px; width: 64px; } }
