@@ -116,3 +116,29 @@ test('15.250 receipt keeps trade qty (yd) and physical pieces; cutting takes pie
   const tr = (await prod('GET', '/api/lot-trace?lot=YD-A')).body;
   assert.equal(tr.kind, 'material'); assert.equal(tr.bags[0].inputs.find(i => i.lot === 'YD-A').pieces, 3); assert.equal(tr.materials.find(m => m.lot === 'YD-A').receipts[0].pieces, 30);
 });
+
+test('15.251 one item received as several vendor LOTs with pieces; pieces get codes LOT-1..N; cutting picks piece numbers', async () => {
+  const nx = (await admin('POST', '/api/boms', { product: 'NX-8 원단', product_code: 'NX-8R', item_category: '원자재', kind: 'finished', base_qty: 1, unit: 'yd', materials: [] })).body;
+  const rc = await admin('POST', '/api/receipts', { receipt_date: today, vendor: '엔엑스', request_id: rid(), lines: [{ bom_id: nx.id, lot: 'L1', qty: 5000, pieces: 15 }, { bom_id: nx.id, lot: 'L2', qty: 5000, pieces: 15 }] });
+  assert.equal(rc.status, 200, JSON.stringify(rc.body));
+  assert.deepEqual(rc.body.lines.map(l => [l.lot, l.pieces, l.piece_from]), [['L1', 15, 1], ['L2', 15, 1]]);
+  const rc2 = (await admin('POST', '/api/receipts', { receipt_date: today, vendor: '엔엑스', request_id: rid(), lines: [{ bom_id: nx.id, lot: 'L1', qty: 100, pieces: 2 }] })).body;
+  assert.equal(rc2.lines[0].piece_from, 16, 'a later receipt of the same LOT continues the piece numbers');
+  const avail = (await prod('GET', '/api/lots/available?item=' + encodeURIComponent('NX-8 원단'))).body.rows;
+  assert.equal(avail.find(l => l.lot === 'L1').pieces_free.length, 17); assert.deepEqual(avail.find(l => l.lot === 'L2').pieces_free.slice(0, 3), [1, 2, 3]);
+  const semi = (await admin('POST', '/api/boms', { product: 'NX-8 반제품', product_code: 'NX8S', item_category: '반제품', kind: 'semi', semi_type: '천와이퍼', base_qty: 1, unit: '매', materials: [{ item: 'NX-8 원단', item_category: '원자재', qty: 1, unit: 'yd' }] })).body;
+  const line = (await prod('GET', '/api/production-units?kind=line')).body[0];
+  const cut = (inputs, qty = 300) => prod('POST', '/api/semi-batches', { process: 'cut', common: { work_date: today, unit_id: line.id }, request_id: rid(), items: [{ entry_mode: 'code', bom_id: semi.id, product_group: 'wiper', product_type: '천와이퍼', start_time: '08:00', end_time: '09:00', qty, inputs }] });
+  const ok1 = await cut([{ item: 'NX-8 원단', lot: 'L1', piece_nos: [3, 1] }, { item: 'NX-8 원단', lot: 'L2', piece_nos: '5' }]);
+  assert.equal(ok1.status, 200, JSON.stringify(ok1.body));
+  const used = sqlite.prepare('SELECT lot, qty, pieces, piece_nos FROM semi_lot_inputs WHERE record_id=? ORDER BY id').all(ok1.body.rows[0].id);
+  assert.deepEqual(used.map(u => [u.lot, u.qty, u.pieces, u.piece_nos]), [['L1', 200, 2, '1,3'], ['L2', 100, 1, '5']]);
+  const again = await cut([{ item: 'NX-8 원단', lot: 'L1', piece_nos: [3] }]);
+  assert.equal(again.status, 400); assert.match(again.body.error, /L1-3은 없는 절이거나 이미 투입한 절/);
+  assert.equal((await cut([{ item: 'NX-8 원단', lot: 'L2', piece_nos: [16] }])).status, 400, 'L2 has only 15 pieces');
+  const after = (await prod('GET', '/api/lots/available?item=' + encodeURIComponent('NX-8 원단'))).body.rows.find(l => l.lot === 'L1');
+  assert.equal(after.pieces_free.includes(1), false); assert.equal(after.pieces_free.includes(2), true); assert.equal(after.pieces_left, 15);
+  const tr = (await prod('GET', '/api/lot-trace?lot=L1-3')).body;
+  assert.equal(tr.kind, 'piece'); assert.deepEqual(tr.bags.map(b => b.lot), [ok1.body.rows[0].lot]);
+  assert.equal((await prod('GET', '/api/lot-trace?lot=L1-2')).body.bags.length, 0, 'an unused piece has no bags');
+});

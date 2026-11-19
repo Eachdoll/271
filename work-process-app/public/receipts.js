@@ -85,7 +85,7 @@ async function pageReceiptEntry(main) {
       <td><select data-f="location" aria-label="${i + 1}번째 줄 위치"${rcLocations(l.warehouse).length ? '' : ' disabled'}>${rcLocationOptions(l.warehouse, l.location)}</select></td>
       <td><input data-f="note" value="${esc(l.note || '')}" maxlength="200" aria-label="${i + 1}번째 줄 비고"></td>
       <td><input data-f="note2" value="${esc(l.note2 || '')}" maxlength="200" aria-label="${i + 1}번째 줄 업체 정보(비고2)"></td>
-      <td class="nowrap"><button type="button" class="btn small" data-rc-split>LOT 나누기</button> <button type="button" class="btn small danger" data-rc-del aria-label="${i + 1}번째 줄 삭제">×</button></td></tr>`).join('')
+      <td class="nowrap"><button type="button" class="btn small" data-rc-split title="업체 LOT이 여러 개일 때(LOT마다 절·수량)">업체 LOT 나누기</button> <button type="button" class="btn small danger" data-rc-del aria-label="${i + 1}번째 줄 삭제">×</button></td></tr>`).join('')
       || '<tr><td colspan="14" class="muted">아직 줄이 없습니다. 발주를 담거나 품목을 추가하세요.</td></tr>';
     // 휴대폰 카드의 칸 이름(표는 처음 한 번만 이름표를 붙이므로 다시 그릴 때마다 붙인다)
     const heads = $$('thead th', body.closest('table')).map(th => th.textContent.trim());
@@ -206,17 +206,10 @@ async function pageReceiptEntry(main) {
     readAll(); const line = lines.find(x => x.key === tr.dataset.rcLine);
     if (e.target.closest('[data-rc-del]')) { lines = lines.filter(x => x !== line); draw(); return; }
     if (!e.target.closest('[data-rc-split]')) return;
-    const total = Number(line.qty || 0);
-    const v = await promptBox(`LOT 나누기 · ${line.item}`, `<p class="small muted">같은 품목 줄을 LOT 개수만큼 만듭니다. 나눈 뒤 LOT·수량을 줄마다 고칠 수 있습니다.</p>
-      <div class="form-grid"><label>LOT 개수 *<input name="count" type="number" min="2" max="50" step="1" required value="2"></label>
-      <label>줄마다 수량 <span class="hint">(비우면 지금 수량 ${fmtNum(total)}을 똑같이 나눔)</span><input name="each" type="number" min="0" step="any" inputmode="decimal"></label></div>
-      <p class="small muted">나눈 줄마다 LOT NO가 따로 붙습니다(${esc(prefixOf(line))}+입고일_순번).</p>`);
-    if (!v) return;
-    const count = Math.max(2, Math.min(50, Math.floor(Number(v.count) || 2)));
-    if (lines.length + count - 1 > 100) return toast('입고 줄은 100줄까지입니다.', 'err');
-    const each = v.each !== '' && v.each !== undefined ? Number(v.each) : total ? Math.floor(total / count * 1000) / 1000 : '';
-    const made = Array.from({ length: count }, (_, i) => newLine(line, { warehouse: line.warehouse, location: line.location, note: line.note, note2: line.note2, lot: i === 0 ? line.lot || '' : '', autoLot: i === 0 ? line.autoLot : false, qty: each === '' ? '' : i === count - 1 && v.each === '' && total ? Math.round((total - each * (count - 1)) * 1000) / 1000 : each }));
-    await assignLots(made.filter(l => !String(l.lot || '').trim())).catch(fail); // 15.199 나눈 줄마다 다른 LOT NO
+    // 15.251 업체 LOT 여러 개(LOT마다 절·수량)
+    const parts = await vendorLotDialog(line); if (!parts) return;
+    if (lines.length + parts.length - 1 > 100) return toast('입고 줄은 100줄까지입니다.', 'err');
+    const made = parts.map(p => newLine(line, { warehouse: line.warehouse, location: line.location, note: line.note, note2: line.note2, lot: p.lot, pieces: p.pieces ?? '', qty: p.qty }));
     lines.splice(lines.indexOf(line), 1, ...made); draw([made[0].key, 'lot']);
   });
   $('[data-rc-all]', form).onchange = e => { lines.forEach(l => { l.picked = e.target.checked; }); draw(); };
@@ -290,6 +283,32 @@ async function pageReceiptEntry(main) {
 }
 
 // 입고증(15.72): 입고번호 한 장. 인쇄·PDF 저장은 발주서와 같은 방식(body.printing-cert). LOT 라벨(QR)도 여기서 연다.
+// 15.251 업체 LOT 여러 개: 한 품목을 업체 LOT마다 절(실물)과 수량으로 나눈다. 수량을 비운 줄은 남은 수량을 절 비율로 나눔.
+// 절마다 코드 LOT-1 … LOT-N이 붙는다(같은 LOT을 나중에 또 받으면 다음 번호부터).
+async function vendorLotDialog(line) {
+  const total = Number(line.qty) || 0, unit = line.unit || '';
+  const row = (i, l = {}) => `<tr data-vl-row><td><input name="lot_${i}" maxlength="100" value="${esc(l.lot || '')}" placeholder="업체 LOT" aria-label="${i + 1}번째 업체 LOT"></td><td><input name="pcs_${i}" type="number" min="0" step="1" inputmode="numeric" value="${esc(l.pieces ?? '')}" placeholder="절" aria-label="${i + 1}번째 절"></td><td><input name="qty_${i}" type="number" min="0" step="any" inputmode="decimal" value="" placeholder="비우면 절 비율" aria-label="${i + 1}번째 수량"></td><td class="small muted" data-vl-codes></td></tr>`;
+  let n = 2;
+  const v = await promptBox(`업체 LOT 나누기 · ${line.item}`, `<p class="small muted">한 품목이 업체 LOT 여러 개로 들어오면 LOT마다 실물 <b>절</b> 수를 적으세요. 수량(${esc(unit || '거래 단위')})은 LOT마다 적거나, 비우면 전체 ${fmtNum(total)} ${esc(unit)}을 절 비율로 나눕니다. 절마다 코드(LOT-1 … LOT-N)가 붙어 커팅·융착에서 절 번호로 고를 수 있습니다.</p>
+    <div class="table-wrap"><table class="grid keep-table vl-grid" data-no-sort data-keep-cols data-no-reorder><thead><tr><th>업체 LOT *</th><th>실물(절)</th><th>수량 (${esc(unit || '거래 단위')})</th><th>절 코드</th></tr></thead><tbody data-vl-body>${row(0, { lot: line.lot, pieces: line.pieces })}${row(1)}</tbody></table></div>
+    <div class="actions" style="justify-content:flex-start"><button type="button" class="btn small" data-vl-add>+ LOT 줄</button><span class="small" data-vl-sum></span></div>`, { wide: true, onOpen: el => {
+      const body = $('[data-vl-body]', el);
+      const sync = () => { let p = 0, q = 0; $$('[data-vl-row]', body).forEach(tr => { const lot = $('[name^=lot_]', tr).value.trim(), pc = Math.floor(Number($('[name^=pcs_]', tr).value) || 0); p += pc; q += Number($('[name^=qty_]', tr).value) || 0; $('[data-vl-codes]', tr).textContent = lot && pc ? `${lot}-1 ~ ${lot}-${pc}` : ''; }); $('[data-vl-sum]', el).textContent = `절 합계 ${fmtNum(p)} · 적은 수량 ${fmtNum(q)} / ${fmtNum(total)} ${unit}`; };
+      $('[data-vl-add]', el).onclick = () => { if (n >= 50) return; body.insertAdjacentHTML('beforeend', row(n++)); sync(); $(`[name="lot_${n - 1}"]`, el).focus(); };
+      el.addEventListener('input', sync); sync(); $('[name=lot_0]', el).focus();
+    } });
+  if (!v) return null;
+  const rows = [];
+  for (let i = 0; i < 50; i++) { if (v[`lot_${i}`] === undefined) continue; const lot = String(v[`lot_${i}`] || '').trim(), pieces = v[`pcs_${i}`] === '' ? null : Math.floor(Number(v[`pcs_${i}`]) || 0), qty = v[`qty_${i}`] === '' ? null : Number(v[`qty_${i}`]); if (!lot && !pieces && !qty) continue; rows.push({ lot, pieces, qty }); }
+  if (rows.length < 1) { toast('업체 LOT을 한 줄 이상 적으세요.', 'err'); return null; }
+  if (rows.some(r => !r.lot)) { toast('업체 LOT을 비운 줄이 있습니다. LOT을 적거나 그 줄을 비우세요.', 'err'); return null; }
+  const given = rows.filter(r => r.qty != null).reduce((t, r) => t + r.qty, 0), blank = rows.filter(r => r.qty == null);
+  if (blank.length) {
+    const rest = Math.max(0, Math.round((total - given) * 1000) / 1000), pcs = blank.reduce((t, r) => t + (r.pieces || 0), 0); let left = rest;
+    blank.forEach((r, i) => { const share = i === blank.length - 1 ? left : Math.round((pcs ? rest * (r.pieces || 0) / pcs : rest / blank.length) * 1000) / 1000; r.qty = share; left = Math.round((left - share) * 1000) / 1000; });
+  }
+  return rows;
+}
 function receiptSlip(r) {
   const live = r.lines.filter(l => !l.voided_at);
   const byUnit = new Map(); for (const l of live) byUnit.set(l.unit || '', (byUnit.get(l.unit || '') || 0) + l.qty);
@@ -301,7 +320,7 @@ function receiptSlip(r) {
         <tr><th>거래처</th><td><b>${esc(r.vendor)}</b></td><th>입고 담당</th><td>${esc(r.created_by)}</td></tr>
       </tbody></table>
       <table class="po-items"><thead><tr><th>No</th><th>구분</th><th>품목</th><th>규격</th><th>LOT</th><th class="r">수량</th><th>단위</th><th class="r">실물(절)</th><th>창고 · 위치</th><th>비고</th></tr></thead>
-      <tbody>${r.lines.map((l, i) => `<tr${l.voided_at ? ' class="rc-void"' : ''}><td class="c">${i + 1}</td><td class="c">${l.kind === 'po' ? '발주' : '기타'}</td><td>${esc(l.item)}${l.product_code ? `<div class="po-code">${esc(l.product_code)}</div>` : ''}${l.req_no ? `<div class="po-code">${esc(l.req_no)}</div>` : ''}</td><td>${esc(l.spec || '')}</td><td>${esc(lotFull(l))}</td><td class="r">${fmtNum(l.qty)}${l.voided_at ? ' (취소)' : ''}</td><td>${esc(l.unit || '')}</td><td class="r">${l.pieces != null ? fmtNum(l.pieces) : ''}</td><td>${esc([l.warehouse, l.location].filter(Boolean).join(' · '))}</td><td>${esc(l.note && l.note !== r.note ? l.note : '')}${l.note2 ? `<div class="small">업체 정보: ${esc(l.note2)}</div>` : ''}</td></tr>`).join('')}</tbody>
+      <tbody>${r.lines.map((l, i) => `<tr${l.voided_at ? ' class="rc-void"' : ''}><td class="c">${i + 1}</td><td class="c">${l.kind === 'po' ? '발주' : '기타'}</td><td>${esc(l.item)}${l.product_code ? `<div class="po-code">${esc(l.product_code)}</div>` : ''}${l.req_no ? `<div class="po-code">${esc(l.req_no)}</div>` : ''}</td><td>${esc(l.spec || '')}</td><td>${esc(lotFull(l))}${l.pieces && l.piece_from ? `<div class="po-code">${esc(`${l.lot}-${l.piece_from} ~ ${l.lot}-${l.piece_from + l.pieces - 1}`)}</div>` : ''}</td><td class="r">${fmtNum(l.qty)}${l.voided_at ? ' (취소)' : ''}</td><td>${esc(l.unit || '')}</td><td class="r">${l.pieces != null ? fmtNum(l.pieces) : ''}</td><td>${esc([l.warehouse, l.location].filter(Boolean).join(' · '))}</td><td>${esc(l.note && l.note !== r.note ? l.note : '')}${l.note2 ? `<div class="small">업체 정보: ${esc(l.note2)}</div>` : ''}</td></tr>`).join('')}</tbody>
       <tfoot><tr><th colspan="5" class="r">합계</th><td class="r" colspan="2"><b>${[...byUnit].map(([u, q]) => `${fmtNum(q)} ${esc(u)}`).join(' · ')}</b></td><td class="r">${(() => { const p = r.lines.filter(l => !l.voided_at && l.pieces != null).reduce((t, l) => t + l.pieces, 0); return p ? `<b>${fmtNum(p)}</b>` : ''; })()}</td><td colspan="2"></td></tr></tfoot></table>
       <div class="po-memo"><b>비고</b><div class="po-memo-body">${esc(r.note || '')}</div></div>
       <table class="rc-sign"><tbody><tr><th>입고 담당</th><th>확인</th><th>승인</th></tr><tr><td></td><td></td><td></td></tr></tbody></table>
@@ -329,7 +348,8 @@ function qrIssue(items, { title = 'QR코드 발행', file = 'QR' } = {}) {
 function lotLabels(r) {
   const live = r.lines.filter(l => !l.voided_at);
   // 15.230 QR코드 발행 양식(QR + 큰 LOT 번호 + 품목·수량·입고번호)
-  return qrIssue(live.map(l => ({ code: lotFull(l) || `${r.receipt_no}-${l.id}`, sub: [`${l.item}${l.spec ? ' ' + l.spec : ''}`, `${fmtNum(l.qty)} ${l.unit || ''}`.trim(), r.receipt_no].filter(Boolean).join(' · ') })), { title: `QR코드 발행 · ${r.receipt_no}`, file: 'LOT라벨' });
+  // 15.251 실물(절)을 적은 줄은 절마다 라벨(LOT-1 … LOT-N)
+  return qrIssue(live.flatMap(l => l.pieces && l.piece_from ? Array.from({ length: Math.floor(l.pieces) }, (_, k) => ({ code: `${l.lot}-${l.piece_from + k}`, sub: [`${l.item}${l.spec ? ' ' + l.spec : ''}`, `${k + 1}/${Math.floor(l.pieces)}절 · ${fmtNum(l.qty)} ${l.unit || ''}`.trim(), r.receipt_no].filter(Boolean).join(' · ') })) : [{ code: lotFull(l) || `${r.receipt_no}-${l.id}`, sub: [`${l.item}${l.spec ? ' ' + l.spec : ''}`, `${fmtNum(l.qty)} ${l.unit || ''}`.trim(), r.receipt_no].filter(Boolean).join(' · ') }]), { title: `QR코드 발행 · ${r.receipt_no}`, file: 'LOT라벨' });
   const m = modal(`<h3 class="po-print-title">LOT 라벨 <span class="small muted">${esc(r.receipt_no)} · 라벨 ${live.length}개</span></h3>
     <div class="cert rc-labels">${live.map(l => { const text = [lotFull(l) || '-', l.product_code || l.item, `${l.qty} ${l.unit || ''}`.trim(), r.receipt_no].join('|'); return `<div class="rc-label">
       <div class="rc-label-qr">${qrSvg(text)}</div>
@@ -543,7 +563,7 @@ async function pageOtherReceiptHeads(main) {
     <div id="otHeads"><p class="muted">불러오는 중…</p></div></section>
   <section class="ot-sec"><div class="ot-head ot-head2"><h2>☰ 기타입고상세내역 <span class="small muted" id="otLabel"></span></h2>
       <label class="inline">입고창고 <select id="otWh">${rcWarehouseOptions()}</select></label><label class="inline">위치 <select id="otLoc" disabled><option value="">—</option></select></label><button type="button" class="btn" id="otApply" disabled>일괄적용</button>
-      <span class="grow"></span><button type="button" class="btn" id="otLineAdd" disabled>추가</button><button type="button" class="btn danger" id="otLineDel" disabled>삭제</button><button type="button" class="btn qr-pdf-btn" id="otQr" disabled>QR코드</button><button type="button" class="btn primary" id="otSave" disabled>저장</button></div>
+      <span class="grow"></span><button type="button" class="btn" id="otLineAdd" disabled>추가</button><button type="button" class="btn" id="otSplit" disabled title="체크한 새 줄 하나를 업체 LOT 여러 개(LOT마다 절·수량)로">업체 LOT 나누기</button><button type="button" class="btn danger" id="otLineDel" disabled>삭제</button><button type="button" class="btn qr-pdf-btn" id="otQr" disabled>QR코드</button><button type="button" class="btn primary" id="otSave" disabled>저장</button></div>
     <div id="otLines"><div class="empty">위 기타입고내역에서 입고번호를 고르거나 「추가」로 새 입고번호를 만드세요.</div></div></section>`;
   const form = $('#otFilters', main); let heads = [], cur = null, lines = [], catalog = null, seq = 0;
   if (typeof bindPartnerPicker === 'function') bindPartnerPicker(form.elements.vendor, null, { type: 'purchase' }).catch(() => {});
@@ -566,7 +586,7 @@ async function pageOtherReceiptHeads(main) {
   const picked = () => $$('[data-ot-pick]:checked', main).map(x => lines.find(l => l.key === x.dataset.otPick)).filter(Boolean);
   const sync = () => {
     const has = !!cur, n = picked().length;
-    $('#otDel', main).disabled = !has; $('#otLineAdd', main).disabled = !has; $('#otApply', main).disabled = !has || !lines.length; $('#otLineDel', main).disabled = !n; $('#otQr', main).disabled = !has || !lines.some(l => !l.isNew);
+    $('#otDel', main).disabled = !has; $('#otLineAdd', main).disabled = !has; $('#otApply', main).disabled = !has || !lines.length; $('#otLineDel', main).disabled = !n; $('#otSplit', main).disabled = !(picked().length === 1 && picked()[0].isNew); $('#otQr', main).disabled = !has || !lines.some(l => !l.isNew);
     const s = $('#otSave', main); s.disabled = !dirty(); s.textContent = dirty() ? `저장 (${lines.filter(l => l.isNew || l.changed).length})` : '저장';
   };
   const drawLines = () => {
@@ -574,7 +594,7 @@ async function pageOtherReceiptHeads(main) {
     $('#otLines', main).innerHTML = !cur ? '<div class="empty">위 기타입고내역에서 입고번호를 고르거나 「추가」로 새 입고번호를 만드세요.</div>' : lines.length ? `<div class="table-wrap"><table class="grid keep-table ot-grid ot-lines" data-no-sort data-keep-cols><thead><tr><th class="c">No.</th><th class="pick-cell"><input type="checkbox" data-ot-all aria-label="모두 고르기"></th><th>업체 LOT</th><th>품목코드</th><th>품목명</th><th>품목분류</th><th class="r">입하수량</th><th class="r" title="실물 개수(절). 마감은 입하수량(거래 단위)으로">실물(절)</th><th>입고창고</th><th>로케이션</th><th>비고</th><th>업체정보</th></tr></thead><tbody>${lines.map((l, i) => `<tr data-ot-line="${l.key}" class="${l.isNew ? 'ot-new' : l.changed ? 'ot-changed' : ''}"><td class="c">${i + 1}</td><td class="pick-cell"><input type="checkbox" data-ot-pick="${l.key}" aria-label="${esc(l.item)} 고르기"></td>
       <td class="nowrap"><input data-f="lot" value="${esc(l.lot || '')}" maxlength="100" aria-label="업체 LOT" placeholder="업체 LOT · 비우면 SST" class="ot-lot">${!l.isNew && l.sub_lot ? `<span class="small muted">-${esc(l.sub_lot)}</span>` : ''}</td><td class="nowrap">${esc(l.product_code || '')}</td><td><b>${esc(l.item)}</b>${l.spec ? ` <span class="small muted">${esc(l.spec)}</span>` : ''}</td><td>${esc(l.item_category || '')}</td>
       <td class="r">${l.isNew ? `<input type="number" data-f="qty" min="0" step="any" inputmode="decimal" value="${esc(l.qty ?? '')}" aria-label="입하수량" style="width:6em">` : `${fmtNum(l.qty)} <span class="small muted">${esc(l.unit || '')}</span>`}</td>
-      <td class="r">${l.isNew ? `<input type="number" data-f="pieces" min="0" step="any" inputmode="decimal" value="${esc(l.pieces ?? '')}" aria-label="실물(절)" placeholder="절" style="width:5em">` : l.pieces != null ? `${fmtNum(l.pieces)} <span class="small muted">절</span>` : '<span class="muted">—</span>'}</td>
+      <td class="r">${l.isNew ? `<input type="number" data-f="pieces" min="0" step="any" inputmode="decimal" value="${esc(l.pieces ?? '')}" aria-label="실물(절)" placeholder="절" style="width:5em">` : l.pieces != null ? `${fmtNum(l.pieces)} <span class="small muted">절</span>${l.piece_from ? `<div class="small muted">${esc(`${l.lot}-${l.piece_from}~${l.piece_from + l.pieces - 1}`)}</div>` : ''}` : '<span class="muted">—</span>'}</td>
       <td><select data-f="warehouse" aria-label="입고창고">${rcWarehouseOptions(l.warehouse || '')}</select></td><td><select data-f="location" aria-label="로케이션"${rcLocations(l.warehouse).length ? '' : ' disabled'}>${rcLocationOptions(l.warehouse, l.location || '')}</select></td>
       <td><input data-f="note" value="${esc(l.note || '')}" maxlength="200" aria-label="비고"></td><td><input data-f="note2" value="${esc(l.note2 || '')}" maxlength="200" aria-label="업체정보"></td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">상세 줄이 없습니다. 오른쪽 위 「추가」로 품목을 담으세요.</div>';
@@ -626,6 +646,12 @@ async function pageOtherReceiptHeads(main) {
   });
   $('#otWh', main).onchange = e => { const loc = $('#otLoc', main); loc.innerHTML = rcLocationOptions(e.target.value); loc.disabled = !rcLocations(e.target.value).length; };
   $('#otApply', main).onclick = () => { const wh = $('#otWh', main).value, loc = $('#otLoc', main).value; if (!wh) return toast('입고창고를 고르세요.', 'err'); const target = picked().length ? picked() : lines; for (const l of target) { l.warehouse = wh; l.location = loc; if (!l.isNew) l.changed = true; } drawLines(); toast(`${picked().length ? '체크한' : '모든'} ${target.length}줄에 ${wh}${loc ? ' · ' + loc : ''}을(를) 넣었습니다. 「저장」하세요.`); };
+  $('#otSplit', main).onclick = async () => {
+    const [line] = picked(); if (!line || !line.isNew) return toast('저장 전 줄 하나를 체크하세요.', 'err');
+    const parts = await vendorLotDialog(line); if (!parts) return;
+    const made = parts.map(p => ({ ...line, key: 'n' + Math.random().toString(36).slice(2), lot: p.lot, pieces: p.pieces ?? '', qty: p.qty }));
+    lines.splice(lines.indexOf(line), 1, ...made); drawLines(); toast(`${made.length}개 업체 LOT로 나눴습니다. 「저장」하세요.`);
+  };
   $('#otLineDel', main).onclick = async () => {
     const list = picked(); if (!list.length) return; const saved = list.filter(l => !l.isNew);
     if (saved.length && !await confirmBox(`저장된 ${saved.length}줄을 지울까요? (재고에서 빠집니다)`)) return;
@@ -643,7 +669,7 @@ async function pageOtherReceiptHeads(main) {
       await loadHeads(cur.id);
     } catch (error) { fail(error); sync(); }
   };
-  $('#otQr', main).onclick = () => { const list = (picked().length ? picked() : lines).filter(l => !l.isNew); if (!list.length) return toast('저장된 줄만 QR을 발행할 수 있습니다.', 'err'); qrIssue(list.map(l => ({ code: lotFull(l) || `${cur.receipt_no}-${l.id}`, sub: [`${l.item}${l.spec ? ' ' + l.spec : ''}`, `${fmtNum(l.qty)} ${l.unit || ''}`.trim(), [l.warehouse, l.location].filter(Boolean).join(' '), cur.receipt_no].filter(Boolean).join(' · ') })), { title: `QR코드 발행 · ${cur.receipt_no}`, file: 'LOT라벨' }); };
+  $('#otQr', main).onclick = () => { const list = (picked().length ? picked() : lines).filter(l => !l.isNew); if (!list.length) return toast('저장된 줄만 QR을 발행할 수 있습니다.', 'err'); qrIssue(list.flatMap(l => l.pieces && l.piece_from ? Array.from({ length: Math.floor(l.pieces) }, (_, k) => ({ code: `${l.lot}-${l.piece_from + k}`, sub: [`${l.item}${l.spec ? ' ' + l.spec : ''}`, `${k + 1}/${Math.floor(l.pieces)}절 · ${fmtNum(l.qty)} ${l.unit || ''}`.trim(), cur.receipt_no].filter(Boolean).join(' · ') })) : [l]).map(l => l.code ? l : ({ code: lotFull(l) || `${cur.receipt_no}-${l.id}`, sub: [`${l.item}${l.spec ? ' ' + l.spec : ''}`, `${fmtNum(l.qty)} ${l.unit || ''}`.trim(), [l.warehouse, l.location].filter(Boolean).join(' '), cur.receipt_no].filter(Boolean).join(' · ') })), { title: `QR코드 발행 · ${cur.receipt_no}`, file: 'LOT라벨' }); };
   main.addEventListener('click', e => { const tr = e.target.closest('[data-ot-head]'); if (tr) pick(Number(tr.dataset.otHead)).catch(fail); });
   main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-ot-head]'); if (tr) editHead(Number(tr.dataset.otHead)).catch(fail); });
   main.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('[data-ot-head]')) { e.preventDefault(); e.target.click(); } });

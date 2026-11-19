@@ -3428,3 +3428,9 @@ table.bill-list tr[data-row-bill].on > td { background: var(--accent-soft) !impo
 .lt-recent { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .lt-recent h3 { margin: 0 0 6px; font-size: 14px; }
 @media (max-width: 820px) { .lt-cols { grid-template-columns: minmax(0, 1fr); } .lt-arrow { transform: rotate(90deg); } .lt-recent { grid-template-columns: minmax(0, 1fr); } }
+/* 15.251 절 번호 고르기·업체 LOT 나누기 */
+.sl-grid tr.sl-pcs td { padding-top: 4px !important; padding-bottom: 8px !important; background: var(--panel); }
+.sl-pc { display: inline-flex; align-items: center; gap: 4px; margin: 3px 4px 3px 0; padding: 3px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 12.5px; font-family: ui-monospace, Menlo, Consolas, monospace; cursor: pointer; }
+.sl-pc:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); font-weight: 700; }
+.vl-grid input { width: 100%; min-width: 7em; }
+.vl-grid td[data-vl-codes] { white-space: nowrap; font-family: ui-monospace, Menlo, Consolas, monospace; }
