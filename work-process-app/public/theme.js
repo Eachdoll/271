@@ -25,13 +25,39 @@ function applyDensity(mode) {
   for (const b of document.querySelectorAll('.density-toggle')) { b.innerHTML = `<span class="theme-icon" aria-hidden="true">${mode === 'compact' ? '☰' : '≡'}</span> <span>${DENSITY_LABEL[mode]}</span>`; b.title = '화면 밀도(촘촘 ↔ 보통)'; b.setAttribute('aria-label', `화면 밀도: ${DENSITY_LABEL[mode]}`); }
 }
 // 15.220 디자인 스킨(사용자별): 기본 · 크리스마스. <html data-skin="christmas">. 계정 설정(ME.ui.skin)에 저장, 이 기기에도 기억(첫 화면 깜빡임 없이).
-const SKIN_KEY = 'wpa:skin', SKINS = [['default', '기본'], ['christmas', '🎄 크리스마스']];
+const SKIN_KEY = 'wpa:skin', SKINS = [['default', '기본'], ['christmas', '🎄 크리스마스'], ['ribbon', '🎀 핑크 리본'], ['cat', '🐱 리본 고양이']]; // 15.222 핑크 리본, 15.224 리본 고양이(자체 캐릭터)
+// 15.225 리본 고양이 스킨의 캐릭터 그림을 사용자가 직접 올린 파일로 바꾸기. 이 기기 브라우저에만 저장(서버·저장소에 올리지 않음).
+const FACE_KEY = 'wpa:skin-face';
+function skinFace() { try { const v = localStorage.getItem(FACE_KEY) || ''; return /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(v) ? v : ''; } catch { return ''; } }
+function applyFace() {
+  const v = skinFace(), root = document.documentElement;
+  if (v) root.style.setProperty('--ct-face', `url("${v}")`); else root.style.removeProperty('--ct-face');
+  for (const b of document.querySelectorAll('[data-face-reset]')) b.hidden = !v;
+}
+function setFaceFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || !/^image\/(png|jpeg|webp|gif)$/.test(file.type)) return reject(new Error('PNG·JPG·WEBP·GIF 그림을 고르세요.'));
+    if (file.size > 5 * 1024 * 1024) return reject(new Error('그림은 5MB 이하로 고르세요.'));
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, 256 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      const data = c.toDataURL('image/png');
+      try { localStorage.setItem(FACE_KEY, data); } catch { return reject(new Error('이 기기에 저장하지 못했습니다(저장 공간).')); }
+      applyFace(); resolve();
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('그림을 읽지 못했습니다.')); };
+    img.src = url;
+  });
+}
 function skinMode() { try { const v = localStorage.getItem(SKIN_KEY); return SKINS.some(([k]) => k === v) ? v : 'default'; } catch { return 'default'; } }
 function applySkin(skin, { save = false } = {}) {
   const v = SKINS.some(([k]) => k === skin) ? skin : 'default';
   if (v === 'default') document.documentElement.removeAttribute('data-skin'); else document.documentElement.setAttribute('data-skin', v);
   try { localStorage.setItem(SKIN_KEY, v); } catch { /* 이 화면에만 */ }
   for (const s of document.querySelectorAll('.skin-select')) s.value = v;
+  for (const f of document.querySelectorAll('.skin-face')) f.hidden = v !== 'cat'; // 15.225
   if (save && typeof api === 'function' && typeof ME !== 'undefined' && ME) api('PUT', '/api/me/prefs', { skin: v }).then(p => { if (ME) ME.ui = p; }).catch(() => {});
 }
 function themeMode() { try { const v = localStorage.getItem(THEME_KEY); return THEME_MODES.includes(v) ? v : 'auto'; } catch { return 'auto'; } }
@@ -42,7 +68,7 @@ function applyTheme(mode) {
 }
 (function themeStart() {
   if (typeof document === 'undefined' || !document.documentElement) return;
-  applyTheme(themeMode()); applyNavLayout(navLayout()); applyDensity(densityMode()); applySkin(skinMode());
+  applyTheme(themeMode()); applyNavLayout(navLayout()); applyDensity(densityMode()); applySkin(skinMode()); applyFace();
   const place = () => {
     for (const found of document.querySelectorAll('.who, .auth-card, .side')) {
       const host = found.classList.contains('side') ? (found.querySelector(':scope > .side-prefs') || found.insertAdjacentElement('afterbegin', Object.assign(document.createElement('div'), { className: 'side-prefs' }))) : found;
@@ -68,6 +94,12 @@ function applyTheme(mode) {
           sk.innerHTML = SKINS.map(([k, l]) => `<option value="${k}">스킨: ${l}</option>`).join('');
           sk.value = skinMode(); sk.onchange = () => applySkin(sk.value, { save: true });
           host.append(sk);
+          // 15.225 캐릭터 그림 바꾸기(리본 고양이 스킨일 때만 보임)
+          const fw = document.createElement('div'); fw.className = 'skin-face'; fw.hidden = skinMode() !== 'cat';
+          fw.innerHTML = '<label class="btn small" title="이 기기에서만 바뀝니다">캐릭터 그림 바꾸기<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden data-face-file></label><button type="button" class="btn small" data-face-reset>기본 그림</button>';
+          fw.querySelector('[data-face-file]').onchange = e => { const f = e.target.files[0]; e.target.value = ''; setFaceFile(f).then(() => typeof toast === 'function' && toast('캐릭터 그림을 바꿨습니다(이 기기).')).catch(err => typeof toast === 'function' ? toast(err.message, 'err') : alert(err.message)); };
+          fw.querySelector('[data-face-reset]').onclick = () => { try { localStorage.removeItem(FACE_KEY); } catch { /* 없음 */ } applyFace(); };
+          host.append(fw); applyFace();
         }
       }
     }

@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.221';
+const APP_VERSION = '15.225';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -366,7 +366,7 @@ async function saveNewAttachments(entity, row, draft, form) {
 // 메뉴: 업무 → 하위 메뉴 → 화면. 입력과 목록(조회·검색)은 서로 다른 화면입니다(VIEW_SPLIT).
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
-  { group: '영업', items: [{ sub: '견적', items: [['#/sales/quotes', '견적서 관리']] }, { sub: '수주', items: [['#/sales/orders', '수주 관리']] }, { sub: '매출전표', items: [['#/sales/bills', '매출전표 관리'], ['#/sales/calendar', '매출 달력'], ['#/sales/returns', '반입(반품) 관리'], ['#/sales/delivery-status', '납품현황'], ['#/sales/closing', '매출 마감']] }, { sub: '생산의뢰', items: [['#/sales/mr', '생산의뢰 관리']] }, { sub: '구매의뢰', items: [['#/sales/pr', '구매의뢰 관리']] }, { sub: '샘플의뢰', items: [['#/sales/sample/product', '제품 샘플의뢰'], ['#/sales/sample/goods', '상품 샘플의뢰']] }] },
+  { group: '영업', items: [{ sub: '견적', items: [['#/sales/quotes', '견적서 관리']] }, { sub: '수주', items: [['#/sales/orders', '수주 관리']] }, { sub: '매출전표', items: [['#/sales/bills', '매출전표 관리'], ['#/sales/calendar', '매출 달력'], ['#/sales/reps', '영업담당자별 현황'], ['#/sales/returns', '반입(반품) 관리'], ['#/sales/delivery-status', '납품현황'], ['#/sales/closing', '매출 마감']] }, { sub: '생산의뢰', items: [['#/sales/mr', '생산의뢰 관리']] }, { sub: '구매의뢰', items: [['#/sales/pr', '구매의뢰 관리']] }, { sub: '샘플의뢰', items: [['#/sales/sample/product', '제품 샘플의뢰'], ['#/sales/sample/goods', '상품 샘플의뢰']] }] },
   { group: '구매', items: [
     { sub: '발주', items: [['#/purchase/po', '발주 관리']] },
     { sub: '매입전표', items: [['#/purchase/bills', '매입전표 관리'], ['#/purchase/calendar', '매입 달력'], ['#/purchase/returns', '반출(반품) 관리'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/closing', '매입 마감']] },
@@ -416,7 +416,7 @@ const canSeeMenu = key => !key || !ME || !Array.isArray(ME.menus) || ME.menus.in
 // 15.179 사용 권한이 있어야 쓸 수 있는 화면(서버가 영업·구매 담당만 허용): 메뉴를 「전체 보임」으로 해도 권한이 없으면 숨기고 막는다.
 // 메뉴 보기만 켜고 권한이 없어 들어가면 빈 화면·「권한 없음」 오류만 보이던 문제.
 const ROUTE_ROLE = [
-  [['#/sales/quotes', '#/sales/orders', '#/sales/bills', '#/sales/calendar', '#/sales/returns', '#/sales/delivery-status', '#/sales/closing', '#/sales/tax', '#/sales/tax-check', '#/sales/book', '#/sales/ledger', '#/sales/aging'], ['sales']],
+  [['#/sales/quotes', '#/sales/orders', '#/sales/bills', '#/sales/calendar', '#/sales/reps', '#/sales/returns', '#/sales/delivery-status', '#/sales/closing', '#/sales/tax', '#/sales/tax-check', '#/sales/book', '#/sales/ledger', '#/sales/aging'], ['sales']],
   [['#/purchase/bills', '#/purchase/calendar', '#/purchase/returns', '#/purchase/receipt-status', '#/purchase/closing', '#/purchase/tax', '#/purchase/tax-check', '#/purchase/book', '#/purchase/ledger', '#/purchase/aging'], ['purchase']],
   [['#/purchase/payments', '#/purchase/disbursements', '#/purchase/notes'], ['sales', 'purchase']],
 ];
@@ -601,7 +601,8 @@ const PAGES = {
   '#/sales/quotes': main => managedPage(main, '#/sales/quotes', pageQuoteList),
   '#/purchase/notes': main => pageNotes(main), // 15.165 어음 관리
   '#/purchase/calendar': main => pagePurchaseCalendar(main), // 15.176 매입 달력
-  '#/sales/calendar': main => pageSalesCalendar(main), // 15.166 매출 달력 // 15.157 납품현황(입고현황의 매출 쪽)
+  '#/sales/calendar': main => managedPage(main, '#/sales/calendar', pageSalesCalendar), // 15.166 매출 달력(15.224 매출전표 관리 탭)
+  '#/sales/reps': main => managedPage(main, '#/sales/reps', pageSalesReps), // 15.224 영업담당자별 현황 // 15.157 납품현황(입고현황의 매출 쪽)
   '#/sales/orders/new': main => managedPage(main, '#/sales/orders/new', pageSalesOrderEntry), // 15.178 수주 관리
   '#/sales/orders/edit': main => { let id = null; try { id = sessionStorage.getItem('wpa:so-edit'); } catch { id = null; } if (!id) { location.hash = '#/sales/orders'; return; } return managedPage(main, '#/sales/orders/edit', m => pageSalesOrderEntry(m, id)); }, // 15.179 수주 관리 · 수주 고치기
   '#/sales/orders': main => managedPage(main, '#/sales/orders', pageSalesOrderList),
@@ -678,7 +679,7 @@ function refreshFavNav() {
 // ── 15.170 「관리」 화면: 목록과 입력(만들기)을 한 메뉴로. 같은 화면 제목 아래 전환 단추, 입력 주소(/new)는 그대로 쓰되
 // 메뉴 강조·화면 탭·위치 표시는 관리 화면 하나로 묶는다(navRoute).
 const MANAGE = {
-  '#/sales/bills': { title: '매출전표 관리', tabs: [['#/sales/bills', '전표 목록'], ['#/sales/bills/new', '전표 입력']] },
+  '#/sales/bills': { title: '매출전표 관리', tabs: [['#/sales/bills', '전표 목록'], ['#/sales/bills/new', '전표 입력'], ['#/sales/calendar', '매출 달력'], ['#/sales/reps', '담당자별 현황']] },
   '#/sales/tax': { title: '세금계산서 관리', tabs: [['#/sales/tax', '계산서 목록'], ['#/sales/tax/new', '계산서 만들기']] },
   '#/sales/quotes': { title: '견적서 관리', tabs: [['#/sales/quotes', '견적서 목록'], ['#/sales/quotes/new', '견적서 작성']] },
   '#/sales/orders': { title: '수주 관리', tabs: [['#/sales/orders', '수주 목록'], ['#/sales/orders/new', '수주 입력']] },
@@ -700,7 +701,7 @@ const MANAGE = {
   '#/quality/voc/list': { title: 'VOC 관리', tabs: [['#/quality/voc/list', 'VOC 처리목록'], ['#/quality/voc/request', 'VOC 접수']] },
   '#/dev/list': { title: '개발 관리', tabs: [['#/dev/list', '개발리스트'], ['#/dev/request', '개발의뢰']] },
 };
-const ROUTE_ALIAS = { '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users', '#/logistics/receipt/new': '#/logistics/receive', '#/logistics/receipts': '#/logistics/receive', '#/logistics/ship/new': '#/logistics/ship', '#/purchase/laundry/new': '#/purchase/laundry', '#/prod/semi/new': '#/prod/semi', '#/prod/semi/cut/new': '#/prod/semi/cut', '#/prod/semi/wash/new': '#/prod/semi/wash', '#/quality/request': '#/quality/list', '#/quality/voc/request': '#/quality/voc/list', '#/dev/request': '#/dev/list' };
+const ROUTE_ALIAS = { '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/calendar': '#/sales/bills', '#/sales/reps': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users', '#/logistics/receipt/new': '#/logistics/receive', '#/logistics/receipts': '#/logistics/receive', '#/logistics/ship/new': '#/logistics/ship', '#/purchase/laundry/new': '#/purchase/laundry', '#/prod/semi/new': '#/prod/semi', '#/prod/semi/cut/new': '#/prod/semi/cut', '#/prod/semi/wash/new': '#/prod/semi/wash', '#/quality/request': '#/quality/list', '#/quality/voc/request': '#/quality/voc/list', '#/dev/request': '#/dev/list' };
 const navRoute = r => ROUTE_ALIAS[String(r || '#/').split('?')[0]] || String(r || '#/').split('?')[0];
 function managedTabs(main, route) {
   const m = MANAGE[navRoute(route)], h1 = $('h1', main); if (!m || !h1 || $('.manage-tabs', main)) return;
@@ -735,7 +736,7 @@ function bindNavFind() {
   if (!bindNavFind.once) { bindNavFind.once = true; // 문서 이벤트는 한 번만(화면마다 메뉴를 다시 그려도 쌓이지 않게). 누른 단추 글자가 바뀌어 떨어져도 경로로 판단.
     document.addEventListener('click', e => { const path = e.composedPath(); if (!path.some(n => n.classList?.contains('nav-search'))) $$('.nav-find-list').forEach(l => { l.hidden = true; }); if (!path.some(n => n.classList?.contains('prefs-menu'))) $$('.prefs-menu[open]').forEach(d => { d.open = false; }); }); }
   // 화면 설정: 언어·화면 모드·메뉴 위치·밀도 단추를 「⚙ 화면 설정」 안으로 모은다(theme.js·i18n.js가 머리줄에 넣는 단추를 옮김)
-  const gather = () => { const pop = $('.who .prefs-pop'); if (!pop) return; $$('.who > .lang-select, .who > .theme-toggle, .who > .skin-select').forEach(x => pop.append(x)); };
+  const gather = () => { const pop = $('.who .prefs-pop'); if (!pop) return; $$('.who > .lang-select, .who > .theme-toggle, .who > .skin-select, .who > .skin-face').forEach(x => pop.append(x)); };
   if (typeof applySkin === 'function' && ME?.ui) applySkin(ME.ui.skin || 'default'); // 15.220 계정에 저장된 스킨
   gather(); new MutationObserver(gather).observe($('.who'), { childList: true });
 }
@@ -1366,9 +1367,9 @@ const PHONE_GRID = [
   ['#workList', { a: ['샘플명', '제품명', '상품명', '타겟제품'], b: ['판정', '상태'], c: ['접수번호', '검사구분', '고객사', ['완료희망일', '희망']], d: ['상태'] }], // 15.219 분석·VOC·개발·샘플 리스트
   ['#taxList', { k: [''], a: ['거래처'], b: ['합계'], c: ['문서상태', ['작성일자', '작성'], '품목', '구분'] }], // 15.219 세금계산서 목록
   ['#mrList', { a: ['품목 · 수량'], b: ['진행'], c: ['업체 · 주문번호', ['출고 희망', '출고']], d: [''] }], // 15.219 생산의뢰
-  ['#scBills', { a: ['거래처'], b: ['합계금액'], c: ['전표번호', ['매출', '매출'], ['매입', '매입'], ['세액', '세액']] }], // 15.218 매출·매입 달력 납품전표 목록
+  ['#scBills', { a: ['거래처'], b: ['합계금액'], c: ['전표번호', ['영업사원', '담당'], ['매출', '매출'], ['매입', '매입'], ['세액', '세액']] }], // 15.218 매출·매입 달력 납품전표 목록
   ['#scItems', { a: ['제품명'], b: ['금액'], c: ['제품코드', '규격', ['수량', '수량'], ['단가', '단가']] }], // 15.218 세부품목내역
-  ['#billList', { k: [''], a: ['거래처'], b: ['합계'], c: ['전표번호', ['전표 일자', '일자'], ['명세서 일자', '일자'], '상태', '세금계산서'], d: [] }], // 15.215 매출·매입전표 목록
+  ['#billList', { k: [''], a: ['거래처'], b: ['합계'], c: ['전표번호', ['전표 일자', '일자'], ['명세서 일자', '일자'], ['영업담당', '담당'], '상태', '세금계산서'], d: [] }], // 15.215 매출·매입전표 목록
   ['#poList', { a: ['품목명'], b: ['수량'], c: ['거래처', '입고상태', ['납기일', '납기']], d: [''] }], // 15.212 (15.219 2줄로: 입고·잔량·의뢰번호는 상세에)
   ['#rcList', { k: [''], a: ['품목명'], b: ['발주수량'], c: ['거래처', '상태', ['납기일', '납기']], d: ['사진·검수'] }], // 15.212 (15.219 2줄로)
   ['.mr-needs', { a: ['품목'], b: ['생산 필요'], c: ['규격·사이즈', ['의뢰', '의뢰'], ['생산', '생산'], ['계획 안 됨', '미계획']] }], // 15.210

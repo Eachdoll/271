@@ -12,6 +12,7 @@ async function pageSalesBillEntry(main) {
       <label>전표 일자 *<input name="bill_date" type="date" required value="${todayStr()}"></label>
       <label>과세 구분<select name="tax_type"><option value="taxable">과세 (부가세 10%)</option><option value="zero">영세·면세 (부가세 0)</option></select></label>
       <label>출하일 범위<span class="bill-range"><input name="from" type="date" aria-label="출하일 시작"> ~ <input name="to" type="date" aria-label="출하일 끝"></span></label>
+      <label>영업담당자<input name="sales_rep" maxlength="50" list="sbRepList" autocomplete="off" placeholder="비우면 거래처 담당자"><datalist id="sbRepList"></datalist></label>
       <label class="span2">비고<input name="note" maxlength="500"></label>
     </div>
     <section class="pr-section"><h3>수주 잔량</h3><div data-order-lines><p class="muted small">거래처를 넣으면 나옵니다.</p></div></section>
@@ -27,6 +28,7 @@ async function pageSalesBillEntry(main) {
   const load = async (force = false) => {
     const customer = (input.dataset.partnerPrev ?? input.value).trim(), key = [customer, form.elements.from.value, form.elements.to.value].join('|');
     if (!force && key === loadedKey) return; loadedKey = key;
+    repFromCustomer(form.elements.sales_rep, customer); // 15.224
     if (!customer) { rows = []; orders = []; box.innerHTML = orderBox.innerHTML = '<p class="muted small">거래처를 넣으면 나옵니다.</p>'; totals(); return; }
     box.innerHTML = orderBox.innerHTML = '<p class="muted small">불러오는 중…</p>';
     let data, open; try { [data, open] = await Promise.all([api('GET', '/api/sales-bills/unbilled?' + new URLSearchParams({ customer, from: form.elements.from.value, to: form.elements.to.value })), api('GET', '/api/sales-orders/open-lines?' + new URLSearchParams({ customer }))]); } catch (error) { box.innerHTML = orderBox.innerHTML = `<p class="field-error">${esc(error.message)}</p>`; return; }
@@ -141,6 +143,7 @@ async function pageSalesBillEntry(main) {
   input.addEventListener('change', () => { clearTimeout(timer); load().catch(fail); });
   form.elements.from.onchange = form.elements.to.onchange = () => load().catch(fail);
   bindPartnerPicker(input, $('[data-partner-hint]', form), { type: 'sales' }).catch(() => {});
+  fillRepList($('#sbRepList', form)); form.elements.sales_rep.addEventListener('input', e => { e.target.dataset.auto = e.target.value ? '0' : '1'; });
   form.onsubmit = async e => {
     e.preventDefault(); if (busy) return;
     const v = formObj(form), picked = rows.filter(r => r.picked), extra = filledManual(), fromOrders = orders.filter(o => o.picked);
@@ -153,7 +156,7 @@ async function pageSalesBillEntry(main) {
     const badManual = extra.find(m => !m.item.trim() || m.qty === '' || m.price === ''); if (badManual) return toast('직접 입력 줄의 품목·수량·단가를 넣으세요.', 'err');
     busy = true; const button = $('[data-bill-save]', form); button.disabled = true;
     try {
-      const bill = await api('POST', '/api/sales-bills', { customer: v.customer, bill_date: v.bill_date, tax_type: v.tax_type, note: v.note, request_id: requestId,
+      const bill = await api('POST', '/api/sales-bills', { customer: v.customer, bill_date: v.bill_date, tax_type: v.tax_type, note: v.note, sales_rep: v.sales_rep, request_id: requestId,
         lines: [...fromOrders.map(o => ({ source_type: 'order', order_line_id: o.id, qty: o.take, unit_price: o.price, note: o.note })), ...picked.map(r => ({ source_type: 'ship', source_id: r.source_id, unit_price: r.price, note: r.note })), ...extra.map(m => ({ source_type: 'manual', item: m.item, spec: m.spec, qty: m.qty, unit: m.unit, unit_price: m.price, note: m.note }))] });
       toast(bill.duplicate ? `${bill.bill_no} 전표는 앞서 이미 저장되었습니다.` : `${bill.bill_no} 매출전표를 저장했습니다. 합계 ${won(bill.total)}원${fromOrders.length ? ` · 출하지시 ${fromOrders.length}건` : ''}`);
       requestId = crypto.randomUUID(); form.elements.note.value = ''; manual = []; drawManual();
@@ -174,6 +177,7 @@ function salesBillSheet(bill, after = null, { onClose = null } = {}) {
         <tr><th>전표번호</th><td>${esc(bill.bill_no)}${bill.status === 'cancelled' ? ' (취소)' : ''}</td><th>전표 일자</th><td>${esc(bill.bill_date)}</td></tr>
         <tr><th>거래처</th><td><b>${esc(bill.customer)}</b></td><th>과세 구분</th><td>${bill.tax_type === 'zero' ? '영세·면세' : '과세 10%'}</td></tr>
         <tr><th>공급자</th><td>${COMPANY_NAME}</td><th>작성</th><td>${esc(bill.created_by)} · ${esc(String(bill.created_at).slice(0, 16))}</td></tr>
+        <tr><th>영업담당자</th><td colspan="3">${bill.sales_rep ? `<b>${esc(bill.sales_rep)}</b>` : '<span class="muted">미지정</span>'} <button type="button" class="link-btn small no-print" data-bill-rep>담당자 바꾸기</button></td></tr>
       </tbody></table>
       <table class="po-items"><thead><tr><th>No</th><th>출하일</th><th>품목</th><th>규격</th><th>LOT</th><th class="r">수량</th><th>단위</th><th class="r">단가</th><th class="r">공급가액</th><th class="r">세액</th><th>비고</th></tr></thead>
       <tbody>${bill.lines.map((l, i) => `<tr><td class="c">${i + 1}</td><td class="c">${esc(l.ship_date || '')}</td><td>${esc(l.item)} ${catChip(l.category)}${l.product_code ? `<div class="po-code">${esc(l.product_code)}</div>` : ''}</td><td>${esc(l.spec)}</td><td>${esc(l.lot)}</td><td class="r">${fmtNum(l.qty)}</td><td>${esc(l.unit)}</td><td class="r">${fmtNum(l.unit_price)}</td><td class="r">${won(l.supply)}</td><td class="r">${won(l.vat)}</td><td>${esc(l.note)}${l.source_missing ? ' <b>(출하 삭제됨)</b>' : ''}${l.order_no ? `<div class="po-code">${esc(l.order_no)}${poOf(l.customer_po, l.order_note) ? ` · PO ${esc(poOf(l.customer_po, l.order_note))}` : ''}${l.ship_status === 'pending' ? ' · 출하 대기' : l.ship_status === 'cancelled' ? ' · 지시 취소' : ''}</div>` : ''}</td></tr>`).join('')}</tbody>
@@ -188,6 +192,12 @@ function salesBillSheet(bill, after = null, { onClose = null } = {}) {
   $('[data-inv-view]', m.el)?.addEventListener('click', async e => { try { taxInvoiceView(await api('GET', '/api/tax-invoices/' + e.currentTarget.dataset.invView)); } catch (error) { fail(error); } }); // 15.137
   $('[data-bill-ret]', m.el)?.addEventListener('click', async e => { try { returnSheet(await api('GET', '/api/returns/' + e.currentTarget.dataset.billRet)); } catch (error) { fail(error); } });
   $('[data-bill-edit]', m.el)?.addEventListener('click', () => billEditWindow('sales', bill, async next => { m.close(); salesBillSheet(next, after); await after?.(); }));
+  // 15.224 영업담당자 바꾸기(금액과 상관없어 마감·계산서와 관계없이)
+  $('[data-bill-rep]', m.el)?.addEventListener('click', async () => {
+    const values = await promptBox('영업담당자 바꾸기', `<p class="small muted">${esc(bill.bill_no)} · ${esc(bill.customer)}. 비우면 거래처 담당자로 집계됩니다.</p><label>영업담당자<input name="sales_rep" maxlength="50" list="sbRepEdit" autocomplete="off" value="${esc(bill.sales_rep || '')}"><datalist id="sbRepEdit"></datalist></label>`, { onOpen: el => fillRepList($('#sbRepEdit', el)) });
+    if (!values) return;
+    try { const next = await api('PUT', `/api/sales-bills/${bill.id}/rep`, { sales_rep: values.sales_rep }); toast('영업담당자를 바꿨습니다.'); m.close(); salesBillSheet(next, after); await after?.(); } catch (error) { fail(error); }
+  });
   $('[data-close]', m.el).onclick = m.close;
   $('[data-print]', m.el).onclick = () => rcPrint(`매출전표_${bill.bill_no}`);
   $('[data-bill-stmt]', m.el)?.addEventListener('click', () => statementSheet([bill]).catch(fail));
@@ -293,7 +303,7 @@ async function billLinesExcel(side, { from, to, party }) {
 
 async function pageSalesBillList(main) {
   main.innerHTML = `<h1>매출전표 목록</h1>
-  <form class="list-filters toolbar" data-read-only id="sbillFilters"><label>전표 일자<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>거래처<input name="customer" maxlength="100"></label><label>상태<select name="status"><option value="confirmed" selected>확정</option><option value="">전체(취소 포함)</option><option value="cancelled">취소만</option></select></label><label>분류<select name="category">${catOptions(['제품', '상품', '원자재', '부자재', '반제품', '임가공', '미분류'])}</select></label><label class="grow">검색<input type="search" name="q" placeholder="전표번호·거래처·비고·입력자"></label><button class="btn primary">조회</button></form>
+  <form class="list-filters toolbar" data-read-only id="sbillFilters"><label>전표 일자<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>거래처<input name="customer" maxlength="100"></label><label>상태<select name="status"><option value="confirmed" selected>확정</option><option value="">전체(취소 포함)</option><option value="cancelled">취소만</option></select></label><label>영업담당자<select name="rep" data-rep-select><option value="">전체</option></select></label><label>분류<select name="category">${catOptions(['제품', '상품', '원자재', '부자재', '반제품', '임가공', '미분류'])}</select></label><label class="grow">검색<input type="search" name="q" placeholder="전표번호·거래처·비고·입력자"></label><button class="btn primary">조회</button></form>
   <div class="result-bar"><div id="billSummary" class="counts"></div><div class="result-tools bulk-bar" id="billBulk"><span class="small" data-bulk-info>체크한 전표 없음</span><button type="button" class="btn primary" data-bulk-tax disabled title="이미 담긴 전표는 체크할 수 없습니다(중복 방지)">체크한 전표 세금계산서 담기</button><button type="button" class="btn" data-stmt title="고른 거래처의 조회 기간 확정 전표를 한 장으로">거래명세서 (기간 합산)</button><button type="button" class="btn" data-xlsx>엑셀 (줄별)</button></div></div><div id="billList"></div><div class="actions"><button type="button" class="btn" id="billMore" hidden>더 보기</button></div>`;
   const form = $('#sbillFilters', main);
   $('[data-stmt]', main).onclick = async () => {
@@ -313,9 +323,10 @@ async function pageSalesBillList(main) {
     rows = next ? rows.concat(data.rows) : data.rows; page = data.page; $('#billMore', main).hidden = !data.more;
     const live = rows.filter(r => r.status === 'confirmed');
     $('#billSummary', main).innerHTML = resultCount(rows.length, data.more, `확정 합계 ${won(live.reduce((t, r) => t + r.total, 0))}원`) + catSummary(data.by_category, '분류별'); // 15.180 결과 줄
-    $('#billList', main).innerHTML = rows.length ? `<div class="table-wrap dense-wrap"><table class="grid bill-list dense-grid"><thead><tr><th class="pick-cell"><input type="checkbox" data-bulk-all aria-label="담을 수 있는 전표 모두 고르기"></th><th>전표번호</th><th>전표 일자</th><th>거래처</th><th class="r">줄</th><th class="r">공급가액</th><th class="r">부가세</th><th class="r">합계</th><th>상태</th><th>세금계산서</th><th>입력</th></tr></thead>${billMonthBody(rows, 5, 3, r => { const inv = r.invoice ? r.invoice.split('|') : null; return `<tr class="row-open${r.status === 'cancelled' ? ' row-off' : ''}" data-row-bill="${r.id}" title="줄을 누르면 전표를 엽니다"><td class="pick-cell">${r.status === 'confirmed' && !r.invoice ? `<input type="checkbox" data-bulk-pick="${r.id}" aria-label="${esc(r.bill_no)} 고르기">` : `<input type="checkbox" disabled title="${r.invoice ? '이미 세금계산서에 담김' : '취소된 전표'}" aria-label="${esc(r.bill_no)} 고를 수 없음">`}</td><td data-card-primary><button type="button" class="link-btn" data-bill-open="${r.id}">${esc(r.bill_no)}</button></td><td>${esc(r.bill_date)}</td><td>${esc(r.customer)} <span class="cell-chips">${r.return_ref ? `<button type="button" class="chip red ret-chip" data-list-ret="${esc(r.return_ref.split('|')[1])}" title="반입 전표 보기">반입 ${esc(r.return_ref.split('|')[0])}</button> ` : ''}${catChips(r.categories)}</span></td><td class="r">${fmtNum(r.line_count)}</td><td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b></td><td>${r.status === 'confirmed' ? '<span class="chip green">확정</span>' : '<span class="chip">취소</span>'}</td><td>${inv ? `${taxChip(inv[1])}<div><button type="button" class="link-btn small" data-inv-open="${esc(inv[2])}" title="세금계산서 보기">${esc(inv[0])}</button></div>` : r.status === 'confirmed' ? '<span class="small muted">안 담음</span>' : ''}</td><td class="small muted">${esc(r.created_by)}</td></tr>`; })}</table></div>` : '<div class="empty">조건에 맞는 매출전표가 없습니다.</div>';
+    $('#billList', main).innerHTML = rows.length ? `<div class="table-wrap dense-wrap"><table class="grid bill-list dense-grid"><thead><tr><th class="pick-cell"><input type="checkbox" data-bulk-all aria-label="담을 수 있는 전표 모두 고르기"></th><th>전표번호</th><th>전표 일자</th><th>거래처</th><th>영업담당</th><th class="r">줄</th><th class="r">공급가액</th><th class="r">부가세</th><th class="r">합계</th><th>상태</th><th>세금계산서</th><th>입력</th></tr></thead>${billMonthBody(rows, 6, 3, r => { const inv = r.invoice ? r.invoice.split('|') : null; return `<tr class="row-open${r.status === 'cancelled' ? ' row-off' : ''}" data-row-bill="${r.id}" title="줄을 누르면 전표를 엽니다"><td class="pick-cell">${r.status === 'confirmed' && !r.invoice ? `<input type="checkbox" data-bulk-pick="${r.id}" aria-label="${esc(r.bill_no)} 고르기">` : `<input type="checkbox" disabled title="${r.invoice ? '이미 세금계산서에 담김' : '취소된 전표'}" aria-label="${esc(r.bill_no)} 고를 수 없음">`}</td><td data-card-primary><button type="button" class="link-btn" data-bill-open="${r.id}">${esc(r.bill_no)}</button></td><td>${esc(r.bill_date)}</td><td>${esc(r.customer)} <span class="cell-chips">${r.return_ref ? `<button type="button" class="chip red ret-chip" data-list-ret="${esc(r.return_ref.split('|')[1])}" title="반입 전표 보기">반입 ${esc(r.return_ref.split('|')[0])}</button> ` : ''}${catChips(r.categories)}</span></td><td class="nowrap">${r.rep ? esc(r.rep) : '<span class="muted">—</span>'}</td><td class="r">${fmtNum(r.line_count)}</td><td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b></td><td>${r.status === 'confirmed' ? '<span class="chip green">확정</span>' : '<span class="chip">취소</span>'}</td><td>${inv ? `${taxChip(inv[1])}<div><button type="button" class="link-btn small" data-inv-open="${esc(inv[2])}" title="세금계산서 보기">${esc(inv[0])}</button></div>` : r.status === 'confirmed' ? '<span class="small muted">안 담음</span>' : ''}</td><td class="small muted">${esc(r.created_by)}</td></tr>`; })}</table></div>` : '<div class="empty">조건에 맞는 매출전표가 없습니다.</div>';
   };
   rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
+  await repSelect(form.elements.rep); form.elements.rep.addEventListener('change', () => load().catch(fail)); // 15.224
   form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
   $('[data-xlsx]', main).onclick = () => billLinesExcel('sales', { from: form.elements.from.value, to: form.elements.to.value, party: form.elements.customer.value.trim() }).catch(fail);
   $('#billMore', main).onclick = () => load(true).catch(fail);
@@ -742,7 +753,7 @@ async function pageBillCalendar(main, side) {
   main.innerHTML = `<h1>${C.title}</h1>
   <p class="muted small">날짜를 누르면 그날 ${C.word}전표가, 전표를 누르면 품목이 나옵니다. 「+ 전표 추가」는 고른 날짜로 ${C.word}전표 입력을 열고, 「수정」은 일자·단가·비고를 고칩니다. 금액은 ${C.help}이고 V.A.T 별도 ${C.amt}·세액·합계로 봅니다.</p>
   <form class="list-filters toolbar lf-oneline sc-bar" data-read-only id="scForm"><div class="sc-month"><button type="button" class="btn" data-sc-move="-1" aria-label="이전 달">◀</button><input type="month" name="month" value="${month}" aria-label="연·월"><button type="button" class="btn" data-sc-move="1" aria-label="다음 달">▶</button><button type="button" class="btn" data-sc-today>오늘</button></div>
-    <label class="lf-partner">거래처<input name="${C.who}" maxlength="100"></label><button class="btn primary">조회</button></form>
+    <label class="lf-partner">거래처<input name="${C.who}" maxlength="100"></label>${P ? '' : '<label>영업담당자<select name="rep"><option value="">전체</option></select></label>'}<button class="btn primary">조회</button></form>
   <div class="sc-grid">
     <div class="sc-left"><section class="sc-card"><div id="scCal"></div></section><section class="sc-card"><h2 class="sc-h">${C.daily} <span class="small muted" id="scDays"></span></h2><div id="scDaily"></div></section></div>
     <div class="sc-right"><section class="sc-card"><h2 class="sc-h">${C.doc} 목록 <span class="small muted" id="scDayLabel"></span><button type="button" class="btn small primary sc-add" data-sc-add>+ 전표 추가</button></h2><div id="scBills"></div></section><section class="sc-card"><h2 class="sc-h">${C.items} <span class="small muted" id="scBillLabel"></span></h2><div id="scItems"></div></section></div>
@@ -750,6 +761,8 @@ async function pageBillCalendar(main, side) {
   const form = $('#scForm', main);
   bindPartnerPicker(form.elements[C.who], null, { type: C.type }).catch(() => {});
   const partner = () => form.elements[C.who].value.trim();
+  const repQ = () => (P ? {} : { rep: form.elements.rep.value }); // 15.224
+  if (!P) { await repSelect(form.elements.rep); form.elements.rep.addEventListener('change', () => { billId = null; load().catch(fail); }); }
   const save = () => { try { sessionStorage.setItem(C.key, JSON.stringify({ month, day })); } catch { /* 편의 */ } };
   const W = ['일', '월', '화', '수', '목', '금', '토'];
   const drawCal = () => {
@@ -784,19 +797,19 @@ async function pageBillCalendar(main, side) {
   };
   const drawBills = async () => {
     $('#scDayLabel', main).textContent = `${day} (${W[new Date(day).getDay()]})`;
-    const q = new URLSearchParams({ from: day, to: day, status: 'confirmed', [C.who]: partner() });
+    const q = new URLSearchParams({ from: day, to: day, status: 'confirmed', [C.who]: partner(), ...repQ() });
     const data = await api('GET', C.list + '?' + q); if (!main.isConnected) return;
     const rows = data.rows; if (!rows.some(r => r.id === billId)) billId = rows[0]?.id ?? null;
     const sum = k => rows.reduce((t, r) => t + (Number(r[k]) || 0), 0);
-    $('#scBills', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid keep-table sc-table" data-no-sort data-keep-cols><thead><tr><th class="r">No</th><th>전표번호</th><th>거래처</th><th class="r">${C.amt}</th><th class="r">세액</th><th class="r">합계금액</th></tr></thead>
-      <tbody>${rows.map((r, i) => `<tr class="sc-row${r.id === billId ? ' on' : ''}" data-sc-bill="${r.id}" tabindex="0" title="두 번 누르면 전표 열기"><td class="r">${i + 1}</td><td class="nowrap">${esc(r.bill_no)}</td><td>${esc(r[C.who])}</td><td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b></td></tr>`).join('')}</tbody>
-      <tfoot><tr><th colspan="3">합계 · ${fmtNum(rows.length)}건${data.more ? ' (앞 200건)' : ''}</th><td class="r">${won(sum('supply_total'))}</td><td class="r">${won(sum('vat_total'))}</td><td class="r"><b>${won(sum('total'))}</b></td></tr></tfoot></table></div>`
+    $('#scBills', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid keep-table sc-table" data-no-sort data-keep-cols><thead><tr><th class="r">No</th><th>전표번호</th><th>거래처</th>${P ? '' : '<th>영업사원</th>'}<th class="r">${C.amt}</th><th class="r">세액</th><th class="r">합계금액</th></tr></thead>
+      <tbody>${rows.map((r, i) => `<tr class="sc-row${r.id === billId ? ' on' : ''}" data-sc-bill="${r.id}" tabindex="0" title="두 번 누르면 전표 열기"><td class="r">${i + 1}</td><td class="nowrap">${esc(r.bill_no)}</td><td>${esc(r[C.who])}</td>${P ? '' : `<td class="nowrap">${r.rep ? esc(r.rep) : '<span class="muted">—</span>'}</td>`}<td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b></td></tr>`).join('')}</tbody>
+      <tfoot><tr><th colspan="${P ? 3 : 4}">합계 · ${fmtNum(rows.length)}건${data.more ? ' (앞 200건)' : ''}</th><td class="r">${won(sum('supply_total'))}</td><td class="r">${won(sum('vat_total'))}</td><td class="r"><b>${won(sum('total'))}</b></td></tr></tfoot></table></div>`
       : `<div class="empty">이 날 ${C.word}전표가 없습니다. 「+ 전표 추가」로 입력하세요.</div>`;
     await drawItems();
   };
   const load = async () => {
     form.elements.month.value = month;
-    cal = await api('GET', C.cal + '?' + new URLSearchParams({ month, [C.who]: partner() })); if (!main.isConnected) return;
+    cal = await api('GET', C.cal + '?' + new URLSearchParams({ month, [C.who]: partner(), ...repQ() })); if (!main.isConnected) return;
     if (day.slice(0, 7) !== month) day = cal.days.at(-1)?.date || `${month}-01`;
     save(); drawCal(); drawDaily(); await drawBills();
   };
@@ -817,5 +830,49 @@ async function pageBillCalendar(main, side) {
   });
   main.addEventListener('dblclick', e => { const b = e.target.closest('[data-sc-bill]'); if (b) api('GET', C.one + b.dataset.scBill).then(x => C.sheet(x, () => load())).catch(fail); });
   main.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-sc-day], [data-sc-bill]')) { e.preventDefault(); e.target.click(); } });
+  await load();
+}
+
+// ── 15.224 영업담당자 ──
+let SALES_REPS = null;
+function salesRepNames(fresh = false) { if (!SALES_REPS || fresh) SALES_REPS = api('GET', '/api/sales-reps').then(r => r.reps).catch(() => []); return SALES_REPS; }
+async function fillRepList(dl) { if (dl) dl.innerHTML = (await salesRepNames()).map(n => `<option value="${esc(n)}">`).join(''); }
+async function repSelect(sel, value = '') { const names = await salesRepNames(true); sel.innerHTML = `<option value="">전체</option>${names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}<option value="미지정">미지정</option>`; sel.value = value; }
+// 거래처를 고르면 그 거래처 기본 담당자를 채움(직접 고친 값은 그대로)
+let repSeq = 0;
+function repFromCustomer(input, customer) {
+  if (!input || input.dataset.auto === '0') return; const my = ++repSeq;
+  if (!customer) { input.value = ''; return; }
+  api('GET', '/api/vendors?' + new URLSearchParams({ q: customer })).then(vs => { if (my !== repSeq || input.dataset.auto === '0') return; const v = vs.find(x => x.name === customer); input.value = v?.sales_rep || ''; input.dataset.auto = '1'; }).catch(() => {});
+}
+async function pageSalesReps(main) {
+  const r0 = { from: todayStr().slice(0, 7) + '-01', to: todayStr() };
+  main.innerHTML = `<h1>영업담당자별 현황</h1>
+  <p class="muted small">담당자마다 맡은 거래처와 기간 매출(확정 매출전표)·미수 잔액을 봅니다. 전표의 영업담당자가 비어 있으면 거래처에 정한 기본 담당자로 셉니다. 거래처 담당자는 「거래처 관리 › 수정」에서, 전표 담당자는 전표 창의 「담당자 바꾸기」에서 정합니다.</p>
+  <form class="list-filters toolbar" data-read-only id="repForm"><label>시작일<input type="date" name="from" value="${r0.from}"></label><label>종료일<input type="date" name="to" value="${r0.to}"></label><label>영업담당자<select name="rep"><option value="">전체</option></select></label><label><input type="checkbox" name="active"> 매출 있는 거래처만</label><button class="btn primary">조회</button><button type="button" class="btn" data-xlsx>엑셀</button></form>
+  <div id="repSum"></div><div id="repRows"></div>`;
+  const form = $('#repForm', main); let data = null;
+  rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
+  await repSelect(form.elements.rep);
+  const name = r => r || '미지정';
+  const visible = () => data.rows.filter(r => !form.elements.active.checked || r.n);
+  const load = async () => {
+    data = await api('GET', '/api/sales-reps/summary?' + new URLSearchParams({ from: form.elements.from.value, to: form.elements.to.value, rep: form.elements.rep.value })); if (!main.isConnected) return;
+    const T = k => data.reps.reduce((t, g) => t + g[k], 0);
+    $('#repSum', main).innerHTML = data.reps.length ? `<div class="table-wrap"><table class="grid rep-sum"><caption class="sr-only">담당자별 합계</caption><thead><tr><th>영업담당자</th><th class="r">담당 거래처</th><th class="r">매출 거래처</th><th class="r">전표</th><th class="r">공급가액</th><th class="r">세액</th><th class="r">합계</th><th class="r">미수 잔액</th></tr></thead>
+      <tbody>${data.reps.map(g => `<tr class="row-open" data-rep-pick="${esc(g.rep || '미지정')}" title="누르면 이 담당자만"><td data-card-primary><b>${esc(name(g.rep))}</b></td><td class="r">${fmtNum(g.customers)}</td><td class="r">${fmtNum(g.active)}</td><td class="r">${fmtNum(g.n)}</td><td class="r">${won(g.supply)}</td><td class="r">${won(g.vat)}</td><td class="r"><b>${won(g.total)}</b></td><td class="r">${won(g.balance)}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><th>합계</th><td class="r">${fmtNum(T('customers'))}</td><td class="r">${fmtNum(T('active'))}</td><td class="r">${fmtNum(T('n'))}</td><td class="r">${won(T('supply'))}</td><td class="r">${won(T('vat'))}</td><td class="r"><b>${won(T('total'))}</b></td><td class="r">${won(T('balance'))}</td></tr></tfoot></table></div>` : '<div class="empty">담당자가 정해진 거래처나 이 기간 매출이 없습니다. 거래처 관리에서 영업담당자를 정하세요.</div>';
+    const rows = visible();
+    $('#repRows', main).innerHTML = rows.length ? `<h2>담당업체 현황 <span class="small muted">${fmtNum(rows.length)}곳</span></h2><div class="table-wrap"><table class="grid rep-rows"><thead><tr><th>영업담당자</th><th>거래처</th><th>코드</th><th class="r">전표</th><th class="r">공급가액</th><th class="r">세액</th><th class="r">합계</th><th>마지막 매출</th><th class="r">미수 잔액</th><th></th></tr></thead>
+      <tbody>${rows.map(r => `<tr><td>${esc(name(r.rep))}</td><td data-card-primary><b>${esc(r.customer)}</b>${r.assigned ? '' : ' <span class="chip" title="거래처 기본 담당자가 아니라 전표에 직접 정한 담당자">전표 지정</span>'}</td><td class="nowrap">${esc(r.code || '')}</td><td class="r">${fmtNum(r.n)}</td><td class="r">${won(r.supply)}</td><td class="r">${won(r.vat)}</td><td class="r"><b>${won(r.total)}</b></td><td>${r.last_date ? esc(r.last_date) : '<span class="muted">이 기간 없음</span>'}</td><td class="r">${r.balance ? won(r.balance) : '0'}</td><td class="nowrap"><button type="button" class="btn small" data-rep-bills="${esc(r.customer)}|${esc(r.rep || '미지정')}">전표</button></td></tr>`).join('')}</tbody></table></div>` : '';
+  };
+  form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
+  form.elements.rep.addEventListener('change', () => load().catch(fail));
+  form.elements.active.addEventListener('change', () => load().catch(fail));
+  main.addEventListener('click', e => {
+    const p = e.target.closest('[data-rep-pick]'); if (p) { form.elements.rep.value = p.dataset.repPick; load().catch(fail); return; }
+    const b = e.target.closest('[data-rep-bills]'); if (b) { const [customer, rep] = b.dataset.repBills.split('|'); try { sessionStorage.setItem('wpa:sbill-filter', JSON.stringify({ customer, rep, from: form.elements.from.value, to: form.elements.to.value })); } catch { /* 편의 */ } location.hash = '#/sales/bills'; }
+  });
+  $('[data-xlsx]', main).onclick = () => { if (!data) return; xlsxDownload(`영업담당자별현황_${form.elements.from.value}_${form.elements.to.value}.xlsx`, { sheet: '담당업체', titles: [`영업담당자별 현황 ${form.elements.from.value} ~ ${form.elements.to.value}`], columns: [['rep', '영업담당자'], ['customer', '거래처'], ['code', '코드'], ['n', '전표'], ['supply', '공급가액'], ['vat', '세액'], ['total', '합계'], ['last_date', '마지막 매출'], ['balance', '미수 잔액']], rows: visible().map(r => ({ ...r, rep: name(r.rep), last_date: r.last_date || '' })) }); };
   await load();
 }
