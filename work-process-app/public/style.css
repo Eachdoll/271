@@ -3252,3 +3252,7 @@ form.list-filters .range-presets.rp-compact .rp-name { align-self: center; }
   table.member-grid.matrix td.c input[type=checkbox] { width: 18px; height: 18px; }
   .table-wrap:has(> table.member-grid.matrix) { overflow: visible; border: 1px solid var(--line); border-radius: var(--radius, 12px); }
 }
+/* 15.236 메뉴 보기: 권한이 없어 숨는 화면 안내 줄 */
+.member-grid tr.mv-hint > td { background: color-mix(in srgb, var(--accent-soft) 45%, transparent) !important; text-align: left; padding: 6px 12px !important; line-height: 1.7; }
+.member-grid .mv-need { display: inline-block; margin-right: 10px; }
+.member-grid tr.mv-hint > td, .member-grid tr.mv-hint .mv-need, .member-grid tr.mv-hint .small { white-space: normal !important; overflow-wrap: anywhere; }
