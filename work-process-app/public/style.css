@@ -2949,10 +2949,10 @@ form.list-filters > label.rp-moved, .toolbar > label.rp-moved { display: none !i
 :root[data-skin="cat"] {
   --ct-face: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 30'%3E%3Cpath d='M16 28 S2 19.5 2 10 C2 5 5.6 2 9.6 2 c2.9 0 5 1.6 6.4 3.8 C17.4 3.6 19.5 2 22.4 2 C26.4 2 30 5 30 10 c0 9.5-14 18-14 18z' fill='%23ff5c8a'/%3E%3Cpath d='M8 8 q2-3 5-2' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' opacity='.7'/%3E%3C/svg%3E"); --ct-bow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 22'%3E%3Cpath d='M12 21 S1 14 1 7 C1 3 4 1 7 1 c2.4 0 4 1.4 5 3 c1-1.6 2.6-3 5-3 c3 0 6 2 6 6 c0 7-11 14-11 14z' fill='%23ff5c8a'/%3E%3C/svg%3E");
   --ns-navy: #e8456f; --ns-navy-2: #f0628a; --ns-pill: #e60033;
-  --accent: #e60033; --accent-soft: #ffe3ea; --accent-ink: #c4002b;
+  --accent: #e60033; --accent-soft: var(--ct-soft, #ffe3ea); --accent-ink: var(--ct-ink, #c4002b);
   --btn-primary: #e60033; --btn-primary-hover: #c4002b;
-  --erp-head: #ffe8ee; --erp-head-ink: #c4002b; --erp-head-line: #ffc6d3;
-  --row-hover: #fff0f4; --zebra: #fff9fb; --total-bg: #fff0f4; --erp-sum: #fff0f4;
+  --erp-head: var(--ct-head, #ffe8ee); --erp-head-ink: var(--ct-ink, #c4002b); --erp-head-line: var(--ct-line, #ffc6d3);
+  --row-hover: var(--ct-hover, #fff0f4); --zebra: var(--ct-zebra, #fff9fb); --total-bg: var(--ct-hover, #fff0f4); --erp-sum: var(--ct-hover, #fff0f4); /* 15.246 고른 색에 맞춘 옅은 색(--ct-*)은 theme.js가 넣음 */
   --radius: 14px; --radius-md: 14px; --radius-xl: 18px;
 }
 @media (prefers-color-scheme: dark) { :root[data-skin="cat"]:not([data-theme="light"]) { --ns-navy: #9c1f40; --ns-navy-2: #b3264c; --ns-pill: #ff4d73; --accent: #ff7a98; --accent-soft: #3d1a24; --btn-primary: #e60033; --btn-primary-hover: #b8002a; --erp-head: #3a1f28; --erp-head-ink: #ffb3c4; --erp-head-line: #5c2a39; --row-hover: #2e1b21; --zebra: #24171c; --total-bg: #2c1a20; --erp-sum: #2c1a20; } }
@@ -2977,7 +2977,7 @@ form.list-filters > label.rp-moved, .toolbar > label.rp-moved { display: none !i
 /* 자료 없음 화면: 고양이 얼굴 */
 :root[data-skin="cat"] .empty::before { content: ''; -webkit-mask: none; mask: none; display: block; width: 70px; height: 64px; margin: 0 auto 10px; background: var(--ct-face) center / contain no-repeat; opacity: .9; }
 /* 바닥: 무늬 없이 아주 옅은 분홍 */
-:root[data-skin="cat"]:not([data-theme="dark"]) body { background-color: #fff6f8; }
+:root[data-skin="cat"]:not([data-theme="dark"]) body { background-color: var(--ct-bg, #fff6f8); } /* 15.246 바탕도 고른 색 */
 @media (prefers-color-scheme: dark) { :root[data-skin="cat"]:not([data-theme="light"]) body { background-image: none; } }
 @media print { :root[data-skin="cat"] .top::after, :root[data-skin="cat"] .brand-text::after, :root[data-skin="cat"] .dash-head h1::after, :root[data-skin="cat"] .empty::before, :root[data-skin="cat"] .dash-section > h2::before, :root[data-skin="cat"] .tasks h2::before { display: none; } :root[data-skin="cat"] body { background: #fff; } }
 

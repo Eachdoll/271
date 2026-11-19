@@ -35,7 +35,9 @@ function skinColor() { try { const v = localStorage.getItem(COLOR_KEY) || ''; re
 function shade(hex, f) { const n = parseInt(hex.slice(1), 16), c = [n >> 16, (n >> 8) & 255, n & 255].map(v => Math.round(f < 0 ? v * (1 + f) : v + (255 - v) * f)); return '#' + c.map(v => Math.max(0, Math.min(255, v)).toString(16).padStart(2, '0')).join(''); }
 function applySkinColor() {
   const root = document.documentElement, c = skinColor(), on = c && root.dataset.skin === 'cat';
-  const vars = { '--ct-main': c, '--ct-top': shade(c, 0.12), '--ct-top1': shade(c, 0.25), '--ct-top2': shade(c, -0.08), '--ns-navy': shade(c, 0.12), '--ns-navy-2': shade(c, 0.25), '--ns-pill': c, '--accent': c, '--btn-primary': c, '--btn-primary-hover': shade(c, -0.18) };
+  const vars = { '--ct-main': c, '--ct-top': shade(c, 0.12), '--ct-top1': shade(c, 0.25), '--ct-top2': shade(c, -0.08), '--ns-navy': shade(c, 0.12), '--ns-navy-2': shade(c, 0.25), '--ns-pill': c, '--accent': c, '--btn-primary': c, '--btn-primary-hover': shade(c, -0.18),
+    // 15.246 바탕·표 머리·줄 강조도 고른 색의 옅은 색으로(다크 모드는 style.css의 어두운 값이 이김)
+    '--ct-bg': shade(c, 0.95), '--ct-soft': shade(c, 0.86), '--ct-head': shade(c, 0.89), '--ct-ink': shade(c, -0.18), '--ct-line': shade(c, 0.72), '--ct-hover': shade(c, 0.93), '--ct-zebra': shade(c, 0.97) };
   for (const [k, v] of Object.entries(vars)) { if (on) root.style.setProperty(k, v); else root.style.removeProperty(k); }
   for (const b of document.querySelectorAll('.skin-face .sw')) b.classList.toggle('on', b.dataset.sw === c);
   for (const i of document.querySelectorAll('.skin-face input[type=color]')) i.value = c || '#e60033';
@@ -48,7 +50,7 @@ function applyFace() {
 function setFaceFile(file) {
   return new Promise((resolve, reject) => {
     if (!file || !/^image\/(png|jpeg|webp|gif)$/.test(file.type)) return reject(new Error('PNG·JPG·WEBP·GIF 그림을 고르세요.'));
-    if (file.size > 5 * 1024 * 1024) return reject(new Error('그림은 5MB 이하로 고르세요.'));
+    if (file.size > 10 * 1024 * 1024) return reject(new Error('그림은 10MB 이하로 고르세요.')); // 15.246 5MB → 10MB(저장은 작게 줄여서)
     const img = new Image(), url = URL.createObjectURL(file);
     img.onload = () => {
       const k = Math.min(1, 256 / Math.max(img.width, img.height)), c = document.createElement('canvas');
