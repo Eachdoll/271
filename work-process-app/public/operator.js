@@ -29,7 +29,7 @@ function operatorSemiHistory(rows) {
   return `<section class="card"><h3>내가 입력한 최근 기록</h3><p class="small muted">조회 기간 내 최근 20건 · 정정이 필요하면 생산 담당자에게 요청하세요.</p>${rows.length ? `<div class="operator-history">${rows.slice(0,20).map(r => `<article><div><b>${esc(r.item_name || semiTypeLabel(r))} ${esc(r.spec)}</b><p class="small muted">${esc(r.work_date)} · ${esc(r.unit_name)}${r.process==='wash'?' · '+esc(r.start_time||'시각 미기록'):''}${r.product_code?' · '+esc(r.product_code):''}</p></div>${r.process==='wash'?`<div>세탁수량 <b>${fmtNum(r.qty+(r.defect_qty||0))} ${esc(r.unit)}</b></div>`:`<div>양품 <b>${fmtNum(r.qty)} ${esc(r.unit)}</b><br><span class="small muted">불량 ${fmtNum(r.defect_qty || 0)} ${esc(r.unit)}</span></div>`}</article>`).join('')}</div>` : '<p class="muted">아직 입력한 기록이 없습니다.</p>'}</section>`;
 }
 async function operatorFinished(main) {
-  main.innerHTML = `<h1>완제품 실적 입력</h1><p class="muted">생산일과 계획을 선택한 뒤 이번에 생산한 수량을 입력하세요.</p><form id="operatorActual" class="card stack"><label>생산일 *<input name="production_date" type="date" value="${todayStr()}" max="${todayStr()}" required></label><label>생산계획 *<select name="schedule_id" required disabled><option value="">계획을 불러오는 중…</option></select></label><p id="operatorPlan" class="muted" role="status"></p><label>이번 생산수량 *<input name="qty" type="number" min="0" step="any" required inputmode="decimal" placeholder="누계가 아닌 이번 생산량"></label><label>메모 (선택)<input name="note" maxlength="1000"></label><p id="operatorSaveStatus" role="status" class="small muted"></p><button type="submit" class="btn primary" disabled>실적 저장</button></form><section class="card"><div class="actions"><h3>선택한 날짜의 내 입력 기록</h3><button type="button" class="btn small" id="operatorRefresh">다시 조회</button></div><div id="operatorHistory"></div><p class="small muted">최근 100건 · 수정·취소가 필요하면 생산 담당자에게 요청하세요.</p></section>`;
+  main.innerHTML = `<h1>완제품 실적 입력</h1><p class="muted">생산일과 계획을 선택한 뒤 이번에 생산한 수량을 입력하세요.</p><form id="operatorActual" class="card stack"><label>생산일 *<input name="production_date" type="date" value="${todayStr()}" max="${todayStr()}" required></label><label>생산계획 *<select name="schedule_id" required disabled><option value="">계획을 불러오는 중…</option></select></label><p id="operatorPlan" class="muted" role="status"></p><label>이번 생산수량 *<input name="qty" type="number" min="0" step="any" required inputmode="decimal" placeholder="누계가 아닌 이번 생산량"></label><button type="button" class="btn" id="opBags" title="이번 포장에 쓴 세탁 완료 봉투 LOT">봉투 LOT 고르기 <b id="opBagN">0</b></button><label>메모 (선택)<input name="note" maxlength="1000"></label><p id="operatorSaveStatus" role="status" class="small muted"></p><button type="submit" class="btn primary" disabled>실적 저장</button></form><section class="card"><div class="actions"><h3>선택한 날짜의 내 입력 기록</h3><button type="button" class="btn small" id="operatorRefresh">다시 조회</button></div><div id="operatorHistory"></div><p class="small muted">최근 100건 · 수정·취소가 필요하면 생산 담당자에게 요청하세요.</p></section>`;
   const form = $('#operatorActual',main), select = form.elements.schedule_id, date = form.elements.production_date, button = $('[type=submit]',form), status = $('#operatorSaveStatus',main);
   let plans = [], ready = false, busy = false, sequence = 0, desiredPlan = '', requestId = crypto.randomUUID();
   const planInfo = () => {
@@ -58,14 +58,18 @@ async function operatorFinished(main) {
   });
   date.onchange = () => loadPlans(''); select.onchange = () => { desiredPlan = select.value; planInfo(); };
   $('#operatorRefresh',main).onclick = () => { if (!busy) loadPlans(); };
+  let opBags = [];
+  const opBagBtn = $('#opBags', main), opMats = p => { try { return JSON.parse(p?.materials_json || '[]'); } catch { return []; } };
+  if (opBagBtn) opBagBtn.onclick = async () => { const chosen = plans.find(p => String(p.id) === select.value); if (!chosen) return toast('계획을 먼저 고르세요.', 'err'); const picked = await packPickBags({ product: chosen.product, bom_snapshot: chosen.bom_snapshot || { materials: (() => { try { return JSON.parse(chosen.materials_json || '[]'); } catch { return []; } })() } }, opBags).catch(e => { fail(e); return null; }); if (!picked) return; opBags = picked; const n = $('#opBagN', main); if (n) n.textContent = picked.length; };
   form.onsubmit = async event => {
     event.preventDefault(); if (busy || !ready || !form.reportValidity()) return;
     const chosen = plans.find(p => String(p.id) === select.value); if (!chosen) return;
+    if (!opBags.length && opMats(chosen).some(m => m.item_category === '반제품') && !await confirmBox('포장에 쓴 봉투 LOT을 고르지 않았습니다. 그래도 저장할까요? (LOT 추적이 봉투까지 이어지지 않습니다)')) return;
     busy = true; form.inert = true; button.disabled = true; draft.start(); status.textContent = '저장 중…';
     let saved = false;
     try {
-      await api('POST',`/api/schedules/${chosen.id}/actuals`,{ production_date: date.value, qty: form.elements.qty.value, note: form.elements.note.value, request_id: requestId });
-      saved = true; draft.clear(); requestId = crypto.randomUUID(); form.elements.qty.value = ''; form.elements.note.value = '';
+      await api('POST',`/api/schedules/${chosen.id}/actuals`,{ production_date: date.value, qty: form.elements.qty.value, note: form.elements.note.value, bags: opBags, request_id: requestId });
+      saved = true; draft.clear(); requestId = crypto.randomUUID(); form.elements.qty.value = ''; form.elements.note.value = ''; opBags = []; { const n = $('#opBagN', main); if (n) n.textContent = '0'; } // 15.252 봉투 LOT 연결
       status.textContent = '실적이 저장되었습니다.'; toast('완제품 실적을 저장했습니다.');
       await loadPlans(String(chosen.id));
     } catch (error) { if (!saved) { draft.failure(); status.textContent = '저장하지 못했습니다. 입력 내용을 확인하고 다시 저장하세요.'; } fail(error); }

@@ -158,3 +158,30 @@ test('15.252 raw material received without pieces gets a temporary piece LOT-1 t
   assert.deepEqual([after.balance, after.pieces_free, after.pieces_left], [300, [1], 1]);
   assert.equal((await prod('GET', '/api/lot-trace?lot=TMP-A-1')).body.bags.length, 2);
 });
+
+test('15.253 review fixes: piece numbers per item, counts block numbers, replay, used receipts locked, used bag not deletable, 0 pieces, usage recalculated', async () => {
+  const A = (await admin('POST', '/api/boms', { product: '리뷰원단A', product_code: 'RA-1', item_category: '원자재', kind: 'finished', base_qty: 1, unit: 'yd', materials: [] })).body;
+  const Bm = (await admin('POST', '/api/boms', { product: '리뷰원단B', product_code: 'RB-1', item_category: '원자재', kind: 'finished', base_qty: 1, unit: 'yd', materials: [] })).body;
+  await admin('POST', '/api/receipts', { receipt_date: today, vendor: '리뷰상사', request_id: rid(), lines: [{ bom_id: Bm.id, lot: 'X1', qty: 50, pieces: 5 }] });
+  const ra = (await admin('POST', '/api/receipts', { receipt_date: today, vendor: '리뷰상사', request_id: rid(), lines: [{ bom_id: A.id, lot: 'X1', qty: 30, pieces: 3 }, { bom_id: A.id, lot: 'M1', qty: 30, pieces: 3 }, { bom_id: A.id, lot: 'Z0', qty: 10, pieces: 0 }] })).body;
+  assert.deepEqual(ra.lines.map(l => [l.lot, l.pieces, l.pieces_temp, l.piece_from]), [['X1', 3, 0, 1], ['M1', 3, 0, 1], ['Z0', 1, 1, 1]], 'numbers per item; 0 pieces = temporary 1');
+  const semi = (await admin('POST', '/api/boms', { product: '리뷰 반제품', product_code: 'RVS', item_category: '반제품', kind: 'semi', semi_type: '천와이퍼', base_qty: 1, unit: '매', materials: [{ item: '리뷰원단A', item_category: '원자재', qty: 0.1, unit: 'yd' }] })).body;
+  const line = (await prod('GET', '/api/production-units?kind=line')).body[0], washer = (await prod('GET', '/api/production-units?kind=washer')).body[0];
+  const one = (inputs, extra = {}) => prod('POST', '/api/semi-records', { process: 'cut', work_date: today, unit_id: line.id, entry_mode: 'code', bom_id: semi.id, product_group: 'wiper', product_type: '천와이퍼', start_time: '08:00', end_time: '09:00', qty: 100, inputs, ...extra });
+  assert.equal((await one([{ item: '리뷰원단A', lot: 'M1', pieces: 3 }])).status, 200);
+  const twice = await one([{ item: '리뷰원단A', lot: 'M1', piece_nos: [1] }]);
+  assert.equal(twice.status, 400, 'pieces used by count cannot be picked again by number');
+  const key = rid(), r1 = await one([{ item: '리뷰원단A', lot: 'X1', piece_nos: [1] }], { request_id: key }), r2 = await one([{ item: '리뷰원단A', lot: 'X1', piece_nos: [1] }], { request_id: key });
+  assert.equal(r1.status, 200); assert.equal(r2.status, 200, 'replay returns the saved record'); assert.equal(r2.body.id, r1.body.id);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM semi_lot_inputs WHERE record_id=?').get(r1.body.id).n, 1);
+  const mRow = sqlite.prepare("SELECT id FROM other_receipts WHERE lot='M1' AND item='리뷰원단A'").get();
+  assert.equal((await admin('DELETE', `/api/other-receipts/${mRow.id}`)).status, 409, 'a receipt used by cutting cannot be deleted');
+  assert.equal((await admin('PUT', `/api/other-receipts/${mRow.id}/place`, { lot: 'M9' })).status, 409);
+  await prod('POST', '/api/semi-batches', { process: 'wash', common: { work_date: today, unit_id: washer.id }, request_id: rid(), items: [{ entry_mode: 'wash_quantity', bom_id: semi.id, qty: 100, lot: r1.body.lot, bag_required: true, start_time: '10:00' }] });
+  assert.equal((await prod('DELETE', `/api/semi-records/${r1.body.id}`, { reason: '정리', request_id: rid() })).status, 409, 'a washed bag cannot be deleted');
+  // 불량수량 바로 고치기 → 사용량 다시 계산(양품 100 + 불량 20) × 0.1 = 12
+  const e = await prod('PUT', `/api/semi-records/${r1.body.id}`, { work_date: today, unit_id: line.id, entry_mode: 'code', bom_id: semi.id, product_group: 'wiper', product_type: '천와이퍼', start_time: '08:00', end_time: '09:00', qty: 100, defect_qty: 20, defect_reason: '오염' });
+  assert.equal(e.status, 200, JSON.stringify(e.body));
+  assert.equal(sqlite.prepare('SELECT qty FROM semi_lot_inputs WHERE record_id=?').get(r1.body.id).qty, 12);
+  assert.equal((await prod('GET', '/api/lot-trace?lot=X1-01')).body.bags.length, 1, 'X1-01 means piece 1');
+});
