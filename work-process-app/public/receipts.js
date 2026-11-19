@@ -307,9 +307,22 @@ function receiptSlip(r) {
 }
 function rcPrint(name) { const title = document.title; document.title = name; const wraps = [...document.querySelectorAll('.lr-cert-wrap')], top = wraps.at(-1); wraps.forEach(w => w.classList.toggle('print-skip', w !== top)); document.body.classList.add('printing-cert'); try { window.print(); } finally { wraps.forEach(w => w.classList.remove('print-skip')); document.body.classList.remove('printing-cert'); document.title = title; } }
 
+// 15.230 QR코드 발행 양식: 머리에 「QR코드 발행」·빨간 「PDF출력」, 가운데 큰 QR, 아래 번호를 크고 굵게(긴 번호는 줄바꿈). 한 장에 하나(여러 개면 장마다 하나).
+// items: [{ code: QR에 넣을 글자·크게 쓸 번호, sub: 번호 아래 작은 설명(선택) }]
+function qrIssue(items, { title = 'QR코드 발행', file = 'QR' } = {}) {
+  const list = items.filter(x => x && x.code);
+  if (!list.length) return toast('발행할 번호가 없습니다.', 'err');
+  const m = modal(`<div class="qr-issue-head"><h3>${esc(title)}${list.length > 1 ? ` <span class="small muted">${list.length}장</span>` : ''}</h3><button type="button" class="btn qr-pdf" data-print>PDF출력</button></div>
+    <div class="cert qr-issue">${list.map(x => `<div class="qr-card"><div class="qr-card-code">${qrSvg(x.code)}</div><div class="qr-card-no">${esc(x.code).replace(/([_\-])/g, '$1<wbr>')}</div>${x.sub ? `<div class="qr-card-sub">${esc(x.sub)}</div>` : ''}</div>`).join('')}</div>`, { wide: list.length > 1 });
+  m.el.parentElement.classList.add('lr-cert-wrap');
+  $('[data-print]', m.el).onclick = () => rcPrint(`${file}_${list[0].code}${list.length > 1 ? `_외${list.length - 1}` : ''}`);
+  return m;
+}
 // LOT 라벨(15.72): 줄마다 한 장(품목·코드·LOT·수량·입고일·거래처·입고번호 + QR). QR 내용은 「LOT-서브|코드|수량 단위|입고번호」.
 function lotLabels(r) {
   const live = r.lines.filter(l => !l.voided_at);
+  // 15.230 QR코드 발행 양식(QR + 큰 LOT 번호 + 품목·수량·입고번호)
+  return qrIssue(live.map(l => ({ code: lotFull(l) || `${r.receipt_no}-${l.id}`, sub: [`${l.item}${l.spec ? ' ' + l.spec : ''}`, `${fmtNum(l.qty)} ${l.unit || ''}`.trim(), r.receipt_no].filter(Boolean).join(' · ') })), { title: `QR코드 발행 · ${r.receipt_no}`, file: 'LOT라벨' });
   const m = modal(`<h3 class="po-print-title">LOT 라벨 <span class="small muted">${esc(r.receipt_no)} · 라벨 ${live.length}개</span></h3>
     <div class="cert rc-labels">${live.map(l => { const text = [lotFull(l) || '-', l.product_code || l.item, `${l.qty} ${l.unit || ''}`.trim(), r.receipt_no].join('|'); return `<div class="rc-label">
       <div class="rc-label-qr">${qrSvg(text)}</div>

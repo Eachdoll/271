@@ -3099,3 +3099,24 @@ form.list-filters > label.rp-moved, .toolbar > label.rp-moved { display: none !i
 .fa-title { margin: 14px 0 8px; font-size: 17px; }
 .fa-grid .wo-cell { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
 .plan-undo { justify-content: flex-start; margin: 0 0 10px; }
+
+/* 15.230 조회 줄 맞춤: 기간(◀ 전체 기간 ▶) 칸이 가운데 정렬이라 위에 이름표가 있는 키워드 검색 칸과 높이가 어긋나던 것 → 아래쪽(입력칸 줄)에 맞추고 높이도 입력칸과 같게 */
+form.list-filters .range-presets.rp-compact, form.rs-filter .range-presets.rp-compact { align-self: flex-end; }
+form.list-filters .range-presets.rp-compact > .btn.small, form.list-filters .range-presets.rp-compact .rp-toggle { min-height: var(--filter-ctl-h, 40px); }
+form.list-filters .range-presets.rp-compact .rp-name { align-self: center; }
+
+/* 15.230 QR코드 발행 양식 */
+.qr-issue-head { display: flex; align-items: center; gap: 12px; justify-content: space-between; padding-right: 36px; }
+.qr-issue-head h3 { margin: 0; }
+.modal .btn.qr-pdf { background: #ef1c25 !important; border-color: #ef1c25 !important; color: #fff !important; font-weight: 800; }
+.modal .btn.qr-pdf:hover { background: #c8121a !important; border-color: #c8121a !important; }
+.qr-issue { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; background: #fff; color: #111; padding: 14px 6px 4px; }
+.qr-card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 10px 8px 14px; break-inside: avoid; page-break-inside: avoid; }
+.qr-card-code svg { width: 150px; height: 150px; display: block; }
+.qr-card-no { font-size: 24px; font-weight: 900; line-height: 1.25; text-align: center; letter-spacing: .2px; word-break: keep-all; overflow-wrap: anywhere; max-width: 300px; color: #111; }
+.qr-card-sub { font-size: 12.5px; color: #444; text-align: center; max-width: 260px; overflow-wrap: anywhere; }
+@media print {
+  body.printing-cert .qr-issue-head { display: none !important; }
+  body.printing-cert .qr-issue { grid-template-columns: repeat(2, 1fr); gap: 8mm; padding: 0; }
+  body.printing-cert .qr-card { border: 1px dashed #999; }
+}
