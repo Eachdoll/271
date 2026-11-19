@@ -212,39 +212,69 @@ async function openInspection(id,done=()=>{}) {
     return;
   }
 
-  const m=modal(`<h3>${esc(r.title)} · ${esc(r.category)}</h3><p>${esc(spec.item_category)} · 적용 품목 ${esc(spec.product)} · 규격 ${spec.revision}</p><p class="small muted">모든 값이 규격 이내면 합격, 하나라도 벗어나면 불합격입니다. 빈 칸이 남고 규격 이탈이 없으면 검사 대기입니다. 평균은 참고용입니다.</p>${!data.can_write?'<p class="muted">승인된 의뢰에서 품질 담당자만 측정값을 입력할 수 있습니다.</p>':''}<form class="stack"><p class="small muted">행 = LOT·시료, 열 = 검사 항목의 측정 회차입니다. Enter·방향키로 칸을 옮기고, 엑셀에서 복사한 값을 붙여넣으면 그 칸부터 오른쪽·아래로 채웁니다.</p>
-      <div class="table-wrap insp-wrap"><table class="grid keep-table insp-grid" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th rowspan="2" class="c insp-no">No</th><th rowspan="2" class="insp-lot-h">LOT / 시료명 *</th>${spec.items.map(item=>`<th colspan="${item.count+1}" class="c insp-item-h">${esc(item.name)}<div class="small muted" title="${esc(inspectionRange(item))}">${item.min==null&&item.max==null?'규격 없음':`${item.min==null?'':esc(fmtNum(item.min))} ~ ${item.max==null?'':esc(fmtNum(item.max))}`}${item.unit?` ${esc(item.unit)}`:''}</div></th>`).join('')}${data.can_write?'<th rowspan="2"><span class="sr-only">행 빼기</span></th>':''}</tr><tr>${spec.items.map(item=>`${Array.from({length:item.count},(_,i)=>`<th class="c insp-n">#${i+1}</th>`).join('')}<th class="c insp-avg-h">평균</th>`).join('')}</tr></thead><tbody data-measure-rows></tbody></table></div>
-      ${data.can_write?'<div class="actions" style="justify-content:flex-start"><button type="button" class="btn" data-add-sample>+ LOT / 시료 행 추가</button></div><label>수정 사유 (판정된 결과 수정 시 필수)<input name="reason" maxlength="500"></label>':''}<div data-verdict role="status"></div>${data.can_write?'<button class="btn primary">측정값 저장 · 자동 판정</button>':''}</form><details class="card"><summary>저장 이력 (${data.history.length}건 표시)</summary>${data.history.map(h=>`<p><button class="btn small" data-history="${h.id}">기록 ${h.revision} · ${INSPECTION_RESULT[h.result]}</button> ${esc(h.saved_by)} · ${esc(h.saved_at)} ${esc(h.reason)}</p>`).join('')||'<p>저장 이력이 없습니다.</p>'}</details>`,{wide:true});
-  const form=$('form',m.el),root=$('[data-measure-rows]',form);
-  const read=()=>[...root.children].map(row=>({lot:$('[data-lot]',row).value,values:Object.fromEntries(spec.items.map(item=>[item.key,$$(`[data-item="${item.key}"]`,row).map(el=>el.value)]))}));
-  const renumber=()=>[...root.children].forEach((tr,i)=>{const n=$('[data-row-no]',tr);if(n)n.textContent=i+1;});
+  // 15.240 측정값 그리드: 세로 보기(기본, 행 = 항목·회차, 열 = LOT·시료) ↔ 가로 보기(15.238, 행 = 시료, 열 = 항목·회차). 마지막 고른 보기를 기억
+  let mode='v';try{if(localStorage.getItem('wpa:insp-mode')==='h')mode='h';}catch{}
+  const m=modal(`<h3>${esc(r.title)} · ${esc(r.category)}</h3><p>${esc(spec.item_category)} · 적용 품목 ${esc(spec.product)} · 규격 ${spec.revision}</p><p class="small muted">모든 값이 규격 이내면 합격, 하나라도 벗어나면 불합격입니다. 빈 칸이 남고 규격 이탈이 없으면 검사 대기입니다. 평균은 참고용입니다.</p>${!data.can_write?'<p class="muted">승인된 의뢰에서 품질 담당자만 측정값을 입력할 수 있습니다.</p>':''}<form class="stack"><div class="insp-bar"><p class="small muted" data-insp-hint></p><button type="button" class="btn small" data-insp-mode></button></div>
+      <div class="table-wrap insp-wrap"><table class="grid keep-table insp-grid" data-no-sort data-no-filter data-keep-cols data-no-reorder></table></div>
+      ${data.can_write?'<div class="actions" style="justify-content:flex-start"><button type="button" class="btn" data-add-sample>+ LOT / 시료 추가</button></div><label>수정 사유 (판정된 결과 수정 시 필수)<input name="reason" maxlength="500"></label>':''}<div data-verdict role="status"></div>${data.can_write?'<button class="btn primary">측정값 저장 · 자동 판정</button>':''}</form><details class="card"><summary>저장 이력 (${data.history.length}건 표시)</summary>${data.history.map(h=>`<p><button class="btn small" data-history="${h.id}">기록 ${h.revision} · ${INSPECTION_RESULT[h.result]}</button> ${esc(h.saved_by)} · ${esc(h.saved_at)} ${esc(h.reason)}</p>`).join('')||'<p>저장 이력이 없습니다.</p>'}</details>`,{wide:true});
+  const form=$('form',m.el),table=$('table.insp-grid',form);
+  // 상태: 시료 목록. 칸은 data-s(시료 번호)·data-f(필드 번호: 0 = LOT, 1… = 항목·회차)로 찾는다
+  const F=[{lot:true},...spec.items.flatMap(item=>Array.from({length:item.count},(_,i)=>({item,i})))];
+  const blank=()=>norm({lot:'시료 '+(samples.length+1)});
+  const norm=v=>({lot:v?.lot??'',values:Object.fromEntries(spec.items.map(item=>[item.key,Array.from({length:item.count},(_,i)=>String(v?.values?.[item.key]?.[i]??''))]))});
+  let samples=(measurement?.values||[{lot:r.lot||r.data.lot_etc||'시료 1',values:{}}]).map(norm);
+  const read=()=>samples.map(s=>({lot:s.lot,values:Object.fromEntries(spec.items.map(item=>[item.key,[...s.values[item.key]]]))}));
+  const ro=data.can_write?'':'readonly';
+  const rangeTxt=item=>`${item.min==null&&item.max==null?'규격 없음':`${item.min==null?'':esc(fmtNum(item.min))} ~ ${item.max==null?'':esc(fmtNum(item.max))}`}${item.unit?` ${esc(item.unit)}`:''}`;
+  const cell=(s,f)=>{const d=F[f];if(d.lot)return `<input data-lot data-s="${s}" data-f="0" required maxlength="100" value="${esc(samples[s].lot)}" aria-label="시료 ${s+1} LOT / 시료명" ${ro}>`;return `<input type="number" step="any" inputmode="decimal" data-item="${d.item.key}" data-s="${s}" data-f="${f}" aria-label="시료 ${s+1} ${esc(d.item.name)} ${d.i+1}회" value="${esc(samples[s].values[d.item.key][d.i])}" ${ro}>`;};
+  const delBtn=s=>data.can_write?`<button type="button" class="btn small danger" data-remove-sample="${s}" title="이 시료 빼기" aria-label="시료 ${s+1} 빼기">×</button>`:'';
+  const render=()=>{
+    if(mode==='v'){
+      table.className='grid keep-table insp-grid insp-v';
+      table.innerHTML=`<thead><tr><th class="insp-item-c">검사항목</th><th class="insp-range-c">규격</th><th class="c insp-n-c">회차</th>${samples.map((_,s)=>`<th class="insp-sample-h"><div class="insp-sh"><span data-row-no>시료 ${s+1}</span>${delBtn(s)}</div>${cell(s,0)}</th>`).join('')}</tr></thead><tbody>${
+        spec.items.map(item=>Array.from({length:item.count},(_,i)=>`<tr>${i?'':`<th scope="rowgroup" rowspan="${item.count+1}" class="insp-item-c">${esc(item.name)}<div class="small muted insp-range-in">${rangeTxt(item)}</div></th><td rowspan="${item.count+1}" class="insp-range-c small muted" title="${esc(inspectionRange(item))}">${rangeTxt(item)}</td>`}<td class="c insp-n-c">#${i+1}</td>${samples.map((_,s)=>`<td class="insp-cell">${cell(s,F.findIndex(d=>d.item===item&&d.i===i))}</td>`).join('')}</tr>`).join('')+`<tr class="insp-avg-row"><td class="c insp-n-c">평균</td>${samples.map((_,s)=>`<td class="r insp-avg"><span data-average="${item.key}" data-s="${s}"></span></td>`).join('')}</tr>`).join('')
+      }<tr class="insp-judge-row"><th colspan="3" class="insp-item-c">시료 판정</th>${samples.map((_,s)=>`<td class="c" data-judge="${s}"></td>`).join('')}</tr></tbody>`;
+    }else{
+      table.className='grid keep-table insp-grid insp-h';
+      table.innerHTML=`<thead><tr><th rowspan="2" class="c insp-no">No</th><th rowspan="2" class="insp-lot-h">LOT / 시료명 *</th>${spec.items.map(item=>`<th colspan="${item.count+1}" class="c insp-item-h">${esc(item.name)}<div class="small muted" title="${esc(inspectionRange(item))}">${rangeTxt(item)}</div></th>`).join('')}${data.can_write?'<th rowspan="2"><span class="sr-only">행 빼기</span></th>':''}</tr><tr>${spec.items.map(item=>`${Array.from({length:item.count},(_,i)=>`<th class="c insp-n">#${i+1}</th>`).join('')}<th class="c insp-avg-h">평균</th>`).join('')}</tr></thead><tbody data-measure-rows>${
+        samples.map((_,s)=>`<tr class="inspection-sample"><td class="c insp-no" data-row-no>${s+1}</td><td class="insp-lot">${cell(s,0)}</td>${spec.items.map(item=>`${Array.from({length:item.count},(_,i)=>`<td class="insp-cell">${cell(s,F.findIndex(d=>d.item===item&&d.i===i))}</td>`).join('')}<td class="r insp-avg"><span data-average="${item.key}" data-s="${s}"></span></td>`).join('')}${data.can_write?`<td class="c">${delBtn(s)}</td>`:''}</tr>`).join('')}</tbody>`;
+    }
+    $('[data-insp-hint]',form).textContent=mode==='v'?'행 = 검사 항목·측정 회차, 열 = LOT·시료입니다. Enter는 아래 칸(열 끝이면 다음 시료), 방향키로 이동, 엑셀에서 복사한 값을 붙여넣으면 그 칸부터 아래·오른쪽으로 채웁니다.':'행 = LOT·시료, 열 = 검사 항목의 측정 회차입니다. Enter는 오른쪽 칸(줄 끝이면 다음 시료), 방향키로 이동, 엑셀에서 복사한 값을 붙여넣으면 그 칸부터 오른쪽·아래로 채웁니다.';
+    $('[data-insp-mode]',form).textContent=mode==='v'?'↔ 가로 보기':'↕ 세로 보기';
+    $$('[data-remove-sample]',table).forEach(b=>b.onclick=()=>{if(samples.length===1)return toast('시료는 1개 이상 필요합니다.','err');samples.splice(Number(b.dataset.removeSample),1);edited=true;render();});
+    update();
+  };
   let edited=false;const update=()=>{
     const rows=read();$('[data-verdict]',form).innerHTML=qualityInspectionBadge(inspectionPreview(spec,rows))+` <span class="small muted">${data.can_write&&(edited||!measurement)?'저장 전 미리보기':'저장된 판정'}</span>`;
-    [...root.children].forEach((row,index)=>spec.items.forEach(item=>{const values=rows[index].values[item.key].filter(v=>v!=='').map(Number);$(`[data-average="${item.key}"]`,row).textContent=values.length?fmtNum(Math.round(values.reduce((a,b)=>a+b,0)/values.length*1000)/1000):'—';$$(`[data-item="${item.key}"]`,row).forEach(el=>el.classList.toggle('inspection-outside',el.value!==''&&((item.min!==null&&Number(el.value)<item.min)||(item.max!==null&&Number(el.value)>item.max))));}));
+    rows.forEach((row,s)=>{spec.items.forEach(item=>{const values=row.values[item.key].filter(v=>v!=='').map(Number);const av=$(`[data-average="${item.key}"][data-s="${s}"]`,table);if(av)av.textContent=values.length?fmtNum(Math.round(values.reduce((a,b)=>a+b,0)/values.length*1000)/1000):'—';});
+      const j=$(`[data-judge="${s}"]`,table);if(j)j.innerHTML=qualityInspectionBadge(inspectionPreview(spec,[row]));});
+    $$('input[data-item]',table).forEach(el=>{const item=F[Number(el.dataset.f)].item;el.classList.toggle('inspection-outside',el.value!==''&&((item.min!==null&&Number(el.value)<item.min)||(item.max!==null&&Number(el.value)>item.max)));});
   };
-  const add=(value={lot:r.lot||r.data.lot_etc||'시료 '+(root.children.length+1),values:{}})=>{
-    if(root.children.length>=30)return toast('LOT·시료는 최대 30행입니다.','err');
-    // 15.238 엑셀 그리드: 한 행 = LOT·시료, 항목마다 측정 회차 칸과 평균 칸
-    const row=document.createElement('tr');row.className='inspection-sample';row.innerHTML=`<td class="c insp-no" data-row-no></td><td class="insp-lot"><input data-lot required maxlength="100" value="${esc(value.lot)}" aria-label="LOT / 시료명" ${data.can_write?'':'readonly'}></td>${spec.items.map(item=>`${Array.from({length:item.count},(_,i)=>`<td class="insp-cell"><input type="number" step="any" inputmode="decimal" data-item="${item.key}" aria-label="${esc(item.name)} ${i+1}회" value="${esc(value.values[item.key]?.[i]??'')}" ${data.can_write?'':'readonly'}></td>`).join('')}<td class="r insp-avg"><span data-average="${item.key}"></span></td>`).join('')}${data.can_write?'<td class="c"><button type="button" class="btn small danger" data-remove-sample title="이 행 빼기" aria-label="이 행 빼기">×</button></td>':''}`;root.append(row);if(data.can_write)$('[data-remove-sample]',row).onclick=()=>{if(root.children.length===1)return toast('시료 행은 1개 이상 필요합니다.','err');row.remove();renumber();update();};renumber();update();
-  };
-  (measurement?.values||[undefined]).forEach(add);form.addEventListener('input',()=>{edited=true;update();});
-  // 15.238 엑셀처럼: Enter·Tab은 오른쪽(줄 끝이면 다음 행 처음), ↑↓는 같은 열 위·아래 행, ←→는 칸 끝에서 옆 칸
-  const cellsOf=tr=>$$('input[data-lot],input[data-item]',tr).filter(x=>!x.readOnly);
-  const go=(el,dr,dc)=>{const tr=el.closest('tr'),rows=[...root.children],ri=rows.indexOf(tr),ci=cellsOf(tr).indexOf(el);let r=ri+dr,c=ci+dc;if(dc>0&&c>=cellsOf(tr).length&&dr===0){r=ri+1;c=0;}const t=rows[r]&&cellsOf(rows[r])[Math.max(0,Math.min(c,cellsOf(rows[r]).length-1))];if(t){t.focus();t.select?.();return true;}return false;};
-  form.addEventListener('keydown',e=>{if(!e.target.matches('input[data-item],input[data-lot]')||e.isComposing)return;const el=e.target;
-    if(e.key==='Enter'){e.preventDefault();if(!go(el,0,1)&&data.can_write&&root.children.length<30){add();go(el,1,-cellsOf(el.closest('tr')).indexOf(el));}return;}
-    if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();go(el,e.key==='ArrowDown'?1:-1,0);return;}
-    const atStart=el.type==='number'||el.selectionStart===0, atEnd=el.type==='number'||el.selectionEnd===String(el.value).length;
-    if(e.key==='ArrowRight'&&atEnd&&el.type==='number'){e.preventDefault();go(el,0,1);}else if(e.key==='ArrowLeft'&&atStart&&el.type==='number'){e.preventDefault();go(el,0,-1);}
+  const setVal=(el,v)=>{const s=Number(el.dataset.s),d=F[Number(el.dataset.f)];if(d.lot)samples[s].lot=v;else samples[s].values[d.item.key][d.i]=v;};
+  const at=(s,f)=>$(`input[data-s="${s}"][data-f="${f}"]`,table);
+  const focusAt=(s,f)=>{const t=at(s,f);if(t&&!t.readOnly){t.focus();t.select?.();return true;}return false;};
+  const addSample=v=>{if(samples.length>=30){toast('LOT·시료는 최대 30개입니다.','err');return false;}samples.push(v||blank());return true;};
+  form.addEventListener('input',e=>{if(e.target.matches('input[data-s]'))setVal(e.target,e.target.value);edited=true;update();});
+  // 엑셀처럼: Enter·Tab은 다음 칸(같은 시료의 다음 항목, 끝이면 다음 시료 처음, 마지막이면 시료 추가), 방향키는 보이는 표 기준 위·아래·옆
+  form.addEventListener('keydown',e=>{const el=e.target;if(!el.matches('input[data-s]')||e.isComposing)return;const s=Number(el.dataset.s),f=Number(el.dataset.f);
+    if(e.key==='Enter'){e.preventDefault();if(f+1<F.length)return void focusAt(s,f+1);if(s+1<samples.length)return void focusAt(s+1,0);if(data.can_write&&addSample()){edited=true;render();focusAt(s+1,0);}return;}
+    const vert=e.key==='ArrowDown'||e.key==='ArrowUp',side=e.key==='ArrowRight'||e.key==='ArrowLeft';if(!vert&&!side)return;
+    if(side&&el.type!=='number')return;
+    e.preventDefault();const step=e.key==='ArrowDown'||e.key==='ArrowRight'?1:-1;
+    const alongField=mode==='v'?vert:side;
+    if(alongField)focusAt(s,Math.max(0,Math.min(F.length-1,f+step)));else focusAt(Math.max(0,Math.min(samples.length-1,s+step)),f);
   });
-  // 붙여넣기: 탭·줄바꿈으로 나뉜 값(엑셀 복사)을 그 칸부터 오른쪽·아래로. 행이 모자라면 늘린다(최대 30행).
-  form.addEventListener('paste',e=>{const el=e.target;if(!el.matches('input[data-item],input[data-lot]')||el.readOnly)return;const text=(e.clipboardData||window.clipboardData)?.getData('text')||'';if(!/[\t\n]/.test(text.trim()))return;e.preventDefault();
-    const grid=text.replace(/\r/g,'').replace(/\n$/,'').split('\n').map(l=>l.split('\t'));const rows=()=>[...root.children];const r0=rows().indexOf(el.closest('tr')),c0=cellsOf(el.closest('tr')).indexOf(el);
-    grid.forEach((vals,i)=>{while(!rows()[r0+i]&&root.children.length<30)add({lot:'시료 '+(root.children.length+1),values:{}});const tr=rows()[r0+i];if(!tr)return;const cs=cellsOf(tr);vals.forEach((v,j)=>{const t=cs[c0+j];if(t)t.value=t.matches('[data-item]')?String(v).trim().replace(/,/g,''):String(v).trim();});});
-    edited=true;update();toast(`${grid.length}행 × ${Math.max(...grid.map(g=>g.length))}칸을 붙여넣었습니다.`);});
+  // 붙여넣기: 탭·줄바꿈으로 나뉜 값(엑셀 복사)을 그 칸부터. 세로 보기는 줄 = 항목·회차, 칸 = 시료 / 가로 보기는 그 반대. 시료가 모자라면 늘린다(최대 30).
+  form.addEventListener('paste',e=>{const el=e.target;if(!el.matches('input[data-s]')||el.readOnly)return;const text=(e.clipboardData||window.clipboardData)?.getData('text')||'';if(!/[\t\n]/.test(text.trim()))return;e.preventDefault();
+    const grid=text.replace(/\r/g,'').replace(/\n$/,'').split('\n').map(l=>l.split('\t'));const s0=Number(el.dataset.s),f0=Number(el.dataset.f);let n=0;
+    grid.forEach((vals,i)=>vals.forEach((v,j)=>{const s=s0+(mode==='v'?j:i),f=f0+(mode==='v'?i:j);if(f>=F.length)return;while(s>=samples.length)if(!addSample())return;const d=F[f];v=String(v).trim();if(!d.lot)v=v.replace(/,/g,'');if(d.lot)samples[s].lot=v;else samples[s].values[d.item.key][d.i]=v;n++;}));
+    edited=true;render();focusAt(s0,f0);toast(`${grid.length}줄 × ${Math.max(...grid.map(g=>g.length))}칸을 붙여넣었습니다.`);});
+  $('[data-insp-mode]',form).onclick=()=>{mode=mode==='v'?'h':'v';try{localStorage.setItem('wpa:insp-mode',mode);}catch{}render();};
+  render();
   $$('[data-history]',m.el).forEach(b=>b.onclick=async()=>{try{const h=await api('GET',`/api/requests/${id}/inspection/history/${b.dataset.history}`);modal(`<h3>검사 기록 ${h.revision}</h3><p>${qualityInspectionBadge(h.result)} ${esc(h.saved_by)} · ${esc(h.saved_at)}</p>${inspectionMatrix(spec,h.values)}`,{wide:true});}catch(error){fail(error);}});
   if(!data.can_write)return;
-  $('[data-add-sample]',form).onclick=()=>add();
-  const draft=bindEntryDraft(form,`inspection:${id}:${measurement?.revision||0}`,{read:()=>({rows:read(),reason:form.elements.reason.value}),restore:value=>{root.replaceChildren();value.rows.forEach(add);form.elements.reason.value=value.reason||'';update();}});
+  $('[data-add-sample]',form).onclick=()=>{if(addSample()){edited=true;render();focusAt(samples.length-1,0);}};
+  const draft=bindEntryDraft(form,`inspection:${id}:${measurement?.revision||0}`,{read:()=>({rows:read(),reason:form.elements.reason.value}),restore:value=>{samples=(value.rows||[]).map(norm);if(!samples.length)samples=[norm({lot:'시료 1'})];form.elements.reason.value=value.reason||'';render();}});
   let busy=false;form.onsubmit=async e=>{e.preventDefault();if(busy)return;busy=true;form.inert=true;draft.start();let committed=false;try{const saved=await api('PUT',`/api/requests/${id}/inspection`,{rows:read(),revision:measurement?.revision||0,reason:form.elements.reason.value});committed=true;draft.clear();m.close();toast('저장 완료 · '+INSPECTION_RESULT[saved.result]);Promise.resolve(done()).catch(fail);await openInspection(id,done);}catch(error){if(!committed)draft.failure();fail(committed?new Error('검사 결과는 저장되었습니다. 다시 조회해주세요. '+error.message):error);}finally{busy=false;form.inert=false;}};
 }
+

@@ -3331,3 +3331,31 @@ table.insp-grid thead .insp-no, table.insp-grid thead .insp-lot-h { position: st
   table.wl-oneline td { white-space: nowrap; padding-top: 7px !important; padding-bottom: 7px !important; }
   table.wl-oneline td .st-select { min-height: 30px; padding: 2px 6px; }
 }
+/* 15.240 측정값 그리드 세로 보기(행 = 항목·회차, 열 = 시료). 항목·규격·회차 칸 왼쪽 고정, 시료 머리글(LOT 입력)은 위 고정 */
+.insp-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.insp-bar > p { margin: 0; flex: 1 1 260px; }
+table.insp-v th.insp-item-c, table.insp-v .insp-range-c, table.insp-v .insp-n-c { position: sticky; z-index: 2; background: var(--panel); }
+table.insp-v th.insp-item-c { left: 0; width: 130px; min-width: 130px; max-width: 130px; white-space: normal; text-align: left; padding: 6px 8px !important; font-size: 13px; font-weight: 700; vertical-align: top; }
+table.insp-v .insp-range-c { left: 130px; width: 104px; min-width: 104px; max-width: 104px; white-space: normal !important; padding: 6px 8px !important; vertical-align: top; white-space: nowrap; }
+table.insp-v .insp-n-c { left: 234px; width: 46px; min-width: 46px; color: var(--muted); font-size: 12.5px; box-shadow: 2px 0 0 var(--line); }
+table.insp-v thead th.insp-item-c, table.insp-v thead th.insp-range-c, table.insp-v thead th.insp-n-c { z-index: 4; background: var(--erp-head, var(--bg)); vertical-align: bottom; }
+table.insp-v thead th.insp-sample-h { min-width: 8.5em; padding: 4px 4px 0 !important; vertical-align: bottom; }
+table.insp-v .insp-sh { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 0 4px 4px; }
+table.insp-v .insp-sh .btn.small { min-height: 26px; padding: 0 8px; }
+table.insp-v thead input[data-lot] { width: 100%; min-width: 7em; border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; margin-bottom: 4px; background: var(--panel); font-weight: 600; }
+table.insp-v thead input[data-lot]:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+table.insp-v tr.insp-avg-row td { border-bottom: 2px solid var(--line-strong, var(--line)); }
+table.insp-v tr.insp-avg-row td.insp-n-c { background: var(--total-bg, var(--bg)); font-weight: 700; }
+table.insp-v tr.insp-judge-row td, table.insp-v tr.insp-judge-row th { padding: 6px 8px !important; background: var(--total-bg, var(--bg)); }
+table.insp-v tbody tr:hover td.insp-cell { background-color: var(--row-hover); }
+table.insp-v .insp-range-in { display: none; font-weight: 400; }
+@media (max-width: 700px) {
+  table.insp-v th.insp-item-c { width: 84px; min-width: 84px; max-width: 84px; font-size: 12px; }
+  table.insp-v .insp-range-in { display: block; font-size: 11px; white-space: normal; }
+  table.insp-v .insp-range-c { display: none; }
+  table.insp-v .insp-n-c { left: 84px; width: 38px; min-width: 38px; }
+  table.insp-v thead th.insp-sample-h { min-width: 6em; }
+  table.insp-v thead input[data-lot] { min-width: 5em; }
+  table.insp-v td input { min-width: 4em; }
+  table.insp-v tr.insp-judge-row th { white-space: normal; }
+}
