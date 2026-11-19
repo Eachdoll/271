@@ -40,7 +40,7 @@ async function pageReceiptEntry(main) {
           <label>입고창고:<select data-rc-bulk-wh aria-label="일괄적용할 입고창고"${(rcWarehouses || []).length ? '' : ' disabled'}>${rcWarehouseOptions()}</select></label>
           <label>Location:<select data-rc-bulk-loc aria-label="일괄적용할 창고위치" disabled>${rcLocationOptions('')}</select></label>
           <button type="button" class="btn small primary" data-rc-bulk title="체크한 줄(없으면 입고 상세 모든 줄)에 입고창고·창고위치를 넣습니다">일괄적용</button>
-          ${rcCanManageWarehouse() ? '<button type="button" class="btn small" data-rc-warehouses>창고 위치관리</button>' : ''}
+          ${rcCanManageWarehouse() ? '<button type="button" class="btn small" data-rc-warehouses title="관리 › 창고 관리로 이동">창고·위치 관리 →</button>' : ''}
         </div>
         <span class="small muted" data-rc-picked>선택 0줄</span>
         <button type="button" class="btn small danger" data-rc-remove>선택 줄 삭제</button>
@@ -250,7 +250,7 @@ async function pageReceiptEntry(main) {
     draw(); toast(`${lines.some(l => l.picked) ? '체크한' : '모든'} ${list.length}줄에 ${bulkWh.value}${bulkLoc.value ? ' · ' + bulkLoc.value : ''}을(를) 넣었습니다.`);
   };
   const manage = $('[data-rc-warehouses]', form);
-  if (manage) manage.onclick = () => rcWarehouseManager(() => { readAll(); const w = bulkWh.value; bulkWh.innerHTML = rcWarehouseOptions(w); bulkWh.disabled = !(rcWarehouses || []).length; bulkWh.onchange(); draw(); });
+  if (manage) manage.onclick = () => { location.hash = '#/logistics/warehouses'; }; // 15.230 관리 › 창고 관리 화면으로(입력 중인 줄은 이 탭 초안에 남음)
   // 초안(이 탭): 머리·줄
   const entryDraft = bindEntryDraft(form, 'receipt:new', {
     noPhotos: true,
@@ -307,9 +307,22 @@ function receiptSlip(r) {
 }
 function rcPrint(name) { const title = document.title; document.title = name; const wraps = [...document.querySelectorAll('.lr-cert-wrap')], top = wraps.at(-1); wraps.forEach(w => w.classList.toggle('print-skip', w !== top)); document.body.classList.add('printing-cert'); try { window.print(); } finally { wraps.forEach(w => w.classList.remove('print-skip')); document.body.classList.remove('printing-cert'); document.title = title; } }
 
+// 15.230 QR코드 발행 양식: 머리에 「QR코드 발행」·빨간 「PDF출력」, 가운데 큰 QR, 아래 번호를 크고 굵게(긴 번호는 줄바꿈). 한 장에 하나(여러 개면 장마다 하나).
+// items: [{ code: QR에 넣을 글자·크게 쓸 번호, sub: 번호 아래 작은 설명(선택) }]
+function qrIssue(items, { title = 'QR코드 발행', file = 'QR' } = {}) {
+  const list = items.filter(x => x && x.code);
+  if (!list.length) return toast('발행할 번호가 없습니다.', 'err');
+  const m = modal(`<div class="qr-issue-head"><h3>${esc(title)}${list.length > 1 ? ` <span class="small muted">${list.length}장</span>` : ''}</h3><button type="button" class="btn qr-pdf" data-print>PDF출력</button></div>
+    <div class="cert qr-issue">${list.map(x => `<div class="qr-card"><div class="qr-card-code">${qrSvg(x.code)}</div><div class="qr-card-no">${esc(x.code).replace(/([_\-])/g, '$1<wbr>')}</div>${x.sub ? `<div class="qr-card-sub">${esc(x.sub)}</div>` : ''}</div>`).join('')}</div>`, { wide: list.length > 1 });
+  m.el.parentElement.classList.add('lr-cert-wrap');
+  $('[data-print]', m.el).onclick = () => rcPrint(`${file}_${list[0].code}${list.length > 1 ? `_외${list.length - 1}` : ''}`);
+  return m;
+}
 // LOT 라벨(15.72): 줄마다 한 장(품목·코드·LOT·수량·입고일·거래처·입고번호 + QR). QR 내용은 「LOT-서브|코드|수량 단위|입고번호」.
 function lotLabels(r) {
   const live = r.lines.filter(l => !l.voided_at);
+  // 15.230 QR코드 발행 양식(QR + 큰 LOT 번호 + 품목·수량·입고번호)
+  return qrIssue(live.map(l => ({ code: lotFull(l) || `${r.receipt_no}-${l.id}`, sub: [`${l.item}${l.spec ? ' ' + l.spec : ''}`, `${fmtNum(l.qty)} ${l.unit || ''}`.trim(), r.receipt_no].filter(Boolean).join(' · ') })), { title: `QR코드 발행 · ${r.receipt_no}`, file: 'LOT라벨' });
   const m = modal(`<h3 class="po-print-title">LOT 라벨 <span class="small muted">${esc(r.receipt_no)} · 라벨 ${live.length}개</span></h3>
     <div class="cert rc-labels">${live.map(l => { const text = [lotFull(l) || '-', l.product_code || l.item, `${l.qty} ${l.unit || ''}`.trim(), r.receipt_no].join('|'); return `<div class="rc-label">
       <div class="rc-label-qr">${qrSvg(text)}</div>
@@ -363,25 +376,34 @@ function rcLocBind(box) {
   box.addEventListener('click', e => { if (e.target.closest('[data-loc-add]')) { rcLocAdd(box); input.focus(); } const x = e.target.closest('[data-loc-del]'); if (x) { x.closest('[data-loc]').remove(); rcLocAdd(box); } });
 }
 // 창고·위치 관리(물류팀장·관리자). 입고 기록이 없는 창고는 삭제, 있으면 사용 중지(15.104). 위치는 쉼표·줄바꿈으로 나눠 적는다.
-async function rcWarehouseManager(after) {
-  const list = await api('GET', '/api/warehouses?all=1');
-  const m = modal(`<h3>창고·위치 관리</h3><p class="small muted">입고 줄의 창고·위치 선택지입니다. 한 창고에 위치를 여러 개 넣을 수 있습니다(Enter·쉼표로 추가, ×로 빼기). 위치를 비워 두면 그 창고는 위치 없이 씁니다. 이름을 바꾸면 지난 입고 기록의 창고 이름도 바뀝니다.</p>
-    <div class="table-wrap"><table class="grid keep-table"><thead><tr><th>창고</th><th>위치(Location)</th><th>순서</th><th>사용</th><th></th></tr></thead><tbody>${list.map(w => `<tr data-wh="${w.id}"><td><input data-k="name" value="${esc(w.name)}" maxlength="50" aria-label="창고 이름"></td><td>${rcLocEditor(w.locations, w.name)}</td><td><input data-k="sort" type="number" step="1" value="${w.sort}" aria-label="${esc(w.name)} 순서" style="width:5em"></td><td><input type="checkbox" data-k="active"${w.active ? ' checked' : ''} aria-label="${esc(w.name)} 사용"></td><td class="nowrap"><button type="button" class="btn small" data-wh-save>저장</button> <button type="button" class="btn small danger" data-wh-del title="입고 기록이 없는 창고만 지울 수 있습니다">삭제</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">등록된 창고가 없습니다.</td></tr>'}</tbody></table></div>
-    <form class="form-grid" data-wh-new data-own-errors><label>새 창고 *<input name="name" required maxlength="50" placeholder="예: 5동"></label><div class="span2 loc-field"><span class="loc-label">위치(Location) <span class="hint">(여러 개 · Enter나 쉼표로 추가)</span></span>${rcLocEditor('', '새 창고')}</div><div class="actions"><button class="btn primary">창고 추가</button></div></form>
-    <div class="actions"><button type="button" class="btn" data-close>닫기</button></div>`, { wide: true });
-  const done = async () => { m.close(); await rcLoadWarehouses(true); after?.(); rcWarehouseManager(after); };
-  $('[data-close]', m.el).onclick = async () => { m.close(); await rcLoadWarehouses(true); after?.(); };
-  $$('[data-loc-editor]', m.el).forEach(rcLocBind);
-  $$('[data-wh-save]', m.el).forEach(b => b.onclick = async () => {
-    const tr = b.closest('tr'), val = k => $(`[data-k="${k}"]`, tr);
-    try { await api('PUT', '/api/warehouses/' + tr.dataset.wh, { name: val('name').value, locations: rcLocValue(tr), sort: Number(val('sort').value) || 0, active: val('active').checked }); toast('저장했습니다.'); await done(); } catch (error) { fail(error); }
-  });
-  $$('[data-wh-del]', m.el).forEach(b => b.onclick = async () => {
-    const tr = b.closest('tr'), name = $('[data-k="name"]', tr).value;
-    if (!(await confirmBox(`${name} 창고를 지울까요? 이 창고로 기록된 입고가 있으면 지워지지 않습니다.`))) return;
-    try { await api('DELETE', '/api/warehouses/' + tr.dataset.wh); toast('창고를 지웠습니다.'); await done(); } catch (error) { fail(error); }
-  });
-  $('[data-wh-new]', m.el).onsubmit = async e => { e.preventDefault(); try { await api('POST', '/api/warehouses', { ...formObj(e.target), locations: rcLocValue(e.target) }); toast('창고를 추가했습니다.'); await done(); } catch (error) { fail(error); } };
+// 15.230 관리 › 창고 관리 화면으로 옮김(입고 입력의 「창고 위치관리」를 누르면 이 화면으로 이동). 권한 없는 사람은 보기만.
+async function pageWarehouses(main) {
+  const can = rcCanManageWarehouse();
+  main.innerHTML = `<h1>창고 관리 <span class="dept">관리</span></h1>
+  <p class="muted">입고 줄·재고 이동에서 고르는 창고와 위치(Location)입니다. 한 창고에 위치를 여러 개 넣을 수 있습니다(Enter·쉼표로 추가, ×로 빼기). 위치를 비워 두면 그 창고는 위치 없이 씁니다. 이름을 바꾸면 지난 입고 기록의 창고 이름도 바뀝니다. 입고 기록이 없는 창고만 지울 수 있고, 있으면 「사용」을 끄세요.${can ? '' : ' <b>고치기는 물류팀장·관리자만 할 수 있습니다.</b>'}</p>
+  <div id="whBox"><p class="muted">불러오는 중…</p></div>
+  <div class="actions" style="justify-content:flex-start"><a class="btn" href="#/logistics/stock">재고 현황(창고·위치별) →</a><a class="btn" href="#/logistics/receive">입고 입력 →</a></div>`;
+  const box = $('#whBox', main);
+  const draw = async () => {
+    const list = await api('GET', '/api/warehouses?all=1'); if (!main.isConnected) return;
+    box.innerHTML = `<div class="table-wrap"><table class="grid keep-table wh-grid"><thead><tr><th>창고</th><th>위치(Location)</th><th>순서</th><th>사용</th>${can ? '<th></th>' : ''}</tr></thead><tbody>${list.map(w => can ? `<tr data-wh="${w.id}"><td><input data-k="name" value="${esc(w.name)}" maxlength="50" aria-label="창고 이름"></td><td>${rcLocEditor(w.locations, w.name)}</td><td><input data-k="sort" type="number" step="1" value="${w.sort}" aria-label="${esc(w.name)} 순서" style="width:5em"></td><td><input type="checkbox" data-k="active"${w.active ? ' checked' : ''} aria-label="${esc(w.name)} 사용"></td><td class="nowrap"><button type="button" class="btn small" data-wh-save>저장</button> <button type="button" class="btn small danger" data-wh-del title="입고 기록이 없는 창고만 지울 수 있습니다">삭제</button></td></tr>`
+      : `<tr><td data-card-primary><b>${esc(w.name)}</b></td><td>${(w.locations ? w.locations.split(',') : []).map(l => `<span class="chip">${esc(l)}</span>`).join(' ') || '<span class="muted">위치 없음</span>'}</td><td>${w.sort}</td><td>${w.active ? '사용' : '<span class="muted">중지</span>'}</td></tr>`).join('') || `<tr><td colspan="${can ? 5 : 4}" class="muted">등록된 창고가 없습니다.</td></tr>`}</tbody></table></div>
+      ${can ? `<form class="card form-grid wh-new" data-wh-new data-own-errors><h3 class="span2">창고 추가</h3><label>새 창고 *<input name="name" required maxlength="50" placeholder="예: 5동"></label><div class="span2 loc-field"><span class="loc-label">위치(Location) <span class="hint">(여러 개 · Enter나 쉼표로 추가)</span></span>${rcLocEditor('', '새 창고')}</div><div class="actions"><button class="btn primary">창고 추가</button></div></form>` : ''}`;
+    if (!can) return;
+    $$('[data-loc-editor]', box).forEach(rcLocBind);
+    const done = async () => { await rcLoadWarehouses(true); await draw(); };
+    $$('[data-wh-save]', box).forEach(btn => btn.onclick = async () => {
+      const tr = btn.closest('tr'), val = k => $(`[data-k="${k}"]`, tr);
+      try { await api('PUT', '/api/warehouses/' + tr.dataset.wh, { name: val('name').value, locations: rcLocValue(tr), sort: Number(val('sort').value) || 0, active: val('active').checked }); toast('저장했습니다.'); await done(); } catch (error) { fail(error); }
+    });
+    $$('[data-wh-del]', box).forEach(btn => btn.onclick = async () => {
+      const tr = btn.closest('tr'), name = $('[data-k="name"]', tr).value;
+      if (!(await confirmBox(`${name} 창고를 지울까요? 이 창고로 기록된 입고가 있으면 지워지지 않습니다.`))) return;
+      try { await api('DELETE', '/api/warehouses/' + tr.dataset.wh); toast('창고를 지웠습니다.'); await done(); } catch (error) { fail(error); }
+    });
+    $('[data-wh-new]', box).onsubmit = async e => { e.preventDefault(); try { await api('POST', '/api/warehouses', { ...formObj(e.target), locations: rcLocValue(e.target) }); toast('창고를 추가했습니다.'); await done(); } catch (error) { fail(error); } };
+  };
+  await draw();
 }
 
 // ── QR 코드(15.72, 외부 라이브러리 없이): 바이트 모드 · 오류 정정 M · 버전 1~10 · 마스크는 벌점이 가장 낮은 것 ──
@@ -466,4 +488,39 @@ function qrSvg(text) {
     let path = ''; g.forEach((row, r) => row.forEach((on, c) => { if (on) path += `M${c + q} ${r + q}h1v1h-1z`; }));
     return `<svg viewBox="0 0 ${n + q * 2} ${n + q * 2}" role="img" aria-label="QR ${esc(text)}" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"/><path d="${path}" fill="#000"/></svg>`;
   } catch { return '<span class="small muted">QR 생성 불가</span>'; }
+}
+
+// ── 15.230 QR 일괄 발행: 입고·생산완료로 생긴 LOT를 기간·검색으로 찾아 체크한 것만 QR코드 발행(한 장에 하나, PDF출력) ──
+async function pageQrBulk(main) {
+  let preset = null; try { preset = JSON.parse(sessionStorage.getItem('wpa:qr-bulk') || 'null'); sessionStorage.removeItem('wpa:qr-bulk'); } catch { preset = null; }
+  const t = todayStr();
+  main.innerHTML = `<h1>QR 일괄 발행 <span class="dept">물류</span></h1>
+  <p class="muted">입고(발주·기타)와 생산완료(완제품 실적)로 생긴 LOT입니다. 처음 들어온 날짜·품목·LOT·위치로 찾아 체크하고 「QR코드 발행」을 누르면 LOT마다 한 장씩 나오고 「PDF출력」으로 한 번에 인쇄합니다. 같은 LOT를 여러 장 붙여야 하면 「장 수」를 바꾸세요.</p>
+  <form class="list-filters toolbar" data-read-only id="qrbForm"><label>입고·생산일<input type="date" name="from" value="${esc(preset?.from || t)}"></label><label>~<input type="date" name="to" value="${esc(preset?.to || t)}"></label><label class="list-search">검색<input type="search" name="q" maxlength="200" value="${esc(preset?.q || '')}" placeholder="품목·LOT"></label><label class="inline"><input type="checkbox" name="instock" checked> 잔량 있는 LOT만</label><button class="btn primary">조회</button></form>
+  <div class="result-bar"><div class="counts" id="qrbSum"></div><span class="result-tools"><label class="inline">장 수 <input type="number" id="qrbCopies" min="1" max="50" value="1" style="width:4.5em"></label><button type="button" class="btn qr-pdf-btn" id="qrbIssue" disabled>QR코드 발행</button></span></div>
+  <div id="qrbList"><p class="muted">불러오는 중…</p></div>`;
+  const form = $('#qrbForm', main); let rows = [];
+  rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
+  const picked = () => $$('[data-qrb-pick]:checked', main).map(x => rows[Number(x.dataset.qrbPick)]);
+  const sync = () => { const n = picked().length; $('#qrbIssue', main).disabled = !n; $('#qrbIssue', main).textContent = n ? `QR코드 발행 (${n})` : 'QR코드 발행'; const all = $('[data-qrb-all]', main); if (all) all.checked = n > 0 && n === rows.length; };
+  const load = async () => {
+    const v = formObj(form);
+    const data = await api('GET', '/api/inventory/lots?' + new URLSearchParams({ asof: todayStr(), q: v.q || '', ...(form.elements.instock.checked ? { state: 'instock' } : {}) }));
+    if (!main.isConnected) return;
+    rows = data.rows.filter(r => r.lot && r.lot !== '(LOT 미지정)' && (!v.from || r.first_date >= v.from) && (!v.to || r.first_date <= v.to));
+    $('#qrbSum', main).innerHTML = `LOT ${fmtNum(rows.length)}개${data.more ? ' · <span class="chip yellow">앞부분만 · 검색으로 좁히세요</span>' : ''}`;
+    $('#qrbList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid qrb-grid"><thead><tr><th class="pick-cell"><input type="checkbox" data-qrb-all aria-label="모두 고르기"></th><th>LOT</th><th>품목</th><th class="r">입고·생산</th><th class="r">잔량</th><th>위치</th><th>처음 입고</th><th></th></tr></thead><tbody>${rows.map((r, i) => `<tr><td class="pick-cell"><input type="checkbox" data-qrb-pick="${i}" aria-label="${esc(r.lot)} 고르기"></td><td class="nowrap"><span class="lot-tag">${esc(r.lot)}</span></td><td data-card-primary><b>${esc(r.item)}</b></td><td class="r">${fmtNum(r.received)} ${esc(r.unit || '')}</td><td class="r"><b>${fmtNum(r.balance)}</b></td><td>${esc(r.places || '')}</td><td class="small muted">${esc(r.first_date || '')}</td><td><button type="button" class="btn small" data-qrb-one="${i}">QR</button></td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="empty">이 기간에 들어온 LOT가 없습니다. 기간을 넓히거나 「잔량 있는 LOT만」을 끄세요.</div>';
+    if (preset?.all) { $$('[data-qrb-pick]', main).forEach(x => { x.checked = true; }); preset = null; }
+    sync();
+  };
+  const card = r => ({ code: r.lot, sub: [r.item, `${fmtNum(r.received)} ${r.unit || ''}`.trim(), r.places || '', r.first_date].filter(Boolean).join(' · ') });
+  const copies = () => Math.max(1, Math.min(50, Number($('#qrbCopies', main).value) || 1));
+  const issue = list => { const n = copies(); qrIssue(list.flatMap(r => Array.from({ length: n }, () => card(r))), { title: 'QR코드 발행', file: 'QR일괄' }); };
+  main.addEventListener('change', e => { if (e.target.matches('[data-qrb-all]')) $$('[data-qrb-pick]', main).forEach(x => { x.checked = e.target.checked; }); if (e.target.matches('[data-qrb-all], [data-qrb-pick]')) sync(); });
+  main.addEventListener('click', e => { const b = e.target.closest('[data-qrb-one]'); if (b) issue([rows[Number(b.dataset.qrbOne)]]); });
+  $('#qrbIssue', main).onclick = () => { const list = picked(); if (list.length) issue(list); };
+  form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
+  form.elements.instock.onchange = () => load().catch(fail);
+  await load();
 }

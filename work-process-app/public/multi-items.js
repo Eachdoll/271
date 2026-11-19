@@ -258,7 +258,7 @@ async function renderActualChanges(root, kind) {
   bindChangeButtons(root, () => render());
 }
 
-async function openProductionActuals(id) {
+async function openProductionActuals(id, { onChange = null } = {}) {
   const box = modal('<h3>생산실적 · 실제 생산량</h3><div data-actual-content>불러오는 중…</div>',{wide:true});
   let requestId = crypto.randomUUID(), history = [], next = null, busy = false, lotInfo = null;
   lotInfo = await api('GET', `/api/schedules/${id}/lot-materials`).catch(() => null);
@@ -269,7 +269,7 @@ async function openProductionActuals(id) {
     const s = result.schedule; const unit = s.unit || s.bom_snapshot?.unit || '단위 미지정';
     const last = s.period === 'day' ? s.start_date : s.period === 'week' ? addDays(s.start_date,6) : monthEnd(s.start_date);
     const date = todayStr() < s.start_date || todayStr() > last ? s.start_date : todayStr();
-    $('[data-actual-content]',box.el).innerHTML = `<h4>${esc(s.product)} ${esc(s.spec)} · ${esc(unit)}</h4><p>계획 ${fmtNum(s.qty)} / 실제 누적 <b>${fmtNum(result.actual_qty)}</b> / 차이 ${fmtNum(result.variance_qty)} / 달성률 ${result.achievement_rate ?? '—'}%</p><p class="small muted">${esc(s.start_date)} ~ ${esc(last)} · ${result.auto ? '반제품 실적은 <a href="#/prod/semi/cut">반제품 · 커팅/융착</a> 기록에서 자동으로 집계됩니다(같은 품목명, 계획에 사이즈가 있으면 같은 사이즈, 계획 기간 안의 작업일). 여기에는 입력하지 않습니다.' : '완료 체크와 별도로 실제 생산한 수량만 입력하세요. 같은 생산실적을 여러 일정에 중복 입력하지 마세요.'}</p>${result.auto ? `<div class="table-wrap"><table class="grid"><thead><tr><th>작업일</th><th>라인</th><th>사이즈·규격</th><th class="r">양품</th><th class="r">불량</th><th>입력자</th></tr></thead><tbody>${result.cut_rows.map(c => `<tr><td>${esc(c.work_date)}</td><td>${esc(c.unit_name)}</td><td>${esc(c.spec)}</td><td class="r"><b>${fmtNum(c.qty)}</b> ${esc(c.unit)}</td><td class="r">${fmtNum(c.defect_qty)}</td><td class="small muted">${esc(c.created_by)}</td></tr>`).join('') || '<tr><td colspan="6">이 계획에 해당하는 커팅/융착 기록이 아직 없습니다.</td></tr>'}</tbody></table></div>${history.length ? '<h4>이전에 직접 입력한 실적</h4>' : ''}` : ''}${result.auto && !history.length ? '' : result.can_write ? `<form class="stack" data-actual-form><div class="form-grid">${multiInput('production_date','생산일','date',date)}<label>실제 생산량 *<input name="qty" type="number" min="0" step="any" required></label>${multiInput('note','작업·변동 메모','text','',false)}<label>완제품 LOT <span class="hint">(비우면 자동 ${esc(lotInfo?.product_lot_prefix || 'P')}+생산일_순번)</span><input name="lot" maxlength="100" placeholder="자동"></label></div><div data-actual-lots></div><p role="status" data-actual-status class="small muted"></p><div class="actions"><button class="btn primary">생산실적 추가</button></div></form>` : result.auto ? '' : '<p class="muted">생산 담당자 또는 일정 등록자가 실적을 입력할 수 있습니다.</p>'}${result.auto && !history.length ? '' : `<div class="table-wrap"><table class="erp-grid actual-hist" data-keep-cols data-no-sort><thead><tr><th>생산일</th><th class="r">양품 수량</th><th>완제품 LOT</th><th>투입 자재 (자재 · LOT · 수량)</th><th>입력자 / 입력시각</th><th>메모</th><th></th></tr></thead><tbody>${history.map(a => `<tr class="${a.voided_at ? 'row-off' : ''}"><td class="nowrap"><b>${esc(a.production_date)}</b></td><td class="r actual-qty"><b>${fmtNum(a.qty)}</b> <span class="small muted">${esc(unit)}</span>${a.voided_at ? '<div><span class="chip">취소</span></div>' : ''}${a.corrected_at ? `<div class="small muted">수정됨 · 승인 ${esc(a.corrected_by)}</div>` : ''}</td><td class="nowrap">${a.lot ? `<span class="lot-tag">${esc(a.lot)}</span>` : '<span class="muted">—</span>'}</td><td>${(a.inputs || []).length ? `<table class="actual-inputs"><tbody>${a.inputs.map(x => `<tr><td>${esc(x.item)}</td><td><span class="lot-tag">${esc(x.lot)}</span></td><td class="r">${fmtNum(x.qty)} <span class="small muted">${esc(x.unit || '')}</span></td></tr>`).join('')}</tbody></table>` : '<span class="muted small">투입 LOT 없음</span>'}</td><td class="small">${esc(a.author_name)}<br><span class="muted">${esc(String(a.created_at).slice(5, 16))}</span></td><td>${esc(a.note)}${a.voided_at ? `<br>취소: ${esc(a.voided_by)} · ${esc(a.void_reason)}` : ''}</td><td>${a.voided_at ? '' : a.pending_change ? `<span class="chip yellow">승인 대기</span><div class="small">${changeSummary(a.pending_change)}<br>사유: ${esc(a.pending_change.reason)} · ${esc(a.pending_change.requested_by)}</div>${changeActions(a.pending_change, result.can_approve)}` : result.can_write ? `<button class="btn small" data-actual-edit="${a.id}">수정 요청</button> <button class="btn small danger" data-actual-void="${a.id}">취소 요청</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="7">아직 입력한 생산실적이 없습니다.</td></tr>'}</tbody></table></div>`}${next ? '<button class="btn small" data-actual-more>이전 실적 더 보기</button>' : ''}<p class="small muted">입력된 실적의 수정·취소는 요청 후 <b>생산팀장 승인</b> 시 반영됩니다. 지난 기간의 실적도 요청할 수 있습니다.</p>${changeHistory(result.changes)}`;
+    $('[data-actual-content]',box.el).innerHTML = `<h4>${esc(s.product)} ${esc(s.spec)} · ${esc(unit)}</h4><p>계획 ${fmtNum(s.qty)} / 실제 누적 <b>${fmtNum(result.actual_qty)}</b> / 차이 ${fmtNum(result.variance_qty)} / 달성률 ${result.achievement_rate ?? '—'}%</p><p class="small muted">${esc(s.start_date)} ~ ${esc(last)} · ${result.auto ? '반제품 실적은 <a href="#/prod/semi/cut">반제품 · 커팅/융착</a> 기록에서 자동으로 집계됩니다(같은 품목명, 계획에 사이즈가 있으면 같은 사이즈, 계획 기간 안의 작업일). 여기에는 입력하지 않습니다.' : '완료 체크와 별도로 실제 생산한 수량만 입력하세요. 같은 생산실적을 여러 일정에 중복 입력하지 마세요.'}</p>${result.auto ? `<div class="table-wrap"><table class="grid"><thead><tr><th>작업일</th><th>라인</th><th>사이즈·규격</th><th class="r">양품</th><th class="r">불량</th><th>입력자</th></tr></thead><tbody>${result.cut_rows.map(c => `<tr><td>${esc(c.work_date)}</td><td>${esc(c.unit_name)}</td><td>${esc(c.spec)}</td><td class="r"><b>${fmtNum(c.qty)}</b> ${esc(c.unit)}</td><td class="r">${fmtNum(c.defect_qty)}</td><td class="small muted">${esc(c.created_by)}</td></tr>`).join('') || '<tr><td colspan="6">이 계획에 해당하는 커팅/융착 기록이 아직 없습니다.</td></tr>'}</tbody></table></div>${history.length ? '<h4>이전에 직접 입력한 실적</h4>' : ''}` : ''}${result.auto && !history.length ? '' : result.can_write ? `<form class="stack" data-actual-form><div class="form-grid">${multiInput('production_date','생산일','date',date)}<label>실제 생산량 *<input name="qty" type="number" min="0" step="any" required></label>${multiInput('note','작업·변동 메모','text','',false)}<label>완제품 LOT <span class="hint">(비우면 자동 ${esc(lotInfo?.product_lot_prefix || 'P')}+생산일_순번)</span><input name="lot" maxlength="100" placeholder="자동"></label></div><div data-actual-lots></div><p role="status" data-actual-status class="small muted"></p><div class="actions"><button class="btn primary">생산실적 추가</button></div></form>` : result.auto ? '' : '<p class="muted">생산 담당자 또는 일정 등록자가 실적을 입력할 수 있습니다.</p>'}${result.auto && !history.length ? '' : `<div class="table-wrap"><table class="erp-grid actual-hist" data-keep-cols data-no-sort><thead><tr><th>생산일</th><th>작업지시번호</th><th class="r">양품 수량</th><th>완제품 LOT</th><th>투입 자재 (자재 · LOT · 수량)</th><th>입력자 / 입력시각</th><th>메모</th><th></th></tr></thead><tbody>${history.map(a => `<tr class="${a.voided_at ? 'row-off' : ''}"><td class="nowrap"><b>${esc(a.production_date)}</b></td><td class="nowrap">${a.work_order ? `<button type="button" class="link-btn" data-wo-qr="${esc(a.work_order)}" data-wo-sub="${esc(`${s.product} · ${fmtNum(a.qty)} ${unit}${a.lot ? ' · LOT ' + a.lot : ''}`)}" title="QR코드 발행">${esc(a.work_order)}</button>` : '—'}</td><td class="r actual-qty"><b>${fmtNum(a.qty)}</b> <span class="small muted">${esc(unit)}</span>${a.voided_at ? '<div><span class="chip">취소</span></div>' : ''}${a.corrected_at ? `<div class="small muted">수정됨 · 승인 ${esc(a.corrected_by)}</div>` : ''}</td><td class="nowrap">${a.lot ? `<span class="lot-tag">${esc(a.lot)}</span>` : '<span class="muted">—</span>'}</td><td>${(a.inputs || []).length ? `<table class="actual-inputs"><tbody>${a.inputs.map(x => `<tr><td>${esc(x.item)}</td><td><span class="lot-tag">${esc(x.lot)}</span></td><td class="r">${fmtNum(x.qty)} <span class="small muted">${esc(x.unit || '')}</span></td></tr>`).join('')}</tbody></table>` : '<span class="muted small">투입 LOT 없음</span>'}</td><td class="small">${esc(a.author_name)}<br><span class="muted">${esc(String(a.created_at).slice(5, 16))}</span></td><td>${esc(a.note)}${a.voided_at ? `<br>취소: ${esc(a.voided_by)} · ${esc(a.void_reason)}` : ''}</td><td>${a.voided_at ? '' : a.pending_change ? `<span class="chip yellow">승인 대기</span><div class="small">${changeSummary(a.pending_change)}<br>사유: ${esc(a.pending_change.reason)} · ${esc(a.pending_change.requested_by)}</div>${changeActions(a.pending_change, result.can_approve)}` : result.can_write ? `<button class="btn small" data-actual-edit="${a.id}">수정 요청</button> <button class="btn small danger" data-actual-void="${a.id}">취소 요청</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="8">아직 입력한 생산실적이 없습니다.</td></tr>'}</tbody></table></div>`}${next ? '<button class="btn small" data-actual-more>이전 실적 더 보기</button>' : ''}<p class="small muted">입력된 실적의 수정·취소는 요청 후 <b>생산팀장 승인</b> 시 반영됩니다. 지난 기간의 실적도 요청할 수 있습니다.</p>${changeHistory(result.changes)}`;
     const form = $('[data-actual-form]',box.el);
     const lotBox = form && lotInfo?.materials?.length ? actualLotInputs($('[data-actual-lots]', form), lotInfo.materials, () => Number(form.elements.qty.value) || 0) : null;
     if (lotBox) form.elements.qty.addEventListener('input', () => lotBox.autofill());
@@ -300,10 +300,23 @@ async function openProductionActuals(id) {
       catch(error) { fail(error); } finally { busy = false; }
     });
     bindChangeButtons(box.el, refresh);
+    // 15.230 계획 접수 취소: 확정된 완제품 계획에 실적(취소되지 않은 것)이 없으면 대기로 되돌린다.
+    const live = history.filter(a => !a.voided_at).length;
+    if (s.kind === 'finished' && s.confirmed_at && hasRole('production')) {
+      const bar = document.createElement('div'); bar.className = 'actions plan-undo';
+      bar.innerHTML = live ? '<span class="small muted">실적이 있어 계획 접수를 취소할 수 없습니다(실적을 먼저 취소하세요).</span>' : '<button type="button" class="btn danger" data-plan-undo>계획 접수 취소(대기로)</button>';
+      $('[data-actual-content]', box.el).prepend(bar);
+      $('[data-plan-undo]', bar)?.addEventListener('click', async () => {
+        if (!await confirmBox(`${s.product} ${s.start_date} 계획 접수를 취소할까요? 「계획생산 접수·관리」에서 대기로 돌아가고 실적 입력 목록에서 빠집니다.`)) return;
+        try { await api('POST', '/api/schedules/confirm', { ids: [s.id], confirm: false }); toast('계획 접수를 취소했습니다(대기).'); box.close(); await onChange?.(); } catch (error) { fail(error); }
+      });
+    }
     const more = $('[data-actual-more]',box.el); if (more) more.onclick = () => load(true).catch(fail);
   };
   await load();
 }
+// 15.230 작업지시번호를 누르면 QR코드 발행(번호 그대로 QR)
+document.addEventListener('click', event => { const b = event.target.closest('[data-wo-qr]'); if (!b) return; event.preventDefault(); qrIssue([{ code: b.dataset.woQr, sub: b.dataset.woSub || '' }], { file: '작업지시' }); });
 document.addEventListener('click',event => {
   const button = event.target.closest('[data-actual-open]'); if (!button) return;
   event.preventDefault(); event.stopPropagation(); openProductionActuals(button.dataset.actualOpen).catch(fail);
@@ -365,7 +378,7 @@ async function pageFinishedPlan(main) {
   const canEdit = hasRole('production');
   let month = todayStr().slice(0, 7); try { month = sessionStorage.getItem('wpa:fp-month') || month; } catch { /* 편의 기능 */ }
   main.innerHTML = `<h1>완제품 계획생산 접수·관리 <span class="dept">생산</span></h1>
-  <p class="muted">달마다 완제품의 날짜별 생산 계획을 받습니다. 칸을 눌러 수량을 넣으면 <b>대기</b>로 들어가고, 줄을 체크해 「확정」하면 <b>확정</b>이 되어 「완제품 실적 입력」에 나옵니다.</p>
+  <p class="muted">달마다 완제품의 날짜별 생산 계획을 받습니다. 칸을 눌러 수량을 넣으면 <b>대기</b>로 들어가고, 대기 칸을 눌러 「확정」하면 그 한 건만 <b>확정</b>되어 「완제품 실적 입력」에 나옵니다. 확정 칸을 누르면 「확정취소」할 수 있습니다(실적이 없을 때).</p>
   <form class="toolbar fp-tools" id="fpTools" data-read-only>
     <label>계획월<input type="month" name="month" value="${month}" required></label>
     <div class="nav-date"><button type="button" class="btn small" data-fp-move="-1" aria-label="이전 달">◀</button><button type="button" class="btn small" data-fp-move="0">이번 달</button><button type="button" class="btn small" data-fp-move="1" aria-label="다음 달">▶</button></div>
@@ -373,7 +386,7 @@ async function pageFinishedPlan(main) {
     <div class="fp-reg" role="radiogroup" aria-label="계획여부"><b>계획여부</b><label class="inline"><input type="radio" name="reg" value="1" checked> 등록</label><label class="inline"><input type="radio" name="reg" value="0"> 미등록</label><label class="inline"><input type="radio" name="reg" value=""> 전체</label></div>
   </form>
   <div class="fp-bar"><span class="fp-legend"><i class="fp-sw wait"></i>대기 <i class="fp-sw ok"></i>확정</span><span class="small muted" id="fpSum" role="status"></span><span class="grow"></span>
-    ${canEdit ? '<button type="button" class="btn" id="fpAdd">추가</button><button type="button" class="btn primary" id="fpConfirm">확정</button><button type="button" class="btn" id="fpUnconfirm">확정취소</button>' : ''}<a class="btn" href="#/prod/finished">실적 입력 →</a></div>
+    ${canEdit ? '<button type="button" class="btn" id="fpAdd">추가</button>' : ''}<a class="btn" href="#/prod/finished">실적 입력 →</a></div>
   <div id="fpGrid"><p class="muted">불러오는 중…</p></div>`;
   const form = $('#fpTools', main); let boms = [], plans = [], rows = [];
   form.onsubmit = e => e.preventDefault();
@@ -401,30 +414,46 @@ async function pageFinishedPlan(main) {
     $('#fpSum', main).textContent = `품목 ${rows.length}개 · 계획 ${all.length}건(대기 ${wait.length} · 확정 ${all.length - wait.length}) · 계획수량 ${fmtNum(all.reduce((t, s) => t + s.qty, 0))}`;
     if (!rows.length) { $('#fpGrid', main).innerHTML = `<div class="empty">${form.elements.reg.value === '1' ? '이 달에 등록된 계획이 없습니다. 「미등록」·「전체」를 보거나 「추가」하세요.' : '조건에 맞는 완제품이 없습니다. 제품등록에서 분류 「제품」으로 등록하세요.'}</div>`; return; }
     const span = new Map(); rows.forEach(r => span.set(r.cat1, (span.get(r.cat1) || 0) + 1)); const seen = new Set();
-    const head = `<tr><th class="fp-chk"><input type="checkbox" data-fp-all aria-label="모든 줄 고르기"></th><th class="fp-no">No.</th><th class="fp-m-hide">제품분류</th><th class="fp-m-hide">제품구분</th><th class="fp-m-hide">품목코드</th><th class="fp-name-h">품목명</th><th class="fp-m-hide">품목분류</th><th class="r fp-sum-h">계획수량</th>${Array.from({ length: n }, (_, i) => `<th class="fp-d${[0, 6].includes(dow(i + 1)) ? ' fp-we' : ''}${dateOf(i + 1) === today ? ' fp-today' : ''}">${i + 1}</th>`).join('')}</tr>`;
+    const head = `<tr><th class="fp-no">No.</th><th class="fp-m-hide">제품분류</th><th class="fp-m-hide">제품구분</th><th class="fp-m-hide">품목코드</th><th class="fp-name-h">품목명</th><th class="fp-m-hide">품목분류</th><th class="r fp-sum-h">계획수량</th>${Array.from({ length: n }, (_, i) => `<th class="fp-d${[0, 6].includes(dow(i + 1)) ? ' fp-we' : ''}${dateOf(i + 1) === today ? ' fp-today' : ''}">${i + 1}</th>`).join('')}</tr>`;
     const body = rows.map((r, i) => {
       const dayPlans = d => r.plans.filter(s => s.period === 'day' && s.start_date === dateOf(d)), other = r.plans.filter(s => s.period !== 'day');
       const first = !seen.has(r.cat1); seen.add(r.cat1);
-      return `<tr data-fp-row="${i}"><td class="fp-chk"><input type="checkbox" data-fp-pick="${i}" aria-label="${esc(r.product)} 고르기"></td><td class="c fp-no">${i + 1}</td>${first ? `<td class="fp-cat fp-m-hide" rowspan="${span.get(r.cat1)}">${esc(r.cat1 || '(분류 없음)')}</td>` : ''}<td class="fp-m-hide">${esc(r.cat2)}</td><td class="nowrap fp-m-hide">${esc(r.code || '—')}</td><td class="fp-name">${esc(r.product)}<span class="fp-m-code">${esc(r.code || '')}</span></td><td class="fp-m-hide">${esc(r.cls)}</td>
+      return `<tr data-fp-row="${i}"><td class="c fp-no">${i + 1}</td>${first ? `<td class="fp-cat fp-m-hide" rowspan="${span.get(r.cat1)}">${esc(r.cat1 || '(분류 없음)')}</td>` : ''}<td class="fp-m-hide">${esc(r.cat2)}</td><td class="nowrap fp-m-hide">${esc(r.code || '—')}</td><td class="fp-name">${esc(r.product)}<span class="fp-m-code">${esc(r.code || '')}</span></td><td class="fp-m-hide">${esc(r.cls)}</td>
         <td class="r fp-sum">${r.plans.length ? fmtNum(r.plans.reduce((t, s) => t + s.qty, 0)) : ''}${other.length ? `<div class="small muted">주·월 ${other.length}건</div>` : ''}</td>
         ${Array.from({ length: n }, (_, k) => { const ps = dayPlans(k + 1), q = ps.reduce((t, s) => t + s.qty, 0), st = !ps.length ? '' : ps.every(s => s.confirmed_at) ? ' ok' : ' wait';
           return `<td class="fp-cell${st}${[0, 6].includes(dow(k + 1)) ? ' fp-we' : ''}" data-fp-cell="${i}|${k + 1}" title="${esc(r.product)} ${dateOf(k + 1)}${ps.length ? ` · ${ps.every(s => s.confirmed_at) ? '확정' : '대기'}` : ''}">${ps.length ? fmtNum(q) : ''}</td>`; }).join('')}</tr>`;
     }).join('');
     $('#fpGrid', main).innerHTML = `<div class="table-wrap fp-wrap"><table class="grid keep-table fp-grid" data-no-sort data-no-filter data-keep-cols data-no-reorder><caption class="sr-only">${esc(form.elements.month.value)} 완제품 생산 계획</caption><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
-    $('[data-fp-all]', main).onchange = e => $$('[data-fp-pick]', main).forEach(x => { x.checked = e.target.checked; });
     $$('[data-fp-cell]', main).forEach(td => td.onclick = () => cellEdit(td.dataset.fpCell).catch(fail));
   };
-  const picked = () => { const ids = $$('[data-fp-pick]:checked', main).map(x => rows[Number(x.dataset.fpPick)]); return ids.length ? ids : rows; };
   const cellEdit = async key => {
     if (!canEdit) return toast('계획 입력은 생산 담당자가 합니다.', 'err');
     const [ri, d] = key.split('|').map(Number), r = rows[ri], date = dateOf(d), ps = r.plans.filter(s => s.period === 'day' && s.start_date === date);
-    if (ps.some(s => s.confirmed_at)) return toast(`${r.product} ${date}: 확정된 계획입니다. 줄을 체크해 「확정취소」한 뒤 고치세요.`, 'err');
-    const v = await promptBox(`${r.product} · ${date} (${'일월화수목금토'[new Date(date + 'T00:00:00').getDay()]})`, `${ps.length > 1 ? `<p class="small muted">이 날 대기 계획 ${ps.length}건 — 합쳐서 한 건으로 고칩니다.</p>` : ''}<label>계획 수량 <span class="hint">(비우거나 0이면 이 날 계획을 지웁니다)</span><input name="qty" type="number" min="0" step="any" inputmode="decimal" value="${ps.length ? ps.reduce((t, s) => t + s.qty, 0) : ''}" autofocus></label><label>비고<input name="note" maxlength="200" value="${esc(ps[0]?.note || '')}"></label>`);
+    const title = `${r.product} · ${date} (${'일월화수목금토'[new Date(date + 'T00:00:00').getDay()]})`;
+    const setConfirm = async (on, list) => { try { const x = await api('POST', '/api/schedules/confirm', { ids: list.map(s => s.id), confirm: on }); toast(`${r.product} ${date} 계획을 ${on ? '확정' : '확정취소(대기)'}했습니다.${x.changed < list.length ? ` (${list.length - x.changed}건은 그대로)` : ''}`); } catch (error) { fail(error); } await load(); };
+    // 15.230 확정된 칸: 한 건씩 확정취소(실적이 없을 때)
+    if (ps.some(s => s.confirmed_at)) {
+      const done = ps.filter(s => s.confirmed_at), used = done.filter(s => s.actual_qty > 0);
+      const m = modal(`<h3>${esc(title)}</h3><p><span class="chip green">확정</span> 계획 ${fmtNum(done.reduce((t, s) => t + s.qty, 0))}${used.length ? ` · 실적 ${fmtNum(used.reduce((t, s) => t + s.actual_qty, 0))}` : ''}${done[0].confirmed_by ? ` <span class="small muted">확정 ${esc(done[0].confirmed_by)}</span>` : ''}</p>${used.length ? '<p class="small muted">실적이 있는 계획은 확정취소할 수 없습니다. 실적을 먼저 취소하세요.</p>' : '<p class="small muted">확정취소하면 대기로 돌아가고 수량을 고칠 수 있습니다.</p>'}<div class="actions"><button type="button" class="btn" data-x>닫기</button>${used.length ? '' : '<button type="button" class="btn danger" data-un>확정취소</button>'}</div>`);
+      $('[data-x]', m.el).onclick = m.close;
+      $('[data-un]', m.el)?.addEventListener('click', async () => { m.close(); await setConfirm(false, done); });
+      return;
+    }
+    // 대기·빈 칸: 수량 넣기·고치기, 대기 칸은 「확정」 단추로 그 한 건 확정
+    const v = await new Promise(resolve => {
+      const m = modal(`<h3>${esc(title)}</h3><form class="stack" data-fp-form>${ps.length ? `<p><span class="chip yellow">대기</span>${ps.length > 1 ? ` <span class="small muted">이 날 대기 계획 ${ps.length}건 — 합쳐서 한 건으로 고칩니다.</span>` : ''}</p>` : ''}<label>계획 수량 <span class="hint">(비우거나 0이면 이 날 계획을 지웁니다)</span><input name="qty" type="number" min="0" step="any" inputmode="decimal" value="${ps.length ? ps.reduce((t, s) => t + s.qty, 0) : ''}" autofocus></label><label>비고<input name="note" maxlength="200" value="${esc(ps[0]?.note || '')}"></label>
+        <div class="actions"><button type="button" class="btn" data-x>취소</button><button class="btn">${ps.length ? '저장(대기)' : '넣기(대기)'}</button>${ps.length ? '<button type="button" class="btn primary" data-ok>확정</button>' : ''}</div></form>`, { onClose: () => resolve(null) });
+      const f = $('[data-fp-form]', m.el), val = confirm => { const o = formObj(f); resolve({ ...o, confirm }); m.close(); };
+      $('[data-x]', m.el).onclick = m.close; f.onsubmit = e => { e.preventDefault(); val(false); };
+      $('[data-ok]', m.el)?.addEventListener('click', () => val(true));
+      setTimeout(() => f.elements.qty.focus(), 30);
+    });
     if (!v) return;
+    if (v.confirm && ps.length && Number(v.qty) === ps.reduce((t, s) => t + s.qty, 0) && (v.note || '') === (ps[0]?.note || '') && ps.length === 1) return setConfirm(true, ps);
     const qty = Number(v.qty) || 0;
     try {
       if (!qty) { for (const s of ps) await api('DELETE', '/api/schedules/' + s.id); if (ps.length) toast('계획을 지웠습니다.'); }
-      else if (ps.length) { await api('PUT', '/api/schedules/' + ps[0].id, { period: 'day', start_date: date, qty, note: v.note, ...(ps[0].bom_id ? { bom_id: ps[0].bom_id } : { product: ps[0].product }) }); for (const s of ps.slice(1)) await api('DELETE', '/api/schedules/' + s.id); toast('계획을 고쳤습니다(대기).'); }
+      else if (ps.length) { await api('PUT', '/api/schedules/' + ps[0].id, { period: 'day', start_date: date, qty, note: v.note, ...(ps[0].bom_id ? { bom_id: ps[0].bom_id } : { product: ps[0].product }) }); for (const s of ps.slice(1)) await api('DELETE', '/api/schedules/' + s.id); if (v.confirm) { await api('POST', '/api/schedules/confirm', { ids: [ps[0].id], confirm: true }); toast(`계획을 고치고 확정했습니다.`); } else toast('계획을 고쳤습니다(대기).'); }
       else { await api('POST', '/api/schedules', { kind: 'finished', period: 'day', start_date: date, qty, note: v.note, ...(r.bom ? { bom_id: r.bom.id } : { product: r.product }) }); toast('계획을 넣었습니다(대기).'); }
     } catch (error) { fail(error); }
     await load();
@@ -436,17 +465,6 @@ async function pageFinishedPlan(main) {
     if (!v) return;
     try { await api('POST', '/api/schedules', { kind: 'finished', period: 'day', start_date: v.start_date, bom_id: Number(v.bom_id), qty: v.qty, note: v.note }); toast('계획을 넣었습니다(대기).'); if (!v.start_date.startsWith(form.elements.month.value)) form.elements.month.value = v.start_date.slice(0, 7); await load(); } catch (error) { fail(error); }
   });
-  const confirmAll = async on => {
-    const rs = picked(), target = rs.flatMap(r => r.plans).filter(s => on ? !s.confirmed_at : s.confirmed_at && !(s.actual_qty > 0));
-    const blocked = on ? 0 : rs.flatMap(r => r.plans).filter(s => s.confirmed_at && s.actual_qty > 0).length;
-    if (!target.length) return toast(on ? '확정할 대기 계획이 없습니다.' : `확정취소할 계획이 없습니다.${blocked ? ` (실적이 있는 확정 계획 ${blocked}건은 취소할 수 없습니다)` : ''}`, 'err');
-    const scope = $$('[data-fp-pick]:checked', main).length ? `체크한 ${rs.length}개 품목` : `보이는 ${rs.length}개 품목 전체`;
-    if (!await confirmBox(`${scope}의 ${on ? '대기' : '확정'} 계획 ${target.length}건을 ${on ? '확정' : '확정취소'}할까요?${blocked ? ` 실적이 있는 ${blocked}건은 그대로 둡니다.` : ''}`)) return;
-    try { const r = await api('POST', '/api/schedules/confirm', { ids: target.map(s => s.id), confirm: on }); toast(`${r.changed}건을 ${on ? '확정' : '확정취소'}했습니다.`); } catch (error) { fail(error); }
-    await load();
-  };
-  $('#fpConfirm', main)?.addEventListener('click', () => confirmAll(true));
-  $('#fpUnconfirm', main)?.addEventListener('click', () => confirmAll(false));
   $$('[data-fp-move]', main).forEach(b => b.onclick = () => { const step = Number(b.dataset.fpMove); if (!step) form.elements.month.value = todayStr().slice(0, 7); else { const [y, m] = form.elements.month.value.split('-').map(Number); const d = new Date(y, m - 1 + step, 1); form.elements.month.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; } load().catch(fail); });
   form.elements.month.addEventListener('change', () => load().catch(fail));
   let t = null; form.elements.q.addEventListener('input', () => { clearTimeout(t); t = setTimeout(draw, 150); });
@@ -467,7 +485,7 @@ async function pageFinishedActual(main) {
     <label>품목<input type="search" name="q" placeholder="품목코드/명" autocomplete="off"></label>
     <label class="inline"><input type="checkbox" name="late" checked> 지난 2주 미완료 계획 포함</label>
   </form>
-  <div class="fp-bar"><span class="small muted" id="faSum" role="status"></span><span class="grow"></span>${canEnter ? '<button type="button" class="btn primary" id="faSaveAll">입력한 줄 모두 저장</button>' : ''}<a class="btn" href="#/prod/finished/plan">계획생산 접수·관리 →</a></div>
+  <div class="fp-bar"><span class="small muted" id="faSum" role="status"></span><span class="grow"></span><button type="button" class="btn qr-pdf-btn" id="faQr" title="이 생산일에 저장한 실적 LOT를 한 번에 QR코드로">이날 실적 QR 일괄 발행</button>${canEnter ? '<button type="button" class="btn primary" id="faSaveAll">입력한 줄 모두 저장</button>' : ''}<a class="btn" href="#/prod/finished/plan">계획생산 접수·관리 →</a></div>
   <div id="faList"><p class="muted">불러오는 중…</p></div>`;
   renderActualChanges($('#actualChanges', main), 'finished').catch(fail);
   const form = $('#faTools', main); let rows = [];
@@ -485,17 +503,17 @@ async function pageFinishedActual(main) {
   };
   const draw = () => {
     const date = form.elements.date.value;
-    $('#faSum', main).textContent = `확정 계획 ${rows.length}건 · 계획 ${fmtNum(rows.reduce((t, s) => t + s.qty, 0))} · 실적 ${fmtNum(rows.reduce((t, s) => t + s.actual_qty, 0))}`;
+    $('#faSum', main).textContent = `확정 계획 ${rows.length}건 · 계획 ${fmtNum(rows.reduce((t, s) => t + s.qty, 0))} · 양품 ${fmtNum(rows.reduce((t, s) => t + s.actual_qty, 0))}`;
     if (!rows.length) { $('#faList', main).innerHTML = `<div class="empty">${esc(date)}에 확정된 완제품 계획이 없습니다. 「계획생산 접수·관리」에서 계획을 확정하세요.</div>`; return; }
-    $('#faList', main).innerHTML = `<div class="table-wrap"><table class="grid keep-table fa-grid" data-no-sort data-no-filter data-keep-cols data-no-reorder><caption class="sr-only">${esc(date)} 완제품 실적 입력</caption><thead><tr><th>No.</th><th>계획일</th><th>품목코드</th><th>품목명</th><th>단위</th><th class="r">계획수량</th><th class="r">실적 누계</th><th class="r">잔량</th><th class="r">양품수량</th><th>비고</th><th><span class="sr-only">작업</span></th></tr></thead><tbody>${rows.map((s, i) => { const left = Math.round((s.qty - s.actual_qty) * 1000) / 1000, unit = s.unit || s.bom_snapshot?.unit || '';
-      return `<tr data-fa-row="${i}" class="${s.done || left <= 0 ? 'fa-done' : s.start_date < date ? 'fa-late' : ''}"><td class="c">${i + 1}</td><td class="nowrap">${s.period === 'day' ? esc(s.start_date.slice(5)) : `${PERIOD[s.period]} ${esc(s.start_date.slice(5))}~`}${s.start_date < date && s.period === 'day' ? ' <span class="chip yellow">지난 계획</span>' : ''}</td>
+    $('#faList', main).innerHTML = `<h2 class="fa-title">완제품 실적 리스트 <span class="small muted">${esc(date)}</span></h2><div class="table-wrap"><table class="grid keep-table fa-grid" data-no-sort data-no-filter data-keep-cols data-no-reorder><caption class="sr-only">${esc(date)} 완제품 실적 리스트</caption><thead><tr><th>No.</th><th>계획일</th><th>작업지시번호</th><th>품목코드</th><th>품목명</th><th>단위</th><th class="r">계획수량</th><th class="r">양품수량</th><th class="r">잔량</th><th class="r">양품수량 입력</th><th>비고</th><th><span class="sr-only">작업</span></th></tr></thead><tbody>${rows.map((s, i) => { const left = Math.round((s.qty - s.actual_qty) * 1000) / 1000, unit = s.unit || s.bom_snapshot?.unit || '', wos = (s.work_orders || '').split(',').filter(Boolean);
+      return `<tr data-fa-row="${i}" class="${s.done || left <= 0 ? 'fa-done' : s.start_date < date ? 'fa-late' : ''}"><td class="c">${i + 1}</td><td class="nowrap">${s.period === 'day' ? esc(s.start_date.slice(5)) : `${PERIOD[s.period]} ${esc(s.start_date.slice(5))}~`}${s.start_date < date && s.period === 'day' ? ' <span class="chip yellow">지난 계획</span>' : ''}</td><td class="nowrap wo-cell">${wos.length ? wos.map(w => `<div><button type="button" class="link-btn" data-wo-qr="${esc(w)}" data-wo-sub="${esc(`${s.product} · 계획 ${s.start_date}`)}" title="QR코드 발행">${esc(w)}</button></div>`).join('') : '<span class="small muted" title="양품수량을 저장하면 실적 날짜로 번호가 붙습니다">저장 시 부여</span>'}</td>
         <td class="nowrap">${esc(s.bom_snapshot?.product_code || '—')}</td><td><b>${esc(s.product)}</b>${s.spec ? ` <span class="small muted">${esc(s.spec)}</span>` : ''}</td><td>${esc(unit)}</td>
         <td class="r">${fmtNum(s.qty)}</td><td class="r">${fmtNum(s.actual_qty)}</td><td class="r ${left <= 0 ? 'green-text' : ''}"><b>${left <= 0 ? '완료' : fmtNum(left)}</b></td>
         <td class="r"><input type="number" min="0" step="any" inputmode="decimal" data-fa-qty placeholder="${left > 0 ? fmtNum(left) : ''}" aria-label="${esc(s.product)} 양품수량"${canEnter ? '' : ' disabled'}></td>
         <td><input data-fa-note maxlength="200" aria-label="${esc(s.product)} 비고"${canEnter ? '' : ' disabled'}></td>
         <td class="nowrap">${canEnter ? '<button type="button" class="btn small primary" data-fa-save>저장</button> ' : ''}<button type="button" class="btn small" data-fa-detail>상세</button></td></tr>`; }).join('')}</tbody></table></div>`;
     $$('[data-fa-row]', main).forEach(tr => { const s = rows[Number(tr.dataset.faRow)];
-      $('[data-fa-detail]', tr).onclick = () => openProductionActuals(s.id).catch(fail);
+      $('[data-fa-detail]', tr).onclick = () => openProductionActuals(s.id, { onChange: () => load() }).catch(fail);
       const q = $('[data-fa-qty]', tr); q.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('[data-fa-save]', tr)?.click(); } });
       $('[data-fa-save]', tr)?.addEventListener('click', async e => { const btn = e.currentTarget; btn.disabled = true; try { if (await save(s, tr)) await load(); } finally { btn.disabled = false; } }); });
   };
@@ -512,8 +530,15 @@ async function pageFinishedActual(main) {
     if (short.length && !await confirmBox(`${s.product}: 투입 자재 LOT 재고가 모자랍니다(${short.join(', ')}). 있는 만큼만 넣고 저장할까요?`)) return false;
     try {
       const r = await api('POST', `/api/schedules/${s.id}/actuals`, { production_date: pd, qty, note: $('[data-fa-note]', tr).value, inputs: out, request_id: crypto.randomUUID() });
-      toast(`${s.product} 양품 ${fmtNum(qty)} 저장 · LOT ${r.lot || '—'}${pd !== date ? ` (생산일 ${pd})` : ''}`); return true;
+      toast(`${s.product} 양품 ${fmtNum(qty)} 저장 · ${r.work_order || ''} · LOT ${r.lot || '—'}${pd !== date ? ` (생산일 ${pd})` : ''}`); return true;
     } catch (error) { fail(error); return false; }
+  };
+  // 15.230 이날 저장한 실적 LOT(제품 LOT)를 한 번에 QR코드 발행
+  $('#faQr', main).onclick = () => {
+    const date = form.elements.date.value, list = [];
+    for (const s of rows) { let a = []; try { a = JSON.parse(s.actual_lots || '[]'); } catch { a = []; } for (const x of a) if (x.date === date && x.lot) list.push({ code: x.lot, sub: [s.product, `${fmtNum(x.qty)} ${s.unit || s.bom_snapshot?.unit || ''}`.trim(), x.wo, x.date].filter(Boolean).join(' · ') }); }
+    if (!list.length) return toast(`${date}에 저장한 실적 LOT가 없습니다.`, 'err');
+    qrIssue(list, { title: `QR코드 발행 · ${date} 생산완료`, file: '생산LOT' });
   };
   $('#faSaveAll', main)?.addEventListener('click', async e => {
     const todo = $$('[data-fa-row]', main).filter(tr => Number($('[data-fa-qty]', tr).value) > 0); if (!todo.length) return toast('양품수량을 넣은 줄이 없습니다.', 'err');

@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.228';
+const APP_VERSION = '15.231';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -395,7 +395,7 @@ const NAV = [
     ['#/logistics/receive', '입고 관리'],
     { sub: '출하', items: [['#/logistics/ship-orders', '출하지시'], ['#/logistics/ship', '출하 관리']] },
     ['#/logistics/stock', '재고 현황'],
-    ['#/logistics/scan', 'QR 스캔'],
+    ['#/logistics/lots', 'LOT·QR 관리'], // 15.231 LOT 관리 · QR 일괄 발행 · 파렛트 묶음 · QR 스캔을 한 관리 화면(탭)으로
   ] },
 ];
 // 15.213 하위 묶음에 화면이 하나뿐이면(견적 > 견적서 관리 등) 묶음 없이 바로 화면 링크로
@@ -408,7 +408,7 @@ function routeMenu(route) {
   const path = String(route || '#/').split('?')[0];
   // 구매의뢰 목록은 결재선에 지정된 누구나 들어와 결재해야 하므로 막지 않는다(서버가 본인 관련 의뢰만 보여 준다).
   if (path === '#/sales/pr') return null;
-  if (path.startsWith('#/purchase/vendors') || path.startsWith('#/purchase/prices') || path.startsWith('#/quality/specs')) return 'master';
+  if (path.startsWith('#/purchase/vendors') || path.startsWith('#/purchase/prices') || path.startsWith('#/quality/specs') || path.startsWith('#/logistics/warehouses')) return 'master';
   for (const [prefix, key] of [['#/sales', 'sales'], ['#/purchase', 'purchase'], ['#/quality', 'quality'], ['#/dev', 'dev'], ['#/prod', 'production'], ['#/logistics', 'logistics']]) if (path === prefix || path.startsWith(prefix + '/')) return key;
   return null;
 }
@@ -454,7 +454,7 @@ function applyMenuAccess(main) {
   });
 }
 // 관리 메뉴(15.38): 거래처·검사규격 같은 기준 정보는 업무 메뉴가 아닌 관리 묶음에 둔다. 주소는 그대로다.
-const NAV_MANAGE = [['#/purchase/vendors', '거래처 관리'], ['#/purchase/prices', '단가표'], ['#/quality/specs', '검사규격 설정']];
+const NAV_MANAGE = [['#/purchase/vendors', '거래처 관리'], ['#/logistics/warehouses', '창고 관리'], ['#/purchase/prices', '단가표'], ['#/quality/specs', '검사규격 설정']]; // 15.230 창고 관리
 const NAV_ADMIN = [['#/admin/users', '회원 관리'], ['#/admin', '관리자 설정'], ['#/admin/org', '조직 구성'], ['#/admin/approval', '결재선 설정'], ['#/admin/bom', '제품등록'], ['#/admin/bom-sheet', 'BOM 소요량']]; // 15.175 회원 관리 분리
 // Entry and list screens built from one page: the page renders both parts and the view hides one.
 // key: route → [page route, view, title, other route, link label]
@@ -631,7 +631,7 @@ const PAGES = {
   '#/sales/tax-check': main => pageTaxCheck(main, 'sales'),
   '#/purchase/tax-check': main => pageTaxCheck(main, 'purchase'),
   '#/logistics/stock': main => pageStock(main),
-  '#/logistics/scan': main => pageScan(main),
+  '#/logistics/scan': main => managedPage(main, '#/logistics/scan', pageScan),
   '#/purchase/vendors': main => pageVendors(main),
   '#/purchase/prices': main => pagePrices(main),
   '#/purchase/sample/request': () => { location.replace('#/sales/sample/goods'); }, // 15.183 영업으로 옮김
@@ -652,6 +652,10 @@ const PAGES = {
   '#/admin/org': pageOrg,
   '#/admin/approval': main => pageApprovalRules(main), // 15.185 결재선 기본값
   '#/admin/bom': pageBoms,
+  '#/logistics/warehouses': main => pageWarehouses(main), // 15.230 관리 › 창고 관리
+  '#/logistics/qr': main => managedPage(main, '#/logistics/qr', pageQrBulk), // 15.230 QR 일괄 발행
+  '#/logistics/pallets': main => managedPage(main, '#/logistics/pallets', pagePallets), // 15.231 파렛트 묶음 QR
+  '#/logistics/lots': main => managedPage(main, '#/logistics/lots', pageLots), // 15.231 LOT 관리
   '#/admin/bom-sheet': main => pageBomSheet(main), // 15.196
   '#/me': pageMe,
   '#/tasks': pageTasks,
@@ -679,6 +683,7 @@ function refreshFavNav() {
 // ── 15.170 「관리」 화면: 목록과 입력(만들기)을 한 메뉴로. 같은 화면 제목 아래 전환 단추, 입력 주소(/new)는 그대로 쓰되
 // 메뉴 강조·화면 탭·위치 표시는 관리 화면 하나로 묶는다(navRoute).
 const MANAGE = {
+  '#/logistics/lots': { title: 'LOT·QR 관리', tabs: [['#/logistics/lots', 'LOT 관리'], ['#/logistics/qr', 'QR 일괄 발행'], ['#/logistics/pallets', '파렛트 묶음'], ['#/logistics/scan', 'QR 스캔']] }, // 15.231
   '#/sales/bills': { title: '매출전표 관리', tabs: [['#/sales/bills', '전표 목록'], ['#/sales/bills/new', '전표 입력'], ['#/sales/calendar', '매출 달력'], ['#/sales/reps', '담당자별 현황']] },
   '#/sales/tax': { title: '세금계산서 관리', tabs: [['#/sales/tax', '계산서 목록'], ['#/sales/tax/new', '계산서 만들기']] },
   '#/sales/quotes': { title: '견적서 관리', tabs: [['#/sales/quotes', '견적서 목록'], ['#/sales/quotes/new', '견적서 작성']] },
@@ -701,7 +706,7 @@ const MANAGE = {
   '#/quality/voc/list': { title: 'VOC 관리', tabs: [['#/quality/voc/list', 'VOC 처리목록'], ['#/quality/voc/request', 'VOC 접수']] },
   '#/dev/list': { title: '개발 관리', tabs: [['#/dev/list', '개발리스트'], ['#/dev/request', '개발의뢰']] },
 };
-const ROUTE_ALIAS = { '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/calendar': '#/sales/bills', '#/sales/reps': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users', '#/logistics/receipt/new': '#/logistics/receive', '#/logistics/receipts': '#/logistics/receive', '#/logistics/ship/new': '#/logistics/ship', '#/purchase/laundry/new': '#/purchase/laundry', '#/prod/semi/new': '#/prod/semi', '#/prod/semi/cut/new': '#/prod/semi/cut', '#/prod/semi/wash/new': '#/prod/semi/wash', '#/quality/request': '#/quality/list', '#/quality/voc/request': '#/quality/voc/list', '#/dev/request': '#/dev/list' };
+const ROUTE_ALIAS = { '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/calendar': '#/sales/bills', '#/logistics/qr': '#/logistics/lots', '#/logistics/pallets': '#/logistics/lots', '#/logistics/scan': '#/logistics/lots', '#/sales/reps': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users', '#/logistics/receipt/new': '#/logistics/receive', '#/logistics/receipts': '#/logistics/receive', '#/logistics/ship/new': '#/logistics/ship', '#/purchase/laundry/new': '#/purchase/laundry', '#/prod/semi/new': '#/prod/semi', '#/prod/semi/cut/new': '#/prod/semi/cut', '#/prod/semi/wash/new': '#/prod/semi/wash', '#/quality/request': '#/quality/list', '#/quality/voc/request': '#/quality/voc/list', '#/dev/request': '#/dev/list' };
 const navRoute = r => ROUTE_ALIAS[String(r || '#/').split('?')[0]] || String(r || '#/').split('?')[0];
 function managedTabs(main, route) {
   const m = MANAGE[navRoute(route)], h1 = $('h1', main); if (!m || !h1 || $('.manage-tabs', main)) return;
@@ -1373,9 +1378,9 @@ const PHONE_GRID = [
   ['#workList', { a: ['샘플명', '제품명', '상품명', '타겟제품'], b: ['판정', '상태'], c: ['접수번호', '검사구분', '고객사', ['완료희망일', '희망']], d: ['상태'] }], // 15.219 분석·VOC·개발·샘플 리스트
   ['#taxList', { k: [''], a: ['거래처'], b: ['합계'], c: ['문서상태', ['작성일자', '작성'], '품목', '구분'] }], // 15.219 세금계산서 목록
   ['#mrList', { a: ['품목 · 수량'], b: ['진행'], c: ['업체 · 주문번호', ['출고 희망', '출고']], d: [''] }], // 15.219 생산의뢰
-  ['#scBills', { a: ['거래처'], b: ['합계금액'], c: ['전표번호', ['영업사원', '담당'], ['매출', '매출'], ['매입', '매입'], ['세액', '세액']] }], // 15.218 매출·매입 달력 납품전표 목록
+  ['#scBills', { a: ['거래처'], b: ['합계금액'], c: ['전표번호', ['영업담당자', '담당'], ['매출', '매출'], ['매입', '매입'], ['세액', '세액']] }], // 15.218 매출·매입 달력 납품전표 목록
   ['#scItems', { a: ['제품명'], b: ['금액'], c: ['제품코드', '규격', ['수량', '수량'], ['단가', '단가']] }], // 15.218 세부품목내역
-  ['#billList', { k: [''], a: ['거래처'], b: ['합계'], c: ['전표번호', ['전표 일자', '일자'], ['명세서 일자', '일자'], ['영업담당', '담당'], '상태', '세금계산서'], d: [] }], // 15.215 매출·매입전표 목록
+  ['#billList', { k: [''], a: ['거래처'], b: ['합계'], c: ['전표번호', ['전표 일자', '일자'], ['명세서 일자', '일자'], ['영업담당자', '담당'], '상태', '세금계산서'], d: [] }], // 15.215 매출·매입전표 목록
   ['#poList', { a: ['품목명'], b: ['수량'], c: ['거래처', '입고상태', ['납기일', '납기']], d: [''] }], // 15.212 (15.219 2줄로: 입고·잔량·의뢰번호는 상세에)
   ['#rcList', { k: [''], a: ['품목명'], b: ['발주수량'], c: ['거래처', '상태', ['납기일', '납기']], d: ['사진·검수'] }], // 15.212 (15.219 2줄로)
   ['.mr-needs', { a: ['품목'], b: ['생산 필요'], c: ['규격·사이즈', ['의뢰', '의뢰'], ['생산', '생산'], ['계획 안 됨', '미계획']] }], // 15.210
@@ -2401,7 +2406,7 @@ function bomMaterialRow(material = {}) {
   return `<tr data-material-row><td><div class="mat-pick"><input data-material-item required maxlength="200" value="${esc(material.item)}" aria-label="자재명" list="bomMatList" autocomplete="off" placeholder="자재명 입력 또는 찾기"><button type="button" class="btn small" data-material-find title="등록된 원자재·부자재·반제품에서 고르기">찾기</button></div></td><td><select data-material-category required aria-label="자재 분류">${categoryOptions(material.item_category || '원자재')}</select></td><td><input data-material-qty type="number" required min="0.00000001" step="any" value="${esc(material.qty)}" aria-label="기준수량당 사용량"></td><td><input data-material-unit required maxlength="20" value="${esc(material.unit || 'yd')}" placeholder="yd" aria-label="자재 단위"></td><td><button type="button" class="btn small danger" data-material-remove>삭제</button></td></tr>`;
 }
 function bomForm(bom = {}) {
-  return `<form class="stack" ${bom.id ? `data-entry-author="${esc(bom.created_by)}"` : ''}><div class="form-grid"><label>품목코드<input name="product_code" maxlength="80" value="${esc(bom.product_code)}"></label><label>품목명 *<input name="product" required maxlength="200" value="${esc(bom.product)}"></label>${categoryField(bom.item_category)}<label>규격 <span class="hint">(발주·수주·출하에 그대로 들어감)</span><input name="spec" maxlength="100" value="${esc(bom.spec || '')}" placeholder="예) 9×9인치, 140mm, 0.5T"></label><label>1차 분류<select name="cat1" data-cat-level="1"></select></label><label>2차 분류 <span class="hint">(선택)</span><select name="cat2" data-cat-level="2"></select></label><label>3차 분류 <span class="hint">(선택)</span><select name="cat3" data-cat-level="3"></select></label><p class="span3 small" data-cat-kind role="status"></p><div class="span3 semi-use" data-semi-use><label class="inline"><input type="checkbox" name="semi_enabled" ${bom.semi_type && bom.item_category !== '반제품' ? 'checked' : ''}> 반제품으로도 사용 <span class="hint">(커팅/융착·세탁에서 이 제품코드를 고릅니다)</span></label><div class="form-grid" data-semi-fields><label>생산 종류 *<select name="semi_type"><option value="">선택</option>${Object.entries(SEMI_KIND_LABEL).map(([v, l]) => `<option value="${v}" ${bom.semi_type === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label>생산 기록 단위 *<input name="semi_unit" maxlength="20" list="unitSuggestions" value="${esc(bom.semi_unit || '')}" placeholder="예) 매 / 켤레"></label><label data-pack-row>단위 환산 * <span class="hint" data-pack-text></span><input name="pack_qty" type="number" min="0.000001" step="any" value="${esc(bom.pack_qty ?? '')}" placeholder="예) 1000"></label></div><p class="small muted" data-semi-note></p></div><label>생산 구분<select name="kind"><option value="finished" ${bom.kind !== 'semi' ? 'selected' : ''}>완제품</option><option value="semi" ${bom.kind === 'semi' ? 'selected' : ''}>반제품</option></select></label><label>기준 생산수량 *<input name="base_qty" type="number" min="0.00000001" step="any" required value="${esc(bom.base_qty || 1)}"></label><label>생산 단위 *<input name="unit" maxlength="20" required value="${esc(bom.unit || 'EA')}"></label><fieldset class="span3 inspect-skip"><legend>검사 제외 <span class="hint">(체크하면 이 품목의 검사 의뢰는 리스트에만 올라가고 「검사 제외」로 바로 완료)</span></legend><label class="inline"><input type="checkbox" name="skip_incoming"${bom.skip_incoming ? ' checked' : ''}> 수입검사 제외</label> <label class="inline"><input type="checkbox" name="skip_outgoing"${bom.skip_outgoing ? ' checked' : ''}> 출하검사 제외</label></fieldset><label class="span3">업체 정보 <span class="hint">(공급·고객 업체, 담당자·연락처 등)</span><textarea name="vendor_info" rows="2" maxlength="500" placeholder="예) 세기섬유 · 김대리 010-0000-0000 / 납품처 삼성디스플레이">${esc(bom.vendor_info || '')}</textarea></label><label class="span3">비고<textarea name="note" rows="2" maxlength="500">${esc(bom.note)}</textarea></label></div><p class="muted small">제품 BOM은 구성자재를 등록하세요. 원자재·부자재·반제품·상품은 구성자재 없이 품목으로 등록할 수 있습니다. 1차·2차·3차 세부 분류는 「분류 관리」에서 미리 만든 것 중에서 고릅니다. 반제품은 생산 종류가 지정된 분류(예: 와이퍼 › 천와이퍼)를 고르고 제품코드를 넣으면 커팅/융착·세탁 입력에서 바로 고를 수 있습니다. 반제품에 구성자재를 넣으면 생산량만큼 자재 재고가 차감됩니다.</p><div class="table-wrap"><table class="grid bom-materials"><thead><tr><th>자재명</th><th>분류</th><th>사용량</th><th>단위</th><th></th></tr></thead><tbody data-material-rows>${(bom.materials || []).map(bomMaterialRow).join('')}</tbody></table></div><button type="button" class="btn" data-material-add>+ 자재 추가</button><label class="inline"><input type="checkbox" name="active" ${bom.active !== 0 ? 'checked' : ''}> 사용 중 (생산·입고에서 선택 가능)</label><div class="actions"><button type="submit" class="btn primary">저장</button></div></form>`;
+  return `<form class="stack" ${bom.id ? `data-entry-author="${esc(bom.created_by)}"` : ''}><div class="form-grid"><label>품목코드<input name="product_code" maxlength="80" value="${esc(bom.product_code)}"></label><label>품목명 *<input name="product" required maxlength="200" value="${esc(bom.product)}"></label><label>SST제품명 <span class="hint">(SST 쪽 이름)</span><input name="sst_name" maxlength="200" value="${esc(bom.sst_name || '')}"></label>${categoryField(bom.item_category)}<label>규격 <span class="hint">(발주·수주·출하에 그대로 들어감)</span><input name="spec" maxlength="100" value="${esc(bom.spec || '')}" placeholder="예) 9×9인치, 140mm, 0.5T"></label><label>1차 분류<select name="cat1" data-cat-level="1"></select></label><label>2차 분류 <span class="hint">(선택)</span><select name="cat2" data-cat-level="2"></select></label><label>3차 분류 <span class="hint">(선택)</span><select name="cat3" data-cat-level="3"></select></label><p class="span3 small" data-cat-kind role="status"></p><div class="span3 semi-use" data-semi-use><label class="inline"><input type="checkbox" name="semi_enabled" ${bom.semi_type && bom.item_category !== '반제품' ? 'checked' : ''}> 반제품으로도 사용 <span class="hint">(커팅/융착·세탁에서 이 제품코드를 고릅니다)</span></label><div class="form-grid" data-semi-fields><label>생산 종류 *<select name="semi_type"><option value="">선택</option>${Object.entries(SEMI_KIND_LABEL).map(([v, l]) => `<option value="${v}" ${bom.semi_type === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label>생산 기록 단위 *<input name="semi_unit" maxlength="20" list="unitSuggestions" value="${esc(bom.semi_unit || '')}" placeholder="예) 매 / 켤레"></label><label data-pack-row>단위 환산 * <span class="hint" data-pack-text></span><input name="pack_qty" type="number" min="0.000001" step="any" value="${esc(bom.pack_qty ?? '')}" placeholder="예) 1000"></label></div><p class="small muted" data-semi-note></p></div><label>생산 구분<select name="kind"><option value="finished" ${bom.kind !== 'semi' ? 'selected' : ''}>완제품</option><option value="semi" ${bom.kind === 'semi' ? 'selected' : ''}>반제품</option></select></label><label>기준 생산수량 *<input name="base_qty" type="number" min="0.00000001" step="any" required value="${esc(bom.base_qty || 1)}"></label><label>생산 단위 *<input name="unit" maxlength="20" required value="${esc(bom.unit || 'EA')}"></label><fieldset class="span3 inspect-skip"><legend>검사 제외 <span class="hint">(체크하면 이 품목의 검사 의뢰는 리스트에만 올라가고 「검사 제외」로 바로 완료)</span></legend><label class="inline"><input type="checkbox" name="skip_incoming"${bom.skip_incoming ? ' checked' : ''}> 수입검사 제외</label> <label class="inline"><input type="checkbox" name="skip_outgoing"${bom.skip_outgoing ? ' checked' : ''}> 출하검사 제외</label></fieldset><label class="span3">업체 정보 <span class="hint">(공급·고객 업체, 담당자·연락처 등)</span><textarea name="vendor_info" rows="2" maxlength="500" placeholder="예) 세기섬유 · 김대리 010-0000-0000 / 납품처 삼성디스플레이">${esc(bom.vendor_info || '')}</textarea></label><label class="span3">포장정보 <span class="hint">(예: 1BOX = 10팩, 1팩 = 50매 · 박스 규격·무게)</span><textarea name="pack_info" rows="2" maxlength="500" placeholder="예) 1BOX = 10팩, 1팩 = 50매 / 박스 45×30×25cm, 6kg">${esc(bom.pack_info || '')}</textarea></label><label class="span3">비고<textarea name="note" rows="2" maxlength="500">${esc(bom.note)}</textarea></label></div><p class="muted small">제품 BOM은 구성자재를 등록하세요. 원자재·부자재·반제품·상품은 구성자재 없이 품목으로 등록할 수 있습니다. 1차·2차·3차 세부 분류는 「분류 관리」에서 미리 만든 것 중에서 고릅니다. 반제품은 생산 종류가 지정된 분류(예: 와이퍼 › 천와이퍼)를 고르고 제품코드를 넣으면 커팅/융착·세탁 입력에서 바로 고를 수 있습니다. 반제품에 구성자재를 넣으면 생산량만큼 자재 재고가 차감됩니다.</p><div class="table-wrap"><table class="grid bom-materials"><thead><tr><th>자재명</th><th>분류</th><th>사용량</th><th>단위</th><th></th></tr></thead><tbody data-material-rows>${(bom.materials || []).map(bomMaterialRow).join('')}</tbody></table></div><button type="button" class="btn" data-material-add>+ 자재 추가</button><label class="inline"><input type="checkbox" name="active" ${bom.active !== 0 ? 'checked' : ''}> 사용 중 (생산·입고에서 선택 가능)</label><div class="actions"><button type="submit" class="btn primary">저장</button></div></form>`;
 }
 // 15.77 제품등록 「더보기」 메뉴: 문서 수준 이벤트는 여기서 한 번만 등록한다(화면을 다시 열어도 쌓이지 않게).
 // 버튼 아래에 화면 기준으로 띄우고, 스크롤·창 크기 변경에는 위치만 다시 맞추며(버튼이 화면 밖이면 닫음), 바깥 클릭·Esc로 닫는다.
@@ -2461,7 +2466,7 @@ async function pageBoms(main) {
     $('#bomList').innerHTML = sorted.length ? `<div class="table-wrap"><table class="grid bom-table"><caption class="sr-only">제품 목록</caption><thead><tr><th scope="col">코드</th><th scope="col" class="c">NO</th><th scope="col">품목명</th><th scope="col">분류</th><th scope="col">단위 · 기준</th><th scope="col">구성자재</th><th scope="col">업체 정보</th><th scope="col">비고</th><th scope="col">상태</th><th scope="col"><span class="sr-only">작업</span></th></tr></thead><tbody>${sorted.map((bom, bi) => `<tr class="bom-row${bom.active ? '' : ' row-off'}" title="입력: ${esc(bom.created_by || '미기록')} · ${esc(String(bom.created_at || '').slice(0, 16))}">
       <td class="bom-code nowrap">${bom.product_code ? `<b>${esc(bom.product_code)}</b>` : '<span class="muted">코드 없음</span>'}${bom.is_temp ? ' <span class="chip yellow">임시</span>' : ''}</td>
       <td class="c small muted bom-no">${bi + 1}</td>
-      <td data-card-primary class="bom-name"><b>${esc(bom.product)}</b>${bom.spec ? ` <span class="small muted">${esc(bom.spec)}</span>` : ''}${bom.skip_incoming ? ' <span class="chip">수입검사 제외</span>' : ''}${bom.skip_outgoing ? ' <span class="chip">출하검사 제외</span>' : ''}</td>
+      <td data-card-primary class="bom-name"><b>${esc(bom.product)}</b>${bom.spec ? ` <span class="small muted">${esc(bom.spec)}</span>` : ''}${bom.sst_name ? `<div class="small"><span class="chip">SST</span> ${esc(bom.sst_name)}</div>` : ''}${bom.pack_info ? `<div class="small muted" title="포장정보">📦 ${esc(bom.pack_info)}</div>` : ''}${bom.skip_incoming ? ' <span class="chip">수입검사 제외</span>' : ''}${bom.skip_outgoing ? ' <span class="chip">출하검사 제외</span>' : ''}</td>
       <td class="bom-class">${esc(classPath(bom))}${bom.semi_type ? ` <span class="chip green">생산: ${esc(bom.semi_type)}</span>` : ''}${bom.sizes?.length ? ` <span class="small muted">사이즈 ${esc(bom.sizes.join('·'))}</span>` : ''}</td>
       <td class="nowrap">${esc(bom.unit || '—')}${['제품', '반제품'].includes(bom.item_category) ? ` <span class="small muted">· ${bom.kind === 'finished' ? '완제품' : '반제품'} 기준 ${fmtNum(bom.base_qty)}</span>` : ''}${bom.pack_qty ? `<div class="small muted">1${esc(bom.unit)} = ${fmtNum(bom.pack_qty)}${esc(bom.semi_unit)}</div>` : ''}</td>
       <td>${bomMaterials(bom)}</td>
