@@ -3359,3 +3359,6 @@ table.insp-v .insp-range-in { display: none; font-weight: 400; }
   table.insp-v td input { min-width: 4em; }
   table.insp-v tr.insp-judge-row th { white-space: normal; }
 }
+/* 15.241 측정값 입력 팝업은 옆으로 넓게(항목·회차 칸이 많아도 한눈에), 표 높이도 조금 더 */
+.modal.wide.insp-modal { width: min(1560px, calc(100vw - 32px)); max-width: none; }
+.modal.insp-modal .insp-wrap { max-height: min(64vh, 720px); }

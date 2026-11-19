@@ -212,12 +212,13 @@ async function openInspection(id,done=()=>{}) {
     return;
   }
 
-  // 15.240 측정값 그리드: 세로 보기(기본, 행 = 항목·회차, 열 = LOT·시료) ↔ 가로 보기(15.238, 행 = 시료, 열 = 항목·회차). 마지막 고른 보기를 기억
-  let mode='v';try{if(localStorage.getItem('wpa:insp-mode')==='h')mode='h';}catch{}
+  // 15.240 측정값 그리드: 세로 보기( 행 = 항목·회차, 열 = LOT·시료) ↔ 가로 보기(15.238, 행 = 시료, 열 = 항목·회차). 마지막 고른 보기를 기억
+  let mode='h';try{if(localStorage.getItem('wpa:insp-mode')==='v')mode='v';}catch{} // 15.241 기본은 다시 가로(행 = 시료, 열 = 항목·회차)
   const m=modal(`<h3>${esc(r.title)} · ${esc(r.category)}</h3><p>${esc(spec.item_category)} · 적용 품목 ${esc(spec.product)} · 규격 ${spec.revision}</p><p class="small muted">모든 값이 규격 이내면 합격, 하나라도 벗어나면 불합격입니다. 빈 칸이 남고 규격 이탈이 없으면 검사 대기입니다. 평균은 참고용입니다.</p>${!data.can_write?'<p class="muted">승인된 의뢰에서 품질 담당자만 측정값을 입력할 수 있습니다.</p>':''}<form class="stack"><div class="insp-bar"><p class="small muted" data-insp-hint></p><button type="button" class="btn small" data-insp-mode></button></div>
       <div class="table-wrap insp-wrap"><table class="grid keep-table insp-grid" data-no-sort data-no-filter data-keep-cols data-no-reorder></table></div>
       ${data.can_write?'<div class="actions" style="justify-content:flex-start"><button type="button" class="btn" data-add-sample>+ LOT / 시료 추가</button></div><label>수정 사유 (판정된 결과 수정 시 필수)<input name="reason" maxlength="500"></label>':''}<div data-verdict role="status"></div>${data.can_write?'<button class="btn primary">측정값 저장 · 자동 판정</button>':''}</form><details class="card"><summary>저장 이력 (${data.history.length}건 표시)</summary>${data.history.map(h=>`<p><button class="btn small" data-history="${h.id}">기록 ${h.revision} · ${INSPECTION_RESULT[h.result]}</button> ${esc(h.saved_by)} · ${esc(h.saved_at)} ${esc(h.reason)}</p>`).join('')||'<p>저장 이력이 없습니다.</p>'}</details>`,{wide:true});
   const form=$('form',m.el),table=$('table.insp-grid',form);
+  form.closest('.modal')?.classList.add('insp-modal'); // 15.241 팝업을 옆으로 넓게
   // 상태: 시료 목록. 칸은 data-s(시료 번호)·data-f(필드 번호: 0 = LOT, 1… = 항목·회차)로 찾는다
   const F=[{lot:true},...spec.items.flatMap(item=>Array.from({length:item.count},(_,i)=>({item,i})))];
   const blank=()=>norm({lot:'시료 '+(samples.length+1)});
