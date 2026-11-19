@@ -3405,3 +3405,8 @@ table.insp-r tbody tr.insp-sub > * { border-top: 1px dashed var(--line); }
 .sd-stock-h { margin: 12px 0 6px; }
 .sd-stock { max-height: min(56vh, 520px); overflow: auto; }
 .sd-stock tr[data-sk-row] { cursor: pointer; }
+/* 15.247 매출전표 목록: 한 번 누른 줄 강조 + 표 아래 전표 내용 */
+table.bill-list tr[data-row-bill] { cursor: pointer; }
+table.bill-list tr[data-row-bill].on > td { background: var(--accent-soft) !important; }
+.bill-peek { margin-top: 14px; }
+.bill-peek tfoot td, .bill-peek tfoot th { background: var(--total-bg, var(--bg)); }
