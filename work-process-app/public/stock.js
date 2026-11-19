@@ -549,3 +549,69 @@ async function itemLotWindow(item, asof, onChange) {
     ${rows.length ? `<div class="table-wrap"><table class="grid" data-no-sort data-keep-cols><thead><tr><th>LOT</th><th class="r">입고·생산</th><th class="r">출고·투입</th><th class="r">잔량</th><th>품질</th><th>위치</th><th>처음 입고</th><th></th></tr></thead><tbody>${rows.map((r, i) => `<tr data-il="${i}" class="${r.balance <= 0 ? 'row-off' : ''}${r.qc === 'concession' ? ' lot-tk-row' : ''}" style="cursor:pointer"><td class="nowrap"><span class="lot-tag">${esc(r.lot)}</span></td><td class="r">${fmtNum(r.received)}</td><td class="r">${fmtNum(r.shipped)}</td><td class="r"><b>${fmtNum(r.balance)}</b> ${esc(r.unit || '')}</td><td class="nowrap">${lotQcChip(r)}</td><td class="small">${esc(r.places || '')}</td><td class="small muted">${esc(r.first_date || '')}</td><td><button type="button" class="btn small" data-il-open="${i}">내역</button></td></tr>`).join('')}</tbody></table></div>` : ''}`, { wide: true });
   m.el.addEventListener('click', e => { const tr = e.target.closest('[data-il]'); if (tr) lotHistoryWindow(rows[Number(tr.dataset.il)], onChange).catch(fail); });
 }
+// 15.262 구매 재고현황: 자재·상품 재고 + 최근 매입 단가 × 재고 = 재고금액, 안전재고(설정·미달), 입고 예정(발주 잔량), 예상 재고
+async function pagePurchaseStock(main) {
+  const canLevel = ME.is_admin || ME.roles.includes('purchase') || ME.roles.includes('logistics_approver');
+  main.innerHTML = `<h1>구매 재고현황 <span class="dept">구매</span></h1>
+  <p class="muted">자재·상품의 현재고와 <b>재고금액</b>(현재고 × 최근 매입 단가), <b>안전재고</b>, 아직 안 들어온 <b>입고 예정</b>(발주 잔량)을 한 번에 봅니다. 줄을 누르면 입고 예정 발주가 펼쳐집니다.</p>
+  <form id="psForm" class="toolbar list-filters lf-oneline" data-read-only="true">
+    <label class="lf-date">기준일<input type="date" name="asof" value="${todayStr()}" max="${todayStr()}" required></label>
+    <label class="lf-sel">분류<select name="cls"><option value="mat">자재·상품</option><option value="원자재">원자재</option><option value="부자재">부자재</option><option value="상품">상품</option><option value="">전체</option></select></label>
+    <label class="list-search">검색<input type="search" name="q" maxlength="200" placeholder="품목명·품목코드"></label>
+    <label class="lf-sel lf-wide">보기<select name="state"><option value="">전체</option><option value="low">안전재고 미달</option><option value="incoming">입고 예정 있음</option><option value="nolevel">안전재고 미설정</option></select></label>
+    <button type="submit" class="btn primary">조회</button></form>
+  <div class="ps-cards" id="psCards"></div>
+  <div class="result-bar"><div class="counts" id="psSum"></div><span class="result-tools"><span id="psReorderSlot"></span><button type="button" class="btn" id="psCsv">CSV 저장</button></span></div>
+  <div id="psList"><p class="muted">불러오는 중…</p></div>`;
+  const form = $('#psForm', main); let rows = [], opened = new Set(), version = 0;
+  const key = s => String(s || '').toLowerCase().replace(/\s+/g, '');
+  const won = n => n == null ? '<span class="muted">—</span>' : fmtNum(Math.round(n));
+  const load = async () => {
+    const mine = ++version, v = formObj(form);
+    const [inv, extra] = await Promise.all([api('GET', '/api/inventory?' + new URLSearchParams({ asof: v.asof || todayStr() })), api('GET', '/api/purchase/stock-extra')]);
+    if (mine !== version || !main.isConnected) return;
+    const price = (item, unit) => { const m = new Map(extra.prices.map(p => [p.key, p])); return m.get(key(item) + '\u0000' + (unit || '')) || m.get(key(item) + '\u0000*') || null; };
+    const inc = new Map(); for (const p of extra.incoming) { const k = key(p.item); if (!inc.has(k)) inc.set(k, []); inc.get(k).push(p); }
+    let all = inv.rows.map(r => ({ ...r }));
+    const seen = new Set(all.map(r => key(r.item)));
+    for (const [k, list] of inc) if (!seen.has(k)) { const p = list[0]; all.push({ item: p.item, unit: p.unit, product_code: p.product_code || '', category: p.item_category || '', stock: 0, min_qty: null, low: false, incomingOnly: true }); seen.add(k); }
+    all = all.map(r => { const pr = price(r.item, r.unit), list = (inc.get(key(r.item)) || []).filter(p => !r.unit || !p.unit || p.unit === r.unit), incoming = list.reduce((t, p) => t + p.left, 0);
+      const projected = Math.round((r.stock + incoming) * 1000) / 1000, need = r.min_qty != null ? Math.round((r.min_qty - projected) * 1000) / 1000 : null;
+      return { ...r, price: pr?.price ?? null, price_vendor: pr?.vendor || '', price_date: pr?.date || '', amount: pr ? Math.max(0, r.stock) * pr.price : null, incoming, pos: list, projected, need, low: r.min_qty != null && r.stock < r.min_qty }; });
+    const q = (v.q || '').trim().toLowerCase();
+    rows = all.filter(r => (v.cls === 'mat' ? ['원자재', '부자재', '상품'].includes(r.category) : !v.cls || r.category === v.cls)
+      && (!q || `${r.item} ${r.product_code || ''}`.toLowerCase().includes(q))
+      && (v.state !== 'low' || r.low) && (v.state !== 'incoming' || r.incoming > 0) && (v.state !== 'nolevel' || r.min_qty == null))
+      .sort((a, b) => (b.low - a.low) || String(a.category).localeCompare(String(b.category), 'ko') || a.item.localeCompare(b.item, 'ko'));
+    const total = rows.reduce((t, r) => t + (r.amount || 0), 0), lowN = rows.filter(r => r.low).length, incN = rows.reduce((t, r) => t + r.pos.length, 0), noPrice = rows.filter(r => r.stock > 0 && r.price == null).length;
+    $('#psCards', main).innerHTML = `<div class="ps-card"><span>재고금액 합계</span><b>${won(total)}<small>원</small></b>${noPrice ? `<em>단가 없는 품목 ${noPrice}개 제외</em>` : ''}</div><div class="ps-card${lowN ? ' warn' : ''}"><span>안전재고 미달</span><b>${lowN}<small>품목</small></b></div><div class="ps-card"><span>입고 예정 발주</span><b>${incN}<small>건</small></b><em>${fmtNum(rows.filter(r => r.incoming > 0).length)}품목</em></div><div class="ps-card"><span>품목</span><b>${rows.length}<small>개</small></b></div>`;
+    $('#psSum', main).innerHTML = `${rows.length}개 품목 · 기준일 ${esc(inv.asof)}`;
+    const lowRows = rows.filter(r => r.low && r.min_qty != null);
+    $('#psReorderSlot', main).innerHTML = lowRows.length ? `<button type="button" class="btn" id="psReorder">부족분 발주 <span class="sub-count">${lowRows.length}</span></button> ` : '';
+    if ($('#psReorder', main)) $('#psReorder', main).onclick = () => stockReorder(lowRows).catch(fail);
+    $('#psList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ps-grid" data-keep-cols><thead><tr><th>품목코드</th><th>품목명</th><th>분류</th><th class="r">현재고</th><th class="r">최근 단가</th><th class="r">재고금액</th><th class="r">안전재고</th><th>상태</th><th class="r">입고 예정</th><th class="r">예상 재고</th><th></th></tr></thead><tbody>${rows.map((r, i) => {
+      const st = r.min_qty == null ? '<span class="muted small">미설정</span>' : r.low ? `<span class="chip red">미달 ${fmtNum(Math.round((r.min_qty - r.stock) * 1000) / 1000)}</span>` : '<span class="chip green">정상</span>';
+      const after = r.min_qty != null && r.low ? (r.projected >= r.min_qty ? ' <span class="small green-text">입고 후 정상</span>' : ` <span class="small red-text">입고 후도 부족 ${fmtNum(r.need)}</span>`) : '';
+      const first = r.pos.slice().sort((a, b) => String(a.due_date || '9').localeCompare(String(b.due_date || '9')))[0];
+      return `<tr data-ps="${i}" class="${r.low ? 'row-yellow' : ''}${r.stock < 0 ? ' row-red' : ''}" style="cursor:pointer"><td class="small nowrap">${esc(r.product_code || '') || '<span class="muted">미등록</span>'}</td><td><b>${esc(r.item)}</b>${r.incomingOnly ? ' <span class="chip">발주만</span>' : ''}</td><td class="small">${esc(r.category || '미분류')}${r.cat1 ? `<div class="muted">${esc([r.cat1, r.cat2].filter(Boolean).join(' › '))}</div>` : ''}</td>
+        <td class="r"><b class="${r.stock < 0 ? 'red-text' : ''}">${fmtNum(r.stock)}</b> ${esc(r.unit || '')}</td><td class="r">${r.price == null ? '<span class="muted">—</span>' : `${fmtNum(r.price)}<div class="small muted">${esc(r.price_vendor)}</div>`}</td><td class="r"><b>${won(r.amount)}</b></td>
+        <td class="r">${r.min_qty == null ? '<span class="muted">—</span>' : fmtNum(r.min_qty)}</td><td class="nowrap">${st}${after}</td>
+        <td class="r">${r.incoming > 0 ? `<b>${fmtNum(r.incoming)}</b> <span class="small muted">${r.pos.length}건</span>${first?.due_date ? `<div class="small muted">납기 ${esc(first.due_date)}${first.due_date < todayStr() ? ' <span class="red-text">지남</span>' : ''}</div>` : ''}` : '<span class="muted">—</span>'}</td>
+        <td class="r">${fmtNum(r.projected)}</td><td class="nowrap">${canLevel ? `<button type="button" class="btn small" data-ps-min="${i}">안전재고</button>` : ''}</td></tr>${opened.has(r.item) ? `<tr class="ps-po-row"><td colspan="11">${r.pos.length ? `<table class="erp-grid" data-keep-cols data-no-sort><thead><tr><th>발주번호</th><th>매입처</th><th>발주일</th><th>납기</th><th class="r">발주</th><th class="r">입고</th><th class="r">남은 수량</th><th class="r">단가</th><th class="r">금액</th><th>상태</th></tr></thead><tbody>${r.pos.map(p => `<tr><td class="nowrap">${esc(p.req_no || '')}</td><td>${esc(p.vendor || '')}</td><td class="small">${esc(p.ordered || '')}</td><td class="nowrap${p.due_date && p.due_date < todayStr() ? ' red-text' : ''}">${esc(p.due_date || '—')}</td><td class="r">${fmtNum(p.qty)}</td><td class="r">${fmtNum(p.received)}</td><td class="r"><b>${fmtNum(p.left)}</b> ${esc(p.unit || '')}</td><td class="r">${p.unit_price != null ? fmtNum(p.unit_price) : '—'}</td><td class="r">${p.unit_price != null ? fmtNum(Math.round(p.left * p.unit_price)) : '—'}</td><td>${p.partial ? '<span class="chip yellow">부분 입고</span>' : p.recv_status === 'checking' ? '<span class="chip">검수 중</span>' : '<span class="chip">입고 대기</span>'}</td></tr>`).join('')}</tbody></table>` : '<span class="small muted">입고 예정 발주가 없습니다.</span>'} <a class="small" href="#/purchase/po">발주 관리 →</a></td></tr>` : ''}`; }).join('')}</tbody></table></div>`
+      : '<div class="empty">조건에 맞는 품목이 없습니다.</div>';
+  };
+  main.addEventListener('click', async e => {
+    const mb = e.target.closest('[data-ps-min]'); if (mb) { const r = rows[Number(mb.dataset.psMin)];
+      const v = await promptBox(`${r.item} · 안전재고`, `<p class="small muted">현재고가 이 수량보다 적으면 「미달」로 표시하고 대시보드에 알립니다. 비우면 기준을 없앱니다.</p><label>안전재고 (${esc(r.unit || '단위 미지정')})<input name="min_qty" type="number" min="0" step="any" value="${r.min_qty ?? ''}"></label>`); if (!v) return;
+      try { await api('PUT', '/api/inventory/levels', { item: r.item, unit: r.unit, min_qty: v.min_qty }); toast('안전재고를 저장했습니다.'); await load(); } catch (error) { fail(error); } return; }
+    const tr = e.target.closest('[data-ps]'); if (tr && !e.target.closest('button, a, input')) { const r = rows[Number(tr.dataset.ps)]; opened.has(r.item) ? opened.delete(r.item) : opened.add(r.item); load().catch(fail); }
+  });
+  $('#psCsv', main).onclick = () => { if (!rows.length) return toast('저장할 품목이 없습니다.', 'err');
+    const cols = [['product_code', '품목코드'], ['item', '품목명'], ['category', '분류'], ['stock', '현재고'], ['unit', '단위'], ['price', '최근 단가'], ['amount', '재고금액'], ['min_qty', '안전재고'], ['incoming', '입고 예정'], ['projected', '예상 재고']];
+    const q = x => `"${String(x ?? '').replace(/"/g, '""')}"`, text = '﻿' + [cols.map(c => q(c[1])).join(','), ...rows.map(r => cols.map(c => q(c[0] === 'amount' && r.amount != null ? Math.round(r.amount) : r[c[0]])).join(','))].join('\r\n');
+    const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' })); link.download = `구매재고현황-${form.elements.asof.value}.csv`; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000); };
+  form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
+  form.elements.cls.onchange = form.elements.state.onchange = () => load().catch(fail);
+  rememberList(form);
+  await load();
+}

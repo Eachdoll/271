@@ -5535,8 +5535,20 @@ route('POST', '/api/inventory/adjustments', async ({ user, body }) => {
   catch (error) { if (/UNIQUE/i.test(String(error && error.message))) { const again = await db.prepare('SELECT * FROM stock_adjustments WHERE request_id=?').get(key); if (again && again.created_by_id === user.id) return again; throw new HttpError(409, '이미 사용된 요청 번호입니다.'); } throw error; } // 15.209
   return db.prepare('SELECT * FROM stock_adjustments WHERE id=?').get(r.lastInsertRowid);
 });
+// 15.262 구매 재고현황: 품목별 최근 매입 단가(발주·매입전표 중 최근)와 입고 예정(아직 안 받은 발주 잔량). 구매 담당·관리자만.
+route('GET', '/api/purchase/stock-extra', async ({ user }) => {
+  if (!hasRole(user, 'purchase')) throw new HttpError(403, '구매 재고현황은 구매 담당만 볼 수 있습니다.');
+  const prices = await db.prepare(`SELECT item, unit, unit_price AS price, vendor, d FROM (
+      SELECT TRIM(item) AS item, TRIM(unit) AS unit, unit_price, vendor, COALESCE(NULLIF(substr(recv_at,1,10),''), due_date, substr(created_at,1,10)) AS d, id FROM purchase_orders WHERE unit_price IS NOT NULL AND unit_price>0 AND recv_status<>'rejected'
+    ) ORDER BY d DESC, id DESC LIMIT 20000`).all();
+  const latest = new Map(); for (const r of prices) { const k = nameKey(r.item) + '\u0000' + (r.unit || ''); if (!latest.has(k)) latest.set(k, r); const k2 = nameKey(r.item) + '\u0000*'; if (!latest.has(k2)) latest.set(k2, r); }
+  const open = await db.prepare(`SELECT id, req_no, TRIM(item) AS item, TRIM(unit) AS unit, spec, vendor, item_category, product_code, qty, COALESCE(recv_qty,0) AS received, due_date, recv_status, unit_price, substr(created_at,1,10) AS ordered
+      FROM purchase_orders WHERE (recv_status IN ('','checking') OR (recv_status='mismatch' AND COALESCE(recv_qty,0) < qty)) ORDER BY due_date IS NULL, due_date, id LIMIT 5000`).all();
+  return { prices: [...latest.entries()].map(([k, r]) => ({ key: k, item: r.item, unit: r.unit, price: r.price, vendor: r.vendor, date: r.d })),
+    incoming: open.map(r => ({ ...r, left: stockRound(Math.max(0, r.qty - r.received)), partial: r.received > 0 })).filter(r => r.left > 0) };
+});
 route('PUT', '/api/inventory/levels', async ({ user, body }) => {
-  if (!canAdjustStock(user)) throw new HttpError(403, '안전재고 기준은 물류팀장 또는 관리자만 정할 수 있습니다.');
+  if (!canAdjustStock(user) && !hasRole(user, 'purchase')) throw new HttpError(403, '안전재고 기준은 구매 담당·물류팀장·관리자만 정할 수 있습니다.'); // 15.262 구매 재고현황
   const item = reqStr(body.item, '품목명', 200), unit = str(body.unit, 20);
   if (body.min_qty === '' || body.min_qty == null) { await db.prepare('DELETE FROM stock_levels WHERE item=? AND unit=?').run(item, unit); return { item, unit, min_qty: null }; }
   const min = num(body.min_qty, '안전재고');

@@ -36,6 +36,10 @@ function shade(hex, f) { const n = parseInt(hex.slice(1), 16), c = [n >> 16, (n 
 // 15.261 바탕까지 고른 색으로: 밝은 화면에서 바닥·메뉴줄·탭줄·조회 상자·회색 칩/단추를 그 색의 옅은 색으로, 기본 하트도 그 색. 어두운 화면은 그대로.
 const isDarkNow = () => { const t = document.documentElement.dataset.theme; return t === 'dark' || (t !== 'light' && !!window.matchMedia?.('(prefers-color-scheme: dark)').matches); };
 const heartSvg = (fill, w, h, d, shine) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${w} ${h}'><path d='${d}' fill='${fill}'/>${shine}</svg>`)}")`;
+// 15.262 커스텀 캐릭터 스킨 머리줄 무늬(이 기기에만): <html data-top="…">
+const TOP_KEY = 'wpa:skin-top', TOP_PATTERNS = [['dots', '● 땡땡이'], ['stripe', '▨ 사선 줄무늬'], ['check', '▦ 체크'], ['heart', '♥ 하트'], ['star', '★ 별'], ['wave', '〰 물결'], ['zigzag', '⩘ 지그재그'], ['grad', '◐ 그라데이션만'], ['solid', '■ 단색']];
+function topPattern() { try { const v = localStorage.getItem(TOP_KEY); return TOP_PATTERNS.some(([k]) => k === v) ? v : 'dots'; } catch { return 'dots'; } }
+function applyTopPattern() { const v = topPattern(), root = document.documentElement; if (v === 'dots') root.removeAttribute('data-top'); else root.setAttribute('data-top', v); for (const s of document.querySelectorAll('.skin-top')) s.value = v; }
 function applySkinColor() {
   const root = document.documentElement, c = skinColor(), on = c && root.dataset.skin === 'cat', light = on && !isDarkNow();
   const tintVars = { '--bg': shade(c, 0.9), '--ns-panel': shade(c, 0.95), '--ct-bar': shade(c, 0.93) };
@@ -91,7 +95,7 @@ function applyTheme(mode) {
 }
 (function themeStart() {
   if (typeof document === 'undefined' || !document.documentElement) return;
-  applyTheme(themeMode()); applyNavLayout(navLayout()); applyDensity(densityMode()); applySkin(skinMode()); applyFace();
+  applyTheme(themeMode()); applyNavLayout(navLayout()); applyDensity(densityMode()); applySkin(skinMode()); applyFace(); applyTopPattern();
   try { window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener('change', () => applySkinColor()); } catch { /* 오래된 브라우저 */ }
   const place = () => {
     for (const found of document.querySelectorAll('.who, .auth-card, .side')) {
@@ -130,7 +134,11 @@ function applyTheme(mode) {
           cw.addEventListener('click', e => { const b = e.target.closest('[data-sw]'); if (b) setC(b.dataset.sw); if (e.target.closest('[data-sw-reset]')) setC(''); });
           cw.querySelector('input[type=color]').addEventListener('input', e => setC(e.target.value.toLowerCase()));
           fw.append(cw);
-          host.append(fw); applyFace();
+          // 15.262 머리줄 무늬 고르기
+          const tw = document.createElement('label'); tw.className = 'skin-top-wrap'; tw.innerHTML = `<span>머리줄 무늬</span><select class="skin-top" aria-label="머리줄 무늬">${TOP_PATTERNS.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select>`;
+          tw.querySelector('select').onchange = e => { try { localStorage.setItem(TOP_KEY, e.target.value); } catch { /* 이 화면에만 */ } applyTopPattern(); };
+          fw.append(tw);
+          host.append(fw); applyFace(); applyTopPattern();
         }
       }
     }

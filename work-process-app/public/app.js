@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.261';
+const APP_VERSION = '15.262';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -368,7 +368,7 @@ const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
   { group: '영업', items: [{ sub: '견적', items: [['#/sales/quotes', '견적서 관리']] }, { sub: '수주', items: [['#/sales/orders', '수주 관리']] }, { sub: '매출전표', items: [['#/sales/bills', '매출전표 관리'], ['#/sales/calendar', '매출 달력'], ['#/sales/reps', '영업담당자별 현황'], ['#/sales/returns', '반입(반품) 관리'], ['#/sales/delivery-status', '납품현황'], ['#/sales/closing', '매출 마감']] }, { sub: '생산의뢰', items: [['#/sales/mr', '생산의뢰 관리']] }, { sub: '구매의뢰', items: [['#/sales/pr', '구매의뢰 관리']] }, { sub: '샘플의뢰', items: [['#/sales/sample/product', '제품 샘플의뢰'], ['#/sales/sample/goods', '상품 샘플의뢰']] }] },
   { group: '구매', items: [
-    { sub: '발주', items: [['#/purchase/po', '발주 관리']] },
+    { sub: '발주', items: [['#/purchase/po', '발주 관리'], ['#/purchase/stock', '구매 재고현황']] }, // 15.262
     { sub: '매입전표', items: [['#/purchase/bills', '매입전표 관리'], ['#/purchase/calendar', '매입 달력'], ['#/purchase/returns', '반출(반품) 관리'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/closing', '매입 마감']] },
     { sub: '샘플(상품)', items: [['#/purchase/sample/list', '상품 샘플리스트']] },
     { sub: '세탁', items: [['#/purchase/laundry', '불량·폐기 관리'], ['#/purchase/laundry-reports', '세탁 검수·성적서']] },
@@ -418,7 +418,7 @@ const canSeeMenu = key => !key || !ME || !Array.isArray(ME.menus) || ME.menus.in
 // 메뉴 보기만 켜고 권한이 없어 들어가면 빈 화면·「권한 없음」 오류만 보이던 문제.
 const ROUTE_ROLE = [
   [['#/sales/quotes', '#/sales/orders', '#/sales/bills', '#/sales/calendar', '#/sales/reps', '#/sales/returns', '#/sales/delivery-status', '#/sales/closing', '#/sales/tax', '#/sales/tax-check', '#/sales/book', '#/sales/ledger', '#/sales/aging'], ['sales']],
-  [['#/purchase/bills', '#/purchase/calendar', '#/purchase/returns', '#/purchase/receipt-status', '#/purchase/closing', '#/purchase/tax', '#/purchase/tax-check', '#/purchase/book', '#/purchase/ledger', '#/purchase/aging'], ['purchase']],
+  [['#/purchase/stock', '#/purchase/bills', '#/purchase/calendar', '#/purchase/returns', '#/purchase/receipt-status', '#/purchase/closing', '#/purchase/tax', '#/purchase/tax-check', '#/purchase/book', '#/purchase/ledger', '#/purchase/aging'], ['purchase']],
   [['#/purchase/payments', '#/purchase/disbursements', '#/purchase/notes'], ['sales', 'purchase']],
 ];
 function routeRoles(route) {
@@ -633,6 +633,7 @@ const PAGES = {
   '#/sales/tax-check': main => pageTaxCheck(main, 'sales'),
   '#/purchase/tax-check': main => pageTaxCheck(main, 'purchase'),
   '#/logistics/stock': main => pageStock(main),
+  '#/purchase/stock': main => pagePurchaseStock(main), // 15.262 구매 재고현황(금액·안전재고·입고 예정)
   '#/logistics/scan': main => managedPage(main, '#/logistics/scan', pageScan),
   '#/purchase/vendors': main => pageVendors(main),
   '#/purchase/prices': main => pagePrices(main),
