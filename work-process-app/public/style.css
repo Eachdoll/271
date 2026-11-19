@@ -3482,3 +3482,31 @@ tr.lot-tk-sub > td { background: #fffbe6 !important; box-shadow: inset 3px 0 0 #
 .stock-tree .st-tabs button { border: 0; background: none; padding: 8px 6px; border-radius: 6px; font: inherit; font-weight: 600; color: var(--muted); cursor: pointer; }
 .stock-tree .st-tabs button[aria-selected="true"] { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 .stock-tree .st-set { margin: 12px 6px 4px; padding-top: 10px; border-top: 1px solid var(--line); }
+
+/* 15.261 커스텀 캐릭터 스킨: 메뉴줄·탭줄도 고른 색의 옅은 색(밝은 화면, theme.js가 --ct-bar를 넣을 때만) */
+:root[data-skin="cat"]:not([data-theme="dark"]) .side, :root[data-skin="cat"]:not([data-theme="dark"]) .page-tabs { background: var(--ct-bar, var(--panel)); }
+
+/* 15.262 구매 재고현황 */
+.ps-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 6px 0 10px; }
+.ps-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+.ps-card span { font-size: 13px; color: var(--muted); } .ps-card b { font-size: 22px; } .ps-card b small { font-size: 13px; font-weight: 600; margin-left: 3px; color: var(--muted); } .ps-card em { font-style: normal; font-size: 12px; color: var(--muted); }
+.ps-card.warn { border-color: #f0b429; background: #fff8e6; } .ps-card.warn b { color: #b45309; }
+:root[data-theme="dark"] .ps-card.warn { background: #3a2f12; }
+.ps-po-row > td { background: var(--bg) !important; padding: 8px 12px 12px 28px; }
+/* 15.262 QR 인쇄 글자 굵게 */
+.qr-card-no { color: #000; -webkit-text-stroke: .35px #000; }
+.qr-card-sub { font-size: 14px; font-weight: 800; color: #000; }
+.rc-label-body, .rc-label-body * { font-weight: 700; color: #000; }
+@media print { body.printing-cert .qr-card-no, body.printing-cert .qr-card-sub, body.printing-cert .rc-label-body { font-family: "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; } }
+
+/* 15.262 커스텀 캐릭터 스킨 머리줄 무늬 */
+:root[data-skin="cat"][data-top="stripe"] .top { background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.2) 0 9px, transparent 9px 20px), linear-gradient(180deg, var(--ct-top1, #f0628a) 0%, var(--ct-top2, #d93a63) 100%); background-size: auto, 100% 100%; }
+:root[data-skin="cat"][data-top="check"] .top { background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.14) 0 10px, transparent 10px 20px), repeating-linear-gradient(90deg, rgba(255,255,255,.14) 0 10px, transparent 10px 20px), linear-gradient(180deg, var(--ct-top1, #f0628a) 0%, var(--ct-top2, #d93a63) 100%); background-size: auto, auto, 100% 100%; }
+:root[data-skin="cat"][data-top="heart"] .top { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='26' viewBox='0 0 28 26'%3E%3Cpath d='M14 21 S5 15.5 5 9.6 C5 7 7 5 9.4 5 c1.9 0 3.3 1 4.6 2.6 C15.3 6 16.7 5 18.6 5 C21 5 23 7 23 9.6 c0 5.9-9 11.4-9 11.4z' fill='white' fill-opacity='.22'/%3E%3C/svg%3E"), linear-gradient(180deg, var(--ct-top1, #f0628a) 0%, var(--ct-top2, #d93a63) 100%); background-size: 28px 26px, 100% 100%; }
+:root[data-skin="cat"][data-top="star"] .top { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 30 30'%3E%3Cpath d='M15 5l2.6 6.2 6.6.5-5 4.4 1.6 6.5L15 19.1 9.2 22.6l1.6-6.5-5-4.4 6.6-.5z' fill='white' fill-opacity='.24'/%3E%3C/svg%3E"), linear-gradient(180deg, var(--ct-top1, #f0628a) 0%, var(--ct-top2, #d93a63) 100%); background-size: 30px 30px, 100% 100%; }
+:root[data-skin="cat"][data-top="wave"] .top { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='16' viewBox='0 0 40 16'%3E%3Cpath d='M0 8 Q10 0 20 8 T40 8' fill='none' stroke='white' stroke-opacity='.25' stroke-width='2.5'/%3E%3C/svg%3E"), linear-gradient(180deg, var(--ct-top1, #f0628a) 0%, var(--ct-top2, #d93a63) 100%); background-size: 40px 16px, 100% 100%; }
+:root[data-skin="cat"][data-top="zigzag"] .top { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='14' viewBox='0 0 24 14'%3E%3Cpath d='M0 11 L6 3 L12 11 L18 3 L24 11' fill='none' stroke='white' stroke-opacity='.25' stroke-width='2.5'/%3E%3C/svg%3E"), linear-gradient(180deg, var(--ct-top1, #f0628a) 0%, var(--ct-top2, #d93a63) 100%); background-size: 24px 14px, 100% 100%; }
+:root[data-skin="cat"][data-top="grad"] .top { background-image: linear-gradient(90deg, var(--ct-top2, #d93a63) 0%, var(--ct-top1, #f0628a) 55%, var(--ct-top, #e8456f) 100%); background-size: 100% 100%; }
+:root[data-skin="cat"][data-top="solid"] .top { background-image: none; background-color: var(--ct-main, #e60033); }
+.skin-face .skin-top-wrap { display: flex; align-items: center; gap: 6px; width: 100%; font-size: 12.5px; color: var(--muted); }
+.skin-face .skin-top-wrap select { flex: 1; min-width: 0; }

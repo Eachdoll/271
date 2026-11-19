@@ -334,3 +334,12 @@ test('15.258 review fixes: progress rows cannot be edited, one progress rule, at
   assert.equal((await put({ lot: 'RG-BAD' })).status, 400, 'failed LOT');
   const lt = await admin('PUT', `/api/items/shipment/${sh.id}`, { spec: '', unit: 'EA', lot: 'RG-BAD' }); assert.notEqual(lt.status, 200);
 });
+
+test('15.262 purchase stock: price and incoming POs for purchase only; purchase can set safety stock', async () => {
+  assert.equal((await prod('GET', '/api/purchase/stock-extra')).status, 403, 'production/logistics user is not purchase');
+  const x = await admin('GET', '/api/purchase/stock-extra'); assert.equal(x.status, 200); assert.ok(Array.isArray(x.body.prices) && Array.isArray(x.body.incoming));
+  const buyer = client(); await approvedRegistration(admin, buyer, { name: '구매담당', password: 'password', invite: 'lot249-test' });
+  const u = (await admin('GET', '/api/admin/users')).body.find(v => v.name === '구매담당'); await admin('PUT', `/api/admin/users/${u.id}`, { roles: ['purchase'] });
+  assert.equal((await buyer('GET', '/api/purchase/stock-extra')).status, 200);
+  assert.equal((await buyer('PUT', '/api/inventory/levels', { item: '리뷰원단', unit: 'yd', min_qty: 10 })).status, 200);
+});
