@@ -213,7 +213,7 @@ async function openInspection(id,done=()=>{}) {
   }
 
   // 15.240 측정값 그리드: 세로 보기( 행 = 항목·회차, 열 = LOT·시료) ↔ 가로 보기(15.238, 행 = 시료, 열 = 항목·회차). 마지막 고른 보기를 기억
-  let mode='h';try{if(localStorage.getItem('wpa:insp-mode')==='v')mode='v';}catch{} // 15.241 기본은 다시 가로(행 = 시료, 열 = 항목·회차)
+  let mode='v';try{if(localStorage.getItem('wpa:insp-mode2')==='h')mode='h';}catch{} // 15.242 기본은 항목 = 행(세로), 시료 = 열(가로). 넓은 팝업 그대로
   const m=modal(`<h3>${esc(r.title)} · ${esc(r.category)}</h3><p>${esc(spec.item_category)} · 적용 품목 ${esc(spec.product)} · 규격 ${spec.revision}</p><p class="small muted">모든 값이 규격 이내면 합격, 하나라도 벗어나면 불합격입니다. 빈 칸이 남고 규격 이탈이 없으면 검사 대기입니다. 평균은 참고용입니다.</p>${!data.can_write?'<p class="muted">승인된 의뢰에서 품질 담당자만 측정값을 입력할 수 있습니다.</p>':''}<form class="stack"><div class="insp-bar"><p class="small muted" data-insp-hint></p><button type="button" class="btn small" data-insp-mode></button></div>
       <div class="table-wrap insp-wrap"><table class="grid keep-table insp-grid" data-no-sort data-no-filter data-keep-cols data-no-reorder></table></div>
       ${data.can_write?'<div class="actions" style="justify-content:flex-start"><button type="button" class="btn" data-add-sample>+ LOT / 시료 추가</button></div><label>수정 사유 (판정된 결과 수정 시 필수)<input name="reason" maxlength="500"></label>':''}<div data-verdict role="status"></div>${data.can_write?'<button class="btn primary">측정값 저장 · 자동 판정</button>':''}</form><details class="card"><summary>저장 이력 (${data.history.length}건 표시)</summary>${data.history.map(h=>`<p><button class="btn small" data-history="${h.id}">기록 ${h.revision} · ${INSPECTION_RESULT[h.result]}</button> ${esc(h.saved_by)} · ${esc(h.saved_at)} ${esc(h.reason)}</p>`).join('')||'<p>저장 이력이 없습니다.</p>'}</details>`,{wide:true});
@@ -232,9 +232,9 @@ async function openInspection(id,done=()=>{}) {
   const render=()=>{
     if(mode==='v'){
       table.className='grid keep-table insp-grid insp-v';
-      table.innerHTML=`<thead><tr><th class="insp-item-c">검사항목</th><th class="insp-range-c">규격</th><th class="c insp-n-c">회차</th>${samples.map((_,s)=>`<th class="insp-sample-h"><div class="insp-sh"><span data-row-no>시료 ${s+1}</span>${delBtn(s)}</div>${cell(s,0)}</th>`).join('')}</tr></thead><tbody>${
-        spec.items.map(item=>Array.from({length:item.count},(_,i)=>`<tr>${i?'':`<th scope="rowgroup" rowspan="${item.count+1}" class="insp-item-c">${esc(item.name)}<div class="small muted insp-range-in">${rangeTxt(item)}</div></th><td rowspan="${item.count+1}" class="insp-range-c small muted" title="${esc(inspectionRange(item))}">${rangeTxt(item)}</td>`}<td class="c insp-n-c">#${i+1}</td>${samples.map((_,s)=>`<td class="insp-cell">${cell(s,F.findIndex(d=>d.item===item&&d.i===i))}</td>`).join('')}</tr>`).join('')+`<tr class="insp-avg-row"><td class="c insp-n-c">평균</td>${samples.map((_,s)=>`<td class="r insp-avg"><span data-average="${item.key}" data-s="${s}"></span></td>`).join('')}</tr>`).join('')
-      }<tr class="insp-judge-row"><th colspan="3" class="insp-item-c">시료 판정</th>${samples.map((_,s)=>`<td class="c" data-judge="${s}"></td>`).join('')}</tr></tbody>`;
+      table.innerHTML=`<thead><tr><th class="c insp-item-c">검사 항목 · 규격</th><th class="c insp-n-c">회차</th>${samples.map((_,s)=>`<th class="insp-sample-h"><div class="insp-sh"><span data-row-no>시료 ${s+1}</span>${delBtn(s)}</div>${cell(s,0)}</th>`).join('')}</tr></thead><tbody>${
+        spec.items.map(item=>Array.from({length:item.count},(_,i)=>`<tr>${i?'':`<th scope="rowgroup" rowspan="${item.count+1}" class="insp-item-c" title="${esc(inspectionRange(item))}">${esc(item.name)}<div class="small muted insp-range-in">${rangeTxt(item)}</div></th>`}<td class="c insp-n-c">#${i+1}</td>${samples.map((_,s)=>`<td class="insp-cell">${cell(s,F.findIndex(d=>d.item===item&&d.i===i))}</td>`).join('')}</tr>`).join('')+`<tr class="insp-avg-row"><td class="c insp-n-c">평균</td>${samples.map((_,s)=>`<td class="r insp-avg"><span data-average="${item.key}" data-s="${s}"></span></td>`).join('')}</tr>`).join('')
+      }<tr class="insp-judge-row"><th colspan="2" class="c insp-item-c">시료 판정</th>${samples.map((_,s)=>`<td class="c" data-judge="${s}"></td>`).join('')}</tr></tbody>`;
     }else{
       table.className='grid keep-table insp-grid insp-h';
       table.innerHTML=`<thead><tr><th rowspan="2" class="c insp-no">No</th><th rowspan="2" class="insp-lot-h">LOT / 시료명 *</th>${spec.items.map(item=>`<th colspan="${item.count+1}" class="c insp-item-h">${esc(item.name)}<div class="small muted" title="${esc(inspectionRange(item))}">${rangeTxt(item)}</div></th>`).join('')}${data.can_write?'<th rowspan="2"><span class="sr-only">행 빼기</span></th>':''}</tr><tr>${spec.items.map(item=>`${Array.from({length:item.count},(_,i)=>`<th class="c insp-n">#${i+1}</th>`).join('')}<th class="c insp-avg-h">평균</th>`).join('')}</tr></thead><tbody data-measure-rows>${
@@ -270,7 +270,7 @@ async function openInspection(id,done=()=>{}) {
     const grid=text.replace(/\r/g,'').replace(/\n$/,'').split('\n').map(l=>l.split('\t'));const s0=Number(el.dataset.s),f0=Number(el.dataset.f);let n=0;
     grid.forEach((vals,i)=>vals.forEach((v,j)=>{const s=s0+(mode==='v'?j:i),f=f0+(mode==='v'?i:j);if(f>=F.length)return;while(s>=samples.length)if(!addSample())return;const d=F[f];v=String(v).trim();if(!d.lot)v=v.replace(/,/g,'');if(d.lot)samples[s].lot=v;else samples[s].values[d.item.key][d.i]=v;n++;}));
     edited=true;render();focusAt(s0,f0);toast(`${grid.length}줄 × ${Math.max(...grid.map(g=>g.length))}칸을 붙여넣었습니다.`);});
-  $('[data-insp-mode]',form).onclick=()=>{mode=mode==='v'?'h':'v';try{localStorage.setItem('wpa:insp-mode',mode);}catch{}render();};
+  $('[data-insp-mode]',form).onclick=()=>{mode=mode==='v'?'h':'v';try{localStorage.setItem('wpa:insp-mode2',mode);}catch{}render();};
   render();
   $$('[data-history]',m.el).forEach(b=>b.onclick=async()=>{try{const h=await api('GET',`/api/requests/${id}/inspection/history/${b.dataset.history}`);modal(`<h3>검사 기록 ${h.revision}</h3><p>${qualityInspectionBadge(h.result)} ${esc(h.saved_by)} · ${esc(h.saved_at)}</p>${inspectionMatrix(spec,h.values)}`,{wide:true});}catch(error){fail(error);}});
   if(!data.can_write)return;

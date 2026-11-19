@@ -3362,3 +3362,11 @@ table.insp-v .insp-range-in { display: none; font-weight: 400; }
 /* 15.241 측정값 입력 팝업은 옆으로 넓게(항목·회차 칸이 많아도 한눈에), 표 높이도 조금 더 */
 .modal.wide.insp-modal { width: min(1560px, calc(100vw - 32px)); max-width: none; }
 .modal.insp-modal .insp-wrap { max-height: min(64vh, 720px); }
+/* 15.242 측정값 기본 = 항목 행 × 시료 열(넓은 팝업 그대로). 항목 칸은 가로 보기 머리글처럼 가운데·이름 아래 규격, 머리 음영 */
+table.insp-v th.insp-item-c { width: 150px; min-width: 150px; max-width: 150px; text-align: center; vertical-align: middle; background: var(--erp-head, var(--bg)); }
+table.insp-v .insp-range-in { display: block; font-size: 12px; font-weight: 400; margin-top: 2px; white-space: normal; }
+table.insp-v .insp-n-c { left: 150px; }
+table.insp-v thead th.insp-n-c, table.insp-v thead th.insp-item-c { vertical-align: middle; }
+table.insp-v tr.insp-judge-row th.insp-item-c { width: auto; max-width: none; }
+table.insp-v thead th.insp-sample-h { text-align: center; }
+@media (max-width: 700px) { table.insp-v th.insp-item-c { width: 84px; min-width: 84px; max-width: 84px; } table.insp-v .insp-n-c { left: 84px; } table.insp-v .insp-range-in { font-size: 11px; } }
