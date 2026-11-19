@@ -182,7 +182,18 @@ async function pageMembers(main, tab) {
         ${MENU_GROUP_LABELS.map(([k, l]) => { const on = !base || base.includes(k), byRole = !on && (!eff || eff.includes(k));
           return `<td class="c" data-label="${esc(l.replace(/ \(.*\)$/, ''))}"><label class="mx-cell">${u.menu_mode === 'custom' ? `<input type="checkbox" data-menu="${k}" ${on ? 'checked' : ''} aria-label="${esc(u.name)} ${esc(l)}">` : on ? '<span class="mv-on" aria-label="보임">✓</span>' : '<span class="mv-off" aria-label="숨김">—</span>'}<span class="mx-lab" aria-hidden="true">${esc(l.replace(/ \(.*\)$/, ''))}</span></label>${byRole ? ' <span class="chip" title="사용 권한이 있어 메뉴를 꺼도 보입니다">권한</span>' : ''}</td>`; }).join('')}</tr>${roleHiddenRow(u, MENU_GROUP_LABELS.length + 2)}`; }).join('')}</tbody></table>`,
   };
-  const draw = () => { const list = users.filter(visible); $('[data-member-count]', filters).textContent = `${list.length}명`; $('#memberList', main).innerHTML = list.length ? `<div class="table-wrap">${tables[tab](list)}</div>` : '<div class="empty">조건에 맞는 회원이 없습니다.</div>'; };
+  // 15.244 체크 후 다시 그려도 보던 자리(화면·표 스크롤)와 누른 칸 포커스를 그대로 둔다(맨 위로 튀지 않게)
+  const draw = () => {
+    const box = $('#memberList', main), wrap = $('.table-wrap', box), se = document.scrollingElement || document.documentElement;
+    const keep = { y: se.scrollTop, m: main.scrollTop, t: wrap?.scrollTop || 0, l: wrap?.scrollLeft || 0, h: box.offsetHeight };
+    const f = document.activeElement, ftr = f?.closest?.('tr[data-u]'), fsel = ftr && box.contains(f) ? `tr[data-u="${ftr.dataset.u}"] ${['data-role', 'data-menu', 'data-admin', 'data-menu-mode'].map(a => f.hasAttribute(a) ? `[${a}${f.getAttribute(a) ? `="${CSS.escape(f.getAttribute(a))}"` : ''}]` : '').join('')}${f.type === 'radio' ? `[value="${CSS.escape(f.value)}"]` : ''}` : '';
+    box.style.minHeight = keep.h ? `${keep.h}px` : '';
+    const list = users.filter(visible); $('[data-member-count]', filters).textContent = `${list.length}명`; box.innerHTML = list.length ? `<div class="table-wrap">${tables[tab](list)}</div>` : '<div class="empty">조건에 맞는 회원이 없습니다.</div>';
+    const w2 = $('.table-wrap', box); if (w2) { if (wrap) w2.className = wrap.className; w2.scrollTop = keep.t; w2.scrollLeft = keep.l; } // 표 칸 높이 제한(tw-fill·tw-freeze)을 먼저 옮겨야 표 안 스크롤이 남는다
+    if (fsel && fsel.includes('[')) { try { $(fsel, box)?.focus({ preventScroll: true }); } catch { /* 선택자 */ } }
+    se.scrollTop = keep.y; main.scrollTop = keep.m;
+    requestAnimationFrame(() => { box.style.minHeight = ''; se.scrollTop = keep.y; main.scrollTop = keep.m; });
+  };
   const load = async () => { users = await api('GET', '/api/admin/users'); if (main.isConnected) draw(); };
   const save = async (id, body, msg = '저장했습니다.') => {
     try { await api('PUT', '/api/admin/users/' + id, body); toast(msg); if (Number(id) === ME.id) ME = (await api('GET', '/api/me')).user; }
