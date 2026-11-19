@@ -5965,6 +5965,63 @@ route('POST', '/api/ship-instructions/ship', async ({ user, body }) => {
   catch (error) { if (isGuardError(error)) throw new HttpError(409, '그 사이 출하지시나 매출전표가 바뀌었습니다. 새로 불러오세요.'); throw error; }
   return { shipped: ids.length, partial };
 });
+// 15.245 출하지시 한 줄을 여러 LOT로 출하: 상세 내역(LOT · 납품일자 · 담당자 · 납품수량 · 비고)마다 출하 1건.
+// 지시·전표 줄을 LOT별로 나누고(첫 LOT은 원래 줄, 나머지는 같은 전표의 새 줄 + 새 지시), 남는 수량은 새 줄로 출하 대기에 남는다.
+// 공급가액·세액은 수량 비율로 나누고 끝 줄에 나머지를 몰아 전표 합계는 그대로. 한 batch로 처리(중간 실패 시 모두 되돌림).
+route('POST', '/api/ship-instructions/:id/ship-lots', async ({ user, params, body }) => {
+  if (!hasRole(user, 'logistics')) throw new HttpError(403, '출하 처리는 물류 담당자가 합니다.');
+  const ins = await mustGet('ship_instructions', params.id);
+  if (ins.status !== 'pending') throw new HttpError(409, '이미 처리됐거나 취소된 출하지시입니다. 새로 불러오세요.');
+  if (ins.held) throw new HttpError(409, `${ins.item}: 보류 중인 지시입니다. 보류를 풀고 출하 처리하세요.`);
+  const raw = Array.isArray(body.lines) ? body.lines : [];
+  if (!raw.length || raw.length > 30) throw bad('출하할 LOT을 1~30줄 넣으세요.');
+  const bill = await db.prepare('SELECT * FROM sales_bills WHERE id=?').get(ins.bill_id), line = await db.prepare('SELECT * FROM sales_bill_lines WHERE id=?').get(ins.bill_line_id);
+  if (!bill || bill.status !== 'confirmed' || !line || !line.active) throw new HttpError(409, `${ins.item}: 매출전표가 취소됐거나 바뀌었습니다. 새로 불러오세요.`);
+  const billFloor = (([y, m]) => m === 1 ? `${y - 1}-12-01` : `${y}-${String(m - 1).padStart(2, '0')}-01`)(String(bill.bill_date).split('-').map(Number));
+  const parts = [];
+  for (const [n, r] of raw.entries()) {
+    const lot = str(r?.lot, 100), qty = stockRound(Number(r?.qty)), date = dateStr(r?.ship_date || today(), '납품일자'), note = str(r?.note, 200);
+    if (!(qty > 0)) throw bad(`${n + 1}번째 줄: 납품수량을 0보다 크게 넣으세요.`);
+    if (date > today()) throw bad(`${n + 1}번째 줄: 납품일자는 오늘 이전으로 넣으세요.`);
+    if (date < billFloor) throw bad(`${n + 1}번째 줄: 납품일자는 전표 달(${String(bill.bill_date).slice(0, 7)})의 앞 달 이후여야 합니다.`);
+    if (await salesClosed(ins.customer, date)) throw bad(closedMessage(ins.customer, date, '출하 처리하세요'));
+    await checkShipLot(ins.item, lot);
+    parts.push({ lot, qty, date, note });
+  }
+  const total = stockRound(parts.reduce((t, p) => t + p.qty, 0)), Q = Number(ins.qty);
+  if (total > Q + 0.000001) throw bad(`납품수량 합계 ${total}이 지시 수량 ${stockRound(Q)}보다 많습니다.`);
+  if (Math.abs(Number(line.qty) - Q) > 0.000001) throw new HttpError(409, `${ins.item}: 전표 수량(${stockRound(line.qty)})과 지시 수량(${stockRound(Q)})이 달라 나눌 수 없습니다. 전표를 확인하세요.`);
+  const rest = stockRound(Q - total), segs = [...parts.map(p => p.qty), ...(rest > 0.000001 ? [rest] : [])];
+  // 줄마다 공급가액·세액(끝 줄이 나머지)
+  let sLeft = Number(line.supply), vLeft = Number(line.vat);
+  const money = segs.map((q, k) => { if (k === segs.length - 1) return { supply: sLeft, vat: vLeft }; const supply = Math.round(Number(line.supply) * q / Q), vat = Math.round(Number(line.vat) * q / Q); sLeft -= supply; vLeft -= vat; return { supply, vat }; });
+  const cmds = [], stamp = now(), base = `sl:${ins.id}:${Date.now().toString(36)}`;
+  const ship = (p, k, insRef, lineRef) => {
+    const tag = `${base}:${k}`;
+    cmds.push(
+      { sql: 'INSERT INTO shipments(ship_date,item,qty,customer,note,lot,created_by,product_code,unit,spec,batch_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)', args: [p.date, ins.item, p.qty, ins.customer, p.note || ins.note || '', p.lot, user.name, ins.product_code, ins.unit, ins.spec, tag] },
+      { sql: `UPDATE ship_instructions SET status='shipped',processed_by=?,processed_at=?,shipment_id=(SELECT id FROM shipments WHERE batch_id=?) WHERE id=${insRef} AND status='pending' AND held=0`, args: [user.name, stamp, tag] }, RC_GUARD,
+      { sql: `UPDATE sales_bill_lines SET source_type='ship',source_id=(SELECT id FROM shipments WHERE batch_id=?),ship_date=?,lot=? WHERE id=${lineRef} AND active=1`, args: [tag, p.date, p.lot] }, RC_GUARD);
+  };
+  // 첫 LOT: 원래 지시·전표 줄
+  if (segs.length > 1) cmds.push(
+    { sql: 'UPDATE sales_bill_lines SET qty=?,supply=?,vat=? WHERE id=? AND active=1 AND qty=? AND supply=? AND vat=?', args: [segs[0], money[0].supply, money[0].vat, line.id, line.qty, line.supply, line.vat] }, RC_GUARD,
+    { sql: "UPDATE ship_instructions SET qty=? WHERE id=? AND status='pending' AND qty=?", args: [segs[0], ins.id, ins.qty] }, RC_GUARD);
+  ship(parts[0], 0, String(Number(ins.id)), String(Number(line.id)));
+  // 나머지 LOT·남는 수량: 같은 전표의 새 줄 + 새 지시
+  for (let k = 1; k < segs.length; k++) {
+    cmds.push(
+      { sql: `INSERT INTO sales_bill_lines(bill_id,item_category,source_type,source_id,item,spec,unit,product_code,lot,ship_date,qty,unit_price,supply,vat,note,order_line_id)
+        SELECT bill_id,item_category,?,?,item,spec,unit,product_code,?,?,?,unit_price,?,?,note,order_line_id FROM sales_bill_lines WHERE id=?`, args: [line.source_type, line.source_id, line.lot || '', line.ship_date, segs[k], money[k].supply, money[k].vat, line.id] }, // 원래 줄의 출하 전 값(첫 LOT 출하로 바뀌기 전)
+      { sql: `INSERT INTO ship_instructions(bill_id,bill_line_id,order_line_id,customer,bom_id,product_code,item,spec,unit,qty,ship_date,note,created_by,held)
+        SELECT bill_id,(SELECT MAX(id) FROM sales_bill_lines WHERE bill_id=?),order_line_id,customer,bom_id,product_code,item,spec,unit,?,ship_date,note,created_by,0 FROM ship_instructions WHERE id=?`, args: [bill.id, segs[k], ins.id] });
+    if (k < parts.length) ship(parts[k], k, '(SELECT MAX(id) FROM ship_instructions)', `(SELECT MAX(id) FROM sales_bill_lines WHERE bill_id=${Number(bill.id)})`);
+  }
+  if (segs.length > 1) cmds.push(docChange('sales_bill', bill.id, `출하 LOT별 나눔: ${ins.item} ${stockRound(Q)} → ${parts.map(p => `${p.lot || 'LOT 없음'} ${p.qty}`).join(' + ')}${rest > 0.000001 ? ` + ${rest}(출하 대기)` : ''}`, user));
+  try { await db.batch(cmds); }
+  catch (error) { if (isGuardError(error)) throw new HttpError(409, '그 사이 출하지시나 매출전표가 바뀌었습니다. 새로 불러오세요.'); throw error; }
+  return { shipped: parts.length, rest };
+});
 // 15.208 출하지시 수량 나누기(묶음 15.154와 같은 방식): 지시·전표 줄을 q와 나머지로 나눈다. 나머지는 같은 전표의 새 줄 + 새 출하지시(대기, 묶음 없음).
 // 공급가액·세액은 비율로 나누고 남는 줄에 나머지를 몰아 전표 합계는 그대로. 검증하고 명령들을 돌려준다.
 async function splitInstructionCmds(i, rawQty, user, why) {

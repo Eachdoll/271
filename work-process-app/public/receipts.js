@@ -567,7 +567,7 @@ async function pageOtherReceiptHeads(main) {
     const s = $('#otSave', main); s.disabled = !dirty(); s.textContent = dirty() ? `저장 (${lines.filter(l => l.isNew || l.changed).length})` : '저장';
   };
   const drawLines = () => {
-    $('#otLabel', main).textContent = cur ? `${cur.receipt_no} · ${cur.receipt_date} · ${cur.vendor}` : '';
+    // 15.245 상세 머리 옆 입고번호·날짜·거래처 표시는 없앰(위 표에서 고른 줄이 강조됨)
     $('#otLines', main).innerHTML = !cur ? '<div class="empty">위 기타입고내역에서 입고번호를 고르거나 「추가」로 새 입고번호를 만드세요.</div>' : lines.length ? `<div class="table-wrap"><table class="grid keep-table ot-grid ot-lines" data-no-sort data-keep-cols><thead><tr><th class="c">No.</th><th class="pick-cell"><input type="checkbox" data-ot-all aria-label="모두 고르기"></th><th>LOT NO</th><th>품목코드</th><th>품목명</th><th>품목분류</th><th class="r">입하수량</th><th>입고창고</th><th>로케이션</th><th>비고</th><th>업체정보</th></tr></thead><tbody>${lines.map((l, i) => `<tr data-ot-line="${l.key}" class="${l.isNew ? 'ot-new' : l.changed ? 'ot-changed' : ''}"><td class="c">${i + 1}</td><td class="pick-cell"><input type="checkbox" data-ot-pick="${l.key}" aria-label="${esc(l.item)} 고르기"></td>
       <td class="nowrap"><input data-f="lot" value="${esc(l.lot || '')}" maxlength="100" aria-label="LOT NO" class="ot-lot">${!l.isNew && l.sub_lot ? `<span class="small muted">-${esc(l.sub_lot)}</span>` : ''}</td><td class="nowrap">${esc(l.product_code || '')}</td><td><b>${esc(l.item)}</b>${l.spec ? ` <span class="small muted">${esc(l.spec)}</span>` : ''}</td><td>${esc(l.item_category || '')}</td>
       <td class="r">${l.isNew ? `<input type="number" data-f="qty" min="0" step="any" inputmode="decimal" value="${esc(l.qty ?? '')}" aria-label="입하수량" style="width:6em">` : `${fmtNum(l.qty)} <span class="small muted">${esc(l.unit || '')}</span>`}</td>
@@ -594,15 +594,23 @@ async function pageOtherReceiptHeads(main) {
     if (!cur) return; if (!catalog) catalog = await api('GET', '/api/boms?temp=1').catch(() => []);
     const pickR = await openItemPicker(catalog, { title: '기타입고 품목 찾기', filter: b => !['반제품', '임가공'].includes(b.item_category), multi: true, autoLotBox: false }); if (!pickR) return;
     const made = pickR.items.flatMap(({ bom, count }) => Array.from({ length: count || 1 }, () => ({ key: 'n' + Math.random().toString(36).slice(2), isNew: true, bom_id: bom.id, item: bom.product, product_code: bom.product_code || '', item_category: bom.item_category || '', unit: bom.unit || '', spec: (bom.sizes || []).length ? '' : bom.spec || '', qty: '', lot: '', warehouse: $('#otWh', main).value, location: $('#otLoc', main).value, note: '', note2: bom.vendor_info || '' })));
-    // 같은 품목 줄은 같은 LOT(박스마다 서브 번호), 품목마다 다음 LOT 번호
-    const byItem = new Map(); for (const l of made) { const k = l.bom_id; if (!byItem.has(k)) byItem.set(k, []); byItem.get(k).push(l); }
-    const used = new Map();
-    for (const [, ls] of byItem) { const pre = OT_PREFIX[ls[0].item_category] || 'M', n = (used.get(pre) || 0) + 1; used.set(pre, n);
-      const lots = (await api('GET', '/api/lots/next?' + new URLSearchParams({ prefix: pre, date: cur.receipt_date, count: n })).catch(() => ({ lots: [] }))).lots; const lot = lots[n - 1] || ''; ls.forEach(l => { l.lot = lot; }); }
+    // 15.245 줄마다 다른 LOT: 같은 품목을 LOT 수 5로 담으면 G261119_0001 · _0002 · … _0005. 아직 저장 안 한 줄이 쓴 번호는 건너뛴다.
+    const byPre = new Map(); for (const l of made) { const pre = OT_PREFIX[l.item_category] || 'M'; if (!byPre.has(pre)) byPre.set(pre, []); byPre.get(pre).push(l); }
+    for (const [pre, ls] of byPre) {
+      const head = `${pre}${String(cur.receipt_date).slice(2).replace(/-/g, '')}_`, taken = new Set(lines.filter(l => l.isNew && String(l.lot || '').startsWith(head)).map(l => l.lot));
+      const lots = (await api('GET', '/api/lots/next?' + new URLSearchParams({ prefix: pre, date: cur.receipt_date, count: Math.min(100, ls.length + taken.size) })).catch(() => ({ lots: [] }))).lots.filter(x => !taken.has(x));
+      ls.forEach((l, i) => { l.lot = lots[i] || ''; });
+    }
     lines.push(...made); drawLines(); $(`[data-ot-line="${made[0].key}"] [data-f="qty"]`, main)?.focus();
     toast(`${made.length}줄을 담았습니다. 입하수량·LOT NO를 확인하고 「저장」하세요.`);
   };
   const box = $('#otLines', main);
+  box.addEventListener('keydown', e => {
+    const el = e.target, f = el.dataset?.f, tr = el.closest?.('[data-ot-line]'); if (!f || !tr || e.isComposing || el.tagName === 'SELECT') return;
+    const rows = $$('[data-ot-line]', box), i = rows.indexOf(tr), go = t => { if (!t) return false; t.focus(); t.select?.(); return true; };
+    if (e.key === 'Enter' || e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const d = e.key === 'ArrowUp' ? -1 : 1; for (let j = i + d; rows[j]; j += d) if (go($(`[data-f="${f}"]`, rows[j]))) return; return; }
+    if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && el.type === 'number') { e.preventDefault(); const cells = $$('input[data-f], select[data-f]', tr).filter(x => !x.disabled), k = cells.indexOf(el); go(cells[k + (e.key === 'ArrowRight' ? 1 : -1)]); }
+  });
   box.addEventListener('input', e => { const tr = e.target.closest('[data-ot-line]'); if (!tr || !e.target.dataset.f) return; const l = lines.find(x => x.key === tr.dataset.otLine); l[e.target.dataset.f] = e.target.value; if (!l.isNew) { l.changed = true; tr.classList.add('ot-changed'); } sync(); });
   box.addEventListener('change', e => {
     if (e.target.matches('[data-ot-all]')) { $$('[data-ot-pick]', box).forEach(x => { x.checked = e.target.checked; }); return sync(); }

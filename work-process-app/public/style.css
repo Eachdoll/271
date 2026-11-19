@@ -3393,3 +3393,15 @@ table.insp-r tbody.insp-grp > tr:first-child > * { border-top: 2px solid var(--l
 table.insp-r tbody.insp-grp:nth-of-type(even) td.insp-cell { background: color-mix(in srgb, var(--accent) 3%, var(--panel)); }
 table.insp-r tbody tr.insp-sub > * { border-top: 1px dashed var(--line); }
 @media (max-width: 700px) { .insp-s { flex: 1 1 100%; } .insp-s input[data-lot] { flex: 1; width: auto; } table.insp-r th.insp-item-c { min-width: 84px; width: 84px; font-size: 12px; } table.insp-r th.insp-samp-c { min-width: 64px; width: 64px; } }
+/* 15.245 출하지시 상세 내역(LOT별 납품 줄)·재고현황 고르기 */
+.si-table tr.si-clickable { cursor: pointer; }
+.si-table tr.on > td { background: var(--accent-soft, color-mix(in srgb, var(--accent) 12%, transparent)) !important; }
+.si-detail { margin-top: 14px; }
+.si-detail .sd-grid input[type=date] { min-width: 9.5em; }
+.si-detail .sd-grid input[data-sdf="note"] { width: 100%; min-width: 10em; }
+.si-detail .sd-bar { position: static; margin-top: 8px; }
+.sd-stock-bar { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+.sd-stock-bar label.grow { flex: 1 1 260px; }
+.sd-stock-h { margin: 12px 0 6px; }
+.sd-stock { max-height: min(56vh, 520px); overflow: auto; }
+.sd-stock tr[data-sk-row] { cursor: pointer; }

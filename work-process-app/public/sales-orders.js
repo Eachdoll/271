@@ -205,6 +205,10 @@ async function pageShipInstructions(main) {
   <form class="list-filters toolbar lf-oneline" data-read-only id="siFilters"><label class="lf-period">지시일<span class="lf-pair"><input type="date" name="from" aria-label="지시일 시작"><span class="muted">~</span><input type="date" name="to" aria-label="지시일 끝"></span></label><label class="lf-partner">거래처<input name="customer" maxlength="100"></label><label class="grow lf-q">검색<input type="search" name="q" placeholder="품목·제품코드·거래처·지시서 번호"></label><label class="lf-check" data-si-nobatch><input type="checkbox" name="nobatch"> 묶음 안 된 것만</label><button class="btn primary">조회</button></form>
   <div id="siList"></div>
   <div class="actionbar" id="siBar"><span class="small" id="siCount"></span><label class="inline">출고일 <input type="date" id="siDate" value="${todayStr()}" max="${todayStr()}"></label><button type="button" class="btn" id="siBatch" title="체크한 지시를 묶음 출하지시 한 장으로 묶어 인쇄">출하지시 묶기</button><button type="button" class="btn primary" id="siShip">출하 처리</button></div>`;
+  // 15.245 상세 내역: 출하 대기 줄을 누르면 아래에 LOT별 납품 줄(NO · LOT NO · 납품일자 · 담당자 · 납품수량 · 비고)을 담고 「출하」
+  main.insertAdjacentHTML('beforeend', `<section class="ot-sec si-detail" id="siDetail" hidden><div class="ot-head"><h2>☰ 상세 내역 <span class="small muted" id="sdLabel"></span></h2><span class="grow"></span><button type="button" class="btn" id="sdAdd">추가</button><button type="button" class="btn danger" id="sdDel">삭제</button></div>
+    <div id="sdLines"></div><div class="actionbar sd-bar"><span class="small" id="sdSum"></span><span class="grow"></span><button type="button" class="btn primary" id="sdShip">출하</button></div></section>`);
+  let detail = null, dLines = [];
   const form = $('#siFilters', main); let rows = [], status = 'pending', version = 0, busy = false, lotPickers = new Map();
   const canShip = hasRole('logistics');
   const tabs = [['pending', '출하 대기'], ['batches', '출하지시(묶음)'], ['held', '보류'], ['shipped', '출하 완료'], ['cancelled', '지시 취소']];
@@ -221,7 +225,7 @@ async function pageShipInstructions(main) {
     if (mine !== version || !main.isConnected) return;
     rows = data.rows; const pending = status === 'pending', held = status === 'held';
     $('#siBar', main).hidden = !pending || !(canShip || canHold); $('#siShip', main).hidden = !canShip; $('#siDate', main).closest('label').hidden = !canShip;
-    $('#siList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid si-table keep-table"><thead><tr>${pending && (canShip || canHold) ? '<th><input type="checkbox" id="siAll" aria-label="전체 선택"></th>' : ''}<th>지시일</th><th>거래처</th><th>품목</th><th>규격</th><th class="r">수량</th><th>단위</th><th>${pending ? 'LOT' : 'LOT · 처리'}</th><th>수주 · 전표</th><th>상태</th>${(pending || held) && canHold ? '<th></th>' : ''}</tr></thead><tbody>${rows.map(r => `<tr class="${r.batch_no && pending ? 'si-batched' : ''}">
+    $('#siList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid si-table keep-table"><thead><tr>${pending && (canShip || canHold) ? '<th><input type="checkbox" id="siAll" aria-label="전체 선택"></th>' : ''}<th>지시일</th><th>거래처</th><th>품목</th><th>규격</th><th class="r">수량</th><th>단위</th><th>${pending ? 'LOT' : 'LOT · 처리'}</th><th>수주 · 전표</th><th>상태</th>${(pending || held) && canHold ? '<th></th>' : ''}</tr></thead><tbody>${rows.map(r => `<tr data-si-row="${r.id}" class="${r.batch_no && pending ? 'si-batched' : ''}${pending && canShip ? ' si-clickable' : ''}${detail?.id === r.id ? ' on' : ''}">
       ${pending && (canShip || canHold) ? `<td class="si-c-chk"><input type="checkbox" data-si-pick value="${r.id}" aria-label="${esc(r.item)} 선택"></td>` : ''}<td class="nowrap si-c-date">${esc(r.ship_date)}</td><td class="si-c-cust">${esc(r.customer)}<span class="si-m-only"> · ${esc(String(r.ship_date || '').slice(5))}</span></td>
       <td class="si-c-item" data-card-primary><b>${esc(r.item)}</b>${r.spec ? `<span class="si-m-only small muted"> ${esc(r.spec)}</span>` : ''}${r.product_code ? `<div class="small muted si-m-hide">${esc(r.product_code)}</div>` : ''}${r.note ? `<div class="small muted">${esc(r.note)}</div>` : ''}</td><td class="si-c-spec">${esc(r.spec || '')}</td>
       <td class="r si-c-qty">${pending && canShip ? `<input type="number" class="si-qty" data-si-qty="${r.id}" value="${r.qty}" min="0" max="${r.qty}" step="any" inputmode="decimal" aria-label="${esc(r.item)} 출하 수량(지시 ${fmtNum(r.qty)})" title="재고가 모자라면 적게 넣으세요. 나머지는 출하 대기로 남습니다.">` : `<b>${fmtNum(r.qty)}</b>`}<span class="si-m-only"> ${esc(r.unit || '')}</span></td><td class="si-c-unit">${esc(r.unit || '')}</td>
@@ -231,6 +235,7 @@ async function pageShipInstructions(main) {
     const bundled = pending ? rows.filter(r => r.batch_no).length : 0; // 15.154 묶음 출하지시에 묶인 대기 줄 수
     if (rows.length) $('#siList', main).insertAdjacentHTML('beforeend', sumLine([['합계', esc(`${rows.length}건`)], ...(pending ? [['묶임', esc(`${bundled}건`)], ['안 묶임', esc(`${rows.length - bundled}건`)]] : []), ['수량', esc(unitTotals(rows, r => r.qty, r => r.unit))]]));
     const all = $('#siAll', main); if (all) all.onchange = () => { $$('[data-si-pick]', main).forEach(c => { c.checked = all.checked; }); sync(); };
+    if (detail && !(pending && rows.some(x => x.id === detail.id))) { detail = null; dLines = []; } else if (detail) detail = rows.find(x => x.id === detail.id); drawDetail();
     lotPickers = new Map($$('[data-si-lot]', main).map(inp => { const r = rows.find(x => x.id === Number(inp.dataset.siLot)); return [r.id, bindLotPicker(inp, () => r.item, () => Number($(`[data-si-qty="${r.id}"]`, main)?.value) || r.qty)]; }));
     sync();
   };
@@ -287,6 +292,60 @@ async function pageShipInstructions(main) {
     busy = true; sync();
     try { const r = await api('POST', '/api/ship-instructions/ship', { ids, ship_date: $('#siDate', main).value, lots, qtys }); toast(`${r.shipped}건을 출하 처리했습니다.${r.partial ? ` ${r.partial}건은 일부만 출하하고 남은 수량은 출하 대기에 남겼습니다.` : ''}`); await load(); }
     catch (error) { fail(error); await load().catch(() => {}); } finally { busy = false; sync(); }
+  };
+  const dSum = () => Math.round(dLines.reduce((t, l) => t + (Number(l.qty) || 0), 0) * 1000) / 1000;
+  const drawDetail = () => {
+    const sec = $('#siDetail', main); sec.hidden = !detail || status !== 'pending' || !canShip; if (sec.hidden) return;
+    $('#sdLabel', main).textContent = `${detail.item}${detail.spec ? ` ${detail.spec}` : ''} · ${detail.customer} · 지시 ${fmtNum(detail.qty)} ${detail.unit || ''}`;
+    $('#sdLines', main).innerHTML = dLines.length ? `<div class="table-wrap"><table class="grid keep-table ot-grid sd-grid" data-no-sort data-keep-cols data-no-reorder><thead><tr><th class="c"><input type="checkbox" data-sd-all aria-label="전체 선택"></th><th class="c">NO</th><th>LOT NO</th><th>납품일자</th><th>담당자</th><th class="r">납품수량</th><th>비고</th></tr></thead><tbody>${dLines.map((l, i) => `<tr data-sd="${i}">
+      <td class="c"><input type="checkbox" data-sd-pick="${i}" aria-label="${i + 1}번 줄 선택"></td><td class="c">${i + 1}</td>
+      <td class="nowrap"><b>${esc(l.lot || '(LOT 없음)')}</b>${l.balance != null ? `<div class="small muted">재고 ${fmtNum(l.balance)}${l.places ? ` · ${esc(l.places)}` : ''}</div>` : ''}</td>
+      <td><input type="date" data-sdf="ship_date" value="${esc(l.ship_date)}" max="${todayStr()}" aria-label="납품일자"></td><td>${esc(ME?.name || '')}</td>
+      <td class="r"><input type="number" data-sdf="qty" value="${esc(l.qty)}" min="0" step="any" inputmode="decimal" aria-label="납품수량" style="width:7em"></td>
+      <td><input data-sdf="note" value="${esc(l.note || '')}" maxlength="200" aria-label="비고"></td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="empty">오른쪽 위 「추가」를 눌러 이 품목의 재고 LOT을 고르세요.</div>';
+    const sum = dSum(), rest = Math.round((Number(detail.qty) - sum) * 1000) / 1000, over = rest < -0.000001, bad = dLines.some(l => l.balance != null && Number(l.qty) > l.balance + 0.000001);
+    $('#sdSum', main).innerHTML = `납품수량 합계 <b>${fmtNum(sum)}</b> / 지시 ${fmtNum(detail.qty)} ${esc(detail.unit || '')}${over ? ' <span class="red-text">· 지시 수량보다 많습니다</span>' : rest > 0 && sum > 0 ? ` <span class="muted">· 남는 ${fmtNum(rest)}은 출하 대기로 남음</span>` : ''}${bad ? ' <span class="red-text">· LOT 재고보다 많은 줄이 있습니다</span>' : ''}`;
+    $('#sdShip', main).disabled = busy || !dLines.length || !(sum > 0) || over || dLines.some(l => !(Number(l.qty) > 0));
+    $('#sdDel', main).disabled = !dLines.length;
+  };
+  const pickRow = id => {
+    const r = rows.find(x => x.id === id); if (!r || status !== 'pending' || !canShip) return;
+    if (detail?.id !== id) { detail = r; dLines = []; }
+    $$('[data-si-row]', main).forEach(tr => tr.classList.toggle('on', Number(tr.dataset.siRow) === id)); drawDetail();
+    $('#siDetail', main).scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
+  $('#siList', main).addEventListener('click', e => { const tr = e.target.closest('[data-si-row]'); if (!tr || e.target.closest('input, button, a, select, label')) return; pickRow(Number(tr.dataset.siRow)); });
+  // 추가: 이 품목의 재고 LOT(재고현황) 고르기
+  $('#sdAdd', main).onclick = async () => {
+    if (!detail) return; LOT_CACHE.clear(); const item = detail.item; let stock = await lotsForItem(item, true);
+    const used = new Set(dLines.map(l => l.lot));
+    const table = () => stock.length ? `<div class="table-wrap sd-stock"><table class="grid keep-table" data-no-sort data-keep-cols data-no-reorder><thead><tr><th class="c"><input type="checkbox" data-sk-all aria-label="전체 선택"></th><th>품목코드</th><th>품목명</th><th>창고 · Location</th><th>단위</th><th class="r">수량</th><th>식별번호(LOT)</th><th>입고일</th></tr></thead><tbody>${stock.map((l, i) => `<tr data-sk-row="${i}" class="${used.has(l.lot) ? 'muted' : ''}"><td class="c"><input type="checkbox" data-sk="${i}" ${used.has(l.lot) ? 'disabled title="이미 담음"' : ''} aria-label="${esc(l.lot)} 선택"></td><td>${esc(detail.product_code || '')}</td><td>${esc(l.item)}</td><td class="small">${esc(l.places || '')}</td><td>${esc(l.unit || detail.unit || '')}</td><td class="r">${fmtNum(l.balance)}</td><td class="nowrap"><b>${esc(l.lot)}</b></td><td class="nowrap">${esc(l.first_date || '')}</td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="empty">이 품목의 재고 LOT이 없습니다. 「LOT 없이 담기」로 넣을 수 있습니다.</div>';
+    const m = modal(`<h3>재고현황</h3><div class="toolbar sd-stock-bar"><label class="grow">품목코드/명<input value="${esc(`${detail.product_code ? detail.product_code + ' · ' : ''}${item}`)}" readonly></label><button type="button" class="btn" data-sk-reload>조회</button><button type="button" class="btn" data-sk-nolot>LOT 없이 담기</button><button type="button" class="btn primary" data-sk-ok>확인</button></div><h4 class="sd-stock-h">☰ 품목리스트</h4><div data-sk-box>${table()}</div>`, { wide: true });
+    const box = $('[data-sk-box]', m.el), wire = () => { const all = $('[data-sk-all]', box); if (all) all.onchange = () => $$('[data-sk]:not(:disabled)', box).forEach(c => { c.checked = all.checked; }); $$('[data-sk-row]', box).forEach(tr => tr.addEventListener('click', e => { if (e.target.closest('input')) return; const c = $('[data-sk]', tr); if (c && !c.disabled) c.checked = !c.checked; })); };
+    wire();
+    $('[data-sk-reload]', m.el).onclick = async () => { LOT_CACHE.clear(); stock = await lotsForItem(item, true); box.innerHTML = table(); wire(); };
+    const left = () => Math.max(0, Math.round((Number(detail.qty) - dSum()) * 1000) / 1000);
+    const add = list => { for (const l of list) { const q = Math.min(l.balance ?? Infinity, left()); dLines.push({ lot: l.lot, balance: l.balance ?? null, places: l.places || '', ship_date: todayStr(), qty: q > 0 && Number.isFinite(q) ? q : '', note: '' }); } m.close(); drawDetail(); $(`[data-sd="${dLines.length - list.length}"] [data-sdf="qty"]`, main)?.focus(); };
+    $('[data-sk-nolot]', m.el).onclick = () => add([{ lot: '', balance: null }]);
+    $('[data-sk-ok]', m.el).onclick = () => { const list = $$('[data-sk]:checked', box).map(c => stock[Number(c.dataset.sk)]); if (!list.length) return toast('담을 LOT을 체크하세요.', 'err'); add(list); };
+  };
+  $('#sdDel', main).onclick = () => { const pick = $$('[data-sd-pick]:checked', main).map(c => Number(c.dataset.sdPick)); if (!pick.length) return toast('지울 줄을 체크하세요.', 'err'); dLines = dLines.filter((_, i) => !pick.includes(i)); drawDetail(); };
+  $('#siDetail', main).addEventListener('input', e => { const tr = e.target.closest('[data-sd]'), f = e.target.dataset.sdf; if (!tr || !f) return; dLines[Number(tr.dataset.sd)][f] = e.target.value; drawDetailSum(); });
+  const drawDetailSum = () => { const ship = $('#sdShip', main), sum = dSum(), rest = Math.round((Number(detail.qty) - sum) * 1000) / 1000, over = rest < -0.000001, bad = dLines.some(l => l.balance != null && Number(l.qty) > l.balance + 0.000001);
+    $('#sdSum', main).innerHTML = `납품수량 합계 <b>${fmtNum(sum)}</b> / 지시 ${fmtNum(detail.qty)} ${esc(detail.unit || '')}${over ? ' <span class="red-text">· 지시 수량보다 많습니다</span>' : rest > 0 && sum > 0 ? ` <span class="muted">· 남는 ${fmtNum(rest)}은 출하 대기로 남음</span>` : ''}${bad ? ' <span class="red-text">· LOT 재고보다 많은 줄이 있습니다</span>' : ''}`;
+    ship.disabled = busy || !dLines.length || !(sum > 0) || over || dLines.some(l => !(Number(l.qty) > 0)); };
+  $('#siDetail', main).addEventListener('change', e => { if (e.target.matches('[data-sd-all]')) $$('[data-sd-pick]', main).forEach(c => { c.checked = e.target.checked; }); });
+  // Enter·↑↓: 같은 칸 다음·이전 줄(숫자 패드로 수량 입력)
+  $('#siDetail', main).addEventListener('keydown', e => { const f = e.target.dataset?.sdf, tr = e.target.closest?.('[data-sd]'); if (!f || !tr || e.isComposing) return; if (!['Enter', 'ArrowDown', 'ArrowUp'].includes(e.key)) return; e.preventDefault(); const t = $(`[data-sd="${Number(tr.dataset.sd) + (e.key === 'ArrowUp' ? -1 : 1)}"] [data-sdf="${f}"]`, main); if (t) { t.focus(); t.select?.(); } else if (e.key === 'Enter') $('#sdShip', main).focus(); });
+  $('#sdShip', main).onclick = async () => {
+    if (!detail || busy) return; const sum = dSum();
+    const low = dLines.filter(l => l.balance != null && Number(l.qty) > l.balance + 0.000001);
+    if (!await confirmBox(`${detail.item} ${fmtNum(sum)} ${detail.unit || ''}을(를) ${dLines.length}개 LOT로 출하할까요?${Number(detail.qty) - sum > 0.000001 ? ` 남는 ${fmtNum(Math.round((Number(detail.qty) - sum) * 1000) / 1000)}은 출하 대기로 남습니다.` : ''}${low.length ? ` ⚠ 재고보다 많은 LOT: ${low.map(l => l.lot).join(', ')}` : ''} 출하 완료로 바뀌고 재고가 빠집니다.`)) return;
+    busy = true; drawDetailSum(); LOT_CACHE.clear();
+    try { const r = await api('POST', `/api/ship-instructions/${detail.id}/ship-lots`, { lines: dLines.map(l => ({ lot: l.lot, qty: Number(l.qty), ship_date: l.ship_date, note: l.note })) }); toast(`${detail.item} ${r.shipped}개 LOT 출하 완료${r.rest ? ` · 남은 ${fmtNum(r.rest)}은 출하 대기` : ''}`); detail = null; dLines = []; await load(); refreshNavBadges?.(); }
+    catch (error) { fail(error); } finally { busy = false; if (detail) drawDetailSum(); }
   };
   drawTabs();
   $('#siTabs', main).addEventListener('click', e => { const b = e.target.closest('[data-si-tab]'); if (!b) return; status = b.dataset.siTab; drawTabs(); load().catch(fail); });
