@@ -3481,6 +3481,7 @@ route('POST', '/api/boms', async ({ user, body }) => {
   if (!result.changes) { await bomCodeClash(fields[1]); throw new HttpError(409, `제품코드 ${fields[1]}가 그 사이 다른 품목에 등록되었습니다.`); } // 15.209 동시 등록
   if (spec) await db.prepare('UPDATE boms SET spec=? WHERE id=?').run(spec, result.lastInsertRowid);
   const vendorInfo = str(body.vendor_info, 500); if (vendorInfo) await db.prepare('UPDATE boms SET vendor_info=? WHERE id=?').run(vendorInfo, result.lastInsertRowid); // 15.190
+  if (body.sst_name !== undefined || body.pack_info !== undefined) await db.prepare('UPDATE boms SET sst_name=?,pack_info=? WHERE id=?').run(str(body.sst_name, 200), str(body.pack_info, 500), result.lastInsertRowid); // 15.230 SST제품명·포장정보
   if (body.skip_incoming !== undefined || body.skip_outgoing !== undefined) await db.prepare('UPDATE boms SET skip_incoming=?,skip_outgoing=? WHERE id=?').run(isChecked(body.skip_incoming) ? 1 : 0, isChecked(body.skip_outgoing) ? 1 : 0, result.lastInsertRowid); // 15.207
   return withSizes(decodeBom(await mustGet('boms', result.lastInsertRowid)));
 });
@@ -3497,6 +3498,8 @@ route('PUT', '/api/boms/:id', async ({ user, params, body }) => {
   } else commands.push(...await bomFollowRename(before, fields[0], fields[1]));
   if (body.spec !== undefined) commands.push({ sql: 'UPDATE boms SET spec=? WHERE id=?', args: [str(body.spec, 100), before.id] });
   if (body.vendor_info !== undefined) commands.push({ sql: 'UPDATE boms SET vendor_info=? WHERE id=?', args: [str(body.vendor_info, 500), before.id] }); // 15.190 업체 정보
+  if (body.sst_name !== undefined) commands.push({ sql: 'UPDATE boms SET sst_name=? WHERE id=?', args: [str(body.sst_name, 200), before.id] }); // 15.230 SST제품명
+  if (body.pack_info !== undefined) commands.push({ sql: 'UPDATE boms SET pack_info=? WHERE id=?', args: [str(body.pack_info, 500), before.id] }); // 15.230 포장정보
   if (body.skip_incoming !== undefined || body.skip_outgoing !== undefined) commands.push({ sql: 'UPDATE boms SET skip_incoming=?,skip_outgoing=? WHERE id=?', args: [isChecked(body.skip_incoming) ? 1 : 0, isChecked(body.skip_outgoing) ? 1 : 0, before.id] }); // 15.207 검사 제외
   await db.batch(commands);
   return withSizes(decodeBom(await mustGet('boms', params.id)));

@@ -37,3 +37,10 @@ test('Work order numbers follow the actual date and count up per day; plans list
   const un = await admin('POST', '/api/schedules/confirm', { ids: [d.id], confirm: false }); assert.equal(un.body.changed, 1);
   assert.equal(sqlite.prepare('SELECT confirmed_at FROM schedules WHERE id=?').get(d.id).confirmed_at, '');
 });
+
+test('Product registration keeps SST product name and packing info (15.230)', async () => {
+  const b = await admin('POST', '/api/boms', { product: 'CF707 와이퍼', product_code: 'P-707', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'BOX', materials: [], sst_name: 'SST-707 Wiper', pack_info: '1BOX = 10팩' });
+  assert.equal(b.status, 200, JSON.stringify(b.body)); assert.equal(b.body.sst_name, 'SST-707 Wiper'); assert.equal(b.body.pack_info, '1BOX = 10팩');
+  const u = await admin('PUT', `/api/boms/${b.body.id}`, { product: 'CF707 와이퍼', product_code: 'P-707', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'BOX', materials: [], sst_name: 'SST-707B' });
+  assert.equal(u.body.sst_name, 'SST-707B'); assert.equal(u.body.pack_info, '1BOX = 10팩', 'omitted pack info stays');
+});
