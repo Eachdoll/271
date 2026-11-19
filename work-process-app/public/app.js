@@ -395,7 +395,7 @@ const NAV = [
     ['#/logistics/receive', '입고 관리'],
     { sub: '출하', items: [['#/logistics/ship-orders', '출하지시'], ['#/logistics/ship', '출하 관리']] },
     ['#/logistics/stock', '재고 현황'],
-    ['#/logistics/scan', 'QR 스캔'],
+    ['#/logistics/scan', 'QR 스캔'], ['#/logistics/qr', 'QR 일괄 발행'],
   ] },
 ];
 // 15.213 하위 묶음에 화면이 하나뿐이면(견적 > 견적서 관리 등) 묶음 없이 바로 화면 링크로
@@ -653,6 +653,7 @@ const PAGES = {
   '#/admin/approval': main => pageApprovalRules(main), // 15.185 결재선 기본값
   '#/admin/bom': pageBoms,
   '#/logistics/warehouses': main => pageWarehouses(main), // 15.230 관리 › 창고 관리
+  '#/logistics/qr': main => pageQrBulk(main), // 15.230 QR 일괄 발행
   '#/admin/bom-sheet': main => pageBomSheet(main), // 15.196
   '#/me': pageMe,
   '#/tasks': pageTasks,

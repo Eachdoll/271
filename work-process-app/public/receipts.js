@@ -489,3 +489,38 @@ function qrSvg(text) {
     return `<svg viewBox="0 0 ${n + q * 2} ${n + q * 2}" role="img" aria-label="QR ${esc(text)}" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"/><path d="${path}" fill="#000"/></svg>`;
   } catch { return '<span class="small muted">QR 생성 불가</span>'; }
 }
+
+// ── 15.230 QR 일괄 발행: 입고·생산완료로 생긴 LOT를 기간·검색으로 찾아 체크한 것만 QR코드 발행(한 장에 하나, PDF출력) ──
+async function pageQrBulk(main) {
+  let preset = null; try { preset = JSON.parse(sessionStorage.getItem('wpa:qr-bulk') || 'null'); sessionStorage.removeItem('wpa:qr-bulk'); } catch { preset = null; }
+  const t = todayStr();
+  main.innerHTML = `<h1>QR 일괄 발행 <span class="dept">물류</span></h1>
+  <p class="muted">입고(발주·기타)와 생산완료(완제품 실적)로 생긴 LOT입니다. 처음 들어온 날짜·품목·LOT·위치로 찾아 체크하고 「QR코드 발행」을 누르면 LOT마다 한 장씩 나오고 「PDF출력」으로 한 번에 인쇄합니다. 같은 LOT를 여러 장 붙여야 하면 「장 수」를 바꾸세요.</p>
+  <form class="list-filters toolbar" data-read-only id="qrbForm"><label>입고·생산일<input type="date" name="from" value="${esc(preset?.from || t)}"></label><label>~<input type="date" name="to" value="${esc(preset?.to || t)}"></label><label class="list-search">검색<input type="search" name="q" maxlength="200" value="${esc(preset?.q || '')}" placeholder="품목·LOT"></label><label class="inline"><input type="checkbox" name="instock" checked> 잔량 있는 LOT만</label><button class="btn primary">조회</button></form>
+  <div class="result-bar"><div class="counts" id="qrbSum"></div><span class="result-tools"><label class="inline">장 수 <input type="number" id="qrbCopies" min="1" max="50" value="1" style="width:4.5em"></label><button type="button" class="btn qr-pdf-btn" id="qrbIssue" disabled>QR코드 발행</button></span></div>
+  <div id="qrbList"><p class="muted">불러오는 중…</p></div>`;
+  const form = $('#qrbForm', main); let rows = [];
+  rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
+  const picked = () => $$('[data-qrb-pick]:checked', main).map(x => rows[Number(x.dataset.qrbPick)]);
+  const sync = () => { const n = picked().length; $('#qrbIssue', main).disabled = !n; $('#qrbIssue', main).textContent = n ? `QR코드 발행 (${n})` : 'QR코드 발행'; const all = $('[data-qrb-all]', main); if (all) all.checked = n > 0 && n === rows.length; };
+  const load = async () => {
+    const v = formObj(form);
+    const data = await api('GET', '/api/inventory/lots?' + new URLSearchParams({ asof: todayStr(), q: v.q || '', ...(form.elements.instock.checked ? { state: 'instock' } : {}) }));
+    if (!main.isConnected) return;
+    rows = data.rows.filter(r => r.lot && r.lot !== '(LOT 미지정)' && (!v.from || r.first_date >= v.from) && (!v.to || r.first_date <= v.to));
+    $('#qrbSum', main).innerHTML = `LOT ${fmtNum(rows.length)}개${data.more ? ' · <span class="chip yellow">앞부분만 · 검색으로 좁히세요</span>' : ''}`;
+    $('#qrbList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid qrb-grid"><thead><tr><th class="pick-cell"><input type="checkbox" data-qrb-all aria-label="모두 고르기"></th><th>LOT</th><th>품목</th><th class="r">입고·생산</th><th class="r">잔량</th><th>위치</th><th>처음 입고</th><th></th></tr></thead><tbody>${rows.map((r, i) => `<tr><td class="pick-cell"><input type="checkbox" data-qrb-pick="${i}" aria-label="${esc(r.lot)} 고르기"></td><td class="nowrap"><span class="lot-tag">${esc(r.lot)}</span></td><td data-card-primary><b>${esc(r.item)}</b></td><td class="r">${fmtNum(r.received)} ${esc(r.unit || '')}</td><td class="r"><b>${fmtNum(r.balance)}</b></td><td>${esc(r.places || '')}</td><td class="small muted">${esc(r.first_date || '')}</td><td><button type="button" class="btn small" data-qrb-one="${i}">QR</button></td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="empty">이 기간에 들어온 LOT가 없습니다. 기간을 넓히거나 「잔량 있는 LOT만」을 끄세요.</div>';
+    if (preset?.all) { $$('[data-qrb-pick]', main).forEach(x => { x.checked = true; }); preset = null; }
+    sync();
+  };
+  const card = r => ({ code: r.lot, sub: [r.item, `${fmtNum(r.received)} ${r.unit || ''}`.trim(), r.places || '', r.first_date].filter(Boolean).join(' · ') });
+  const copies = () => Math.max(1, Math.min(50, Number($('#qrbCopies', main).value) || 1));
+  const issue = list => { const n = copies(); qrIssue(list.flatMap(r => Array.from({ length: n }, () => card(r))), { title: 'QR코드 발행', file: 'QR일괄' }); };
+  main.addEventListener('change', e => { if (e.target.matches('[data-qrb-all]')) $$('[data-qrb-pick]', main).forEach(x => { x.checked = e.target.checked; }); if (e.target.matches('[data-qrb-all], [data-qrb-pick]')) sync(); });
+  main.addEventListener('click', e => { const b = e.target.closest('[data-qrb-one]'); if (b) issue([rows[Number(b.dataset.qrbOne)]]); });
+  $('#qrbIssue', main).onclick = () => { const list = picked(); if (list.length) issue(list); };
+  form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
+  form.elements.instock.onchange = () => load().catch(fail);
+  await load();
+}

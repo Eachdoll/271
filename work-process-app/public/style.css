@@ -3124,3 +3124,7 @@ form.list-filters .range-presets.rp-compact .rp-name { align-self: center; }
 /* 15.230 재고 현황 창고·위치별 */
 .stock-place-grid tr.wh-first > td { border-top: 2px solid var(--line-strong, #c9d2de); }
 .stock-wh-pick select { min-width: 9em; }
+
+/* 15.230 QR 일괄 발행 단추(빨강) */
+.btn.qr-pdf-btn:not(:disabled) { background: #ef1c25 !important; border-color: #ef1c25 !important; color: #fff !important; font-weight: 800; }
+.btn.qr-pdf-btn:disabled { opacity: .55; }

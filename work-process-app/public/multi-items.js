@@ -485,7 +485,7 @@ async function pageFinishedActual(main) {
     <label>품목<input type="search" name="q" placeholder="품목코드/명" autocomplete="off"></label>
     <label class="inline"><input type="checkbox" name="late" checked> 지난 2주 미완료 계획 포함</label>
   </form>
-  <div class="fp-bar"><span class="small muted" id="faSum" role="status"></span><span class="grow"></span>${canEnter ? '<button type="button" class="btn primary" id="faSaveAll">입력한 줄 모두 저장</button>' : ''}<a class="btn" href="#/prod/finished/plan">계획생산 접수·관리 →</a></div>
+  <div class="fp-bar"><span class="small muted" id="faSum" role="status"></span><span class="grow"></span><button type="button" class="btn qr-pdf-btn" id="faQr" title="이 생산일에 저장한 실적 LOT를 한 번에 QR코드로">이날 실적 QR 일괄 발행</button>${canEnter ? '<button type="button" class="btn primary" id="faSaveAll">입력한 줄 모두 저장</button>' : ''}<a class="btn" href="#/prod/finished/plan">계획생산 접수·관리 →</a></div>
   <div id="faList"><p class="muted">불러오는 중…</p></div>`;
   renderActualChanges($('#actualChanges', main), 'finished').catch(fail);
   const form = $('#faTools', main); let rows = [];
@@ -532,6 +532,13 @@ async function pageFinishedActual(main) {
       const r = await api('POST', `/api/schedules/${s.id}/actuals`, { production_date: pd, qty, note: $('[data-fa-note]', tr).value, inputs: out, request_id: crypto.randomUUID() });
       toast(`${s.product} 양품 ${fmtNum(qty)} 저장 · ${r.work_order || ''} · LOT ${r.lot || '—'}${pd !== date ? ` (생산일 ${pd})` : ''}`); return true;
     } catch (error) { fail(error); return false; }
+  };
+  // 15.230 이날 저장한 실적 LOT(제품 LOT)를 한 번에 QR코드 발행
+  $('#faQr', main).onclick = () => {
+    const date = form.elements.date.value, list = [];
+    for (const s of rows) { let a = []; try { a = JSON.parse(s.actual_lots || '[]'); } catch { a = []; } for (const x of a) if (x.date === date && x.lot) list.push({ code: x.lot, sub: [s.product, `${fmtNum(x.qty)} ${s.unit || s.bom_snapshot?.unit || ''}`.trim(), x.wo, x.date].filter(Boolean).join(' · ') }); }
+    if (!list.length) return toast(`${date}에 저장한 실적 LOT가 없습니다.`, 'err');
+    qrIssue(list, { title: `QR코드 발행 · ${date} 생산완료`, file: '생산LOT' });
   };
   $('#faSaveAll', main)?.addEventListener('click', async e => {
     const todo = $$('[data-fa-row]', main).filter(tr => Number($('[data-fa-qty]', tr).value) > 0); if (!todo.length) return toast('양품수량을 넣은 줄이 없습니다.', 'err');

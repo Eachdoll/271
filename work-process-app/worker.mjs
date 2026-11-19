@@ -3801,6 +3801,7 @@ route('GET', '/api/schedules', async ({ query }) => {
   return (await db.prepare(`SELECT *,COALESCE((SELECT SUM(a.qty) FROM production_actuals a WHERE a.schedule_id=schedules.id AND a.voided_at IS NULL),0) + COALESCE((SELECT SUM(c.qty) FROM semi_records c WHERE ${semiCutMatch('schedules')}),0) AS actual_qty,
       (SELECT COUNT(*) FROM production_actuals a WHERE a.schedule_id=schedules.id AND a.voided_at IS NULL) + (SELECT COUNT(*) FROM semi_records c WHERE ${semiCutMatch('schedules')}) AS actual_count,
       (SELECT group_concat(work_order, ',') FROM (SELECT a.work_order FROM production_actuals a WHERE a.schedule_id=schedules.id AND a.voided_at IS NULL AND a.work_order<>'' ORDER BY a.id)) AS work_orders,
+      (SELECT json_group_array(json_object('lot', a.lot, 'qty', a.qty, 'wo', a.work_order, 'date', a.production_date)) FROM production_actuals a WHERE a.schedule_id=schedules.id AND a.voided_at IS NULL AND a.lot<>'') AS actual_lots,
       COALESCE((SELECT SUM(c.qty) FROM semi_records c WHERE ${semiCutMatch('schedules')}),0) AS cut_qty,
       (SELECT r.req_no || ' · ' || r.customer || CASE WHEN r.order_no!='' THEN ' · ' || r.order_no ELSE '' END FROM production_request_lines l JOIN production_requests r ON r.id=l.request_id WHERE l.id=schedules.production_line_id) AS order_ref,
       (SELECT l.request_id FROM production_request_lines l WHERE l.id=schedules.production_line_id) AS order_id FROM schedules WHERE kind=? AND (
