@@ -5542,9 +5542,14 @@ route('GET', '/api/purchase/stock-extra', async ({ user }) => {
       SELECT TRIM(item) AS item, TRIM(unit) AS unit, unit_price, vendor, COALESCE(NULLIF(substr(recv_at,1,10),''), due_date, substr(created_at,1,10)) AS d, id FROM purchase_orders WHERE unit_price IS NOT NULL AND unit_price>0 AND recv_status<>'rejected'
     ) ORDER BY d DESC, id DESC LIMIT 20000`).all();
   const latest = new Map(); for (const r of prices) { const k = nameKey(r.item) + '\u0000' + (r.unit || ''); if (!latest.has(k)) latest.set(k, r); const k2 = nameKey(r.item) + '\u0000*'; if (!latest.has(k2)) latest.set(k2, r); }
+  // 15.263 재고금액 단가는 매입전표 단가(확정 전표의 살아 있는 줄 중 가장 최근)
+  const bills = await db.prepare(`SELECT TRIM(l.item) AS item, TRIM(l.unit) AS unit, l.unit_price AS price, b.vendor, b.bill_date AS d, b.bill_no FROM purchase_bill_lines l JOIN purchase_bills b ON b.id=l.bill_id
+      WHERE b.status='confirmed' AND l.active=1 AND l.unit_price IS NOT NULL AND l.unit_price>0 AND l.qty>0 ORDER BY b.bill_date DESC, b.id DESC, l.id DESC LIMIT 20000`).all();
+  const billLatest = new Map(); for (const r of bills) { const k = nameKey(r.item) + '\u0000' + (r.unit || ''); if (!billLatest.has(k)) billLatest.set(k, r); const k2 = nameKey(r.item) + '\u0000*'; if (!billLatest.has(k2)) billLatest.set(k2, r); }
   const open = await db.prepare(`SELECT id, req_no, TRIM(item) AS item, TRIM(unit) AS unit, spec, vendor, item_category, product_code, qty, COALESCE(recv_qty,0) AS received, due_date, recv_status, unit_price, substr(created_at,1,10) AS ordered
       FROM purchase_orders WHERE (recv_status IN ('','checking') OR (recv_status='mismatch' AND COALESCE(recv_qty,0) < qty)) ORDER BY due_date IS NULL, due_date, id LIMIT 5000`).all();
-  return { prices: [...latest.entries()].map(([k, r]) => ({ key: k, item: r.item, unit: r.unit, price: r.price, vendor: r.vendor, date: r.d })),
+  return { bill_prices: [...billLatest.entries()].map(([k, r]) => ({ key: k, item: r.item, unit: r.unit, price: r.price, vendor: r.vendor, date: r.d, bill_no: r.bill_no })),
+    prices: [...latest.entries()].map(([k, r]) => ({ key: k, item: r.item, unit: r.unit, price: r.price, vendor: r.vendor, date: r.d })),
     incoming: open.map(r => ({ ...r, left: stockRound(Math.max(0, r.qty - r.received)), partial: r.received > 0 })).filter(r => r.left > 0) };
 });
 route('PUT', '/api/inventory/levels', async ({ user, body }) => {
