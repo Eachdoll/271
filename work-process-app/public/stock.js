@@ -11,26 +11,70 @@ async function pageStock(main) {
   main.innerHTML = `
   <h1>재고 현황 <span class="dept">물류</span></h1>
   <p class="muted">「창고·위치별」로 보면 창고 → 위치(Location)마다 어떤 품목·LOT가 얼마나 있는지 나옵니다. 입고(발주·기타) + 생산실적·반제품 커팅/융착 − 생산 투입(BOM 기준) − 출하 ± 재고 조정으로 계산한 수량입니다. 품목명과 단위가 같은 기록끼리 합산하므로, <b>같은 품목은 같은 이름·단위</b>로 입력하세요. 시스템 도입 전부터 있던 재고는 <b>기초재고</b>로 한 번 입력합니다.</p>
+  <div class="stock-ex"><details class="stock-tree-box" open><summary>자재별 · 창고별</summary><nav id="stockTree" class="stock-tree" aria-label="재고 분류·창고"></nav></details><section class="stock-ex-main">
   <form id="stockFilters" class="toolbar list-filters lf-oneline" data-read-only="true">
     <label class="lf-date">기준일<input type="date" name="asof" value="${todayStr()}" max="${todayStr()}" required></label>
-    <label class="list-search">품목 검색<input type="search" name="q" maxlength="200" placeholder="품목명·규격"></label>
-    <label class="lf-sel">분류<select name="item_category">${categoryOptions('', true)}</select></label>
-    <label class="lf-sel">1차 분류<select name="cat1" id="stockCat1"><option value="">전체</option></select></label>
-    <label class="lf-sel">2차 분류<select name="cat2" id="stockCat2"><option value="">전체</option></select></label>
+    <label class="list-search">품목 검색<input type="search" name="q" maxlength="200" placeholder="품목명·규격·LOT"></label>
     <label class="lf-sel lf-wide">재고 상태<select name="state"><option value="">전체</option><option value="instock">재고 있음</option><option value="low">안전재고 미달</option><option value="negative">재고 음수(기록 확인)</option></select></label>
     <button type="submit" class="btn primary">조회</button>
   </form>
   <div class="result-bar"><div id="stockSummary" class="counts"></div>
-    <div class="seg result-seg" role="group" aria-label="보기"><label><input type="radio" name="group" value="item" form="stockFilters" checked> 품목 합계</label><label><input type="radio" name="group" value="spec" form="stockFilters"> 규격·사이즈별</label><label><input type="radio" name="group" value="place" form="stockFilters"> 창고·위치별</label></div>
+    <div class="seg result-seg" role="group" aria-label="보기"><label><input type="radio" name="group" value="item" form="stockFilters" checked> 품목 합계</label><label><input type="radio" name="group" value="spec" form="stockFilters"> 규격·사이즈별</label><label><input type="radio" name="group" value="lot" form="stockFilters"> LOT별</label><label><input type="radio" name="group" value="place" form="stockFilters"> 창고·위치별</label></div>
     <span class="result-tools"><button type="button" class="btn" id="stockLots" title="LOT가 적힌 입고 − 같은 LOT 출하">LOT별 재고</button><button type="button" class="btn" id="stockCsv">CSV 저장</button><span id="stockAdjustSlot"></span></span></div>
-  <div id="stockList"></div>`;
+  <div class="stock-path" id="stockPath"></div><div id="stockList"></div></section></div>`;
   const form = $('#stockFilters', main); let version = 0, current = { rows: [], group: 'item' };
   $('#stockLots', main).onclick = () => stockLotWindow(form.elements.asof.value || todayStr(), form.elements.q.value);
-  await api('GET', '/api/boms/categories').then(cats => {
-    const options = list => '<option value="">전체</option>' + [...new Set(list.filter(Boolean))].map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
-    const second = () => { const keep = form.cat2.value; $('#stockCat2').innerHTML = options(cats.filter(c => !form.cat1.value || c.cat1 === form.cat1.value).map(c => c.cat2)); form.cat2.value = [...form.cat2.options].some(o => o.value === keep) ? keep : ''; };
-    $('#stockCat1').innerHTML = options(cats.map(c => c.cat1)); second(); rememberList(form); second(); const state = uxRead(uxKey('filters', (location.hash || '#/') + ':' + form.id)); if (state) uxFormRestore(form, state); form.cat1.onchange = second;
-  }).catch(() => {});
+  // 15.258 파일 탐색기처럼: 왼쪽 분류(원자재·부자재·제품·상품·반제품 → 1·2·3차) / 창고(→ 구역·Location)를 고르면 오른쪽에 그 재고
+  if (window.matchMedia?.('(max-width: 860px)').matches) $('.stock-tree-box', main).open = false; // 휴대폰은 접힌 채로 시작
+  let [catNodes, whList] = await Promise.all([api('GET', '/api/item-categories').catch(() => []), api('GET', '/api/warehouses').catch(() => [])]);
+  if (!main.isConnected) return;
+  let sel = { k: 'all', p: [] }, opened = new Set(), itemAll = null, placeAll = null, nav = 'cat'; // 15.259 자재별 / 창고별 내비게이션
+  try { const v = JSON.parse(sessionStorage.getItem('wpa:stock-sel') || 'null'); if (v && ['all', 'cat', 'wh'].includes(v.k) && Array.isArray(v.p)) sel = v; opened = new Set(JSON.parse(sessionStorage.getItem('wpa:stock-open') || '[]')); nav = sessionStorage.getItem('wpa:stock-nav') === 'wh' || sel.k === 'wh' ? 'wh' : 'cat'; } catch { /* 편의 */ }
+  const canWh = ME.is_admin || ME.roles.includes('logistics_approver');
+  const SEP = '\u0001', keyOf = (k, p) => [k, ...p].join(SEP);
+  const matchCat = r => sel.k !== 'cat' || ((r.category || '미분류') === sel.p[0] && (!sel.p[1] || r.cat1 === sel.p[1]) && (!sel.p[2] || r.cat2 === sel.p[2]) && (!sel.p[3] || r.cat3 === sel.p[3]));
+  const NOPLACE = '(위치 미지정)', matchWh = r => sel.k !== 'wh' || ((sel.p[0] === NOPLACE ? !r.warehouse : r.warehouse === sel.p[0]) && (!sel.p[1] || (sel.p[1] === NOPLACE ? !r.location : r.location === sel.p[1])));
+  const catTree = () => {
+    const root = new Map(['원자재', '부자재', '제품', '상품', '반제품'].map(c => [c, new Map()]));
+    const add = path => { let m = root; for (const name of path) { if (!name) break; if (!m.has(name)) m.set(name, new Map()); m = m.get(name); } };
+    const byId = new Map(catNodes.filter(n => n.active !== false).map(n => [n.id, n]));
+    for (const n of byId.values()) { const path = [n.name]; let q = n; while (q.parent_id && byId.get(q.parent_id)) { q = byId.get(q.parent_id); path.unshift(q.name); } add([n.item_class, ...path]); }
+    for (const r of itemAll || []) add([r.category || '미분류', r.cat1, r.cat2, r.cat3]);
+    return root;
+  };
+  const whTree = () => {
+    const root = new Map(whList.filter(w => w.active !== 0).map(w => [w.name, new Map(String(w.locations || '').split(',').map(x => x.trim()).filter(Boolean).map(l => [l, new Map()]))]));
+    for (const r of placeAll || []) { const w = r.warehouse || NOPLACE; if (!root.has(w)) root.set(w, new Map()); if (r.warehouse) { const l = r.location || NOPLACE; if (!root.get(w).has(l)) root.get(w).set(l, new Map()); } }
+    return root;
+  };
+  const count = (k, p) => { if (k === 'cat' && itemAll) { const was = sel; sel = { k, p }; const n = itemAll.filter(matchCat).length; sel = was; return n; } if (k === 'wh' && placeAll) { const was = sel; sel = { k, p }; const n = placeAll.filter(matchWh).length; sel = was; return n; } return null; };
+  const branch = (k, map, path, depth) => `<ul class="st-ul" role="group">${[...map].map(([name, kids]) => { const p = [...path, name], key = keyOf(k, p), open = opened.has(key), on = sel.k === k && keyOf(sel.k, sel.p) === key, n = count(k, p);
+    return `<li><div class="st-row${on ? ' on' : ''}" style="--d:${depth}">${kids.size ? `<button type="button" class="st-tw" data-st-tw="${esc(key)}" aria-expanded="${open}" aria-label="${esc(name)} 펼치기">${open ? '▾' : '▸'}</button>` : '<span class="st-tw"></span>'}<button type="button" class="st-node" data-st="${esc(key)}"${on ? ' aria-current="true"' : ''}><span class="st-ic">${k === 'wh' ? (depth ? '▫' : '🏬') : (open && kids.size ? '📂' : '📁')}</span>${esc(name)}${n != null ? ` <span class="st-n">${fmtNum(n)}</span>` : ''}</button></div>${kids.size && open ? branch(k, kids, p, depth + 1) : ''}</li>`; }).join('')}</ul>`;
+  const drawTree = () => {
+    const all = nav === 'cat' ? itemAll?.length : placeAll?.length;
+    $('#stockTree', main).innerHTML = `<div class="st-tabs" role="tablist" aria-label="내비게이션"><button type="button" role="tab" data-st-mode="cat" aria-selected="${nav === 'cat'}">📦 자재별</button><button type="button" role="tab" data-st-mode="wh" aria-selected="${nav === 'wh'}">🏬 창고별</button></div>
+      <div class="st-row${sel.k === 'all' ? ' on' : ''}" style="--d:0"><span class="st-tw"></span><button type="button" class="st-node" data-st="all"><span class="st-ic">🗂</span>${nav === 'cat' ? '전체 자재' : '전체 창고'}${all != null ? ` <span class="st-n">${fmtNum(all)}</span>` : ''}</button></div>
+      ${nav === 'cat' ? branch('cat', catTree(), [], 0) : branch('wh', whTree(), [], 0)}
+      <div class="st-set">${nav === 'cat' ? (ME.is_admin ? '<button type="button" class="btn small" data-st-set="cat">⚙ 분류 설정</button>' : '<span class="small muted">분류는 관리자가 설정합니다</span>') : (canWh ? '<button type="button" class="btn small" data-st-set="wh">⚙ 창고·구역 설정</button>' : '<span class="small muted">창고·구역은 물류팀장·관리자가 설정합니다</span>')}</div>`;
+    $('#stockPath', main).innerHTML = sel.k === 'all' ? '' : `<span class="muted">${sel.k === 'cat' ? '자재별' : '창고별'}</span> › ${sel.p.map(x => `<b>${esc(x)}</b>`).join(' › ')} <button type="button" class="link-btn small" data-st="all">전체 보기</button>`;
+  };
+  const saveTree = () => { try { sessionStorage.setItem('wpa:stock-sel', JSON.stringify(sel)); sessionStorage.setItem('wpa:stock-open', JSON.stringify([...opened])); sessionStorage.setItem('wpa:stock-nav', nav); } catch { /* 편의 */ } };
+  const reloadTree = async () => { [catNodes, whList] = await Promise.all([api('GET', '/api/item-categories').catch(() => catNodes), api('GET', '/api/warehouses').catch(() => whList)]); if (main.isConnected) { drawTree(); load().catch(fail); } };
+  const setGroup = g => $$('[name=group]', main).forEach(r => { r.checked = r.value === g; });
+  main.addEventListener('click', e => {
+    const md = e.target.closest('[data-st-mode]'); if (md) { if (md.dataset.stMode !== nav) { nav = md.dataset.stMode; sel = { k: 'all', p: [] }; saveTree(); setGroup(nav === 'wh' ? 'place' : 'item'); drawTree(); load().catch(fail); } return; }
+    const st = e.target.closest('[data-st-set]'); if (st) { if (st.dataset.stSet === 'cat') manageItemCategories(sel.k === 'cat' && ['원자재', '부자재', '제품', '상품', '반제품'].includes(sel.p[0]) ? sel.p[0] : '원자재', reloadTree).catch(fail); else stockWarehouseEditor(reloadTree).catch(fail); return; }
+    const tw = e.target.closest('[data-st-tw]'); if (tw) { const k = tw.dataset.stTw; opened.has(k) ? opened.delete(k) : opened.add(k); saveTree(); drawTree(); return; }
+    const nd = e.target.closest('[data-st]'); if (!nd) return;
+    const [k, ...p] = nd.dataset.st.split(SEP); const key = nd.dataset.st;
+    if (k !== 'all' && keyOf(sel.k, sel.p) === key) { opened.has(key) ? opened.delete(key) : opened.add(key); } else if (k !== 'all') opened.add(key); // 고르면 펼치고, 다시 누르면 접기
+    for (let n = 1; n < p.length; n++) opened.add(keyOf(k, p.slice(0, n)));
+    sel = { k, p }; if (k !== 'all') nav = k; saveTree();
+    const g = $$('[name=group]', main).find(x => x.checked)?.value;
+    if (k === 'wh' && g !== 'place') setGroup('place'); else if (k === 'cat' && g === 'place') setGroup('item');
+    drawTree(); load().catch(fail);
+    if (k !== 'all' && window.matchMedia?.('(max-width: 860px)').matches && !nd.closest('#stockPath') && !nd.parentElement?.querySelector('button.st-tw')) { const box = $('.stock-tree-box', main); if (box) box.open = false; } // 15.258 휴대폰: 맨 아래 칸을 고르면 접어서 결과가 보이게
+  });
   rememberList(form);
   const adjust = async (preset = {}) => {
     const v = await promptBox('재고 조정 · 기초재고 · 실사', `
@@ -47,26 +91,48 @@ async function pageStock(main) {
     try { const saved = await api('POST', '/api/inventory/adjustments', body); toast(`재고 조정을 기록했습니다. (${saved.qty > 0 ? '+' : ''}${fmtNum(saved.qty)})`); load(); } catch (error) { fail(error); }
   };
   // 15.230 창고·위치별: 창고 → 위치 → 품목·LOT 잔량(어디에 얼마나 있는지)
-  let placeWh = ''; try { placeWh = sessionStorage.getItem('wpa:stock-wh') || ''; } catch { /* 편의 */ }
   const loadPlaces = async mine => {
-    const v = formObj(form), data = await api('GET', '/api/inventory/places?' + new URLSearchParams({ asof: v.asof || todayStr(), q: v.q || '', warehouse: placeWh }));
+    const v = formObj(form), data = await api('GET', '/api/inventory/places?' + new URLSearchParams({ asof: v.asof || todayStr(), q: v.q || '' }));
     if (mine !== version || !main.isConnected) return;
-    $('#stockAdjustSlot').innerHTML = `<label class="inline stock-wh-pick">창고 <select id="stockWh"><option value="">전체</option>${data.warehouses.map(w => `<option value="${esc(w.name)}">${esc(w.name)}</option>`).join('')}<option value="(위치 미지정)">위치 미지정</option></select></label>`;
-    const sel = $('#stockWh'); sel.value = placeWh; sel.onchange = () => { placeWh = sel.value; try { sessionStorage.setItem('wpa:stock-wh', placeWh); } catch { /* 편의 */ } load().catch(fail); };
-    const rows = data.rows, whs = new Set(rows.map(r => r.warehouse || '(위치 미지정)'));
+    $('#stockAdjustSlot').innerHTML = '';
+    placeAll = data.rows; drawTree(); const rows = data.rows.filter(matchWh), whs = new Set(rows.map(r => r.warehouse || '(위치 미지정)')); current = { asof: data.asof, group: 'place', rows };
     $('#stockSummary').innerHTML = `${fmtNum(rows.length)}줄 · 창고 ${whs.size}곳 · 기준일 ${esc(data.asof)}${data.more ? ' · <span class="chip yellow">앞 3000줄</span>' : ''}`;
     let prev = '';
     $('#stockList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid stock-place-grid"><thead><tr><th>창고</th><th>위치(Location)</th><th>품목코드</th><th>품목명</th><th>LOT</th><th class="r">수량</th><th>처음 입고</th><th></th></tr></thead><tbody>${rows.map((r, i) => { const wh = r.warehouse || '(위치 미지정)', head = wh !== prev; prev = wh;
-      return `<tr class="${head ? 'wh-first' : ''}${r.qty < 0 ? ' row-red' : ''}"><td>${head ? `<b>${esc(wh)}</b>` : '<span class="muted small">〃</span>'}</td><td>${r.location ? `<span class="chip">${esc(r.location)}</span>` : '<span class="muted">—</span>'}</td><td class="small nowrap">${esc(r.code || '')}</td><td data-card-primary><b>${esc(r.item)}</b></td><td class="nowrap"><span class="lot-tag">${esc(r.lot)}</span></td><td class="r"><b>${fmtNum(r.qty)}</b> ${esc(r.unit || '')}</td><td class="small muted">${esc(r.first_date || '')}</td><td class="nowrap">${r.lot !== '(LOT 미지정)' ? `<button type="button" class="btn small" data-place-move="${i}" title="이 LOT를 다른 창고·위치로">이동</button>` : ''}</td></tr>`; }).join('')}</tbody></table></div>`
+      return `<tr data-place-row="${i}" title="더블클릭: 입출고 LOT 내역" class="${head ? 'wh-first' : ''}${r.qty < 0 ? ' row-red' : ''}"><td>${head ? `<b>${esc(wh)}</b>` : '<span class="muted small">〃</span>'}</td><td>${r.location ? `<span class="chip">${esc(r.location)}</span>` : '<span class="muted">—</span>'}</td><td class="small nowrap">${esc(r.code || '')}</td><td data-card-primary><b>${esc(r.item)}</b></td><td class="nowrap"><span class="lot-tag">${esc(r.lot)}</span></td><td class="r"><b>${fmtNum(r.qty)}</b> ${esc(r.unit || '')}</td><td class="small muted">${esc(r.first_date || '')}</td><td class="nowrap">${r.lot !== '(LOT 미지정)' ? `<button type="button" class="btn small" data-place-move="${i}" title="이 LOT를 다른 창고·위치로">이동</button>` : ''}</td></tr>`; }).join('')}</tbody></table></div>`
       : '<div class="empty">조건에 맞는 위치별 재고가 없습니다. 입고 때 창고·위치를 넣으면 여기에 나옵니다(관리 › 창고 관리).</div>';
     $$('[data-place-move]', main).forEach(b => b.onclick = () => { const r = rows[Number(b.dataset.placeMove)]; lotMoveWindow({ item: r.item, unit: r.unit, lot: r.lot }, load).catch(fail); });
   };
+  // 15.260 LOT별: 품목·LOT 잔량(자재별 트리로 거름, 품목·LOT 검색), 더블클릭·「내역」 → 입출고 LOT 내역
+  let lotAll = null;
+  const loadLots = async mine => {
+    const v = formObj(form), data = await api('GET', '/api/inventory/lots?' + new URLSearchParams({ asof: v.asof || todayStr(), q: v.q || '', qc: '1', cat: '1', ...(v.state === 'instock' ? { state: 'instock' } : {}) }));
+    if (mine !== version || !main.isConnected) return;
+    $('#stockAdjustSlot').innerHTML = '';
+    lotAll = data.rows.filter(r => r.lot !== '(LOT 미지정)'); itemAll = lotAll; drawTree();
+    const rows = lotAll.filter(matchCat).filter(r => v.state !== 'negative' || r.balance < 0);
+    current = { asof: data.asof, group: 'lot', rows };
+    $('#stockSummary').innerHTML = `LOT ${fmtNum(rows.length)}개 · 품목 ${fmtNum(new Set(rows.map(r => r.item)).size)} · 기준일 ${esc(data.asof)}${data.more ? ' · <span class="chip yellow">앞부분만 · 검색으로 좁히세요</span>' : ''}${rows.some(r => r.qc === 'fail') ? ` · <span class="chip red">불합격 ${rows.filter(r => r.qc === 'fail').length}</span>` : ''}`;
+    $('#stockList').innerHTML = rows.length ? `<p class="small muted st-dbl-hint">줄을 <b>더블클릭</b>하면(휴대폰은 「내역」) 그 LOT의 입고·출고·투입 내역이 나옵니다.</p><div class="table-wrap"><table class="grid stock-lot-grid"><thead><tr><th>LOT</th><th>품목코드</th><th>품목명</th><th>분류</th><th class="r">입고·생산</th><th class="r">출고·투입</th><th class="r">잔량</th><th>품질</th><th>위치</th><th>처음 입고</th><th>마지막</th><th></th></tr></thead><tbody>${rows.map((r, i) => `<tr data-lot-row="${i}" class="${r.balance < 0 ? 'row-red' : r.balance === 0 ? 'row-off' : ''}${r.qc === 'concession' ? ' lot-tk-row' : ''}" title="더블클릭: 입출고 LOT 내역"><td class="nowrap"><span class="lot-tag">${esc(r.lot)}</span></td><td class="small nowrap">${esc(r.product_code || '')}</td><td><b>${esc(r.item)}</b></td><td class="small">${esc(r.category || '미분류')}${r.cat1 ? `<div class="muted">${esc([r.cat1, r.cat2, r.cat3].filter(Boolean).join(' › '))}</div>` : ''}</td><td class="r">${fmtNum(r.received)}</td><td class="r">${fmtNum(r.shipped)}</td><td class="r"><b>${fmtNum(r.balance)}</b> ${esc(r.unit || '')}</td><td class="nowrap">${lotQcChip(r)}</td><td class="small">${esc(r.places || '')}</td><td class="small muted">${esc(r.first_date || '')}</td><td class="small muted">${esc(r.last_date || '')}</td><td class="nowrap"><button type="button" class="btn small" data-lot-his="${i}">내역</button></td></tr>`).join('')}</tbody></table></div>`
+      : `<div class="empty">${v.q ? `「${esc(v.q)}」에 맞는 LOT가 없습니다.` : '조건에 맞는 LOT가 없습니다.'}</div>`;
+  };
+  const openLot = r => lotHistoryWindow(r, () => load()).catch(fail);
+  main.addEventListener('dblclick', e => {
+    if (e.target.closest('input, button, a, select, textarea')) return;
+    const lr = e.target.closest('[data-lot-row]'); if (lr && current.group === 'lot') { openLot(current.rows[Number(lr.dataset.lotRow)]); return; }
+    const pr = e.target.closest('[data-place-row]'); if (pr && current.group === 'place') { const r = current.rows[Number(pr.dataset.placeRow)]; if (r.lot && r.lot !== '(LOT 미지정)') openLot({ item: r.item, lot: r.lot, unit: r.unit }); return; }
+    const ir = e.target.closest('[data-item-row]'); if (ir && (current.group === 'item' || current.group === 'spec')) itemLotWindow(current.rows[Number(ir.dataset.itemRow)], form.elements.asof.value || todayStr(), () => load()).catch(fail);
+  });
+  main.addEventListener('click', e => { if (e.target.closest('[data-to-lot]')) { setGroup('lot'); try { localStorage.setItem('wpa:stock-group', 'lot'); } catch { /* 편의 */ } load().catch(fail); return; } const b = e.target.closest('[data-lot-his]'); if (b && current.group === 'lot') openLot(current.rows[Number(b.dataset.lotHis)]); });
   const load = async () => {
     if (!main.isConnected) return; const mine = ++version;
-    if (form.querySelector('[name=group]:checked')?.value === 'place' || $$('[name=group]', main).find(x => x.checked)?.value === 'place') return loadPlaces(mine);
+    const gv = $$('[name=group]', main).find(x => x.checked)?.value;
+    if (gv === 'place') return loadPlaces(mine);
+    if (gv === 'lot') return loadLots(mine); // 15.260
     const result = await api('GET', '/api/inventory?' + new URLSearchParams(formObj(form)));
     if (mine !== version || !main.isConnected) return;
-    current = result; const rows = result.rows; const bySpec = result.group === 'spec';
+    itemAll = result.rows; const rows = result.rows.filter(matchCat); current = { ...result, rows }; drawTree(); const bySpec = result.group === 'spec';
+    const qv = (form.elements.q.value || '').trim(); if (qv) api('GET', '/api/inventory/lots?' + new URLSearchParams({ asof: result.asof, q: qv })).then(d => { const n = d.rows.filter(x => x.lot.toLowerCase().includes(qv.toLowerCase())).length; if (n && mine === version && main.isConnected) $('#stockSummary').insertAdjacentHTML('beforeend', ` · <button type="button" class="link-btn" data-to-lot>LOT 「${esc(qv)}」 ${n}개 → LOT별로 보기</button>`); }).catch(() => {}); // 15.260
     const lowRows = result.group === 'item' ? rows.filter(r => r.low) : [];
     $('#stockAdjustSlot').innerHTML = (result.can_adjust ? '<button type="button" class="btn" id="stockAdjust">＋ 기초재고·실사·조정</button>' : '')
       + (lowRows.length && (ME.is_admin || ME.roles.includes('purchase')) ? ` <button type="button" class="btn" id="stockReorder" title="안전재고 미달 품목을 매입처별 발주로">부족분 발주 <span class="sub-count">${lowRows.length}</span></button>` : '');
@@ -74,7 +140,7 @@ async function pageStock(main) {
     if (result.can_adjust) $('#stockAdjust').onclick = () => adjust();
     $('#stockSummary').innerHTML = `${rows.length}개 품목 · 기준일 ${esc(result.asof)}${rows.some(r => r.low) ? ` · <span class="chip yellow">안전재고 미달 ${rows.filter(r => r.low).length}</span>` : ''}${rows.some(r => r.negative) ? ` · <span class="chip red">재고 음수 ${rows.filter(r => r.negative).length}</span> <span class="small muted">입고·기초재고 누락 또는 품목명·단위 불일치를 확인하세요.</span>` : ''}${bySpec ? ' · <span class="small muted">BOM 자재에는 규격이 없어 생산 투입은 규격 없는 줄에 표시됩니다.</span>' : ''}`;
     $('#stockList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>품목코드</th><th>품목명</th>${bySpec ? '<th>규격</th>' : ''}<th>분류</th><th class="r">입고</th><th class="r">생산</th><th class="r">생산 투입</th><th class="r">출하</th><th class="r">조정</th><th class="r">현재고</th>${bySpec ? '' : '<th class="r">안전재고</th>'}<th>최근 변동</th><th></th></tr></thead>
-      <tbody>${rows.map((r, i) => `<tr class="${r.negative ? 'row-red' : r.low ? 'row-yellow' : ''}">
+      <tbody>${rows.map((r, i) => `<tr data-item-row="${i}" title="더블클릭: 이 품목의 LOT별 재고·입출고 내역" class="${r.negative ? 'row-red' : r.low ? 'row-yellow' : ''}">
         <td class="small nowrap">${esc(r.product_code) || '<span class="muted">미등록</span>'}</td><td><b>${esc(r.item)}</b></td>${bySpec ? `<td>${esc(r.spec || '(규격 없음)')}</td>` : ''}<td>${esc(r.category || '미분류')}${r.cat1 ? `<div class="small muted">${esc([r.cat1, r.cat2, r.cat3].filter(Boolean).join(' › '))}</div>` : ''}</td>
         <td class="r">${fmtNum(r.received)}</td><td class="r">${fmtNum(r.produced)}</td><td class="r">${fmtNum(r.used)}</td><td class="r">${fmtNum(r.shipped)}</td><td class="r">${r.adjusted ? (r.adjusted > 0 ? '+' : '') + fmtNum(r.adjusted) : '0'}</td>
         <td class="r"><b class="${r.negative ? 'red-text' : ''}">${fmtNum(r.stock)}</b> ${esc(r.unit || '단위 미지정')}${r.converted ? `<br><span class="small muted">= ${fmtNum(r.converted.qty)} ${esc(r.converted.unit)}</span>` : ''}${r.low ? ' <span class="chip yellow">미달</span>' : ''}</td>
@@ -90,7 +156,7 @@ async function pageStock(main) {
       try {
         const lots = (await api('GET', '/api/lots/available?item=' + encodeURIComponent(r.item))).rows.filter(l => !r.unit || !l.unit || l.unit === r.unit);
         const sum = lots.reduce((t, l) => t + l.balance, 0);
-        tr.insertAdjacentHTML('afterend', `<tr class="stock-lot-row"><td colspan="${tr.children.length}"><div class="stock-lots">${lots.length ? `<table class="erp-grid" data-keep-cols data-no-sort><thead><tr><th>LOT</th><th class="r">입고·생산</th><th class="r">사용·출하</th><th class="r">남은 수량</th><th>위치</th><th>처음 입고</th><th>마지막</th></tr></thead><tbody>${lots.map(l => `<tr><td><span class="lot-tag">${esc(l.lot)}</span></td><td class="r">${fmtNum(l.received)}</td><td class="r">${fmtNum(l.shipped)}</td><td class="r"><b>${fmtNum(l.balance)}</b> <span class="small muted">${esc(l.unit || '')}</span></td><td class="small">${esc(l.places || '')}</td><td class="small">${esc(l.first_date || '')}</td><td class="small">${esc(l.last_date || '')}</td></tr>`).join('')}</tbody><tfoot><tr><th>LOT 합계</th><td></td><td></td><td class="r"><b>${fmtNum(Math.round(sum * 1000) / 1000)}</b></td><td colspan="3" class="small muted">${Math.abs(sum - r.stock) > 0.001 ? `현재고 ${fmtNum(r.stock)}와 차이 ${fmtNum(Math.round((r.stock - sum) * 1000) / 1000)} — LOT 없이 들어오거나 나간 수량(BOM 투입·LOT 없는 출하 등)` : '현재고와 같음'}</td></tr></tfoot></table>` : '<p class="small muted">이 품목은 LOT 남은 재고가 없습니다(LOT 없이 받았거나 다 썼음).</p>'}</div></td></tr>`);
+        tr.insertAdjacentHTML('afterend', `<tr class="stock-lot-row"><td colspan="${tr.children.length}"><div class="stock-lots">${lots.length ? `<table class="erp-grid" data-keep-cols data-no-sort><thead><tr><th>LOT</th><th class="r">입고·생산</th><th class="r">사용·출하</th><th class="r">남은 수량</th><th>위치</th><th>처음 입고</th><th>마지막</th></tr></thead><tbody>${lots.map(l => `<tr${l.concession ? ' class="lot-tk-row"' : ''}><td><span class="lot-tag">${esc(l.lot)}</span>${l.concession ? ' ' + LOT_TK : l.qc_fail ? ' <span class="chip red">불합격</span>' : ''}</td><td class="r">${fmtNum(l.received)}</td><td class="r">${fmtNum(l.shipped)}</td><td class="r"><b>${fmtNum(l.balance)}</b> <span class="small muted">${esc(l.unit || '')}</span></td><td class="small">${esc(l.places || '')}</td><td class="small">${esc(l.first_date || '')}</td><td class="small">${esc(l.last_date || '')}</td></tr>`).join('')}</tbody><tfoot><tr><th>LOT 합계</th><td></td><td></td><td class="r"><b>${fmtNum(Math.round(sum * 1000) / 1000)}</b></td><td colspan="3" class="small muted">${Math.abs(sum - r.stock) > 0.001 ? `현재고 ${fmtNum(r.stock)}와 차이 ${fmtNum(Math.round((r.stock - sum) * 1000) / 1000)} — LOT 없이 들어오거나 나간 수량(BOM 투입·LOT 없는 출하 등)` : '현재고와 같음'}</td></tr></tfoot></table>` : '<p class="small muted">이 품목은 LOT 남은 재고가 없습니다(LOT 없이 받았거나 다 썼음).</p>'}</div></td></tr>`);
         button.setAttribute('aria-expanded', 'true'); button.textContent = 'LOT ▴';
       } catch (error) { fail(error); } finally { button.disabled = false; }
     });
@@ -113,9 +179,14 @@ async function pageStock(main) {
   form.onsubmit = event => { event.preventDefault(); load().catch(fail); };
   // 15.155 보기(품목 합계/규격별)는 결과 위 버튼 — 바꾸면 바로 다시 조회하고, 다음에 열 때도 그 보기로
   try { const g = localStorage.getItem('wpa:stock-group'); if (g) $$('[name=group]', main).forEach(r => { r.checked = r.value === g; }); } catch { /* 편의 */ }
-  $$('[name=group]', main).forEach(r => { r.onchange = () => { try { localStorage.setItem('wpa:stock-group', r.value); } catch { /* 편의 */ } load().catch(fail); }; });
+  $$('[name=group]', main).forEach(r => { r.onchange = () => { try { localStorage.setItem('wpa:stock-group', r.value); } catch { /* 편의 */ } const want = r.value === 'place' ? 'wh' : 'cat'; if (want !== nav) { nav = want; sel = { k: 'all', p: [] }; saveTree(); drawTree(); } load().catch(fail); }; });
+  if (nav === 'wh') setGroup('place'); else if ($$('[name=group]', main).find(x => x.checked)?.value === 'place') setGroup('item');
+  drawTree();
   $('#stockCsv').onclick = () => {
     if (!current.rows.length) return toast('저장할 재고가 없습니다.', 'err');
+    if (current.group === 'lot' || current.group === 'place') { const cols = current.group === 'lot' ? [['lot', 'LOT'], ['product_code', '품목코드'], ['item', '품목명'], ['category', '분류'], ['received', '입고·생산'], ['shipped', '출고·투입'], ['balance', '잔량'], ['unit', '단위'], ['places', '위치'], ['first_date', '처음 입고']] : [['warehouse', '창고'], ['location', '위치'], ['code', '품목코드'], ['item', '품목명'], ['lot', 'LOT'], ['qty', '수량'], ['unit', '단위'], ['first_date', '처음 입고']];
+      const q = x => `"${String(x ?? '').replace(/"/g, '""')}"`, text = '\ufeff' + [cols.map(c => q(c[1])).join(','), ...current.rows.map(r => cols.map(c => q(r[c[0]])).join(','))].join('\r\n');
+      const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' })); link.download = `재고현황-${current.group === 'lot' ? 'LOT' : '위치'}-${current.asof}.csv`; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000); return; }
     const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([stockCsv(current.rows, current.group === 'spec')], { type: 'text/csv;charset=utf-8' }));
     link.download = `재고현황-${current.asof}.csv`; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   };
@@ -401,12 +472,12 @@ async function pageLots(main) {
   const sync = () => { const n = picked().length, b = $('#lotQr', main); b.disabled = !n; b.textContent = n ? `QR코드 발행 (${n})` : 'QR코드 발행'; };
   const load = async () => {
     const v = formObj(form);
-    const [data, plts] = await Promise.all([api('GET', '/api/inventory/lots?' + new URLSearchParams({ asof: todayStr(), q: v.q || '', ...(v.state === 'instock' ? { state: 'instock' } : {}) })), api('GET', '/api/pallets?status=open').catch(() => ({ rows: [] }))]);
+    const [data, plts] = await Promise.all([api('GET', '/api/inventory/lots?' + new URLSearchParams({ asof: todayStr(), q: v.q || '', qc: '1', ...(v.state === 'instock' ? { state: 'instock' } : {}) })), api('GET', '/api/pallets?status=open').catch(() => ({ rows: [] }))]);
     if (!main.isConnected) return;
     const inPlt = new Map(); for (const p of plts.rows) for (const l of p.lines) { const k = l.item + '\u0001' + l.lot, x = inPlt.get(k) || { qty: 0, nos: [] }; x.qty += l.qty; x.nos.push(p.pallet_no); inPlt.set(k, x); }
     rows = data.rows.filter(r => (!v.from || r.first_date >= v.from) && (!v.to || r.first_date <= v.to) && (v.state !== 'empty' || r.balance <= 0)).map(r => ({ ...r, plt: inPlt.get(r.item + '\u0001' + r.lot) || null }));
     $('#lotSum', main).innerHTML = `LOT ${fmtNum(rows.length)}개${data.more ? ' · <span class="chip yellow">앞부분만 · 검색으로 좁히세요</span>' : ''}${rows.some(r => r.plt) ? ` · 파렛트에 묶인 LOT ${rows.filter(r => r.plt).length}` : ''}`;
-    $('#lotList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid lot-grid"><thead><tr><th class="pick-cell"><input type="checkbox" data-lot-all aria-label="모두 고르기"></th><th>LOT</th><th>품목</th><th class="r">입고·생산</th><th class="r">출고·투입</th><th class="r">잔량</th><th class="r">파렛트</th><th>위치</th><th>처음 입고</th><th>마지막</th><th></th></tr></thead><tbody>${rows.map((r, i) => `<tr class="${r.balance < 0 ? 'row-red' : r.balance === 0 ? 'row-off' : ''}"><td class="pick-cell"><input type="checkbox" data-lot-pick="${i}" aria-label="${esc(r.lot)} 고르기"></td><td class="nowrap"><span class="lot-tag">${esc(r.lot)}</span></td><td data-card-primary><b>${esc(r.item)}</b></td><td class="r">${fmtNum(r.received)}</td><td class="r">${fmtNum(r.shipped)}</td><td class="r"><b>${fmtNum(r.balance)}</b> ${esc(r.unit || '')}</td><td class="r small">${r.plt ? `<a href="#/logistics/pallets" title="${esc(r.plt.nos.join(', '))}">${fmtNum(r.plt.qty)}</a>` : '<span class="muted">—</span>'}</td><td class="small">${esc(r.places || '')}</td><td class="small muted">${esc(r.first_date || '')}</td><td class="small muted">${esc(r.last_date || '')}</td><td class="nowrap"><button type="button" class="btn small" data-lot-qr="${i}">QR</button>${r.balance > 0 && r.lot !== '(LOT 미지정)' ? ` <button type="button" class="btn small" data-lot-mv="${i}">이동</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">조건에 맞는 LOT가 없습니다.</div>';
+    $('#lotList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid lot-grid"><thead><tr><th class="pick-cell"><input type="checkbox" data-lot-all aria-label="모두 고르기"></th><th>LOT</th><th>품목</th><th class="r">입고·생산</th><th class="r">출고·투입</th><th class="r">잔량</th><th>품질</th><th class="r">파렛트</th><th>위치</th><th>처음 입고</th><th>마지막</th><th></th></tr></thead><tbody>${rows.map((r, i) => `<tr class="${r.balance < 0 ? 'row-red' : r.balance === 0 ? 'row-off' : ''}${r.qc === 'concession' ? ' lot-tk-row' : ''}"><td class="pick-cell"><input type="checkbox" data-lot-pick="${i}" aria-label="${esc(r.lot)} 고르기"></td><td class="nowrap"><span class="lot-tag">${esc(r.lot)}</span></td><td data-card-primary><b>${esc(r.item)}</b></td><td class="r">${fmtNum(r.received)}</td><td class="r">${fmtNum(r.shipped)}</td><td class="r"><b>${fmtNum(r.balance)}</b> ${esc(r.unit || '')}</td><td class="nowrap">${lotQcChip(r)}</td><td class="r small">${r.plt ? `<a href="#/logistics/pallets" title="${esc(r.plt.nos.join(', '))}">${fmtNum(r.plt.qty)}</a>` : '<span class="muted">—</span>'}</td><td class="small">${esc(r.places || '')}</td><td class="small muted">${esc(r.first_date || '')}</td><td class="small muted">${esc(r.last_date || '')}</td><td class="nowrap"><button type="button" class="btn small" data-lot-hist="${i}" title="이 LOT의 입고·출고 내역">내역</button> <button type="button" class="btn small" data-lot-qr="${i}">QR</button>${r.balance > 0 && r.lot !== '(LOT 미지정)' ? ` <button type="button" class="btn small" data-lot-mv="${i}">이동</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">조건에 맞는 LOT가 없습니다.</div>';
     sync();
   };
   const card = r => ({ code: r.lot, sub: [r.item, `잔량 ${fmtNum(r.balance)} ${r.unit || ''}`.trim(), r.places || '', r.first_date].filter(Boolean).join(' · ') });
@@ -414,10 +485,67 @@ async function pageLots(main) {
   main.addEventListener('click', e => {
     const q = e.target.closest('[data-lot-qr]'); if (q) { qrIssue([card(rows[Number(q.dataset.lotQr)])], { file: 'LOT' }); return; }
     const mv = e.target.closest('[data-lot-mv]'); if (mv) lotMoveWindow(rows[Number(mv.dataset.lotMv)], load).catch(fail);
+    const hi = e.target.closest('[data-lot-hist]'); if (hi) lotHistoryWindow(rows[Number(hi.dataset.lotHist)], load).catch(fail); // 15.256
   });
   $('#lotQr', main).onclick = () => { const l = picked(); if (l.length) qrIssue(l.map(card), { file: 'LOT' }); };
   $('#lotCsv', main).onclick = () => { if (typeof xlsxDownload === 'function') xlsxDownload(`LOT관리_${todayStr()}.xlsx`, { sheet: 'LOT', columns: [['lot', 'LOT'], ['item', '품목'], ['received', '입고·생산'], ['shipped', '출고·투입'], ['balance', '잔량'], ['unit', '단위'], ['pallet', '파렛트'], ['places', '위치'], ['first_date', '처음 입고'], ['last_date', '마지막']], rows: rows.map(r => ({ ...r, pallet: r.plt ? r.plt.qty : '' })) }); };
   form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
   form.elements.state.onchange = () => load().catch(fail);
   await load();
+}
+
+// 15.256 품질 상태 칩: 수입검사 불합격 / 특채
+function lotQcChip(r) {
+  if (r.qc === 'fail') return `<span class="chip red" title="수입검사 불합격 ${esc(r.qc_req || '')}">불합격</span>`;
+  if (r.qc === 'concession') return LOT_TK.replace('title="', `title="특채: ${esc(r.concession?.reason || '')} · ${esc(r.concession?.by || '')} — `);
+  return '';
+}
+// 15.256 LOT 내역(입고·생산 / 출고·투입 / 반입·반출 / 이동) + 품질책임자 특채 처리·취소
+async function lotHistoryWindow(r, onChange) {
+  const h = await api('GET', '/api/inventory/lot-history?' + new URLSearchParams({ item: r.item, lot: r.lot }));
+  const qa = hasRole('quality_approver'), qc = h.qc, KIND = { in: '입고', out: '출고', move: '이동' };
+  const qcBox = !qc ? '' : qc.qc === 'fail'
+    ? `<div class="notice red-box"><b>수입검사 불합격</b> ${esc(qc.req_no || '')} — 투입·출고가 막혀 있습니다.${qa ? ' <button type="button" class="btn small primary" data-lc-make>특채 처리</button>' : ' 특채는 품질책임자가 처리합니다.'}</div>`
+    : `<div class="notice">${LOT_TK} ${esc(qc.concession.reason)} <span class="small muted">· ${esc(qc.concession.created_by)} ${esc(qc.concession.created_at)} · 검사 ${esc(qc.req_no || '')}</span> — 투입·출고 가능합니다.${qa ? ` <button type="button" class="btn small danger" data-lc-void="${qc.concession.id}">특채 취소</button>` : ''}</div>`;
+  const body = `<div class="lh-head"><span class="lot-tag">${esc(r.lot)}</span> <b>${esc(r.item)}</b> <span class="small muted">잔량 ${fmtNum(r.balance ?? h.rows.filter(x => x.kind !== 'move').at(-1)?.balance ?? 0)} ${esc(r.unit || '')}</span></div>${qcBox}
+    ${h.rows.length ? `<div class="table-wrap"><table class="grid" data-lot-hist-table data-no-sort data-no-filter data-keep-cols><thead><tr><th>일자</th><th>구분</th><th>내용</th><th>문서</th><th>거래처·라인</th><th class="r">입고</th><th class="r">출고</th><th class="r">잔량</th><th>위치·비고</th></tr></thead><tbody>${h.rows.map(x => `<tr><td class="nowrap">${esc(x.d || '')}</td><td><span class="chip ${x.kind === 'in' ? 'green' : x.kind === 'out' ? 'red' : ''}">${KIND[x.kind] || ''}</span></td><td>${esc(x.src)}</td><td class="small">${esc(x.doc || '')}</td><td>${esc(x.party || '')}</td><td class="r">${x.kind === 'in' ? fmtNum(x.qty) : ''}</td><td class="r">${x.kind === 'out' ? fmtNum(x.qty) : ''}</td><td class="r"><b>${x.kind === 'move' ? '' : fmtNum(x.balance)}</b></td><td class="small">${esc([x.place, x.note].filter(Boolean).join(' · '))}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">내역이 없습니다.</div>'}`;
+  const m = modal(`<h3>LOT 내역 <span class="small muted">입고·출고·투입·반입반출·이동</span></h3>${body}`, { wide: true });
+  m.el.addEventListener('click', async e => {
+    if (e.target.closest('[data-lc-make]')) {
+      const v = await promptBox(`특채 처리 · ${r.lot}`, `<p class="small muted">${esc(r.item)} LOT ${esc(r.lot)}은 수입검사 불합격입니다. 특채하면 생산 투입·상품 출고가 가능해집니다.</p><label>특채 사유 *<input name="reason" required maxlength="500" placeholder="예) 고객 승인, 용도 한정 사용"></label>`); if (!v) return;
+      try { await api('POST', '/api/lots/concession', { item: r.item, lot: r.lot, reason: v.reason }); toast(`${r.lot} 특채 처리했습니다. 투입·출고가 가능합니다.`); m.close(); await onChange?.(); } catch (error) { fail(error); }
+    }
+    const vd = e.target.closest('[data-lc-void]'); if (vd) {
+      const v = await promptBox(`특채 취소 · ${r.lot}`, `<p class="small muted">취소하면 다시 투입·출고가 막힙니다(이미 쓴 기록은 그대로).</p><label>취소 사유 *<input name="reason" required maxlength="500"></label>`); if (!v) return;
+      try { await api('POST', `/api/lots/concession/${vd.dataset.lcVoid}/void`, { reason: v.reason }); toast('특채를 취소했습니다.'); m.close(); await onChange?.(); } catch (error) { fail(error); }
+    }
+  });
+}
+// 15.259 창고·구역 설정(물류팀장·관리자): 창고 이름·구역(쉼표·줄바꿈)·순서, 추가·저장·삭제
+async function stockWarehouseEditor(onClose) {
+  let list = await api('GET', '/api/warehouses?all=1');
+  const m = modal(`<h3>창고·구역 설정</h3><p class="small muted">재고 현황 「창고별」에 나오는 창고와 그 아래 구역(Location)입니다. 구역은 쉼표나 줄바꿈으로 나눠 적습니다. 입고·이동 기록이 있는 창고는 지울 수 없고 「사용」을 끄면 입력 화면에서만 빠집니다.</p><div data-wh-box></div><div class="actions"><button type="button" class="btn" data-wh-add>＋ 창고 추가</button><button type="button" class="btn primary" data-wh-done>닫기</button></div>`, { wide: true, onClose: () => onClose?.() });
+  const box = $('[data-wh-box]', m.el);
+  const draw = () => { box.innerHTML = `<div class="table-wrap"><table class="grid" data-no-sort data-keep-cols><thead><tr><th>순서</th><th>창고 이름</th><th>구역(Location)</th><th>사용</th><th></th></tr></thead><tbody>${list.map((w, i) => `<tr data-wh="${i}"><td><input type="number" name="sort" value="${esc(w.sort ?? 0)}" step="1" style="width:4.5em" aria-label="순서"></td><td><input name="name" value="${esc(w.name || '')}" maxlength="50" required aria-label="창고 이름" placeholder="예) 1동창고"></td><td><textarea name="locations" rows="2" maxlength="5000" aria-label="구역" placeholder="예) A구역, B구역">${esc(String(w.locations || '').split(',').join(', '))}</textarea></td><td class="c"><input type="checkbox" name="active"${w.active === 0 ? '' : ' checked'} aria-label="사용"></td><td class="nowrap"><button type="button" class="btn small primary" data-wh-save="${i}">저장</button>${w.id ? ` <button type="button" class="btn small danger" data-wh-del="${i}">삭제</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">창고가 없습니다. 「창고 추가」로 넣으세요.</td></tr>'}</tbody></table></div>`; };
+  const reload = async () => { list = await api('GET', '/api/warehouses?all=1'); draw(); };
+  draw();
+  $('[data-wh-done]', m.el).onclick = () => m.close();
+  $('[data-wh-add]', m.el).onclick = () => { list.push({ name: '', locations: '', sort: list.length ? Math.max(...list.map(w => Number(w.sort) || 0)) + 1 : 0, active: 1 }); draw(); $(`[data-wh="${list.length - 1}"] [name=name]`, box)?.focus(); };
+  box.addEventListener('click', async e => {
+    const sv = e.target.closest('[data-wh-save]'); if (sv) { const i = Number(sv.dataset.whSave), tr = sv.closest('tr'), w = list[i];
+      const body = { name: tr.querySelector('[name=name]').value.trim(), locations: tr.querySelector('[name=locations]').value.split(/[,\n]/).map(x => x.trim()).filter(Boolean).join(','), sort: Number(tr.querySelector('[name=sort]').value) || 0, active: tr.querySelector('[name=active]').checked };
+      if (!body.name) { tr.querySelector('[name=name]').focus(); return toast('창고 이름을 넣으세요.', 'err'); }
+      sv.disabled = true; try { await api(w.id ? 'PUT' : 'POST', w.id ? `/api/warehouses/${w.id}` : '/api/warehouses', body); toast(`${body.name} 저장했습니다.`); if (typeof rcLoadWarehouses === 'function') rcLoadWarehouses(true).catch(() => {}); await reload(); } catch (error) { sv.disabled = false; fail(error); } return; }
+    const dl = e.target.closest('[data-wh-del]'); if (dl) { const w = list[Number(dl.dataset.whDel)]; if (!await confirmBox(`${w.name} 창고를 지울까요?`)) return;
+      try { await api('DELETE', `/api/warehouses/${w.id}`); toast('지웠습니다.'); await reload(); } catch (error) { fail(error); } }
+  });
+}
+// 15.260 품목 줄 더블클릭: 이 품목의 LOT별 잔량 → LOT 줄을 누르면 그 LOT의 입출고 내역
+async function itemLotWindow(item, asof, onChange) {
+  const data = await api('GET', '/api/inventory/lots?' + new URLSearchParams({ asof, q: item.item, qc: '1' }));
+  const rows = data.rows.filter(r => r.item === item.item);
+  const m = modal(`<h3>${esc(item.item)} <span class="small muted">LOT별 재고 · 기준일 ${esc(asof)}</span></h3>
+    <p class="small muted">현재고 <b>${fmtNum(item.stock ?? rows.reduce((t, r) => t + r.balance, 0))}</b> ${esc(item.unit || '')} · LOT ${rows.length}개. LOT 줄을 누르면 입고·출고·투입 내역이 나옵니다.${rows.length ? '' : ' LOT가 적힌 입고·생산 기록이 없습니다.'}</p>
+    ${rows.length ? `<div class="table-wrap"><table class="grid" data-no-sort data-keep-cols><thead><tr><th>LOT</th><th class="r">입고·생산</th><th class="r">출고·투입</th><th class="r">잔량</th><th>품질</th><th>위치</th><th>처음 입고</th><th></th></tr></thead><tbody>${rows.map((r, i) => `<tr data-il="${i}" class="${r.balance <= 0 ? 'row-off' : ''}${r.qc === 'concession' ? ' lot-tk-row' : ''}" style="cursor:pointer"><td class="nowrap"><span class="lot-tag">${esc(r.lot)}</span></td><td class="r">${fmtNum(r.received)}</td><td class="r">${fmtNum(r.shipped)}</td><td class="r"><b>${fmtNum(r.balance)}</b> ${esc(r.unit || '')}</td><td class="nowrap">${lotQcChip(r)}</td><td class="small">${esc(r.places || '')}</td><td class="small muted">${esc(r.first_date || '')}</td><td><button type="button" class="btn small" data-il-open="${i}">내역</button></td></tr>`).join('')}</tbody></table></div>` : ''}`, { wide: true });
+  m.el.addEventListener('click', e => { const tr = e.target.closest('[data-il]'); if (tr) lotHistoryWindow(rows[Number(tr.dataset.il)], onChange).catch(fail); });
 }

@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.253';
+const APP_VERSION = '15.260';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -2216,7 +2216,7 @@ function fieldValue(f, r) {
   return s;
 }
 function requestForm(type, r) {
-  return `<form class="req-form" ${r ? `data-entry-author="${esc(r.requester_name)}"` : ''}><div class="form-grid">${REQ[type].fields.map((f) => fieldInput(f, r)).join('')}${['development','sample','sample_goods','voc'].includes(type) ? photoPicker() : ''}</div>
+  return `<form class="req-form" data-req-type="${type}" ${r ? `data-entry-author="${esc(r.requester_name)}"` : ''}><div class="form-grid">${REQ[type].fields.map((f) => fieldInput(f, r)).join('')}${['development','sample','sample_goods','voc'].includes(type) ? photoPicker() : ''}</div>
     <div class="actions"><button class="btn primary">${r ? '저장' : (REQ[type].submitLabel || '의뢰 접수')}</button></div></form>`;
 }
 function statusChip(s) { return `<span class="chip st-${s}">${STATUS[s]}</span>`; }
@@ -2236,7 +2236,7 @@ function requestDetail(type, r, reload) {
       <tr><th>입력자(의뢰자)</th><td>${esc(r.requester_name)} · ${esc(r.created_at.slice(0, 16))}</td></tr>
       ${r.approver_name ? `<tr><th>${r.status === 'rejected' ? '반려자' : '접수자'}</th><td>${esc(r.approver_name)}${r.approved_at ? ' · ' + esc(r.approved_at.slice(0, 16)) : ''}</td></tr>` : ''}
       ${r.reject_reason ? `<tr><th>반려 사유</th><td class="red-text">${esc(r.reject_reason)}</td></tr>` : ''}
-      ${rows}
+      ${rows}${type === 'voc' && r.data?.lot ? `<tr><th>LOT 연결</th><td><button type="button" class="link-btn" data-lt-open="${esc(r.data.lot)}">${esc(r.data.lot)} · LOT 연결 조회 →</button></td></tr>` : ''}
       ${r.result_note ? `<tr><th>결과/메모</th><td>${esc(r.result_note)}</td></tr>` : ''}
     </table>
     ${['development','sample','sample_goods','voc'].includes(type) || r.source_type ? '<h4>첨부 사진 · 기록</h4><div data-request-photos></div>' : ''}
@@ -2626,9 +2626,9 @@ function bindCategoryPicker(form, nodes, bom) {
 }
 
 // ── 제품등록: 세부 분류 관리 (관리자) ──
-async function manageItemCategories(startClass = '원자재') {
+async function manageItemCategories(startClass = '원자재', onClose = null) {
   let nodes = [], current = ITEM_CATEGORIES.includes(startClass) && startClass !== '임가공' ? startClass : '원자재'; // 임가공은 세부 분류를 쓰지 않는다
-  const box = modal(`<h3>분류 관리</h3><p class="small muted">품목 분류마다 1차·2차·3차 세부 분류를 미리 만들어 두면 제품등록에서 고를 수 있습니다(2·3차는 없어도 됩니다). 방진복처럼 사이즈가 정해진 분류에는 사이즈 묶음을 넣으면, 그 아래 품목은 발주·기타입고·출하에서 사이즈별 수량으로 한 번에 입력합니다. 이름을 바꾸면 그 분류로 등록된 품목에도 반영됩니다. 쓰지 않는 분류는 사용 중지하면 새 등록에서만 빠집니다. 하위 분류도 등록된 품목도 없는 분류는 삭제할 수 있습니다. 반제품 분류에는 커팅/융착·세탁에서 쓸 생산 종류를 지정합니다(하위 분류는 물려받음).</p><div class="seg class-tabs" data-cat-tabs>${ITEM_CATEGORIES.filter(c => c !== '임가공').map(c => `<button type="button" data-cat-tab="${c}">${c}</button>`).join('')}</div><div data-cat-tree></div><div class="actions"><button type="button" class="btn" data-cat-close>닫기</button><button type="button" class="btn primary" data-cat-add-root>1차 분류 추가</button></div>`, { wide: true });
+  const box = modal(`<h3>분류 관리</h3><p class="small muted">품목 분류마다 1차·2차·3차 세부 분류를 미리 만들어 두면 제품등록에서 고를 수 있습니다(2·3차는 없어도 됩니다). 방진복처럼 사이즈가 정해진 분류에는 사이즈 묶음을 넣으면, 그 아래 품목은 발주·기타입고·출하에서 사이즈별 수량으로 한 번에 입력합니다. 이름을 바꾸면 그 분류로 등록된 품목에도 반영됩니다. 쓰지 않는 분류는 사용 중지하면 새 등록에서만 빠집니다. 하위 분류도 등록된 품목도 없는 분류는 삭제할 수 있습니다. 반제품 분류에는 커팅/융착·세탁에서 쓸 생산 종류를 지정합니다(하위 분류는 물려받음).</p><div class="seg class-tabs" data-cat-tabs>${ITEM_CATEGORIES.filter(c => c !== '임가공').map(c => `<button type="button" data-cat-tab="${c}">${c}</button>`).join('')}</div><div data-cat-tree></div><div class="actions"><button type="button" class="btn" data-cat-close>닫기</button><button type="button" class="btn primary" data-cat-add-root>1차 분류 추가</button></div>`, { wide: true, onClose: () => onClose?.() });
   const tree = $('[data-cat-tree]', box.el);
   const sizeField = value => `<label>사이즈 묶음 <span class="hint">(쉼표로 구분 · 비우면 상위 분류를 따름)</span><input name="sizes" maxlength="200" value="${esc(value)}" placeholder="예) XS,S,M,L,XL"></label><div class="actions wrap" style="justify-content:flex-start;margin-top:0">${['XS,S,M,L,XL', 'S,M,L,XL,2XL', 'XS,S,M,L,XL,2XL,3XL'].map(v => `<button type="button" class="btn small" data-size-preset="${v}">${v.split(',')[0]}~${v.split(',').at(-1)}</button>`).join('')}</div>`;
   box.el.ownerDocument.addEventListener('click', event => { const b = event.target.closest('[data-size-preset]'); if (b) b.closest('form').elements.sizes.value = b.dataset.sizePreset; });
@@ -2999,6 +2999,8 @@ function otherGroupHead(g) {
 }
 
 // ── 15.136 출하 LOT 연결: LOT 칸을 누르면 그 품목의 재고 LOT(먼저 들어온 순 · 남은 수량)을 고를 수 있고, 재고에 없는 LOT·남은 수량 초과를 바로 알려 준다.
+// 15.257 특채 LOT 표시: ★특채 라벨 + 노랑 테두리(투입·출하 때 알아보기)
+const LOT_TK = '<span class="chip lot-tk" title="수입검사 불합격 → 품질책임자 특채 승인 LOT">★특채</span>';
 const LOT_CACHE = new Map();
 async function lotsForItem(item, fresh = false) {
   const key = String(item || '').trim(); if (!key) return [];
@@ -3012,14 +3014,14 @@ function bindLotPicker(input, itemOf, qtyOf = () => 0) {
   const list = document.createElement('datalist'); list.id = 'lotList' + (++lotListSeq); input.after(list); input.setAttribute('list', list.id); input.autocomplete = 'off';
   const hint = document.createElement('div'); hint.className = 'small lot-hint'; list.after(hint);
   let rows = [];
-  const fill = async () => { rows = await lotsForItem(itemOf()); list.innerHTML = rows.map(l => `<option value="${esc(l.lot)}">남은 ${fmtNum(l.balance)} ${esc(l.unit || '')}${l.places ? ' · ' + esc(l.places) : ''} · ${esc(l.first_date || '')}</option>`).join(''); };
+  const fill = async () => { rows = await lotsForItem(itemOf()); list.innerHTML = rows.map(l => `<option value="${esc(l.lot)}">${l.concession ? '★특채 · ' : l.qc_fail ? '불합격 · ' : ''}남은 ${fmtNum(l.balance)} ${esc(l.unit || '')}${l.places ? ' · ' + esc(l.places) : ''} · ${esc(l.first_date || '')}</option>`).join(''); };
   const warn = () => {
     const lot = input.value.trim(), qty = Number(qtyOf()) || 0; if (!lot) return rows.length ? `재고 LOT ${rows.length}개 · 비어 있으면 LOT 미연결` : '';
     const hit = rows.find(l => l.lot === lot);
     if (!hit) return rows.length ? `「${lot}」은 이 품목의 재고 LOT이 아닙니다` : '';
     return qty > hit.balance + 0.000001 ? `LOT ${lot} 남은 수량 ${fmtNum(hit.balance)}보다 많습니다` : '';
   };
-  const show = () => { const lot = input.value.trim(), hit = rows.find(l => l.lot === lot), w = warn(); hint.innerHTML = w && (lot || !rows.length) ? `<span class="red-text">${esc(w)}</span>` : hit ? `<span class="muted">남은 ${fmtNum(hit.balance)} ${esc(hit.unit || '')}</span>` : rows.length ? `<span class="muted">${esc(w)}</span>` : ''; };
+  const show = () => { const lot = input.value.trim(), hit = rows.find(l => l.lot === lot), w = warn(); input.classList.toggle('lot-tk-input', !!hit?.concession); hint.innerHTML = w && (lot || !rows.length) ? `<span class="red-text">${esc(w)}</span>` : hit ? `${hit.concession ? LOT_TK + ' ' : ''}<span class="muted">남은 ${fmtNum(hit.balance)} ${esc(hit.unit || '')}</span>` : rows.length ? `<span class="muted">${esc(w)}</span>` : ''; };
   input.addEventListener('focus', () => fill().then(show).catch(() => {}));
   input.addEventListener('input', show); input.addEventListener('change', show);
   return { check: () => (input.value.trim() ? warn() : ''), refresh: () => fill().then(show) };
