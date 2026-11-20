@@ -3915,3 +3915,39 @@ table.ct-table .ct-scope { color: var(--text-2, var(--muted)); max-width: 320px;
 /* 15.304 검교정 관리 */
 .cal-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 8px; padding: 8px 12px; border: 1px solid var(--accent); border-radius: 8px; background: var(--accent-soft); position: sticky; top: 0; z-index: 5; }
 .cal-bar[hidden] { display: none; }
+
+/* 15.305 COA 성적서 · 부적합·CAPA */
+.coa-sheet { position: relative; padding: 8px 4px; color: var(--text); }
+.coa-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; border-bottom: 2px solid var(--text); padding-bottom: 8px; }
+.coa-company { font-size: 16px; } .coa-no { font-size: 13px; text-align: right; }
+.coa-title { text-align: center; font-size: 22px; letter-spacing: 2px; margin: 18px 0 14px; }
+table.coa-head, table.coa-items { width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 13px; }
+table.coa-head th, table.coa-head td, table.coa-items th, table.coa-items td { border: 1px solid var(--line-strong, #9aa6b8); padding: 6px 8px; }
+table.coa-head th { width: 15%; background: var(--erp-head, var(--bg)); text-align: left; font-weight: 600; }
+table.coa-items thead th { background: var(--erp-head, var(--bg)); }
+.coa-overall { font-size: 15px; text-align: right; margin: 6px 0 18px; }
+.coa-sign { display: flex; justify-content: space-between; font-size: 13px; border-top: 1px solid var(--line); padding-top: 10px; }
+.coa-src { margin-top: 10px; }
+.coa-void-mark { position: absolute; top: 40%; left: 0; right: 0; text-align: center; font-size: 40px; font-weight: 800; color: #e03131; opacity: 0.35; transform: rotate(-12deg); pointer-events: none; }
+.modal.wide.coa-modal { width: min(860px, calc(100vw - 32px)); }
+@media print { .coa-sheet { color: #000; } }
+.nc-stepper { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 4px 0 8px; }
+.nc-step { padding: 3px 10px; border-radius: 12px; border: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+.nc-step.done { background: color-mix(in srgb, #2f9e44 10%, var(--panel)); color: #2b8a3e; border-color: #8ce99a; }
+.nc-step.on { background: var(--accent-soft); color: var(--text); border-color: var(--accent); font-weight: 700; }
+.nc-arrow { color: var(--muted); font-size: 12px; }
+
+/* 15.306 문서관리·변경관리·교육·자격·협력업체 품질 */
+.q-file { display: inline-flex; align-items: center; gap: 5px; text-decoration: none; color: var(--accent); white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+.q-file:hover { text-decoration: underline; }
+.q-file-t { font-size: 10.5px; font-weight: 700; letter-spacing: .3px; padding: 1px 4px; border-radius: 4px; background: color-mix(in srgb, #e03131 12%, var(--panel)); color: #c92a2a; }
+.q-chk, .tr-dept { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.tr-pick { display: grid; gap: 8px; max-height: 260px; overflow: auto; }
+.tr-dept { padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; }
+.tr-dept-h { flex-basis: 100%; }
+.tr-score { width: 70px; }
+.q-tabs { margin: 0 0 10px; }
+table.chg-imp td { vertical-align: middle; } table.chg-imp td:last-child input { width: 100%; }
+table.chg-imp tr.chg-yes td:first-child { font-weight: 700; color: var(--text); }
+.sup-total { font-size: 14px; }
+.scoa-files { display: grid; gap: 6px; }

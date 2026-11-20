@@ -582,6 +582,20 @@
       "when": 1799060013000,
       "tag": "0082_instruments",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "6",
+      "when": 1799146413000,
+      "tag": "0083_coa_capa",
+      "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "6",
+      "when": 1799232813000,
+      "tag": "0084_qa_system",
+      "breakpoints": true
     }
   ]
 }

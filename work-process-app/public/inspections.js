@@ -215,12 +215,13 @@ async function openInspection(id,done=()=>{}) {
   // 15.243 측정값 입력: 분석 항목마다 행으로 구분, 원 데이터(측정 회차)는 한 줄에 10칸까지(20회면 두 줄). 「종횡 바꾸기」로 항목별 묶음 ↔ 시료별 묶음. LOT·시료는 표 위 한 곳에서 입력·추가·빼기
   const PER=10;
   let mode='item';try{if(localStorage.getItem('wpa:insp-mode3')==='sample')mode='sample';}catch{}
-  const m=modal(`<h3>${esc(r.title)} · ${esc(r.category)}</h3><p>${esc(spec.item_category)} · 적용 품목 ${esc(spec.product)} · 규격 ${spec.revision}</p><p class="small muted">모든 값이 규격 이내면 합격, 하나라도 벗어나면 불합격입니다. 빈 칸이 남고 규격 이탈이 없으면 검사 대기입니다. 평균은 참고용입니다.</p>${!data.can_write?'<p class="muted">승인된 의뢰에서 품질 담당자만 측정값을 입력할 수 있습니다.</p>':''}<form class="stack"><div class="insp-bar"><p class="small muted" data-insp-hint></p><button type="button" class="btn small" data-insp-mode>⇄ 종횡 바꾸기</button></div>
+  const m=modal(`<h3>${esc(r.title)} · ${esc(r.category)}</h3>${r.category==='수입검사'&&hasRole('quality')?`<div class="actions wrap insp-links"><button type="button" class="btn small" data-insp-scoa>공급사 COA${r.data?.coa_requested?' (요청함)':''}</button></div>`:''}<p>${esc(spec.item_category)} · 적용 품목 ${esc(spec.product)} · 규격 ${spec.revision}</p><p class="small muted">모든 값이 규격 이내면 합격, 하나라도 벗어나면 불합격입니다. 빈 칸이 남고 규격 이탈이 없으면 검사 대기입니다. 평균은 참고용입니다.</p>${!data.can_write?'<p class="muted">승인된 의뢰에서 품질 담당자만 측정값을 입력할 수 있습니다.</p>':''}<form class="stack"><div class="insp-bar"><p class="small muted" data-insp-hint></p><button type="button" class="btn small" data-insp-mode>⇄ 종횡 바꾸기</button></div>
       <div class="insp-samples" data-samples></div>
       <div class="table-wrap insp-wrap"><table class="grid keep-table insp-grid insp-r" data-no-sort data-no-filter data-keep-cols data-no-reorder></table></div>
       ${data.can_write?'<label>수정 사유 (판정된 결과 수정 시 필수)<input name="reason" maxlength="500"></label>':''}<div data-verdict role="status"></div>${data.can_write?'<button class="btn primary">측정값 저장 · 자동 판정</button>':''}</form><details class="card"><summary>저장 이력 (${data.history.length}건 표시)</summary>${data.history.map(h=>`<p><button class="btn small" data-history="${h.id}">기록 ${h.revision} · ${INSPECTION_RESULT[h.result]}</button> ${esc(h.saved_by)} · ${esc(h.saved_at)} ${esc(h.reason)}</p>`).join('')||'<p>저장 이력이 없습니다.</p>'}</details>`,{wide:true});
   const form=$('form',m.el),table=$('table.insp-grid',form),strip=$('[data-samples]',form);
   form.closest('.modal')?.classList.add('insp-modal'); // 15.241 팝업을 옆으로 넓게
+  $('[data-insp-scoa]',m.el)?.addEventListener('click',()=>scoaOpen(r.id).catch(fail)); /* 15.306 A5 공급사 COA 첨부 */
   // 상태: 시료 목록. 칸은 data-s(시료 번호)·data-f(필드 번호: 0 = LOT, 1… = 항목·회차)로 찾는다
   const F=[{lot:true},...spec.items.flatMap(item=>Array.from({length:item.count},(_,i)=>({item,i})))];
   const fOf=(item,i)=>F.findIndex(d=>d.item===item&&d.i===i);

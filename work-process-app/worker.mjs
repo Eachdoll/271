@@ -218,7 +218,7 @@ async function savePhotos(list) {
   } catch (error) { await removePhotos(saved); throw error; }
 }
 async function removePhotos(files) {
-  for (const f of files || []) if (/^[a-f0-9]{24}\.(jpg|png|webp)$/.test(f)) await images.delete(f);
+  for (const f of files || []) if (/^[a-f0-9]{24}\.(jpg|png|webp|pdf)$/.test(f)) await images.delete(f); // 15.306 문서 PDF도
 }
 
 const attachmentTables = { request: 'requests', purchase_order: 'purchase_orders', other_receipt: 'other_receipts', shipment: 'shipments' };
@@ -506,7 +506,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'qualifications', 'supplier_evals', 'supplier_coas'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -3935,6 +3935,549 @@ route('DELETE', '/api/instruments/:id', async ({ user, params, query }) => {
   if (Number(query.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
   await db.prepare('DELETE FROM instruments WHERE id=? AND revision=?').run(prior.id, prior.revision); return { ok: true };
 });
+// ── 15.305 품질 1단계: LOT별 COA 발행 · 부적합·CAPA ──
+// COA 데이터: 그 LOT의 측정값(출하검사 우선, 합격 우선, 없으면 의뢰·공정검사·연구 분석)과 생산실적(제조일·수량)·출하(고객사·출하일)
+const coaSpecText = it => it.min != null && it.max != null ? `${it.min} ~ ${it.max}` : it.min != null ? `≥ ${it.min}` : it.max != null ? `≤ ${it.max}` : '';
+function coaItems(snapshot, rows) {
+  const spec = typeof snapshot === 'string' ? JSON.parse(snapshot || '{}') : snapshot || {};
+  return (spec.items || []).map((it, i) => { const key = it.key || 'i' + i, vals = (rows || []).flatMap(r => (r.values?.[key] || []).filter(v => v !== null && v !== '' && Number.isFinite(Number(v))).map(Number));
+    const avg = vals.length ? Math.round(vals.reduce((t, v) => t + v, 0) / vals.length * 1000) / 1000 : null, judged = it.min != null || it.max != null;
+    const out = vals.some(v => (it.min != null && v < it.min) || (it.max != null && v > it.max));
+    return { name: it.name, unit: it.unit || '', spec: coaSpecText(it), method: it.method || '', n: vals.length, avg, min: vals.length ? Math.min(...vals) : null, max: vals.length ? Math.max(...vals) : null, judge: !vals.length ? '' : !judged ? '기록' : out ? '부적합' : '적합' }; });
+}
+async function coaSource(lot, sourceId = null) {
+  const cands = await db.prepare(`SELECT r.id, r.req_no, r.type, r.category, r.title, r.inspection_snapshot, r.data, m.values_json, m.result, m.updated_at FROM requests r JOIN inspection_measurements m ON m.request_id=r.id
+    WHERE r.type IN ('analysis','rnd_analysis') AND r.inspection_snapshot<>'' AND r.status<>'rejected' AND (r.lot=? OR json_extract(r.data,'$.lot')=? OR json_extract(r.data,'$.lot_etc')=?)
+    ORDER BY CASE r.category WHEN '출하검사' THEN 0 WHEN '공정검사' THEN 1 ELSE 2 END, CASE m.result WHEN 'pass' THEN 0 ELSE 1 END, r.id DESC LIMIT 10`).all(lot, lot, lot);
+  const pick = sourceId ? cands.find(c => c.id === Number(sourceId)) : cands[0];
+  if (sourceId && !pick) throw bad('그 LOT의 측정 기록이 아닙니다.');
+  const prod = await db.prepare(`SELECT a.production_date, a.qty, s.product, s.spec, COALESCE(NULLIF(s.unit,''),json_extract(s.bom_snapshot,'$.unit'),'') AS unit, COALESCE(json_extract(s.bom_snapshot,'$.product_code'),'') AS code
+    FROM production_actuals a JOIN schedules s ON s.id=a.schedule_id WHERE a.lot=? AND a.voided_at IS NULL ORDER BY a.id LIMIT 1`).get(lot);
+  const ships = await db.prepare('SELECT customer, MAX(ship_date) AS ship_date, SUM(qty) AS qty FROM shipments WHERE lot=? GROUP BY customer ORDER BY MAX(ship_date) DESC LIMIT 10').all(lot);
+  const pd = pick ? JSON.parse(pick.data || '{}') : {};
+  return { lot, candidates: cands.map(c => ({ id: c.id, req_no: c.req_no, category: c.type === 'rnd_analysis' ? '연구 분석' : c.category, title: c.title, result: c.result, updated_at: c.updated_at })),
+    source: pick ? { id: pick.id, req_no: pick.req_no, result: pick.result, items: coaItems(pick.inspection_snapshot, JSON.parse(pick.values_json || '[]')) } : null,
+    header: { item: prod?.product || pick?.title || '', product_code: prod?.code || pd.product_code || '', spec: prod?.spec || '', mfg_date: prod?.production_date || null, qty: prod?.qty ?? null, unit: prod?.unit || pd.unit || '', customers: ships },
+    coas: (await db.prepare("SELECT id, coa_no, rev, status, customer, created_at FROM coas WHERE lot=? ORDER BY id DESC").all(lot)) };
+}
+const COA_STATUS = { draft: '작성', approved: '승인(발행)', void: '무효' };
+const coaRow = r => ({ ...r, items: JSON.parse(r.items_json || '[]'), history: JSON.parse(r.history || '[]'), status_label: COA_STATUS[r.status] || r.status });
+const coaHead = (b, h = {}) => ({ customer: str(b.customer ?? h.customer, 100), item: str(b.item ?? h.item, 200), product_code: str(b.product_code ?? h.product_code, 80), spec: str(b.spec ?? h.spec, 100),
+  qty: b.qty === '' || b.qty == null ? (h.qty ?? null) : num(b.qty, '수량'), unit: str(b.unit ?? h.unit, 20), mfg_date: b.mfg_date === '' ? null : b.mfg_date ? dateStr(b.mfg_date, '제조일') : h.mfg_date || null,
+  exp_date: b.exp_date === '' ? null : b.exp_date ? dateStr(b.exp_date, '유효기간') : h.exp_date || null, ship_date: b.ship_date === '' ? null : b.ship_date ? dateStr(b.ship_date, '출하일') : h.ship_date || null,
+  lang: b.lang === 'en' ? 'en' : b.lang === 'ko' ? 'ko' : h.lang || 'ko', note: str(b.note ?? h.note, 500) });
+route('GET', '/api/coa/source', async ({ query }) => coaSource(reqStr(query.lot, 'LOT', 100), query.source || null));
+route('GET', '/api/coas', async ({ user, query }) => {
+  const where = [], args = []; if (query.status && COA_STATUS[query.status]) { where.push('status=?'); args.push(query.status); }
+  if (query.lot) { where.push('lot=?'); args.push(str(query.lot, 100)); }
+  applyListKeyword(where, args, query.q, ['coa_no', 'lot', 'item', 'product_code', 'customer', 'source_no']);
+  return { rows: (await db.prepare(`SELECT * FROM coas ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY id DESC LIMIT 500`).all(...args)).map(coaRow), can_manage: hasRole(user, 'quality'), can_approve: hasRole(user, 'quality_approver'), company: await companyInfo() };
+});
+route('GET', '/api/coas/:id', async ({ params }) => ({ ...coaRow(await mustGet('coas', params.id)), company: await companyInfo() }));
+route('POST', '/api/coas', async ({ user, body }) => {
+  requireRole(user, 'quality', '품질'); const lot = reqStr(body.lot, 'LOT', 100), key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM coas WHERE request_id=?').get(key); if (old) return coaRow(old); }
+  const src = await coaSource(lot, body.source_request_id || null);
+  if (!src.source) throw bad(`LOT ${lot}의 측정 기록(출하검사·분석)이 없습니다. 측정값을 먼저 넣으세요.`);
+  if (src.source.result !== 'pass') throw bad(`${src.source.req_no}의 판정이 합격이 아닙니다(${src.source.result === 'fail' ? '불합격' : '측정 중'}). 합격 판정 측정값이 있어야 COA를 발행합니다.`);
+  const first = src.header.customers[0] || {}, f = coaHead(body, { ...src.header, customer: first.customer || '', ship_date: first.ship_date || null, exp_date: src.header.mfg_date ? (() => { const [y, m, d] = src.header.mfg_date.split('-').map(Number); const t = new Date(Date.UTC(y, m - 1 + 24, d)); t.setUTCDate(t.getUTCDate() - 1); return t.toISOString().slice(0, 10); })() : null });
+  const prefix = 'COA-' + today().slice(2).replace(/-/g, '') + '-';
+  const r = await db.prepare(`INSERT INTO coas(coa_no,lot,item,product_code,spec,customer,qty,unit,mfg_date,exp_date,ship_date,source_request_id,source_no,items_json,judge,lang,note,history,request_id,created_by) VALUES(${nextDocNo('coas', 'coa_no')},?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(prefix, prefix, prefix, lot, f.item, f.product_code, f.spec, f.customer, f.qty, f.unit, f.mfg_date, f.exp_date, f.ship_date, src.source.id, src.source.req_no, JSON.stringify(src.source.items), '적합', f.lang, f.note, JSON.stringify([{ at: now(), by: user.name, what: '작성', source: src.source.req_no }]), key, user.name);
+  return coaRow(await mustGet('coas', r.lastInsertRowid));
+});
+// 고치기: 작성 상태는 그대로 고침. 승인된 COA를 고치면 재발행(Rev+1) 작성 상태로 돌아가고 이전 판은 이력에 남김. refresh=1이면 측정값을 다시 가져옴.
+route('PUT', '/api/coas/:id', async ({ user, params, body }) => {
+  requireRole(user, 'quality', '품질'); const prior = await mustGet('coas', params.id);
+  if (Number(body.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  if (prior.status === 'void') throw bad('무효 처리된 COA입니다.');
+  const f = coaHead(body, prior); let items = prior.items_json, srcId = prior.source_request_id, srcNo = prior.source_no;
+  if (body.refresh || body.source_request_id) { const src = await coaSource(prior.lot, body.source_request_id || null); if (!src.source || src.source.result !== 'pass') throw bad('합격 판정 측정값이 있어야 합니다.'); items = JSON.stringify(src.source.items); srcId = src.source.id; srcNo = src.source.req_no; }
+  const reissue = prior.status === 'approved';
+  const hist = [...JSON.parse(prior.history || '[]'), { at: now(), by: user.name, what: reissue ? '재발행 작성' : '수정', ...(reissue ? { prev: { rev: prior.rev, approved_by: prior.approved_by, approved_at: prior.approved_at, items: JSON.parse(prior.items_json || '[]'), customer: prior.customer, exp_date: prior.exp_date } } : {}) }].slice(-50);
+  const r = await db.prepare(`UPDATE coas SET item=?,product_code=?,spec=?,customer=?,qty=?,unit=?,mfg_date=?,exp_date=?,ship_date=?,lang=?,note=?,items_json=?,source_request_id=?,source_no=?,status='draft',rev=rev+?,approved_by=CASE WHEN ?=1 THEN '' ELSE approved_by END,approved_at=CASE WHEN ?=1 THEN NULL ELSE approved_at END,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`)
+    .run(f.item, f.product_code, f.spec, f.customer, f.qty, f.unit, f.mfg_date, f.exp_date, f.ship_date, f.lang, f.note, items, srcId, srcNo, reissue ? 1 : 0, reissue ? 1 : 0, reissue ? 1 : 0, JSON.stringify(hist), user.name, prior.id, prior.revision);
+  if (!r.changes) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  return coaRow(await mustGet('coas', prior.id));
+});
+route('POST', '/api/coas/:id/approve', async ({ user, params, body }) => {
+  if (!hasRole(user, 'quality_approver')) throw new HttpError(403, 'COA 승인은 품질책임자·관리자가 합니다.');
+  const prior = await mustGet('coas', params.id); if (Number(body.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  if (prior.status !== 'draft') throw bad('작성 상태의 COA만 승인합니다.');
+  const hist = [...JSON.parse(prior.history || '[]'), { at: now(), by: user.name, what: '승인', rev: prior.rev }].slice(-50);
+  await db.prepare("UPDATE coas SET status='approved',approved_by=?,approved_at=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?").run(user.name, now(), JSON.stringify(hist), user.name, prior.id, prior.revision);
+  return coaRow(await mustGet('coas', prior.id));
+});
+route('POST', '/api/coas/:id/void', async ({ user, params, body }) => {
+  requireRole(user, 'quality', '품질'); const prior = await mustGet('coas', params.id); if (Number(body.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  if (prior.status === 'approved' && !hasRole(user, 'quality_approver')) throw new HttpError(403, '승인된 COA의 무효 처리는 품질책임자가 합니다.');
+  const reason = reqStr(body.reason, '무효 사유', 300), hist = [...JSON.parse(prior.history || '[]'), { at: now(), by: user.name, what: '무효', reason }].slice(-50);
+  await db.prepare("UPDATE coas SET status='void',void_reason=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?").run(reason, JSON.stringify(hist), user.name, prior.id, prior.revision);
+  return coaRow(await mustGet('coas', prior.id));
+});
+
+// 부적합·CAPA: 등록 → 원인분석 → 조치 → 유효성검증 → 종결(품질책임자). 출처(수입·출하검사·분석·VOC·공정 이상·심사 지적)에서 바로 등록하면 출처 번호·품목·LOT를 채운다.
+const NC_STATUS = { open: '등록', analysis: '원인분석', action: '조치', verify: '유효성검증', closed: '종결', void: '취소' };
+const NC_SOURCE = { iqc: '수입검사', oqc: '출하검사', analysis: '분석', process: '공정 이상', voc: '고객 불만(VOC)', audit: '심사 지적', other: '기타' };
+const NC_KIND = ['OOS', 'OOT', '공정 이상', '고객 불만', '심사 지적', '기타'];
+const NC_GRADE = { critical: '치명', major: '중대', minor: '경미' };
+const NC_COLS = ['kind', 'grade', 'title', 'detail', 'item', 'lot', 'qty', 'found_date', 'owner_name', 'due_date', 'containment', 'cause_json', 'correction', 'corrective', 'preventive', 'action_date', 'verify_date', 'verify_result', 'verify_note'];
+function ncBody(o0, prior = {}) {
+  const o = o0 && typeof o0 === 'object' ? o0 : {}, pick = k => o[k] === undefined ? prior[k] : o[k];
+  const kind = pick('kind') || 'OOS'; if (!NC_KIND.includes(kind)) throw bad('유형을 고르세요.');
+  const grade = pick('grade') || 'minor'; if (!NC_GRADE[grade]) throw bad('등급을 고르세요.');
+  const d = (v, label) => v === '' || v == null ? null : dateStr(v, label);
+  let cause = pick('cause_json'); if (typeof cause === 'string') { try { cause = JSON.parse(cause || '{}'); } catch { cause = {}; } }
+  cause = cause && typeof cause === 'object' && !Array.isArray(cause) ? Object.fromEntries(['why1', 'why2', 'why3', 'why4', 'why5', 'man', 'machine', 'material', 'method', 'env', 'root'].map(k => [k, str(cause[k], 300)]).filter(([, v]) => v)) : {};
+  const qty = pick('qty'); const f = { kind, grade, title: reqStr(pick('title'), '부적합 내용(제목)', 200), detail: str(pick('detail'), 2000), item: str(pick('item'), 200), lot: str(pick('lot'), 100),
+    qty: qty === '' || qty == null ? null : num(qty, '수량'), found_date: d(pick('found_date') || today(), '발생일'), owner_name: str(pick('owner_name'), 50), due_date: d(pick('due_date'), '조치 기한'),
+    containment: str(pick('containment'), 1000), cause_json: JSON.stringify(cause), correction: str(pick('correction'), 1000), corrective: str(pick('corrective'), 1000), preventive: str(pick('preventive'), 1000),
+    action_date: d(pick('action_date'), '조치일'), verify_date: d(pick('verify_date'), '검증일'), verify_result: pick('verify_result') || '', verify_note: str(pick('verify_note'), 1000) };
+  if (!['', '유효', '효과 없음'].includes(f.verify_result)) throw bad('검증 결과를 고르세요.');
+  if (f.due_date && f.due_date < f.found_date) throw bad('조치 기한이 발생일보다 빠릅니다.');
+  return f;
+}
+const ncRow = r => ({ ...r, cause: JSON.parse(r.cause_json || '{}'), history: JSON.parse(r.history || '[]'), status_label: NC_STATUS[r.status] || r.status, source_label: NC_SOURCE[r.source_type] || r.source_type, grade_label: NC_GRADE[r.grade] || r.grade });
+// 단계마다 필요한 내용: 원인분석 → 조치로 갈 때 원인, 조치 → 검증으로 갈 때 시정조치, 종결은 유효성검증 「유효」 + 품질책임자
+function ncCheckStep(f, to, user) {
+  const cause = JSON.parse(f.cause_json || '{}');
+  if (['action', 'verify', 'closed'].includes(to) && !Object.keys(cause).length) throw bad('원인분석(5Why 또는 4M·근본 원인)을 적어야 다음 단계로 갑니다.');
+  if (['verify', 'closed'].includes(to) && !f.corrective) throw bad('시정조치 내용을 적어야 유효성검증으로 갑니다.');
+  if (to === 'closed') { if (f.verify_result !== '유효' || !f.verify_date) throw bad('유효성검증 결과가 「유효」이고 검증일이 있어야 종결합니다.'); if (!hasRole(user, 'quality_approver')) throw new HttpError(403, '종결은 품질책임자·관리자가 합니다.'); }
+}
+route('GET', '/api/ncs', async ({ user, query }) => {
+  const where = [], args = [];
+  if (query.source_type && NC_SOURCE[query.source_type]) { where.push('source_type=?'); args.push(query.source_type); }
+  if (query.source_id) { where.push('source_id=?'); args.push(Number(query.source_id) || 0); }
+  applyListKeyword(where, args, query.q, ['nc_no', 'title', 'item', 'lot', 'source_no', 'owner_name']);
+  return { rows: (await db.prepare(`SELECT * FROM nonconformities ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY CASE WHEN status IN ('closed','void') THEN 1 ELSE 0 END, COALESCE(due_date,'9999'), id DESC LIMIT 1000`).all(...args)).map(ncRow), can_manage: hasRole(user, 'quality'), can_close: hasRole(user, 'quality_approver'), today: today() };
+});
+route('POST', '/api/ncs', async ({ user, body }) => {
+  requireRole(user, 'quality', '품질'); const key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM nonconformities WHERE request_id=?').get(key); if (old) return ncRow(old); }
+  const st = NC_SOURCE[body.source_type] ? body.source_type : 'other'; let sid = null, sno = '', fill = {};
+  if (['iqc', 'oqc', 'analysis', 'voc'].includes(st) && body.source_id) { const q = await getRequest(Number(body.source_id) || 0); sid = q.id; sno = q.req_no; const qd = JSON.parse(q.data || '{}'); fill = { item: q.title, lot: q.lot || qd.lot_etc || (['있음', '없음'].includes(qd.lot) ? '' : qd.lot || '') }; }
+  else if (body.source_no) sno = str(body.source_no, 80);
+  const f = ncBody({ ...fill, ...Object.fromEntries(Object.entries(body).filter(([, v]) => v !== '' && v != null)), title: body.title });
+  const prefix = 'NC-' + today().slice(2).replace(/-/g, '') + '-';
+  const r = await db.prepare(`INSERT INTO nonconformities(nc_no,source_type,source_id,source_no,${NC_COLS.join(',')},history,request_id,created_by) VALUES(${nextDocNo('nonconformities', 'nc_no')},?,?,?,${NC_COLS.map(() => '?').join(',')},?,?,?)`)
+    .run(prefix, prefix, prefix, st, sid, sno, ...NC_COLS.map(k => f[k]), JSON.stringify([{ at: now(), by: user.name, what: '등록', source: sno }]), key, user.name);
+  return ncRow(await mustGet('nonconformities', r.lastInsertRowid));
+});
+route('PUT', '/api/ncs/:id', async ({ user, params, body }) => {
+  requireRole(user, 'quality', '품질'); const prior = await mustGet('nonconformities', params.id);
+  if (Number(body.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  if (['closed', 'void'].includes(prior.status) && !(body.status && body.status !== prior.status && hasRole(user, 'quality_approver'))) throw bad(`${NC_STATUS[prior.status]}된 건입니다. 다시 열려면 품질책임자가 상태를 바꾸세요.`);
+  const f = ncBody(body, prior), to = body.status && NC_STATUS[body.status] ? body.status : prior.status;
+  if (to !== prior.status) { if (to === 'void' && !str(body.reason, 300)) throw bad('취소 사유를 적으세요.'); if (to !== 'void' && to !== 'open') ncCheckStep(f, to, user); }
+  const changed = NC_COLS.filter(k => (prior[k] ?? null) !== (f[k] ?? null));
+  if (!changed.length && to === prior.status) return ncRow(prior);
+  const hist = [...JSON.parse(prior.history || '[]'), { at: now(), by: user.name, what: to !== prior.status ? '단계' : '수정', ...(to !== prior.status ? { status: [prior.status, to] } : {}), fields: changed, ...(body.reason ? { reason: str(body.reason, 300) } : {}) }].slice(-100);
+  const closing = to === 'closed' && prior.status !== 'closed';
+  const r = await db.prepare(`UPDATE nonconformities SET ${NC_COLS.map(k => k + '=?').join(',')},status=?,closed_by=CASE WHEN ?=1 THEN ? WHEN ?='closed' THEN closed_by ELSE '' END,closed_at=CASE WHEN ?=1 THEN ? WHEN ?='closed' THEN closed_at ELSE NULL END,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`)
+    .run(...NC_COLS.map(k => f[k]), to, closing ? 1 : 0, user.name, to, closing ? 1 : 0, now(), to, JSON.stringify(hist), user.name, prior.id, prior.revision);
+  if (!r.changes) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  return ncRow(await mustGet('nonconformities', prior.id));
+});
+// ── 15.306 품질 2단계(QA 체계): 문서관리 · 변경관리 · 교육·자격 · 협력업체 품질 ──
+// 문서·공급사 COA 파일(PDF·사진)은 사진과 같은 회사 저장소에 무작위 이름(24자리)으로 둔다. 목록 API가 열람 권한이 없는 사람에게는 파일 이름을 주지 않는다.
+async function saveDocFiles(list, max = 5) {
+  if (list == null) return [];
+  if (!Array.isArray(list) || list.length > max) throw bad(`파일은 한 번에 ${max}개까지 올릴 수 있습니다.`);
+  const parsed = list.map(x => {
+    const o = typeof x === 'string' ? { data: x } : x || {};
+    const m = /^data:(image\/(?:jpeg|png|webp)|application\/pdf);base64,([A-Za-z0-9+/=]+)$/.exec(String(o.data || ''));
+    if (!m) throw bad('파일은 PDF 또는 사진(jpg·png·webp)만 올릴 수 있습니다.');
+    if (m[2].length > Math.ceil(8 * 1024 * 1024 / 3) * 4 + 4) throw bad('파일 하나는 8MB 이하여야 합니다.');
+    let bytes; try { bytes = Uint8Array.from(atob(m[2]), c => c.charCodeAt(0)); } catch { throw bad('파일 형식이 올바르지 않습니다.'); }
+    if (bytes.length > 8 * 1024 * 1024) throw bad('파일 하나는 8MB 이하여야 합니다.');
+    if (m[1] === 'application/pdf' && !(bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46)) throw bad('PDF 파일이 올바르지 않습니다.');
+    const ext = m[1] === 'application/pdf' ? 'pdf' : m[1] === 'image/jpeg' ? 'jpg' : m[1].slice(6);
+    return { file: randomHex(12) + '.' + ext, bytes, type: m[1], name: str(o.name, 120).replace(/[\\/:*?"<>|]/g, '_') || '파일.' + ext, size: bytes.length };
+  });
+  const saved = [];
+  try { for (const p of parsed) { await images.put(p.file, p.bytes, { httpMetadata: { contentType: p.type } }); saved.push(p.file); } }
+  catch (error) { await removePhotos(saved); throw error; }
+  return parsed.map(({ bytes, ...p }) => ({ ...p, at: now() }));
+}
+const addYears = (d, n) => { if (!d || !n) return null; const [y, m, dd] = d.split('-').map(Number); const t = new Date(Date.UTC(y + n, m - 1, dd)); if (t.getUTCDate() !== dd) t.setUTCDate(0); return t.toISOString().slice(0, 10); };
+const intIn = (v, label, lo, hi, def) => { if (v === '' || v == null) return def; const n = Number(v); if (!Number.isInteger(n) || n < lo || n > hi) throw bad(`${label}은(는) ${lo}~${hi} 사이 정수로 넣으세요.`); return n; };
+const qDate = (v, label) => v === '' || v == null ? null : dateStr(v, label);
+const optId = v => v === '' || v == null ? null : Number.isSafeInteger(Number(v)) && Number(v) > 0 ? Number(v) : null;
+const pushHist = (prior, entry) => JSON.stringify([...JSON.parse(prior.history || '[]'), { at: now(), ...entry }].slice(-100));
+const conflict = () => new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+
+// A1 문서관리. 내부문서: 초안 → 검토 → 승인·배포(품질책임자) → 폐지, 개정하면 판(Rev)이 하나 오르고 승인된 판은 파일과 함께 versions에 쌓인다.
+// 외부문서(규격·법규·고객 요구서)는 등록이 곧 유효(대장). 열람 부서를 지정하면 품질 담당·책임자 말고는 그 부서만 보이고, 그 사람들에게는 최신 승인판만 내려받게 한다.
+const QDOC_KIND = { manual: '품질 매뉴얼', procedure: '절차서', instruction: '지침서', form: '양식·서식', std: '규격(KS·ISO 등)', law: '법규', customer: '고객 요구서', ext_other: '기타 외부문서' };
+const QDOC_INTERNAL = ['manual', 'procedure', 'instruction', 'form'];
+const QDOC_PREFIX = { manual: 'QM-', procedure: 'QP-', instruction: 'QI-', form: 'QF-', std: 'EX-', law: 'EX-', customer: 'EX-', ext_other: 'EX-' };
+const QDOC_STATUS = { draft: '초안', review: '검토', approved: '승인·배포', obsolete: '폐지' };
+const QDOC_COLS = ['title', 'kind', 'edition', 'issuer', 'dept', 'owner_name', 'summary', 'effective_date', 'review_months', 'next_review', 'retention_years', 'dispose_date', 'access_depts', 'training_needed', 'change_id', 'note'];
+function qdocBody(o0, prior = {}) {
+  const o = o0 && typeof o0 === 'object' ? o0 : {}, pick = k => o[k] === undefined ? prior[k] : o[k];
+  const kind = pick('kind'); if (!QDOC_KIND[kind]) throw bad('문서 종류를 고르세요.');
+  if (prior.kind && QDOC_INTERNAL.includes(prior.kind) !== QDOC_INTERNAL.includes(kind)) throw bad('내부문서와 외부문서는 서로 바꿀 수 없습니다. 새로 등록하세요.');
+  let depts = pick('access_depts'); if (typeof depts === 'string') { try { depts = JSON.parse(depts || '[]'); } catch { depts = []; } }
+  depts = Array.isArray(depts) ? [...new Set(depts.map(x => str(x, 50)).filter(Boolean))].slice(0, 30) : [];
+  const f = { title: reqStr(pick('title'), '문서 제목', 200), kind, edition: str(pick('edition'), 60), issuer: str(pick('issuer'), 100), dept: str(pick('dept'), 50), owner_name: str(pick('owner_name'), 50), summary: str(pick('summary'), 1000),
+    effective_date: qDate(pick('effective_date'), '시행일'), review_months: intIn(pick('review_months'), '검토 주기(개월)', 0, 60, 12), next_review: qDate(pick('next_review'), '다음 검토일'),
+    retention_years: intIn(pick('retention_years'), '보존기간(년)', 0, 99, 3), dispose_date: qDate(pick('dispose_date'), '폐기 예정일'), access_depts: JSON.stringify(depts),
+    training_needed: pick('training_needed') === true || pick('training_needed') === 1 || pick('training_needed') === '1' || pick('training_needed') === 'on' ? 1 : 0, change_id: optId(pick('change_id')), note: str(pick('note'), 1000) };
+  return f;
+}
+const isQuality = user => hasRole(user, 'quality');
+function qdocRow(r, user) {
+  const versions = JSON.parse(r.versions || '[]'), file = JSON.parse(r.file_json || '{}'), depts = JSON.parse(r.access_depts || '[]');
+  const out = { ...r, versions, file: file.file ? file : null, access_depts: depts, internal: QDOC_INTERNAL.includes(r.kind), kind_label: QDOC_KIND[r.kind] || r.kind, status_label: QDOC_STATUS[r.status] || r.status, history: JSON.parse(r.history || '[]'), current: versions.at(-1) || null };
+  delete out.file_json;
+  if (!isQuality(user)) { out.file = null; out.versions = versions.map(({ file: _f, ...v }) => v); out.history = []; }
+  return out;
+}
+const qdocVisible = (r, user) => { if (isQuality(user)) return true; if (r.status !== 'approved') return false; const d = JSON.parse(r.access_depts || '[]'); return !d.length || d.includes(user.department || ''); };
+async function qdocDropFile(file, versions) { if (file?.file && !versions.some(v => v.file?.file === file.file)) await removePhotos([file.file]); }
+route('GET', '/api/qdocs', async ({ user }) => {
+  const rows = (await db.prepare('SELECT * FROM quality_docs ORDER BY doc_no LIMIT 2000').all()).filter(r => qdocVisible(r, user)).map(r => qdocRow(r, user));
+  const lists = await orgLists(true);
+  return { rows, can_manage: isQuality(user), can_approve: hasRole(user, 'quality_approver'), today: today(), depts: lists.departments.map(d => d.name), me: { name: user.name, department: user.department || '' } };
+});
+route('POST', '/api/qdocs', async ({ user, body }) => {
+  requireRole(user, 'quality', '품질'); const key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM quality_docs WHERE request_id=?').get(key); if (old) return qdocRow(old, user); }
+  const f = qdocBody(body), internal = QDOC_INTERNAL.includes(f.kind), docNo = str(body.doc_no, 40).toUpperCase();
+  if (docNo && await db.prepare('SELECT 1 FROM quality_docs WHERE doc_no=?').get(docNo)) throw bad(`이미 있는 문서번호입니다: ${docNo}`);
+  if (!internal && !f.issuer) throw bad('외부문서는 발행처(예: 국가기술표준원·고객사)를 넣으세요.');
+  const files = await saveDocFiles(body.files, 1), file = files[0] || {};
+  try {
+    const rev = 0, eff = f.effective_date || (internal ? null : today());
+    const status = internal ? 'draft' : 'approved';
+    const versions = internal ? [] : [{ rev, edition: f.edition, file: file.file ? file : null, summary: '등록', approved_by: user.name, approved_at: now(), effective_date: eff }];
+    const prefix = QDOC_PREFIX[f.kind];
+    const r = await db.prepare(`INSERT INTO quality_docs(doc_no,scope,rev,${QDOC_COLS.join(',')},file_json,versions,status,approved_by,approved_at,history,request_id,created_by) VALUES(${docNo ? '?' : nextDocNo('quality_docs', 'doc_no')},?,?,${QDOC_COLS.map(() => '?').join(',')},?,?,?,?,?,?,?,?)`)
+      .run(...(docNo ? [docNo] : [prefix, prefix, prefix]), internal ? 'internal' : 'external', rev, ...QDOC_COLS.map(k => k === 'effective_date' ? eff : k === 'next_review' && !internal && !f.next_review ? (f.review_months ? calNextDue(eff, f.review_months) : null) : f[k]),
+        JSON.stringify(file), JSON.stringify(versions), status, internal ? '' : user.name, internal ? null : now(), JSON.stringify([{ at: now(), by: user.name, what: internal ? '초안 등록' : '외부문서 등록' }]), key, user.name);
+    return qdocRow(await mustGet('quality_docs', r.lastInsertRowid), user);
+  } catch (error) { await removePhotos(files.map(x => x.file)); throw error; }
+});
+route('PUT', '/api/qdocs/:id', async ({ user, params, body }) => {
+  requireRole(user, 'quality', '품질'); const prior = await mustGet('quality_docs', params.id);
+  if (Number(body.revision) !== prior.revision) throw conflict();
+  if (prior.status === 'obsolete') throw bad('폐지된 문서는 고칠 수 없습니다.');
+  const internal = QDOC_INTERNAL.includes(prior.kind), locked = internal && prior.status === 'approved';
+  // 승인·배포된 내부문서는 관리 정보(주관 부서·담당·열람 부서·보존·검토 주기·메모)만 고친다. 내용·파일은 「개정」으로.
+  const src = locked ? Object.fromEntries(Object.entries(body).filter(([k]) => ['dept', 'owner_name', 'access_depts', 'retention_years', 'review_months', 'next_review', 'note', 'training_needed'].includes(k))) : body;
+  const f = qdocBody(src, prior);
+  const versions = JSON.parse(prior.versions || '[]'), oldFile = JSON.parse(prior.file_json || '{}');
+  const files = !locked ? await saveDocFiles(body.files, 1) : [];
+  try {
+    const file = files[0] || (body.remove_file && !locked ? {} : oldFile);
+    const changed = QDOC_COLS.filter(k => (prior[k] ?? null) !== (f[k] ?? null)); if (file.file !== oldFile.file) changed.push('file');
+    if (!changed.length) return qdocRow(prior, user);
+    // 외부문서는 판(edition)이나 파일이 바뀌면 그때 판을 대장 이력에 하나 더 쌓는다.
+    let vers = versions;
+    if (!internal && (f.edition !== prior.edition || file.file !== oldFile.file)) vers = [...versions, { rev: versions.length, edition: f.edition, file: file.file ? file : null, summary: str(body.change_note, 300) || '판 변경', approved_by: user.name, approved_at: now(), effective_date: f.effective_date || today() }];
+    const r = await db.prepare(`UPDATE quality_docs SET ${QDOC_COLS.map(k => k + '=?').join(',')},file_json=?,versions=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`)
+      .run(...QDOC_COLS.map(k => f[k]), JSON.stringify(file), JSON.stringify(vers), pushHist(prior, { by: user.name, what: '수정', fields: changed }), user.name, prior.id, prior.revision);
+    if (!r.changes) throw conflict();
+    if (file.file !== oldFile.file) await qdocDropFile(oldFile, vers);
+    return qdocRow(await mustGet('quality_docs', prior.id), user);
+  } catch (error) { await removePhotos(files.map(x => x.file)); throw error; }
+});
+// 단계: draft → review(검토 요청) → approved(승인·배포, 품질책임자) / review → draft(반려) / approved → draft(개정 시작: Rev+1) / 어느 단계든 → obsolete(폐지, 품질책임자)
+route('POST', '/api/qdocs/:id/step', async ({ user, params, body }) => {
+  requireRole(user, 'quality', '품질'); const prior = await mustGet('quality_docs', params.id);
+  if (Number(body.revision) !== prior.revision) throw conflict();
+  const to = body.to, from = prior.status, internal = QDOC_INTERNAL.includes(prior.kind), file = JSON.parse(prior.file_json || '{}'), versions = JSON.parse(prior.versions || '[]');
+  const reason = str(body.reason, 300), approver = hasRole(user, 'quality_approver');
+  const set = { status: to }; let what = '';
+  if (to === 'obsolete') {
+    if (from === 'obsolete') throw bad('이미 폐지된 문서입니다.'); if (!approver) throw new HttpError(403, '폐지는 품질책임자·관리자가 합니다.'); if (!reason) throw bad('폐지 사유를 적으세요.');
+    set.obsolete_date = today(); set.dispose_date = prior.dispose_date || (prior.retention_years ? addYears(today(), prior.retention_years) : null); what = '폐지';
+  } else if (!internal) throw bad('외부문서는 수정과 폐지만 합니다.');
+  else if (from === 'draft' && to === 'review') {
+    if (!file.file) throw bad('문서 파일(PDF 등)을 올려야 검토를 요청합니다.');
+    if (prior.rev > 0 && !prior.summary) throw bad('개정 내용(무엇을 바꿨는지)을 적어야 검토를 요청합니다.');
+    what = '검토 요청';
+  } else if (from === 'review' && to === 'draft') { if (!approver) throw new HttpError(403, '반려는 품질책임자·관리자가 합니다.'); if (!reason) throw bad('반려 사유를 적으세요.'); what = '반려'; }
+  else if (from === 'review' && to === 'approved') {
+    if (!approver) throw new HttpError(403, '승인·배포는 품질책임자·관리자가 합니다.');
+    const eff = prior.effective_date && prior.effective_date >= today() ? prior.effective_date : today();
+    set.effective_date = eff; set.approved_by = user.name; set.approved_at = now(); set.next_review = prior.review_months ? calNextDue(eff, prior.review_months) : null;
+    set.versions = JSON.stringify([...versions, { rev: prior.rev, file, summary: prior.summary || (prior.rev ? '' : '제정'), approved_by: user.name, approved_at: now(), effective_date: eff }]);
+    what = prior.rev ? `Rev.${prior.rev} 개정 승인·배포` : '제정 승인·배포';
+  } else if (from === 'approved' && to === 'draft') { set.rev = prior.rev + 1; set.summary = str(body.summary, 1000); set.change_id = optId(body.change_id) ?? prior.change_id; what = `Rev.${prior.rev + 1} 개정 시작`; }
+  else throw bad(`「${QDOC_STATUS[from]}」에서 「${QDOC_STATUS[to] || to}」(으)로 갈 수 없습니다.`);
+  const keys = Object.keys(set);
+  const r = await db.prepare(`UPDATE quality_docs SET ${keys.map(k => k + '=?').join(',')},history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`)
+    .run(...keys.map(k => set[k]), pushHist(prior, { by: user.name, what, status: [from, to], ...(reason ? { reason } : {}) }), user.name, prior.id, prior.revision);
+  if (!r.changes) throw conflict();
+  const row = qdocRow(await mustGet('quality_docs', prior.id), user);
+  return { ...row, training_suggest: to === 'approved' && !!prior.training_needed };
+});
+route('DELETE', '/api/qdocs/:id', async ({ user, params, query }) => {
+  requireRole(user, 'quality', '품질'); const prior = await mustGet('quality_docs', params.id);
+  if (Number(query.revision) !== prior.revision) throw conflict();
+  if (JSON.parse(prior.versions || '[]').length) throw bad('승인·등록된 판이 있는 문서는 지울 수 없습니다. 폐지하세요.');
+  await db.prepare('DELETE FROM quality_docs WHERE id=? AND revision=?').run(prior.id, prior.revision);
+  await qdocDropFile(JSON.parse(prior.file_json || '{}'), []); return { ok: true };
+});
+
+// A2 변경관리(4M + 설계·규격): 요청 → 영향평가 → 승인(품질책임자) → 적용(적용일·초물 LOT) → 검증완료. 누구나 요청, 진행은 품질.
+const CHG_KIND = { man: '사람(Man)', machine: '설비(Machine)', material: '원자재(Material)', method: '방법(Method)', design: '설계', spec: '규격' };
+const CHG_STATUS = { requested: '요청', evaluating: '영향평가', approved: '승인', applied: '적용', verified: '검증완료', rejected: '반려', void: '취소' };
+const CHG_SOURCE = { internal: '직접 요청', capa: 'CAPA 조치', supplier: '협력업체 변경점' };
+const CHG_IMPACT = { quality: '제품 품질·특성', customer: '고객 통보·승인(PCN)', docs: '문서 개정', validation: '재밸리데이션', training: '교육', inspection: '검사 기준·규격', stock: '재고·재공품 처리' };
+const CHG_COLS = ['kind', 'title', 'item', 'reason', 'before_text', 'after_text', 'vendor', 'impact_json', 'plan_date', 'apply_date', 'first_lot', 'verify_date', 'verify_result', 'verify_note', 'owner_name'];
+function chgBody(o0, prior = {}) {
+  const o = o0 && typeof o0 === 'object' ? o0 : {}, pick = k => o[k] === undefined ? prior[k] : o[k];
+  const kind = pick('kind'); if (!CHG_KIND[kind]) throw bad('변경 유형(4M·설계·규격)을 고르세요.');
+  let imp = pick('impact_json'); if (typeof imp === 'string') { try { imp = JSON.parse(imp || '{}'); } catch { imp = {}; } }
+  imp = imp && typeof imp === 'object' && !Array.isArray(imp) ? Object.fromEntries(Object.keys(CHG_IMPACT).map(k => { const x = imp[k] || {}; const v = ['yes', 'no'].includes(x.v) ? x.v : ''; return [k, { v, note: str(x.note, 300) }]; }).filter(([, x]) => x.v || x.note)) : {};
+  const f = { kind, title: reqStr(pick('title'), '변경 내용(제목)', 200), item: str(pick('item'), 200), reason: str(pick('reason'), 1000), before_text: str(pick('before_text'), 1000), after_text: str(pick('after_text'), 1000), vendor: str(pick('vendor'), 100),
+    impact_json: JSON.stringify(imp), plan_date: qDate(pick('plan_date'), '적용 예정일'), apply_date: qDate(pick('apply_date'), '적용일'), first_lot: str(pick('first_lot'), 100),
+    verify_date: qDate(pick('verify_date'), '검증일'), verify_result: pick('verify_result') || '', verify_note: str(pick('verify_note'), 1000), owner_name: str(pick('owner_name'), 50) };
+  if (!['', '유효', '효과 없음'].includes(f.verify_result)) throw bad('검증 결과를 고르세요.');
+  if (f.verify_date && f.apply_date && f.verify_date < f.apply_date) throw bad('검증일이 적용일보다 빠릅니다.');
+  return f;
+}
+const chgRow = (r, links = {}) => ({ ...r, impact: JSON.parse(r.impact_json || '{}'), history: JSON.parse(r.history || '[]'), status_label: CHG_STATUS[r.status] || r.status, kind_label: CHG_KIND[r.kind] || r.kind, source_label: CHG_SOURCE[r.source_type] || r.source_type, docs: links.docs?.[r.id] || [], trainings: links.trainings?.[r.id] || [] });
+function chgCheckStep(f, to, user) {
+  const imp = JSON.parse(f.impact_json || '{}');
+  if (['approved', 'applied', 'verified'].includes(to)) { const miss = Object.entries(CHG_IMPACT).filter(([k]) => !imp[k]?.v).map(([, l]) => l); if (miss.length) throw bad(`영향평가를 모두 「있음/없음」으로 골라야 승인합니다: ${miss.join(', ')}`); }
+  if (to === 'approved' && !hasRole(user, 'quality_approver')) throw new HttpError(403, '변경 승인은 품질책임자·관리자가 합니다.');
+  if (['applied', 'verified'].includes(to) && (!f.apply_date || !f.first_lot)) throw bad('적용일과 초물 LOT(변경 뒤 첫 LOT)를 넣어야 적용으로 갑니다.');
+  if (to === 'verified' && (f.verify_result !== '유효' || !f.verify_date)) throw bad('적용 후 검증 결과가 「유효」이고 검증일이 있어야 검증완료합니다.');
+}
+const CHG_NEXT = { requested: ['evaluating'], evaluating: ['approved', 'requested'], approved: ['applied'], applied: ['verified'], verified: [], rejected: [], void: [] };
+route('GET', '/api/changes', async ({ user }) => {
+  const rows = await db.prepare("SELECT * FROM quality_changes ORDER BY CASE WHEN status IN ('verified','rejected','void') THEN 1 ELSE 0 END, id DESC LIMIT 1000").all();
+  const docs = {}, trainings = {};
+  for (const d of await db.prepare('SELECT id,doc_no,title,rev,status,change_id FROM quality_docs WHERE change_id IS NOT NULL').all()) (docs[d.change_id] ||= []).push({ id: d.id, doc_no: d.doc_no, title: d.title, rev: d.rev, status_label: QDOC_STATUS[d.status] });
+  for (const t of await db.prepare("SELECT id,title,plan_date,status,change_id FROM trainings WHERE change_id IS NOT NULL AND status<>'void'").all()) (trainings[t.change_id] ||= []).push(t);
+  return { rows: rows.map(r => chgRow(r, { docs, trainings })), can_manage: isQuality(user), can_approve: hasRole(user, 'quality_approver'), me: user.name, today: today() };
+});
+route('POST', '/api/changes', async ({ user, body }) => {
+  const key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM quality_changes WHERE request_id=?').get(key); if (old) return chgRow(old); }
+  const st = CHG_SOURCE[body.source_type] ? body.source_type : 'internal'; let sid = null, sno = '', fill = {};
+  if (st === 'capa') { const n = await mustGet('nonconformities', Number(body.source_id) || 0); sid = n.id; sno = n.nc_no; fill = { item: n.item, reason: `${n.nc_no} ${n.title} — 시정조치: ${n.corrective || ''}`.slice(0, 1000) }; }
+  if (st === 'supplier' && !str(body.vendor, 100)) throw bad('협력업체 변경점은 업체(매입처)를 고르세요.');
+  if (st !== 'internal' && !isQuality(user)) throw new HttpError(403, 'CAPA·협력업체 변경점의 변경 요청은 품질이 만듭니다.');
+  const f = chgBody({ ...fill, ...Object.fromEntries(Object.entries(body).filter(([, v]) => v !== '' && v != null)) });
+  const prefix = 'CHG-' + today().slice(2).replace(/-/g, '') + '-';
+  const r = await db.prepare(`INSERT INTO quality_changes(change_no,source_type,source_id,source_no,${CHG_COLS.join(',')},requester_name,requester_id,history,request_id,created_by) VALUES(${nextDocNo('quality_changes', 'change_no')},?,?,?,${CHG_COLS.map(() => '?').join(',')},?,?,?,?,?)`)
+    .run(prefix, prefix, prefix, st, sid, sno, ...CHG_COLS.map(k => f[k]), user.name, user.id, JSON.stringify([{ at: now(), by: user.name, what: '변경 요청', source: sno || CHG_SOURCE[st] }]), key, user.name);
+  return chgRow(await mustGet('quality_changes', r.lastInsertRowid));
+});
+route('PUT', '/api/changes/:id', async ({ user, params, body }) => {
+  const prior = await mustGet('quality_changes', params.id), q = isQuality(user), mine = prior.requester_id === user.id;
+  if (!q && !(mine && prior.status === 'requested')) throw new HttpError(403, '요청한 사람은 「요청」 단계에서만 고칩니다. 그다음은 품질이 진행합니다.');
+  if (Number(body.revision) !== prior.revision) throw conflict();
+  if (['verified', 'rejected', 'void'].includes(prior.status)) throw bad(`${CHG_STATUS[prior.status]}된 변경입니다.`);
+  const f = chgBody(body, prior), to = body.status && CHG_STATUS[body.status] ? body.status : prior.status, reason = str(body.reason, 300);
+  if (to !== prior.status) {
+    if (to === 'rejected') { if (!hasRole(user, 'quality_approver')) throw new HttpError(403, '반려는 품질책임자·관리자가 합니다.'); if (!reason) throw bad('반려 사유를 적으세요.'); }
+    else if (to === 'void') { if (!reason) throw bad('취소 사유를 적으세요.'); if (!q && !mine) throw new HttpError(403, '요청한 사람이나 품질만 취소합니다.'); }
+    else { if (!q) throw new HttpError(403, '변경 진행은 품질이 합니다.'); if (!CHG_NEXT[prior.status].includes(to)) throw bad(`「${CHG_STATUS[prior.status]}」에서 「${CHG_STATUS[to]}」(으)로 갈 수 없습니다.`); chgCheckStep(f, to, user); }
+  }
+  const changed = CHG_COLS.filter(k => (prior[k] ?? null) !== (f[k] ?? null));
+  if (!changed.length && to === prior.status) return chgRow(prior);
+  const approving = to === 'approved' && prior.status !== 'approved';
+  const r = await db.prepare(`UPDATE quality_changes SET ${CHG_COLS.map(k => k + '=?').join(',')},status=?,approved_by=CASE WHEN ?=1 THEN ? ELSE approved_by END,approved_at=CASE WHEN ?=1 THEN ? ELSE approved_at END,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`)
+    .run(...CHG_COLS.map(k => f[k]), to, approving ? 1 : 0, user.name, approving ? 1 : 0, now(), pushHist(prior, { by: user.name, what: to !== prior.status ? '단계' : '수정', ...(to !== prior.status ? { status: [prior.status, to] } : {}), fields: changed, ...(reason ? { reason } : {}) }), user.name, prior.id, prior.revision);
+  if (!r.changes) throw conflict();
+  return chgRow(await mustGet('quality_changes', prior.id));
+});
+
+// A3 교육·자격. 교육: 계획 → 실시(실시일·시간·참석) → 평가완료(참석자 결과). 대상자는 본인이 「참석 확인」을 누를 수 있다.
+const TR_KIND = ['OJT', '정기 교육', '직무 교육', '외부 교육', '문서 개정 교육', '법정 교육'];
+const TR_STATUS = { planned: '계획', done: '실시', evaluated: '평가완료', void: '취소' };
+const TR_COLS = ['title', 'kind', 'plan_date', 'done_date', 'hours', 'instructor', 'place', 'content', 'eval_method', 'doc_id', 'doc_label', 'change_id', 'note'];
+async function trBody(o0, prior = {}) {
+  const o = o0 && typeof o0 === 'object' ? o0 : {}, pick = k => o[k] === undefined ? prior[k] : o[k];
+  const kind = pick('kind'); if (!TR_KIND.includes(kind)) throw bad('교육 유형을 고르세요.');
+  const hours = pick('hours'); const f = { title: reqStr(pick('title'), '교육명', 200), kind, plan_date: dateStr(pick('plan_date'), '교육 예정일'), done_date: qDate(pick('done_date'), '실시일'),
+    hours: hours === '' || hours == null ? null : num(hours, '교육 시간'), instructor: str(pick('instructor'), 50), place: str(pick('place'), 100), content: str(pick('content'), 2000), eval_method: str(pick('eval_method'), 50),
+    doc_id: optId(pick('doc_id')), doc_label: str(prior.doc_label, 200), change_id: optId(pick('change_id')), note: str(pick('note'), 1000) };
+  if (f.hours != null && (f.hours <= 0 || f.hours > 200)) throw bad('교육 시간은 0~200시간으로 넣으세요.');
+  if (f.doc_id !== (prior.doc_id ?? null)) { if (f.doc_id) { const d = await mustGet('quality_docs', f.doc_id); f.doc_label = `${d.doc_no} Rev.${d.rev} ${d.title}`.slice(0, 200); } else f.doc_label = ''; }
+  return f;
+}
+async function trAttendees(list) {
+  if (list == null) return null; if (!Array.isArray(list) || list.length > 300) throw bad('교육 대상자는 300명까지입니다.');
+  const users = await db.prepare("SELECT id,name,department FROM users WHERE approval_status='approved'").all(), out = new Map();
+  for (const a of list) {
+    const o = typeof a === 'object' && a ? a : { user_name: a }; const u = users.find(x => x.id === Number(o.user_id)) || users.find(x => x.name === str(o.user_name, 50));
+    const name = u ? u.name : reqStr(o.user_name, '대상자 이름', 50); if (out.has(name)) continue;
+    const score = o.score === '' || o.score == null ? null : num(o.score, '점수'); if (score != null && (score < 0 || score > 100)) throw bad('점수는 0~100으로 넣으세요.');
+    const result = ['', '이수', '미이수', '재교육'].includes(o.result || '') ? o.result || '' : (() => { throw bad('교육 결과를 고르세요.'); })();
+    out.set(name, { user_id: u?.id ?? null, user_name: name, dept: u?.department || str(o.dept, 50), attended: o.attended === true || o.attended === 1 || o.attended === '1' ? 1 : 0, score, result, note: str(o.note, 300) });
+  }
+  return [...out.values()];
+}
+const trRow = (r, att = []) => ({ ...r, history: JSON.parse(r.history || '[]'), status_label: TR_STATUS[r.status] || r.status, attendees: att });
+async function trList(where = '', args = []) {
+  const rows = await db.prepare(`SELECT * FROM trainings ${where} ORDER BY plan_date DESC, id DESC LIMIT 2000`).all(...args);
+  const att = await db.prepare('SELECT * FROM training_attendees ORDER BY id').all(), by = {};
+  for (const a of att) (by[a.training_id] ||= []).push(a);
+  return rows.map(r => trRow(r, by[r.id] || []));
+}
+// guard: 같은 batch 앞의 UPDATE가 revision을 올렸을 때만 대상자 표를 바꾼다(동시 수정이면 아무것도 바뀌지 않음).
+async function trSaveAttendees(id, list, prior = [], guardRev = null) {
+  if (!list) return [];
+  const keep = new Set(list.map(a => a.user_name)), g = guardRev == null ? '1=1' : 'EXISTS(SELECT 1 FROM trainings WHERE id=? AND revision=?)', ga = guardRev == null ? [] : [id, guardRev];
+  return [
+    ...prior.filter(a => !keep.has(a.user_name)).map(a => ({ sql: `DELETE FROM training_attendees WHERE id=? AND ${g}`, args: [a.id, ...ga] })),
+    ...list.map(a => ({ sql: `INSERT INTO training_attendees(training_id,user_id,user_name,dept,attended,confirmed_at,score,result,note) SELECT ?,?,?,?,?,?,?,?,? WHERE ${g}
+      ON CONFLICT(training_id,user_name) DO UPDATE SET user_id=excluded.user_id,dept=excluded.dept,attended=excluded.attended,confirmed_at=CASE WHEN excluded.attended=1 THEN COALESCE(training_attendees.confirmed_at,excluded.confirmed_at) ELSE NULL END,score=excluded.score,result=excluded.result,note=excluded.note`,
+      args: [id, a.user_id, a.user_name, a.dept, a.attended, a.attended ? now() : null, a.score, a.result, a.note, ...ga] })),
+  ];
+}
+route('GET', '/api/trainings', async ({ user }) => ({ rows: await trList(), can_manage: isQuality(user), me: user.name, today: today(), kinds: TR_KIND }));
+route('POST', '/api/trainings', async ({ user, body }) => {
+  requireRole(user, 'quality', '품질'); const key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM trainings WHERE request_id=?').get(key); if (old) return (await trList('WHERE id=?', [old.id]))[0]; }
+  const f = await trBody(body), att = await trAttendees(body.attendees || []);
+  const r = await db.prepare(`INSERT INTO trainings(${TR_COLS.join(',')},history,request_id,created_by) VALUES(${TR_COLS.map(() => '?').join(',')},?,?,?)`).run(...TR_COLS.map(k => f[k]), JSON.stringify([{ at: now(), by: user.name, what: '계획 등록' }]), key, user.name);
+  const id = Number(r.lastInsertRowid); const cmds = await trSaveAttendees(id, att); if (cmds.length) await db.batch(cmds);
+  return (await trList('WHERE id=?', [id]))[0];
+});
+route('PUT', '/api/trainings/:id', async ({ user, params, body }) => {
+  requireRole(user, 'quality', '품질'); const prior = await mustGet('trainings', params.id);
+  if (Number(body.revision) !== prior.revision) throw conflict();
+  if (prior.status === 'void') throw bad('취소된 교육입니다.');
+  const f = await trBody(body, prior), att = await trAttendees(body.attendees), oldAtt = await db.prepare('SELECT * FROM training_attendees WHERE training_id=?').all(prior.id);
+  const to = body.status && TR_STATUS[body.status] ? body.status : prior.status, reason = str(body.reason, 300);
+  if (to !== prior.status) {
+    const list = att || oldAtt;
+    if (to === 'void') { if (!reason) throw bad('취소 사유를 적으세요.'); }
+    else if (to === 'done') { if (prior.status !== 'planned') throw bad('계획 단계에서만 실시로 넘깁니다.'); if (!f.done_date || !f.hours) throw bad('실시일과 교육 시간을 넣어야 실시로 넘깁니다.'); if (!list.some(a => a.attended)) throw bad('참석자를 한 명 이상 체크하세요.'); }
+    else if (to === 'evaluated') { if (prior.status !== 'done') throw bad('실시한 교육만 평가완료합니다.'); const miss = list.filter(a => a.attended && !a.result).map(a => a.user_name); if (miss.length) throw bad(`참석자 결과(이수·미이수·재교육)를 모두 고르세요: ${miss.slice(0, 5).join(', ')}${miss.length > 5 ? ' 외' : ''}`); }
+    else throw bad('단계를 확인하세요.');
+  }
+  if (f.done_date && f.done_date > today()) throw bad('실시일이 오늘보다 늦습니다.');
+  const changed = TR_COLS.filter(k => (prior[k] ?? null) !== (f[k] ?? null));
+  const r = await db.batch([{ sql: `UPDATE trainings SET ${TR_COLS.map(k => k + '=?').join(',')},status=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`,
+    args: [...TR_COLS.map(k => f[k]), to, pushHist(prior, { by: user.name, what: to !== prior.status ? '단계' : '수정', ...(to !== prior.status ? { status: [prior.status, to] } : {}), fields: changed, ...(att ? { attendees: att.length } : {}), ...(reason ? { reason } : {}) }), user.name, prior.id, prior.revision] },
+    ...(await trSaveAttendees(prior.id, att, oldAtt, prior.revision + 1))]);
+  if (!r[0].meta.changes) throw conflict();
+  return (await trList('WHERE id=?', [prior.id]))[0];
+});
+route('POST', '/api/trainings/:id/attend', async ({ user, params }) => {
+  const t = await mustGet('trainings', params.id); if (!['planned', 'done'].includes(t.status)) throw bad('계획·실시 중인 교육만 참석 확인합니다.');
+  const a = await db.prepare('SELECT * FROM training_attendees WHERE training_id=? AND (user_id=? OR user_name=?)').get(t.id, user.id, user.name);
+  if (!a) throw new HttpError(403, '이 교육의 대상자가 아닙니다. 품질 담당에게 대상자 추가를 요청하세요.');
+  if (!a.attended) await db.prepare('UPDATE training_attendees SET attended=1,confirmed_at=? WHERE id=?').run(now(), a.id);
+  return (await trList('WHERE id=?', [t.id]))[0];
+});
+const QUAL_STATUS = { valid: '유효', expired: '만료', withdrawn: '반납·취소' };
+const QUAL_COLS = ['user_id', 'user_name', 'kind', 'cert_no', 'issuer', 'acquired_date', 'expire_date', 'status', 'note'];
+async function qualBody(o0) {
+  const o = o0 && typeof o0 === 'object' ? o0 : {};
+  const u = o.user_id ? await db.prepare('SELECT id,name FROM users WHERE id=?').get(Number(o.user_id)) : await db.prepare("SELECT id,name FROM users WHERE name=? AND approval_status='approved'").get(str(o.user_name, 50));
+  const f = { user_id: u?.id ?? null, user_name: u?.name || reqStr(o.user_name, '대상자', 50), kind: reqStr(o.kind, '자격명', 100), cert_no: str(o.cert_no, 80), issuer: str(o.issuer, 100),
+    acquired_date: qDate(o.acquired_date, '취득일'), expire_date: qDate(o.expire_date, '만료일'), status: QUAL_STATUS[o.status] ? o.status : 'valid', note: str(o.note, 500) };
+  if (f.acquired_date && f.expire_date && f.expire_date <= f.acquired_date) throw bad('만료일은 취득일 뒤여야 합니다.');
+  return f;
+}
+const qualRow = r => ({ ...r, history: JSON.parse(r.history || '[]'), status_label: QUAL_STATUS[r.status] || r.status });
+route('GET', '/api/qualifications', async ({ user }) => ({ rows: (await db.prepare('SELECT * FROM qualifications ORDER BY CASE WHEN expire_date IS NULL THEN 1 ELSE 0 END, expire_date, id DESC LIMIT 2000').all()).map(qualRow), can_manage: isQuality(user), today: today() }));
+route('POST', '/api/qualifications', async ({ user, body }) => {
+  requireRole(user, 'quality', '품질'); const key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM qualifications WHERE request_id=?').get(key); if (old) return qualRow(old); }
+  const f = await qualBody(body);
+  const r = await db.prepare(`INSERT INTO qualifications(${QUAL_COLS.join(',')},history,request_id,created_by) VALUES(${QUAL_COLS.map(() => '?').join(',')},?,?,?)`).run(...QUAL_COLS.map(k => f[k]), JSON.stringify([{ at: now(), by: user.name, what: '등록' }]), key, user.name);
+  return qualRow(await mustGet('qualifications', r.lastInsertRowid));
+});
+route('PUT', '/api/qualifications/:id', async ({ user, params, body }) => {
+  requireRole(user, 'quality', '품질'); const prior = await mustGet('qualifications', params.id);
+  if (Number(body.revision) !== prior.revision) throw conflict();
+  const f = await qualBody(body), changed = QUAL_COLS.filter(k => (prior[k] ?? null) !== (f[k] ?? null)); if (!changed.length) return qualRow(prior);
+  const r = await db.prepare(`UPDATE qualifications SET ${QUAL_COLS.map(k => k + '=?').join(',')},history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`).run(...QUAL_COLS.map(k => f[k]), pushHist(prior, { by: user.name, what: '수정', fields: changed }), user.name, prior.id, prior.revision);
+  if (!r.changes) throw conflict();
+  return qualRow(await mustGet('qualifications', prior.id));
+});
+route('DELETE', '/api/qualifications/:id', async ({ user, params, query }) => {
+  requireRole(user, 'quality', '품질'); const prior = await mustGet('qualifications', params.id);
+  if (Number(query.revision) !== prior.revision) throw conflict();
+  await db.prepare('DELETE FROM qualifications WHERE id=? AND revision=?').run(prior.id, prior.revision); return { ok: true };
+});
+
+// A5 협력업체 품질: 매입처별 품질 카드. 수입검사 건수·불합격률(자동), 공급사 COA 수령(COA 요청 입고 중 미수령), 연 1회 유효성평가(품질 50%·납기 30%·대응 20% → A 90↑·B 80↑·C 70↑·D), 업체 변경점(→ 변경관리).
+const vkey = s => String(s || '').toLowerCase().replace(/\s+/g, '');
+const SUP_GRADE = t => t >= 90 ? 'A' : t >= 80 ? 'B' : t >= 70 ? 'C' : 'D';
+const IQC_BASE = "r.type='analysis' AND r.category='수입검사' AND COALESCE(json_extract(r.data,'$.exempt'),0)<>1";
+async function supplierIqc(year, vendorKey = null) {
+  const args = [String(year)]; if (vendorKey) args.push(vendorKey);
+  return db.prepare(`SELECT LOWER(REPLACE(r.customer,' ','')) AS k, MAX(r.customer) AS vendor, COUNT(*) AS total, SUM(CASE WHEN m.result='fail' THEN 1 ELSE 0 END) AS fail, SUM(CASE WHEN m.result='pass' THEN 1 ELSE 0 END) AS pass,
+    SUM(CASE WHEN json_extract(r.data,'$.coa_requested')=1 THEN 1 ELSE 0 END) AS coa_req, SUM(CASE WHEN json_extract(r.data,'$.coa_requested')=1 AND c.files IS NOT NULL AND c.files<>'[]' THEN 1 ELSE 0 END) AS coa_recv,
+    SUM(CASE WHEN c.files IS NOT NULL AND c.files<>'[]' THEN 1 ELSE 0 END) AS coa_any
+    FROM requests r LEFT JOIN inspection_measurements m ON m.request_id=r.id LEFT JOIN supplier_coas c ON c.inspection_id=r.id
+    WHERE ${IQC_BASE} AND r.customer<>'' AND substr(r.created_at,1,4)=? ${vendorKey ? "AND LOWER(REPLACE(r.customer,' ',''))=?" : ''} GROUP BY k`).all(...args);
+}
+route('GET', '/api/supplier-quality', async ({ user, query }) => {
+  const year = intIn(query.year, '연도', 2000, 2100, Number(today().slice(0, 4)));
+  const vendors = await db.prepare('SELECT name FROM vendors WHERE is_purchase=1 ORDER BY name').all();
+  const iqc = await supplierIqc(year), evals = await db.prepare('SELECT * FROM supplier_evals ORDER BY year DESC, id DESC').all();
+  const changes = await db.prepare("SELECT vendor, status FROM quality_changes WHERE source_type='supplier'").all();
+  const map = new Map();
+  for (const v of vendors) map.set(vkey(v.name), { vendor: v.name });
+  for (const x of iqc) if (!map.has(x.k)) map.set(x.k, { vendor: x.vendor });
+  const rows = [...map.entries()].map(([k, v]) => {
+    const s = iqc.find(x => x.k === k) || {}, ev = evals.filter(e => e.vendor_key === k), ch = changes.filter(c => vkey(c.vendor) === k);
+    const total = s.total || 0, fail = s.fail || 0, judged = (s.fail || 0) + (s.pass || 0);
+    return { key: k, vendor: v.vendor, iqc_total: total, iqc_fail: fail, iqc_judged: judged, fail_rate: judged ? Math.round(fail / judged * 1000) / 10 : null, coa_req: s.coa_req || 0, coa_recv: s.coa_recv || 0, coa_missing: (s.coa_req || 0) - (s.coa_recv || 0),
+      eval: ev.find(e => e.year === year) || null, last_eval: ev[0] || null, changes_open: ch.filter(c => !['verified', 'rejected', 'void'].includes(c.status)).length, changes_total: ch.length };
+  }).sort((a, b) => b.iqc_total - a.iqc_total || a.vendor.localeCompare(b.vendor, 'ko'));
+  return { year, rows, can_manage: isQuality(user), today: today() };
+});
+route('GET', '/api/supplier-quality/detail', async ({ query }) => {
+  const vendor = reqStr(query.vendor, '업체', 100), k = vkey(vendor);
+  const insp = await db.prepare(`SELECT r.id,r.req_no,r.title,r.lot,r.status,r.created_at,r.customer,json_extract(r.data,'$.coa_requested') AS coa_requested,COALESCE(m.result,'pending') AS result,c.files AS coa_files,c.received_date AS coa_date
+    FROM requests r LEFT JOIN inspection_measurements m ON m.request_id=r.id LEFT JOIN supplier_coas c ON c.inspection_id=r.id WHERE ${IQC_BASE} AND LOWER(REPLACE(r.customer,' ',''))=? ORDER BY r.id DESC LIMIT 200`).all(k);
+  const evals = await db.prepare('SELECT * FROM supplier_evals WHERE vendor_key=? ORDER BY year DESC').all(k);
+  const changes = (await db.prepare("SELECT * FROM quality_changes WHERE source_type='supplier' ORDER BY id DESC").all()).filter(c => vkey(c.vendor) === k).map(r => chgRow(r));
+  return { vendor, inspections: insp.map(r => ({ ...r, coa_files: JSON.parse(r.coa_files || '[]') })), evals: evals.map(e => ({ ...e, history: JSON.parse(e.history || '[]') })), changes };
+});
+route('POST', '/api/supplier-evals', async ({ user, body }) => {
+  requireRole(user, 'quality', '품질');
+  const vendor = reqStr(body.vendor, '업체', 100), k = vkey(vendor), year = intIn(body.year, '평가 연도', 2000, 2100, Number(today().slice(0, 4)));
+  const sc = (v, label) => { const n = num(v, label); if (n < 0 || n > 100) throw bad(`${label}는 0~100점으로 넣으세요.`); return Math.round(n * 10) / 10; };
+  const q = sc(body.quality_score, '품질 점수'), d = sc(body.delivery_score, '납기 점수'), rs = sc(body.response_score, '대응 점수');
+  const total = Math.round((q * 0.5 + d * 0.3 + rs * 0.2) * 10) / 10, grade = SUP_GRADE(total), s = (await supplierIqc(year, k))[0] || {};
+  const prior = await db.prepare('SELECT * FROM supplier_evals WHERE vendor_key=? AND year=?').get(k, year);
+  if (prior) {
+    if (Number(body.revision) !== prior.revision) throw conflict();
+    const r = await db.prepare("UPDATE supplier_evals SET vendor=?,quality_score=?,delivery_score=?,response_score=?,total=?,grade=?,iqc_total=?,iqc_fail=?,note=?,evaluated_by=?,evaluated_at=?,history=?,revision=revision+1 WHERE id=? AND revision=?")
+      .run(vendor, q, d, rs, total, grade, s.total || 0, s.fail || 0, str(body.note, 1000), user.name, now(), pushHist(prior, { by: user.name, what: '재평가', from: [prior.total, prior.grade], to: [total, grade] }), prior.id, prior.revision);
+    if (!r.changes) throw conflict();
+    return db.prepare('SELECT * FROM supplier_evals WHERE id=?').get(prior.id);
+  }
+  const r = await db.prepare('INSERT INTO supplier_evals(vendor,vendor_key,year,quality_score,delivery_score,response_score,total,grade,iqc_total,iqc_fail,note,evaluated_by,evaluated_at,history) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(vendor_key,year) DO NOTHING')
+    .run(vendor, k, year, q, d, rs, total, grade, s.total || 0, s.fail || 0, str(body.note, 1000), user.name, now(), JSON.stringify([{ at: now(), by: user.name, what: '평가', to: [total, grade] }]));
+  if (!r.changes) throw conflict();
+  return db.prepare('SELECT * FROM supplier_evals WHERE id=?').get(r.lastInsertRowid);
+});
+// 공급사 COA 수령: 수입검사 의뢰(입고 LOT) 하나에 파일 여러 개(최대 5).
+async function iqcRequest(id) { const r = await getRequest(Number(id) || 0); if (r.type !== 'analysis' || r.category !== '수입검사') throw bad('수입검사 의뢰에만 공급사 COA를 붙입니다.'); return r; }
+const scoaRow = (r, q) => ({ inspection_id: q.id, req_no: q.req_no, vendor: q.customer, item: q.title, lot: q.lot, coa_requested: !!JSON.parse(q.data || '{}').coa_requested, files: JSON.parse(r?.files || '[]'), received_date: r?.received_date || null, note: r?.note || '', revision: r?.revision || 0, updated_by: r?.updated_by || '', updated_at: r?.updated_at || null });
+route('GET', '/api/supplier-coas/:id', async ({ params }) => { const q = await iqcRequest(params.id); return scoaRow(await db.prepare('SELECT * FROM supplier_coas WHERE inspection_id=?').get(q.id), q); });
+route('PUT', '/api/supplier-coas/:id', async ({ user, params, body }) => {
+  requireRole(user, 'quality', '품질'); const q = await iqcRequest(params.id), prior = await db.prepare('SELECT * FROM supplier_coas WHERE inspection_id=?').get(q.id);
+  if (Number(body.revision || 0) !== (prior?.revision || 0)) throw conflict();
+  const cur = JSON.parse(prior?.files || '[]'), keepNames = body.keep === undefined ? cur.map(x => x.file) : body.keep;
+  if (!Array.isArray(keepNames) || keepNames.some(f => !cur.some(x => x.file === f))) throw bad('남길 파일을 다시 확인하세요.');
+  const keep = cur.filter(x => keepNames.includes(x.file)); if (keep.length + (body.files || []).length > 5) throw bad('공급사 COA 파일은 5개까지입니다.');
+  const added = await saveDocFiles(body.files, 5), files = [...keep, ...added], rd = qDate(body.received_date, '수령일') || (added.length ? today() : prior?.received_date || null);
+  try {
+    const r = prior
+      ? await db.prepare("UPDATE supplier_coas SET files=?,received_date=?,note=?,vendor=?,item=?,lot=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?").run(JSON.stringify(files), rd, str(body.note, 500), q.customer, q.title, q.lot, user.name, prior.id, prior.revision)
+      : await db.prepare('INSERT INTO supplier_coas(inspection_id,vendor,item,lot,files,received_date,note,updated_by) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(inspection_id) DO NOTHING').run(q.id, q.customer, q.title, q.lot, JSON.stringify(files), rd, str(body.note, 500), user.name);
+    if (!r.changes) throw conflict();
+  } catch (error) { await removePhotos(added.map(x => x.file)); throw error; }
+  await removePhotos(cur.filter(x => !keepNames.includes(x.file)).map(x => x.file));
+  return scoaRow(await db.prepare('SELECT * FROM supplier_coas WHERE inspection_id=?').get(q.id), q);
+});
 route('GET', '/api/rnd-specs', async ({ user }) => { const { raw, ...lib } = await rndSpecLibrary(); return { ...lib, can_manage: isResearcher(user) }; });
 route('PUT', '/api/rnd-specs', async ({ user, body }) => {
   if (!isResearcher(user)) throw new HttpError(403, '연구소 검사규격은 연구원(개발·개발책임자)만 설정합니다.');
@@ -3959,16 +4502,19 @@ function rndShort(snapshot, valuesJson, memo = '') {
     const sum = rndMeasure(spec.items, null, rows.map(x => ({ lot: x.lot, values: Object.fromEntries(spec.items.map((it, i) => ['i' + i, x.values?.[it.key || 'i' + i] || []])) }))).summary;
     return sum + (memo ? ` / 의견: ${memo}` : ''); } catch { return ''; }
 }
+// 15.305 품질 분석의뢰(의뢰검사·공정검사)도 같은 측정 그리드: 항목·기준(하한~상한)·데이터를 의뢰서에 미리 적지 않아도 바로 넣는다. 수입·출하검사는 기존 검사 화면.
+const measureTarget = r => r.type === 'rnd_analysis' ? 'rnd' : r.type === 'analysis' && !['수입검사', '출하검사'].includes(r.category) ? 'quality' : '';
 route('GET', '/api/requests/:id/rnd-measure', async ({ params }) => {
-  const r = await getRequest(params.id); if (r.type !== 'rnd_analysis') throw bad('연구 분석만 볼 수 있습니다.');
+  const r = await getRequest(params.id); if (!measureTarget(r)) throw bad('연구 분석·품질 분석의뢰만 볼 수 있습니다.');
   const m = await db.prepare('SELECT * FROM inspection_measurements WHERE request_id=?').get(r.id);
   const spec = r.inspection_snapshot ? JSON.parse(r.inspection_snapshot) : null, rows = m ? JSON.parse(m.values_json) : null;
   const summary = rndShort(spec, rows); // 15.299
   return { spec, measurement: m ? { ...m, rows } : null, memo: JSON.parse(r.data || '{}').memo || '', summary };
 });
 route('PUT', '/api/requests/:id/rnd-measure', async ({ user, params, body }) => {
-  if (!isResearcher(user)) throw new HttpError(403, '측정값은 연구원(개발·개발책임자)만 고칩니다.');
-  const r = await getRequest(params.id); if (r.type !== 'rnd_analysis') throw bad('연구 분석만 고칠 수 있습니다.');
+  const r = await getRequest(params.id), target = measureTarget(r); if (!target) throw bad('연구 분석·품질 분석의뢰만 고칠 수 있습니다.');
+  if (target === 'rnd' && !isResearcher(user)) throw new HttpError(403, '측정값은 연구원(개발·개발책임자)만 고칩니다.');
+  if (target === 'quality') { requireRole(user, 'quality', '품질'); if (!WORK_STATUSES.includes(r.status)) throw bad('분석의뢰를 접수(승인)한 뒤 측정값을 넣으세요.'); }
   const meas = rndMeasure(body.spec_items, body.values, body.samples); if (!meas) throw bad('측정 항목을 넣으세요.');
   const prior = await db.prepare('SELECT * FROM inspection_measurements WHERE request_id=?').get(r.id);
   const reason = prior ? reqStr(body.reason, '수정 사유', 300) : str(body.reason, 300) || '측정값 입력';
@@ -7665,11 +8211,11 @@ return { async fetch(req) {
       if (!user) throw new HttpError(401, '로그인이 필요합니다.');
       if (isOperator(user)) throw new HttpError(403, '오퍼레이터는 첨부 파일을 조회할 수 없습니다.');
       const file = p.slice('/uploads/'.length);
-      if (!/^[a-f0-9]{24}\.(jpg|png|webp)$/.test(file)) throw new HttpError(404, '사진을 찾을 수 없습니다.');
+      if (!/^[a-f0-9]{24}\.(jpg|png|webp|pdf)$/.test(file)) throw new HttpError(404, '사진을 찾을 수 없습니다.'); // 15.306 품질 문서·공급사 COA PDF
       const photo = await images.get(file);
       if (!photo) throw new HttpError(404, '사진을 찾을 수 없습니다.');
-      res.set('Content-Type', photo.httpMetadata?.contentType || 'application/octet-stream');
-      res.set('Cache-Control', 'private, no-store');
+      res.set('Content-Type', file.endsWith('.pdf') ? 'application/pdf' : photo.httpMetadata?.contentType || 'application/octet-stream');
+      res.set('Cache-Control', 'private, no-store'); res.set('X-Content-Type-Options', 'nosniff');
       return new Response(photo.body, { headers: res });
     }
     if (!['GET', 'HEAD'].includes(req.method)) return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });

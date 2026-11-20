@@ -1,5 +1,5 @@
 // Private company R2 access via S3 SigV4. No credentials or signed URLs reach the browser.
-const imageKey = /^[a-f0-9]{24}\.(jpg|png|webp)$/;
+const imageKey = /^[a-f0-9]{24}\.(jpg|png|webp|pdf)$/; // 15.306 품질 문서 PDF
 const imageLimit = 8 * 1024 * 1024;
 const encoder = new TextEncoder();
 const asBytes = value => typeof value === 'string' ? encoder.encode(value) : value;

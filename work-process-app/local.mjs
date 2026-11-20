@@ -40,19 +40,19 @@ export function localEnvironment(dataDir, inviteCode) {
     catch (e) { sqlite.exec('ROLLBACK'); throw e; }
   } };
   const filePath = key => {
-    if (!/^[a-f0-9]{24}\.(jpg|png|webp)$/.test(key)) throw new Error('Invalid object key');
+    if (!/^[a-f0-9]{24}\.(jpg|png|webp|pdf)$/.test(key)) throw new Error('Invalid object key');
     return path.join(dataDir, 'uploads', key);
   };
   const BUCKET = {
     async list({ limit = 3, cursor = '' } = {}) {
-      const keys = fs.readdirSync(path.join(dataDir, 'uploads')).filter(key => /^[a-f0-9]{24}\.(jpg|png|webp)$/.test(key)).sort().filter(key => !cursor || key > cursor);
+      const keys = fs.readdirSync(path.join(dataDir, 'uploads')).filter(key => /^[a-f0-9]{24}\.(jpg|png|webp|pdf)$/.test(key)).sort().filter(key => !cursor || key > cursor);
       const page = keys.slice(0, limit);
       return { objects: page.map(key => ({ key })), truncated: keys.length > page.length, cursor: keys.length > page.length ? page.at(-1) : undefined };
     },
     async put(key, bytes) { fs.writeFileSync(filePath(key), new Uint8Array(bytes)); },
     async get(key) {
       if (!fs.existsSync(filePath(key))) return null;
-      return { body: fs.readFileSync(filePath(key)), httpMetadata: { contentType: ({ jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' })[key.split('.').pop()] } };
+      return { body: fs.readFileSync(filePath(key)), httpMetadata: { contentType: ({ jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', pdf: 'application/pdf' })[key.split('.').pop()] } };
     },
     async delete(key) { fs.rmSync(filePath(key), { force: true }); },
   };
