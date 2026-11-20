@@ -1265,3 +1265,32 @@ test('15.320 product spec is stored with the item and its revision header; spec-
   assert.equal(off.rev, 0); assert.equal(off.build.on, false);
   assert.equal((await admin('POST', '/api/cost/items', { item_code: 'T320-BAD', name: 'x', build: { on: true, spp: 'alert(1)' }, lines: [{ type: 'mat', name: 'a', price: '1' }] })).status, 400);
 });
+test('15.321 R&D estimates (stage=dev) share the purchase engine: researchers create/edit dev items only, purchase list excludes them, promote hands over to mass', async () => {
+  const u = (await admin('GET', '/api/admin/users')).body.find(x => x.name === '생산');
+  await admin('PUT', `/api/admin/users/${u.id}`, { roles: ['dev'] });
+  try {
+    const req = (await admin('POST', '/api/requests', { type: 'development', title: '저분진 와이퍼 9인치 양산', customer: '삼성SDI', due_date: '2027-03-31', target_price: '150', data: { extra: 'x' } })).body;
+    assert.equal((await prod('GET', '/api/cost/items')).status, 403, 'mass list is purchase-only');
+    const dl = (await prod('GET', '/api/cost/items?stage=dev')).body;
+    assert.ok(dl.dev_requests.some(d => d.id === req.id)); assert.ok(Array.isArray(dl.materials)); assert.ok(dl.rates);
+    assert.equal((await prod('POST', '/api/cost/items', { name: 'x', lines: [{ type: 'mat', name: 'a', price: '1' }] })).status, 403, 'researcher cannot create mass items');
+    const est = (await prod('POST', '/api/cost/items', { stage: 'dev', dev_request_id: req.id, name: '저분진 와이퍼 9인치', unit: 'PK', pieces: 100, sale_price: 150, lines: [{ type: 'mat', name: '원단', price: '1230', qty: '100/36', loss: 5 }, { type: 'labor', name: '재단', qty: '100', capa: '2200' }], effective_date: '2026-01-02', request_id: rid() })).body;
+    assert.equal(est.stage, 'dev'); assert.match(est.item_code, /^DEV-\d{4}$/); assert.equal(est.dev_request_id, req.id);
+    assert.equal((await prod('POST', '/api/cost/items', { stage: 'dev', dev_request_id: 999999, name: 'x', lines: [{ type: 'mat', name: 'a', price: '1' }] })).status, 400);
+    assert.ok(!(await admin('GET', '/api/cost/items')).body.rows.some(r => r.id === est.id), 'purchase list excludes dev estimates');
+    assert.ok((await admin('GET', '/api/cost/items?stage=dev')).body.rows.some(r => r.id === est.id), 'purchase can still see estimates');
+    const e2 = (await prod('PUT', `/api/cost/items/${est.id}`, { revision: est.revision, effective_date: '2026-02-01', reason: '원단 단가 가정 변경', lines: est.lines.map(l => l.name === '원단' ? { ...l, price: '1300' } : l) })).body;
+    assert.equal(e2.rev, 1); assert.equal((await prod('GET', `/api/cost/items/${est.id}/revs`)).body.rows.length, 2);
+    assert.equal((await prod('POST', '/api/cost/items/recalc', { ids: [est.id], effective_date: '2026-11-01', reason: '지금 단가', dry: true })).status, 200, 'researcher recalcs own estimates');
+    const mass = (await admin('GET', '/api/cost/items')).body.rows[0];
+    assert.equal((await prod('POST', '/api/cost/items/recalc', { ids: [mass.id], effective_date: '2026-11-01', reason: 'x' })).status, 403, 'not mass items');
+    assert.equal((await prod('POST', '/api/cost/items/recalc', { rates: true, effective_date: '2026-11-01', reason: 'x' })).status, 403, 'not global recalc');
+    assert.equal((await prod('PUT', `/api/cost/items/${mass.id}`, { revision: mass.revision, note: 'x' })).status, 403);
+    assert.ok((await prod('GET', '/api/find?q=DEV-')).body.rows.some(r => r.type === 'costdev' && r.href === '#/dev/cost'));
+    const pr = (await prod('POST', `/api/cost/items/${est.id}/promote`, { revision: e2.revision, note: '양산 확정' })).body;
+    assert.equal(pr.stage, 'mass'); assert.equal(pr.rev, 1); assert.match(pr.history.at(-1).what, /양산 전환/);
+    assert.ok((await admin('GET', '/api/cost/items')).body.rows.some(r => r.id === est.id), 'now in purchase list');
+    assert.equal((await prod('GET', `/api/cost/items/${est.id}/revs`)).status, 403, 'after hand-over it is purchase-only');
+    assert.equal((await admin('POST', `/api/cost/items/${est.id}/promote`, { revision: pr.revision })).status, 400);
+  } finally { await admin('PUT', `/api/admin/users/${u.id}`, { roles: ['production', 'logistics'] }); }
+});

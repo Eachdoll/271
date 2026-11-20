@@ -4286,3 +4286,10 @@ label.ci-chk input[type=checkbox] { width: auto; min-height: 0; margin: 0; }
 @media (max-width: 700px) { .ci-brow { grid-template-columns: 1fr 1fr; } .ci-brow > label.span2 { grid-column: 1 / -1; } }
 .ci-bbody[hidden] { display: none; }
 .ci-autotag { white-space: nowrap; }
+
+/* 15.321 개발원가 = 양산 원가 예측 */
+.chip.ci-devchip { color: #7048e8; border-color: #b197fc; background: color-mix(in srgb, #7048e8 8%, var(--panel)); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .chip.ci-devchip { color: #d0bfff; border-color: #7048e8; } }
+:root[data-theme="dark"] .chip.ci-devchip { color: #d0bfff; border-color: #7048e8; }
+.ci-nodev { margin-top: 14px; }
+.ci-nodev h2 { font-size: 15px; margin: 0 0 8px; }
