@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.317';
+const APP_VERSION = '15.318';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -375,6 +375,7 @@ const NAV = [
   { group: '영업', items: [{ sub: '견적', items: [['#/sales/quotes', '견적서 관리']] }, { sub: '수주', items: [['#/sales/orders', '수주 관리']] }, { sub: '매출전표', items: [['#/sales/bills', '매출전표 관리'], ['#/sales/calendar', '매출 달력'], ['#/sales/reps', '영업담당자별 현황'], ['#/sales/returns', '반입(반품) 관리'], ['#/sales/delivery-status', '납품현황'], ['#/sales/closing', '매출 마감']] }, { sub: '생산의뢰', items: [['#/sales/mr', '생산의뢰 관리']] }, { sub: '구매의뢰', items: [['#/sales/pr', '구매의뢰 관리']] }, { sub: '샘플의뢰', items: [['#/sales/sample/product', '제품 샘플의뢰'], ['#/sales/sample/goods', '상품 샘플의뢰']] }] },
   { group: '구매', items: [
     { sub: '발주', items: [['#/purchase/po', '발주 관리'], ['#/purchase/stock', '구매 재고현황']] }, // 15.262
+    { sub: '원가', items: [['#/purchase/cost', '원가 산출 관리']] }, // 15.318 품목별 원가·백데이터·공통 기준·리비전
     { sub: '매입전표', items: [['#/purchase/bills', '매입전표 관리'], ['#/purchase/calendar', '매입 달력'], ['#/purchase/returns', '반출(반품) 관리'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/closing', '매입 마감']] },
     { sub: '샘플(상품)', items: [['#/purchase/sample/list', '상품 샘플리스트']] },
     { sub: '세탁', items: [['#/purchase/laundry', '불량·폐기 관리'], ['#/purchase/laundry-reports', '세탁 검수·성적서']] },
@@ -439,7 +440,7 @@ const canSeeMenu = key => !key || !ME || !Array.isArray(ME.menus) || ME.menus.in
 // 메뉴 보기만 켜고 권한이 없어 들어가면 빈 화면·「권한 없음」 오류만 보이던 문제.
 const ROUTE_ROLE = [
   [['#/sales/quotes', '#/sales/orders', '#/sales/bills', '#/sales/calendar', '#/sales/reps', '#/sales/returns', '#/sales/delivery-status', '#/sales/closing', '#/sales/tax', '#/sales/tax-check', '#/sales/book', '#/sales/ledger', '#/sales/aging'], ['sales']],
-  [['#/purchase/stock', '#/purchase/bills', '#/purchase/calendar', '#/purchase/returns', '#/purchase/receipt-status', '#/purchase/closing', '#/purchase/tax', '#/purchase/tax-check', '#/purchase/book', '#/purchase/ledger', '#/purchase/aging'], ['purchase']],
+  [['#/purchase/stock', '#/purchase/cost', '#/purchase/bills', '#/purchase/calendar', '#/purchase/returns', '#/purchase/receipt-status', '#/purchase/closing', '#/purchase/tax', '#/purchase/tax-check', '#/purchase/book', '#/purchase/ledger', '#/purchase/aging'], ['purchase']],
   [['#/purchase/payments', '#/purchase/disbursements', '#/purchase/notes'], ['sales', 'purchase']],
   [['#/admin/org/chart', '#/admin/org/duties'], null],
   [['#/dev/cost'], ['dev']], // 15.316 개발원가는 연구소(개발·개발책임자)만 // 15.314 조직도·지정 담당자는 누구나 보기(고치기는 관리자)
@@ -588,6 +589,10 @@ const PAGES = {
   '#/purchase/po': main => managedPage(main, '#/purchase/po', pagePO), // 15.178 발주 관리
   '#/purchase/po/new': main => managedPage(main, '#/purchase/po/new', pagePO),
   '#/purchase/laundry': pageLaundry,
+  '#/purchase/cost': main => managedPage(main, '#/purchase/cost', pageCostItems), // 15.318 원가 산출 관리
+  '#/purchase/cost/materials': main => managedPage(main, '#/purchase/cost/materials', pageCostMaterials),
+  '#/purchase/cost/rates': main => managedPage(main, '#/purchase/cost/rates', pageCostRates),
+  '#/purchase/cost/trend': main => managedPage(main, '#/purchase/cost/trend', pageCostTrend),
   '#/purchase/laundry/new': pageLaundry,
   '#/purchase/laundry-reports': pageLaundryReports,
   '#/quality/inspections': pageInspections,
@@ -746,6 +751,7 @@ const MANAGE = {
   '#/sales/mr': { title: '생산의뢰 관리', tabs: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] },
   '#/sales/pr': { title: '구매의뢰 관리', tabs: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] },
   '#/purchase/po': { title: '발주 관리', tabs: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
+  '#/purchase/cost': { title: '원가 산출 관리', tabs: [['#/purchase/cost', '품목별 원가'], ['#/purchase/cost/materials', '원가 백데이터'], ['#/purchase/cost/rates', '공통 기준'], ['#/purchase/cost/trend', '원가 추이']] }, // 15.318
   '#/purchase/bills': { title: '매입전표 관리', tabs: [['#/purchase/bills/new', '전표 입력'], ['#/purchase/bills', '전표 목록']] },
   '#/sales/book': { title: '매출 거래처별 장부', tabs: [['#/sales/book', '전표별 장부'], ['#/sales/ledger', '품목 줄별 원장']] },
   '#/purchase/book': { title: '매입 거래처별 장부', tabs: [['#/purchase/book', '전표별 장부'], ['#/purchase/ledger', '품목 줄별 원장']] },
@@ -762,7 +768,7 @@ const MANAGE = {
   '#/dev/list': { title: '개발 관리', tabs: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
   '#/dev/analysis': { title: '연구 분석 관리', tabs: [['#/dev/analysis/request', '분석데이터 입력'], ['#/dev/analysis', '분석리스트']] }, // 15.285 · 15.288
 };
-const ROUTE_ALIAS = { '#/admin/org/chart': '#/admin/org', '#/admin/org/duties': '#/admin/org', '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/calendar': '#/sales/bills', '#/logistics/qr': '#/logistics/lots', '#/logistics/pallets': '#/logistics/lots', '#/logistics/scan': '#/logistics/lots', '#/sales/reps': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users', '#/logistics/receipt/other': '#/logistics/receipt/new', '#/logistics/ship/new': '#/logistics/ship', '#/purchase/laundry/new': '#/purchase/laundry', '#/prod/semi/new': '#/prod/semi', '#/prod/semi/cut/new': '#/prod/semi/cut', '#/prod/semi/wash/new': '#/prod/semi/wash', '#/quality/request': '#/quality/list', '#/quality/voc/request': '#/quality/voc/list', '#/dev/request': '#/dev/list', '#/dev/analysis/request': '#/dev/analysis' };
+const ROUTE_ALIAS = { '#/purchase/cost/materials': '#/purchase/cost', '#/purchase/cost/rates': '#/purchase/cost', '#/purchase/cost/trend': '#/purchase/cost', '#/admin/org/chart': '#/admin/org', '#/admin/org/duties': '#/admin/org', '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/calendar': '#/sales/bills', '#/logistics/qr': '#/logistics/lots', '#/logistics/pallets': '#/logistics/lots', '#/logistics/scan': '#/logistics/lots', '#/sales/reps': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users', '#/logistics/receipt/other': '#/logistics/receipt/new', '#/logistics/ship/new': '#/logistics/ship', '#/purchase/laundry/new': '#/purchase/laundry', '#/prod/semi/new': '#/prod/semi', '#/prod/semi/cut/new': '#/prod/semi/cut', '#/prod/semi/wash/new': '#/prod/semi/wash', '#/quality/request': '#/quality/list', '#/quality/voc/request': '#/quality/voc/list', '#/dev/request': '#/dev/list', '#/dev/analysis/request': '#/dev/analysis' };
 const navRoute = r => ROUTE_ALIAS[String(r || '#/').split('?')[0]] || String(r || '#/').split('?')[0];
 const TAB_ON = { '#/logistics/receipt/other': '#/logistics/receipt/new' }; // 15.234 기타입고도 「입고 입력」 탭에 불
 function managedTabs(main, route) {
@@ -778,6 +784,7 @@ function managedTabs(main, route) {
 // 지금 화면 단계만 색, 나머지는 회색(누르면 그 화면으로). 두 흐름에 걸친 화면은 위 칩으로 흐름을 바꿔 봄(이 기기에 기억).
 const PROCESS_FLOWS = [
   { key: 'order', name: '주문 · 출하 · 매출', steps: [['#/sales/quotes', '견적'], ['#/sales/orders', '수주'], ['#/sales/mr', '생산의뢰'], ['#/prod/orders', '생산의뢰 접수'], ['#/prod/finished/plan', '생산계획'], ['#/prod/finished', '생산실적'], ['#/logistics/ship-orders', '출하지시'], ['#/logistics/ship', '출하'], ['#/sales/bills', '매출전표'], ['#/sales/tax', '세금계산서'], ['#/purchase/payments', '입금확인']] },
+  { key: 'cost', name: '원가 산출', on: ['#/purchase/cost', '#/purchase/cost/materials', '#/purchase/cost/rates', '#/purchase/cost/trend'], steps: [['#/purchase/cost/rates', '공통 기준(인건비·경비율)'], ['#/purchase/cost/materials', '원가 백데이터(단가 시점)'], ['#/purchase/cost', '품목별 원가·리비전'], ['#/purchase/cost/trend', '원가 추이·마진']] }, // 15.318
   { key: 'buy', name: '구매 · 입고 · 매입', steps: [['#/sales/orders', '수주'], ['#/sales/pr', '구매의뢰'], ['#/purchase/po', '발주'], ['#/logistics/receive', '입고확인'], ['#/quality/inspections', '수입검사'], ['#/purchase/bills', '매입전표'], ['#/purchase/tax', '매입 세금계산서'], ['#/purchase/disbursements', '지급확인']] },
   // 15.287 품질: 분석의뢰 · 수입검사 · 출하검사 · VOC (분석 관리 목록의 검사구분 칩을 누르면 그 흐름으로)
   { key: 'qreq', name: '품질 분석의뢰', steps: [['#/quality/request', '분석의뢰·접수'], ['#/quality/list', '분석 진행·결과'], ['#/quality/inspections', '검사 이력']] },

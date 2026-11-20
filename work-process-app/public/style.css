@@ -4206,3 +4206,36 @@ p a.btn.small, p .btn.small { white-space: nowrap; }
 ::selection { background: #b9d3ff; color: #0b1b3a; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) ::selection { background: #3d63dd; color: #fff; } }
 :root[data-theme="dark"] ::selection { background: #3d63dd; color: #fff; }
+
+/* 15.318 구매 › 원가 산출 관리: 원가표 그리드 · 요약 · 리비전 비교 · 추이 그래프 */
+.ci-grid tr.ci-labor > td:first-child { box-shadow: inset 3px 0 0 #3b6fd8; }
+.ci-grid tr.ci-exp > td:first-child { box-shadow: inset 3px 0 0 #a061d1; }
+.ci-grid tr.ci-mat > td:first-child { box-shadow: inset 3px 0 0 #e8590c; }
+.ci-grid input.ci-bad { outline: 2px solid var(--danger); outline-offset: -2px; background: color-mix(in srgb, var(--danger) 8%, var(--panel)); }
+.ci-grid .ci-own { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); margin-top: 2px; white-space: nowrap; }
+.ci-grid .ci-own input { width: auto; min-height: 0; }
+.ci-grid [data-ci-auto] { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ci-kpi .chg { border-color: #e8590c; } .ci-kpi .chg dd { color: #c2410c; }
+.ci-kpi dd small { font-size: 12px; font-weight: 600; }
+.ci-head { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+.ci-list td.r, .cm-list td.r, .ct-list td.r, .ci-revs td.r, .ci-cmp td.r { font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.grid tr.ci-new > td { background-color: color-mix(in srgb, #2f9e44 8%, var(--panel)); }
+table.grid tr.ci-chg > td { background-color: color-mix(in srgb, #e8590c 8%, var(--panel)); }
+table.grid tr.ci-del > td { color: var(--muted); }
+table.grid tr.cm-future > td { background-color: color-mix(in srgb, #f59f00 8%, var(--panel)); }
+table.grid tr.cr-cur > td { background-color: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
+.ok-text { color: #2b8a3e; }
+.cc-wrap { margin: 4px 0 10px; }
+.cc-svg { width: 100%; max-width: 760px; height: auto; display: block; }
+.cc-svg .cc-grid { stroke: var(--line); stroke-width: 1; }
+.cc-svg .cc-ax { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.cc-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.cc-legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+.ct-pick { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.cr-now { margin-bottom: 12px; }
+.cr-calc { border: 1px dashed var(--line); border-radius: 8px; padding: 6px 10px; margin-top: 6px; }
+.cr-calc summary { cursor: pointer; font-size: 13px; color: var(--accent); }
+@media (max-width: 700px) { .ct-pick { grid-template-columns: 1fr; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ok-text { color: #69db7c; } :root:not([data-theme="light"]) .ci-kpi .chg dd { color: #ffa94d; } }
+:root[data-theme="dark"] .ok-text { color: #69db7c; }
+:root[data-theme="dark"] .ci-kpi .chg dd { color: #ffa94d; }

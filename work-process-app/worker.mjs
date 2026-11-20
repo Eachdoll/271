@@ -524,7 +524,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'qualifications', 'supplier_evals', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests', 'quality_audits', 'audit_findings', 'validations', 'quality_goals', 'quality_kpi_values', 'quality_risks', 'risk_assessments', 'org_duty_assignments', 'dev_costs']; // 15.313 위험성평가 · 15.314 지정 담당자
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'qualifications', 'supplier_evals', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests', 'quality_audits', 'audit_findings', 'validations', 'quality_goals', 'quality_kpi_values', 'quality_risks', 'risk_assessments', 'org_duty_assignments', 'dev_costs', 'cost_rates', 'cost_materials', 'cost_material_prices', 'cost_items', 'cost_item_revs']; // 15.313 위험성평가 · 15.314 지정 담당자
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -5343,6 +5343,293 @@ route('DELETE', '/api/dev-costs/:id', async ({ user, params, query }) => {
   if (prior.status !== 'draft' || JSON.parse(prior.history || '[]').some(h => /확정/.test(h.what || ''))) throw bad('한 번이라도 확정된 원가표는 지울 수 없습니다.');
   await db.prepare('DELETE FROM dev_costs WHERE id=? AND revision=?').run(prior.id, prior.revision); return { ok: true };
 });
+// ── 15.318 구매 › 원가 산출 관리 ──
+// 엑셀 「원가 산출」 양식을 그대로 옮김: 품목별 원가 = 원부자재(소요량 × 원화 단가 × (1 + 로스%)) + 인건비(공정마다 시간당 인건비 × 인원 × 작업량 ÷ 시간당 처리량)
+// + 기타 직접비 → 직접비. 불량(직접비 × 불량률, 가산) · 제조경비(직접비 × 제조경비율) · 판관비(직접비 또는 직접비+제조경비 × 판관비율)를 더해 원가.
+// 원가 백데이터(원부자재·상품 단가)와 공통 기준(인건비·비율·환율)은 시점별로 쌓고, 품목 원가는 「그 시점」 단가·기준으로 계산한다.
+// 원가가 바뀔 때마다(직접 수정·단가 변경·기준 변경) 변동 시점·사유와 함께 리비전 스냅샷(cost_item_revs)을 남긴다. 구매 담당(관리자)만.
+const COST_KIND = { product: '제조', goods: '상품' };
+const COST_LINE = { mat: '원부자재', labor: '인건비', exp: '기타 직접비' };
+const COST_CUR = ['KRW', 'USD', 'EUR', 'JPY', 'CNY'];
+const COST_CAUSE = { manual: '직접 수정', material: '단가 변경', rates: '공통 기준 변경', create: '최초 산출' };
+const requireCost = user => { if (!hasRole(user, 'purchase')) throw new HttpError(403, '원가 산출 관리는 구매 담당자(관리자)만 봅니다.'); };
+const cr2 = v => Math.round(v * 100) / 100, cr4 = v => Math.round(v * 10000) / 10000;
+// 칸 수식: 숫자·+ − × ÷·괄호만(예: 245000/1500*0.32, =9000*4). 쉼표·₩·앞의 = 는 무시.
+function costExpr(src, label) {
+  let s = String(src ?? '').trim(); if (s.startsWith('=')) s = s.slice(1); s = s.replace(/[,₩\s]/g, '').replace(/×/g, '*').replace(/÷/g, '/'); if (!s) return null;
+  if (s.length > 120) throw bad(`${label} 식이 너무 깁니다.`);
+  let i = 0; const fail = () => { throw bad(`${label}: 「${String(src).slice(0, 40)}」은(는) 숫자나 사칙연산 식(+ - * / 괄호)으로 넣으세요.`); };
+  const num = () => { const m = /^(\d+(\.\d*)?|\.\d+)/.exec(s.slice(i)); if (!m) fail(); i += m[0].length; return Number(m[0]); };
+  const factor = () => { if (s[i] === '(') { i++; const v = expr(); if (s[i] !== ')') fail(); i++; return v; } if (s[i] === '-') { i++; return -factor(); } if (s[i] === '+') { i++; return factor(); } return num(); };
+  const term = () => { let v = factor(); for (;;) { if (s[i] === '*') { i++; v *= factor(); } else if (s[i] === '/') { i++; const d = factor(); if (d === 0) throw bad(`${label}: 0으로 나눌 수 없습니다.`); v /= d; } else return v; } };
+  const expr = () => { let v = term(); for (;;) { if (s[i] === '+') { i++; v += term(); } else if (s[i] === '-') { i++; v -= term(); } else return v; } };
+  const v = expr(); if (i !== s.length || !Number.isFinite(v)) fail(); return v;
+}
+async function costRatesAt(date) {
+  const r = await db.prepare('SELECT * FROM cost_rates WHERE effective_date<=? ORDER BY effective_date DESC, id DESC LIMIT 1').get(date);
+  return r ? { ...r, fx: JSON.parse(r.fx || '{}') } : { id: null, effective_date: null, labor_rate: 0, mfg_rate: 0, sga_rate: 0, defect_rate: 0, fx: {} };
+}
+async function costPricesAt(date) {
+  const rows = await db.prepare('SELECT * FROM cost_material_prices WHERE effective_date<=? ORDER BY material_id, effective_date, id').all(date);
+  const out = {}; for (const r of rows) out[r.material_id] = r; return out; // 시점까지 마지막 단가
+}
+function costParse(item) { return { ...item, lines: Array.isArray(item.lines) ? item.lines : JSON.parse(item.lines || '[]'), overrides: typeof item.overrides === 'object' && item.overrides ? item.overrides : JSON.parse(item.overrides || '{}') }; }
+// 원가 계산(서버가 기준. 화면도 같은 식으로 미리 보여 준다)
+function costCompute(item0, rates, prices) {
+  const item = costParse(item0), o = item.overrides, pick = k => o[k] == null ? rates[k] || 0 : o[k];
+  const used = { labor_rate: pick('labor_rate'), mfg_rate: pick('mfg_rate'), sga_rate: pick('sga_rate'), defect_rate: pick('defect_rate'), rates_id: rates.id, rates_date: rates.effective_date, overridden: Object.keys(o).filter(k => o[k] != null) };
+  const lines = item.lines.map((l, i) => {
+    const n = `${i + 1}번 줄 `, qty = costExpr(l.qty, n + '소요량·작업량') ?? 1, loss = Number(l.loss) || 0;
+    let unit_price = 0, price_src = 'manual', price_date = null;
+    if (l.type === 'mat' && l.material_id && !l.manual_price) { const p = prices[l.material_id]; unit_price = p ? p.krw_price : 0; price_src = p ? 'master' : 'missing'; price_date = p?.effective_date || null; }
+    else unit_price = costExpr(l.price, n + '단가') ?? 0;
+    let amount = 0, capa = null, workers = null;
+    if (l.type === 'labor') { capa = costExpr(l.capa, n + '시간당 처리량'); workers = costExpr(l.workers, n + '인원') ?? 1; amount = capa > 0 ? used.labor_rate * workers * qty / capa : qty * unit_price; if (capa > 0) price_src = 'rate'; }
+    else if (l.type === 'mat') amount = qty * unit_price * (1 + loss / 100);
+    else amount = qty * unit_price;
+    return { ...l, qty_v: cr4(qty), unit_price: cr4(unit_price), capa_v: capa == null ? null : cr4(capa), workers_v: workers, amount: cr4(amount), price_src, price_date };
+  });
+  const sum = t => lines.filter(l => l.type === t).reduce((s, l) => s + l.amount, 0);
+  const material = sum('mat'), labor = sum('labor'), other = sum('exp'), direct = material + labor + other;
+  const defect = direct * used.defect_rate / 100, mfg = direct * used.mfg_rate / 100, sga = (item.sga_base === 'mfg' ? direct + mfg : direct) * used.sga_rate / 100, total = direct + defect + mfg + sga;
+  const sale = item.sale_price == null || item.sale_price === '' ? null : Number(item.sale_price), pcs = Number(item.pieces) > 0 ? Number(item.pieces) : null;
+  const totals = { material: cr2(material), labor: cr2(labor), other: cr2(other), direct: cr2(direct), defect: cr2(defect), mfg: cr2(mfg), sga: cr2(sga), total: cr2(total), piece_cost: pcs ? cr4(total / pcs) : null,
+    sale_price: sale, margin: sale == null ? null : cr2(sale - total), margin_rate: sale ? cr2((sale - total) / sale * 100) : null, missing_price: lines.some(l => l.price_src === 'missing') };
+  return { lines, totals, rates: used };
+}
+function costLinesClean(list, matIds) {
+  if (!Array.isArray(list)) throw bad('원가 줄이 올바르지 않습니다.'); if (list.length > 200) throw bad('원가 줄은 200줄까지입니다.');
+  const keys = new Set();
+  return list.map((x, i) => {
+    const o = x && typeof x === 'object' ? x : {}, n = `${i + 1}번 줄 `, key = /^[a-f0-9]{8}$/.test(o.key || '') ? o.key : randomHex(4);
+    if (keys.has(key)) throw bad('원가 줄이 겹칩니다.'); keys.add(key);
+    const type = COST_LINE[o.type] ? o.type : 'mat', mid = type === 'mat' ? optId(o.material_id) : null;
+    if (mid && !matIds.has(mid)) throw bad(n + '원가 백데이터의 원부자재를 다시 고르세요.');
+    const ex = (k, l) => { const v = str(o[k], 120); costExpr(v, n + l); return v; };
+    const loss = o.loss === '' || o.loss == null ? 0 : Number(o.loss); if (!(loss >= 0 && loss <= 100)) throw bad(n + '로스(%)는 0~100으로 넣으세요.');
+    const line = { key, type, material_id: mid, manual_price: !!(mid && o.manual_price), name: str(o.name, 100), spec: str(o.spec, 100), unit: str(o.unit, 20), qty: ex('qty', '소요량·작업량'), price: ex('price', '단가'), loss: type === 'mat' ? loss : 0,
+      capa: type === 'labor' ? ex('capa', '시간당 처리량') : '', workers: type === 'labor' ? ex('workers', '인원') : '', note: str(o.note, 200) };
+    if (!line.name && !mid) throw bad(n + '항목 이름을 넣으세요.');
+    return line;
+  });
+}
+async function costItemBody(o0, prior = {}) {
+  const o = o0 && typeof o0 === 'object' ? o0 : {}, pick = k => o[k] === undefined ? prior[k] : o[k];
+  const bom = optId(pick('bom_id')); if (bom && !await db.prepare('SELECT 1 FROM boms WHERE id=?').get(bom)) throw bad('제품등록 품목을 다시 고르세요.');
+  const nOrNull = (v, l, lo = 0, hi = 1e12) => { if (v === '' || v == null) return null; const n = Number(String(v).replace(/,/g, '')); if (!Number.isFinite(n) || n < lo || n > hi) throw bad(`${l}을(를) ${lo} 이상 숫자로 넣으세요.`); return n; };
+  const ov0 = o.overrides === undefined ? JSON.parse(prior.overrides || '{}') : (o.overrides && typeof o.overrides === 'object' ? o.overrides : {}), ov = {};
+  for (const [k, l, hi] of [['labor_rate', '시간당 인건비', 1e7], ['mfg_rate', '제조경비율', 100], ['sga_rate', '판관비율', 100], ['defect_rate', '불량률', 100]]) { const v = nOrNull(ov0[k], l, 0, hi); if (v != null) ov[k] = v; }
+  const matIds = new Set((await db.prepare('SELECT id FROM cost_materials').all()).map(r => r.id));
+  return { name: reqStr(pick('name'), '품목명', 150), spec: str(pick('spec'), 150), kind: COST_KIND[pick('kind')] ? pick('kind') : 'product', category: str(pick('category'), 50), bom_id: bom, unit: str(pick('unit'), 20),
+    pieces: nOrNull(pick('pieces'), '낱개 수', 0.0001), pack_spec: str(pick('pack_spec'), 100), customer: str(pick('customer'), 100), sale_price: nOrNull(pick('sale_price'), '판매가'), sga_base: pick('sga_base') === 'mfg' ? 'mfg' : 'direct',
+    overrides: JSON.stringify(ov), lines: JSON.stringify(costLinesClean(o.lines === undefined ? JSON.parse(prior.lines || '[]') : o.lines, matIds)), note: str(pick('note'), 1000) };
+}
+const COST_ITEM_COLS = ['name', 'spec', 'kind', 'category', 'bom_id', 'unit', 'pieces', 'pack_spec', 'customer', 'sale_price', 'sga_base', 'overrides', 'lines', 'note'];
+const costHeader = f => ({ name: f.name, spec: f.spec, kind: f.kind, unit: f.unit, pieces: f.pieces, pack_spec: f.pack_spec, customer: f.customer, sale_price: f.sale_price, sga_base: f.sga_base, overrides: JSON.parse(f.overrides || '{}') });
+const costRevSql = (itemId, rev, date, reason, cause, f, calc, by) => ({ sql: 'INSERT INTO cost_item_revs(item_id,rev,effective_date,reason,cause,header,lines,rates,totals,created_by) VALUES(?,?,?,?,?,?,?,?,?,?)', args: [itemId, rev, date, reason, cause, JSON.stringify(costHeader(f)), JSON.stringify(calc.lines), JSON.stringify(calc.rates), JSON.stringify(calc.totals), by] });
+const costCostKey = f => JSON.stringify([f.lines, f.overrides, f.sga_base, f.pieces ?? null, f.kind]);
+async function costItemsAll() { return (await db.prepare('SELECT * FROM cost_items ORDER BY active DESC, item_code').all()); }
+async function costLive(rows, date) { const [rates, prices] = [await costRatesAt(date), await costPricesAt(date)]; return rows.map(r => { try { return costCompute(r, rates, prices); } catch { return null; } }); }
+function costRowOut(r, live, revs) {
+  const totals = JSON.parse(r.totals || '{}'), mine = revs.filter(x => x.item_id === r.id), prev = mine.filter(x => x.rev < r.rev).at(-1), pt = prev ? JSON.parse(prev.totals || '{}') : null;
+  return { ...r, lines: JSON.parse(r.lines || '[]'), overrides: JSON.parse(r.overrides || '{}'), history: JSON.parse(r.history || '[]'), active: !!r.active, kind_label: COST_KIND[r.kind], totals,
+    live: live?.totals || null, stale: !!live && Math.abs((live.totals.total || 0) - (totals.total || 0)) > 0.005, prev_total: pt?.total ?? null, prev_date: prev?.effective_date || null,
+    change_pct: pt?.total ? cr2(((totals.total || 0) - pt.total) / pt.total * 100) : null, rev_count: mine.length };
+}
+async function costMaterialsOut(date) {
+  const mats = await db.prepare('SELECT * FROM cost_materials ORDER BY active DESC, code').all(), prices = await db.prepare('SELECT * FROM cost_material_prices ORDER BY material_id, effective_date, id').all();
+  const items = await db.prepare('SELECT id, item_code, name, lines FROM cost_items WHERE active=1').all();
+  return mats.map(m => {
+    const ps = prices.filter(p => p.material_id === m.id), cur = ps.filter(p => p.effective_date <= date).at(-1) || null, next = ps.find(p => p.effective_date > date) || null, prev = cur ? ps.filter(p => p.effective_date <= date && p.id !== cur.id).at(-1) || null : null;
+    const used = items.filter(it => JSON.parse(it.lines || '[]').some(l => l.material_id === m.id)).map(it => ({ id: it.id, item_code: it.item_code, name: it.name }));
+    return { ...m, active: !!m.active, history: JSON.parse(m.history || '[]'), current: cur, next, prev_krw: prev?.krw_price ?? null, change_pct: prev?.krw_price ? cr2((cur.krw_price - prev.krw_price) / prev.krw_price * 100) : null, price_count: ps.length, used_by: used };
+  });
+}
+function costPriceBody(o, rates) {
+  const date = dateStr(o.effective_date || today(), '적용 시점'), currency = COST_CUR.includes(o.currency) ? o.currency : 'KRW';
+  const n = (v, l, allowNeg = false, def = 0) => { if (v === '' || v == null) return def; const x = Number(String(v).replace(/,/g, '')); if (!Number.isFinite(x) || (!allowNeg && x < 0)) throw bad(`${l}을(를) 숫자로 넣으세요.`); return x; };
+  const price = n(o.price, '단가'), surcharge = n(o.surcharge, '할증(서차지)', true), extra = n(o.extra_krw, '부대비(원/단위)', true);
+  let fx = currency === 'KRW' ? 1 : n(o.fx, '환율', false, null); if (currency !== 'KRW' && !fx) fx = Number(rates.fx?.[currency]) || 0; if (currency !== 'KRW' && !(fx > 0)) throw bad(`${currency} 환율을 넣거나 공통 기준에 ${currency} 환율을 먼저 넣으세요.`);
+  return { effective_date: date, currency, price, surcharge, fx, extra_krw: extra, krw_price: cr4((price + surcharge) * fx + extra), incoterms: str(o.incoterms, 30), reason: str(o.reason, 200) };
+}
+const costPriceSql = (mid, p, key, by) => ({ sql: 'INSERT INTO cost_material_prices(material_id,effective_date,currency,price,surcharge,fx,extra_krw,krw_price,incoterms,reason,request_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)', args: [mid, p.effective_date, p.currency, p.price, p.surcharge, p.fx, p.extra_krw, p.krw_price, p.incoterms, p.reason, key, by] });
+// 재산출: 고른 품목(또는 그 원부자재를 쓰는 품목·공통 기준을 쓰는 품목)을 시점 단가·기준으로 다시 계산해, 원가가 바뀐 품목만 리비전을 남긴다(dry면 미리 보기만).
+async function costRecalc(user, { ids = null, material_id = null, rates = false, date, reason, cause, dry = false }) {
+  const [rt, pr] = [await costRatesAt(date), await costPricesAt(date)], out = { changed: [], unchanged: 0, skipped: [] };
+  let rows = (await db.prepare('SELECT * FROM cost_items WHERE active=1 ORDER BY item_code').all());
+  if (ids) rows = rows.filter(r => ids.includes(r.id));
+  if (material_id) rows = rows.filter(r => JSON.parse(r.lines || '[]').some(l => l.material_id === material_id && !l.manual_price));
+  if (rates) rows = rows.filter(r => { const o = JSON.parse(r.overrides || '{}'); return ['labor_rate', 'mfg_rate', 'sga_rate', 'defect_rate'].some(k => o[k] == null); });
+  for (const r of rows) {
+    let calc; try { calc = costCompute(r, rt, pr); } catch (e) { out.skipped.push({ id: r.id, item_code: r.item_code, name: r.name, why: e.message }); continue; }
+    const old = JSON.parse(r.totals || '{}');
+    if (Math.abs((calc.totals.total || 0) - (old.total || 0)) <= 0.005) { out.unchanged++; continue; }
+    const row = { id: r.id, item_code: r.item_code, name: r.name, old_total: old.total ?? null, new_total: calc.totals.total, pct: old.total ? cr2((calc.totals.total - old.total) / old.total * 100) : null, sale_price: r.sale_price, new_margin_rate: calc.totals.margin_rate };
+    if (r.rev_date && date < r.rev_date) { out.skipped.push({ ...row, why: `마지막 리비전 시점(${r.rev_date})보다 앞선 시점입니다.` }); continue; }
+    if (dry) { out.changed.push(row); continue; }
+    const rev = r.rev + 1, tok = randomHex(8), gd = tokGuard('cost_items', r.id, r.revision + 1, tok);
+    const res = await db.batch([
+      { sql: "UPDATE cost_items SET rev=?,rev_date=?,totals=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?", args: [rev, date, JSON.stringify(calc.totals), pushHist(r, { by: user.name, what: `Rev.${rev} ${COST_CAUSE[cause]} · ${reason}`, tok }), user.name, r.id, r.revision] },
+      { ...costRevSql(r.id, rev, date, reason, cause, { ...r }, calc, user.name), sql: costRevSql(r.id, rev, date, reason, cause, r, calc, user.name).sql.replace(') VALUES(?,?,?,?,?,?,?,?,?,?)', ') SELECT ?,?,?,?,?,?,?,?,?,? WHERE ' + gd.sql), args: [...costRevSql(r.id, rev, date, reason, cause, r, calc, user.name).args, ...gd.args] },
+    ]);
+    if (!res[0].meta?.changes && !res[0].changes) { out.skipped.push({ ...row, why: '다른 사람이 먼저 고쳤습니다.' }); continue; }
+    out.changed.push({ ...row, rev });
+  }
+  return out;
+}
+// 공통 기준
+route('GET', '/api/cost/rates', async ({ user }) => {
+  requireCost(user); const t = today(), rows = (await db.prepare('SELECT * FROM cost_rates ORDER BY effective_date DESC, id DESC').all()).map(r => ({ ...r, fx: JSON.parse(r.fx || '{}') }));
+  return { rows, current: rows.find(r => r.effective_date <= t) || null, next: [...rows].reverse().find(r => r.effective_date > t) || null, today: t };
+});
+route('POST', '/api/cost/rates', async ({ user, body }) => {
+  requireCost(user); const key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM cost_rates WHERE request_id=?').get(key); if (old) return old; }
+  const n = (v, l, hi) => { const x = Number(String(v ?? '').replace(/,/g, '')); if (v === '' || v == null || !Number.isFinite(x) || x < 0 || x > hi) throw bad(`${l}을(를) 0~${hi.toLocaleString('ko-KR')} 숫자로 넣으세요.`); return x; };
+  const fx0 = body.fx && typeof body.fx === 'object' ? body.fx : {}, fx = {};
+  for (const c of COST_CUR.slice(1)) { const v = fx0[c]; if (v !== '' && v != null) { const x = Number(String(v).replace(/,/g, '')); if (!(x > 0)) throw bad(`${c} 환율을 숫자로 넣으세요.`); fx[c] = x; } }
+  const date = dateStr(body.effective_date || today(), '적용 시점'), first = !(await db.prepare('SELECT 1 FROM cost_rates').get());
+  const reason = str(body.reason, 200); if (!first && !reason) throw bad('바꾸는 사유를 적으세요(예: 2026 최저임금 인상, 3개년 재무제표 갱신).');
+  const r = await db.prepare('INSERT INTO cost_rates(effective_date,labor_rate,mfg_rate,sga_rate,defect_rate,fx,reason,note,request_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?)')
+    .run(date, n(body.labor_rate, '시간당 인건비', 1e7), n(body.mfg_rate, '제조경비율', 100), n(body.sga_rate, '판관비율', 100), n(body.defect_rate ?? 0, '불량률', 100), JSON.stringify(fx), reason || '최초 등록', str(body.note, 500), key, user.name);
+  return { ...(await mustGet('cost_rates', r.lastInsertRowid)), fx };
+});
+route('DELETE', '/api/cost/rates/:id', async ({ user, params }) => {
+  requireCost(user); const r = await mustGet('cost_rates', params.id);
+  if ((await db.prepare('SELECT COUNT(*) c FROM cost_rates').get()).c < 2) throw bad('공통 기준이 하나뿐이라 지울 수 없습니다.');
+  await db.prepare('DELETE FROM cost_rates WHERE id=?').run(r.id); return { ok: true };
+});
+// 원가 백데이터(원부자재·상품 단가)
+route('GET', '/api/cost/materials', async ({ user }) => { requireCost(user); const t = today(); return { rows: await costMaterialsOut(t), rates: await costRatesAt(t), today: t }; });
+route('GET', '/api/cost/materials/:id/prices', async ({ user, params }) => { requireCost(user); const m = await mustGet('cost_materials', params.id); return { material: m, rows: await db.prepare('SELECT * FROM cost_material_prices WHERE material_id=? ORDER BY effective_date, id').all(m.id) }; });
+async function costMatBody(o, prior = {}) {
+  const pick = k => o[k] === undefined ? prior[k] : o[k];
+  return { name: reqStr(pick('name'), '원부자재명', 150), spec: str(pick('spec'), 150), category: str(pick('category'), 30), supplier: str(pick('supplier'), 100), unit: str(pick('unit'), 20), note: str(pick('note'), 500) };
+}
+route('POST', '/api/cost/materials', async ({ user, body }) => {
+  requireCost(user); const key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM cost_materials WHERE request_id=?').get(key); if (old) return old; }
+  const f = await costMatBody(body), p = costPriceBody(body, await costRatesAt(body.effective_date || today())); p.reason = p.reason || '최초 등록';
+  const code = str(body.code, 40) || `M-${String(((await db.prepare('SELECT COUNT(*) c FROM cost_materials').get()).c + 1)).padStart(4, '0')}`;
+  if (await db.prepare('SELECT 1 FROM cost_materials WHERE code=?').get(code)) throw bad(`이미 있는 코드입니다: ${code}`);
+  await db.batch([
+    { sql: 'INSERT INTO cost_materials(code,name,spec,category,supplier,unit,note,history,request_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?)', args: [code, f.name, f.spec, f.category, f.supplier, f.unit, f.note, JSON.stringify([{ at: now(), by: user.name, what: `등록 · ${p.effective_date} 원화 ${p.krw_price}` }]), key, user.name] },
+    { ...costPriceSql(null, p, null, user.name), sql: costPriceSql(0, p, null, user.name).sql.replace('VALUES(?,', 'VALUES((SELECT id FROM cost_materials WHERE code=?),'), args: [code, ...costPriceSql(0, p, null, user.name).args.slice(1)] },
+  ]);
+  return (await costMaterialsOut(today())).find(m => m.code === code);
+});
+route('PUT', '/api/cost/materials/:id', async ({ user, params, body }) => {
+  requireCost(user); const prior = await mustGet('cost_materials', params.id);
+  if (Number(body.revision) !== prior.revision) throw conflict();
+  const f = await costMatBody(body, prior), active = body.active === undefined ? prior.active : (body.active ? 1 : 0), code = body.code === undefined ? prior.code : reqStr(body.code, '코드', 40);
+  if (code !== prior.code && await db.prepare('SELECT 1 FROM cost_materials WHERE code=? AND id<>?').get(code, prior.id)) throw bad(`이미 있는 코드입니다: ${code}`);
+  const changed = ['name', 'spec', 'category', 'supplier', 'unit', 'note'].filter(k => prior[k] !== f[k]); if (code !== prior.code) changed.push('code'); if (active !== prior.active) changed.push('active');
+  if (!changed.length) return (await costMaterialsOut(today())).find(m => m.id === prior.id);
+  const r = await db.prepare("UPDATE cost_materials SET code=?,name=?,spec=?,category=?,supplier=?,unit=?,note=?,active=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?")
+    .run(code, f.name, f.spec, f.category, f.supplier, f.unit, f.note, active, pushHist(prior, { by: user.name, what: active !== prior.active ? (active ? '다시 사용' : '사용 중지') : '수정', fields: changed }), user.name, prior.id, prior.revision);
+  if (!r.changes) throw conflict();
+  return (await costMaterialsOut(today())).find(m => m.id === prior.id);
+});
+// 단가 변경: 새 시점 단가를 쌓고, 그 원부자재를 쓰는 품목의 원가 영향을 돌려준다(dry면 저장하지 않고 영향만). recalc면 영향 품목을 바로 재산출(리비전).
+route('POST', '/api/cost/materials/:id/prices', async ({ user, params, body }) => {
+  requireCost(user); const m = await mustGet('cost_materials', params.id), key = str(body.request_id, 80) || null;
+  if (key && !body.dry) { const old = await db.prepare('SELECT * FROM cost_material_prices WHERE request_id=?').get(key); if (old) return { price: old, impact: { changed: [], unchanged: 0, skipped: [] } }; }
+  const p = costPriceBody(body, await costRatesAt(body.effective_date || today())); if (!p.reason) throw bad('단가가 바뀐 사유를 적으세요(예: 26년 5월 공급가 인상 +4%).');
+  if (await db.prepare('SELECT 1 FROM cost_material_prices WHERE material_id=? AND effective_date=? AND krw_price=? AND price=?').get(m.id, p.effective_date, p.krw_price, p.price)) throw bad('같은 시점에 같은 단가가 이미 있습니다.');
+  if (body.dry) {
+    // 미리 보기: 이 단가를 그 시점에 넣었다고 치고 영향 계산
+    const [rt, pr] = [await costRatesAt(p.effective_date), await costPricesAt(p.effective_date)]; pr[m.id] = { ...p, material_id: m.id };
+    const rows = (await db.prepare('SELECT * FROM cost_items WHERE active=1').all()).filter(r => JSON.parse(r.lines || '[]').some(l => l.material_id === m.id && !l.manual_price));
+    return { price: p, impact: { changed: rows.map(r => { const c = costCompute(r, rt, pr), o = JSON.parse(r.totals || '{}'); return { id: r.id, item_code: r.item_code, name: r.name, old_total: o.total ?? null, new_total: c.totals.total, pct: o.total ? cr2((c.totals.total - o.total) / o.total * 100) : null, sale_price: r.sale_price, new_margin_rate: c.totals.margin_rate }; }).filter(x => Math.abs((x.new_total || 0) - (x.old_total || 0)) > 0.005), unchanged: 0, skipped: [] } };
+  }
+  await db.batch([costPriceSql(m.id, p, key, user.name), { sql: "UPDATE cost_materials SET history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=?", args: [pushHist(m, { by: user.name, what: `단가 ${p.effective_date} · ${p.currency} ${p.price}${p.surcharge ? ' + ' + p.surcharge : ''} → 원화 ${p.krw_price} · ${p.reason}` }), user.name, m.id] }]);
+  const impact = body.recalc ? await costRecalc(user, { material_id: m.id, date: p.effective_date, reason: `${m.name} 단가 변경 · ${p.reason}`, cause: 'material' }) : await costRecalc(user, { material_id: m.id, date: p.effective_date, reason: '', cause: 'material', dry: true });
+  return { price: p, impact, recalculated: !!body.recalc };
+});
+route('DELETE', '/api/cost/materials/:id/prices/:pid', async ({ user, params }) => {
+  requireCost(user); const m = await mustGet('cost_materials', params.id), p = await db.prepare('SELECT * FROM cost_material_prices WHERE id=? AND material_id=?').get(params.pid, m.id); if (!p) throw bad('단가 이력을 찾을 수 없습니다.');
+  if ((await db.prepare('SELECT COUNT(*) c FROM cost_material_prices WHERE material_id=?').get(m.id)).c < 2) throw bad('단가가 하나뿐이라 지울 수 없습니다.');
+  await db.batch([{ sql: 'DELETE FROM cost_material_prices WHERE id=?', args: [p.id] }, { sql: "UPDATE cost_materials SET history=?,revision=revision+1 WHERE id=?", args: [pushHist(m, { by: user.name, what: `단가 이력 삭제 · ${p.effective_date} 원화 ${p.krw_price}` }), m.id] }]);
+  return { ok: true };
+});
+// 엑셀에서 붙여넣은 백데이터 여러 줄: 코드가 있으면 단가가 다를 때만 새 시점 단가, 없으면 새로 등록
+route('POST', '/api/cost/materials/bulk', async ({ user, body }) => {
+  requireCost(user); const rows = Array.isArray(body.rows) ? body.rows.slice(0, 500) : []; if (!rows.length) throw bad('붙여넣은 줄이 없습니다.');
+  const out = { created: 0, priced: 0, same: 0, errors: [] }; let seq = (await db.prepare('SELECT COUNT(*) c FROM cost_materials').get()).c;
+  for (const [i, o] of rows.entries()) {
+    try {
+      const date = o.effective_date || today(), p = costPriceBody({ ...o, effective_date: date }, await costRatesAt(date)), code = str(o.code, 40);
+      const ex = code ? await db.prepare('SELECT * FROM cost_materials WHERE code=?').get(code) : null;
+      if (ex) {
+        const cur = (await db.prepare('SELECT * FROM cost_material_prices WHERE material_id=? AND effective_date<=? ORDER BY effective_date DESC, id DESC LIMIT 1').get(ex.id, p.effective_date));
+        if (cur && Math.abs(cur.krw_price - p.krw_price) < 0.00005 && cur.price === p.price) { out.same++; continue; }
+        p.reason = p.reason || '엑셀 붙여넣기'; await db.batch([costPriceSql(ex.id, p, null, user.name)]); out.priced++;
+      } else {
+        const f = await costMatBody(o), c = code || `M-${String(++seq).padStart(4, '0')}`; p.reason = p.reason || '엑셀 붙여넣기 등록';
+        await db.batch([{ sql: 'INSERT INTO cost_materials(code,name,spec,category,supplier,unit,note,history,created_by) VALUES(?,?,?,?,?,?,?,?,?)', args: [c, f.name, f.spec, f.category, f.supplier, f.unit, f.note, JSON.stringify([{ at: now(), by: user.name, what: '엑셀 붙여넣기 등록' }]), user.name] },
+          { sql: costPriceSql(0, p, null, user.name).sql.replace('VALUES(?,', 'VALUES((SELECT id FROM cost_materials WHERE code=?),'), args: [c, ...costPriceSql(0, p, null, user.name).args.slice(1)] }]);
+        out.created++;
+      }
+    } catch (e) { out.errors.push(`${i + 1}번 줄: ${e.message}`); }
+  }
+  return out;
+});
+// 품목별 원가
+route('GET', '/api/cost/items', async ({ user }) => {
+  requireCost(user); const t = today(), rows = await costItemsAll(), live = await costLive(rows, t), revs = await db.prepare('SELECT item_id, rev, effective_date, totals FROM cost_item_revs ORDER BY item_id, rev').all();
+  return { rows: rows.map((r, i) => costRowOut(r, live[i], revs)), materials: (await costMaterialsOut(t)).filter(m => m.active).map(m => ({ id: m.id, code: m.code, name: m.name, spec: m.spec, unit: m.unit, supplier: m.supplier, category: m.category, krw_price: m.current?.krw_price ?? null, price_date: m.current?.effective_date || null })),
+    rates: await costRatesAt(t), boms: await db.prepare("SELECT id, product, product_code, item_category FROM boms ORDER BY product LIMIT 3000").all().catch(() => []), today: t };
+});
+route('GET', '/api/cost/items/:id/revs', async ({ user, params }) => {
+  requireCost(user); const it = await mustGet('cost_items', params.id);
+  return { item: it, rows: (await db.prepare('SELECT * FROM cost_item_revs WHERE item_id=? ORDER BY rev').all(it.id)).map(r => ({ ...r, header: JSON.parse(r.header), lines: JSON.parse(r.lines), rates: JSON.parse(r.rates), totals: JSON.parse(r.totals), cause_label: COST_CAUSE[r.cause] || r.cause })) };
+});
+route('POST', '/api/cost/items', async ({ user, body }) => {
+  requireCost(user); const key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM cost_items WHERE request_id=?').get(key); if (old) return old; }
+  const f = await costItemBody(body), date = dateStr(body.effective_date || today(), '원가 산출 시점'), calc = costCompute(f, await costRatesAt(date), await costPricesAt(date));
+  const code = str(body.item_code, 40) || `CI-${String(((await db.prepare('SELECT COUNT(*) c FROM cost_items').get()).c + 1)).padStart(4, '0')}`;
+  if (await db.prepare('SELECT 1 FROM cost_items WHERE item_code=?').get(code)) throw bad(`이미 있는 품목코드입니다: ${code}`);
+  const reason = str(body.reason, 200) || '최초 산출';
+  await db.batch([
+    { sql: `INSERT INTO cost_items(item_code,${COST_ITEM_COLS.join(',')},rev,rev_date,totals,history,request_id,created_by) VALUES(?,${COST_ITEM_COLS.map(() => '?').join(',')},0,?,?,?,?,?)`, args: [code, ...COST_ITEM_COLS.map(k => f[k]), date, JSON.stringify(calc.totals), JSON.stringify([{ at: now(), by: user.name, what: `Rev.0 최초 산출 · 원가 ${calc.totals.total}` }]), key, user.name] },
+    { ...costRevSql(0, 0, date, reason, 'create', f, calc, user.name), sql: costRevSql(0, 0, date, reason, 'create', f, calc, user.name).sql.replace('VALUES(?,', 'VALUES((SELECT id FROM cost_items WHERE item_code=?),'), args: [code, ...costRevSql(0, 0, date, reason, 'create', f, calc, user.name).args.slice(1)] },
+  ]);
+  const t = today(), rows = await costItemsAll(), r = rows.find(x => x.item_code === code); return costRowOut(r, (await costLive([r], t))[0], await db.prepare('SELECT item_id, rev, effective_date, totals FROM cost_item_revs WHERE item_id=? ORDER BY rev').all(r.id));
+});
+// 수정: 원가에 영향을 주는 내용(원가 줄·기준 덮어쓰기·판관비 기준·낱개 수·구분)이 바뀌거나 계산 원가가 달라지면 새 리비전(변동 시점·사유 필수).
+// 판매가·고객·포장사양 같은 머리 정보만 바뀌면 리비전 없이 고친다(이력에 남음).
+route('PUT', '/api/cost/items/:id', async ({ user, params, body }) => {
+  requireCost(user); const prior = await mustGet('cost_items', params.id);
+  if (Number(body.revision) !== prior.revision) throw conflict();
+  const f = await costItemBody(body, prior), code = body.item_code === undefined ? prior.item_code : reqStr(body.item_code, '품목코드', 40), active = body.active === undefined ? prior.active : (body.active ? 1 : 0);
+  if (code !== prior.item_code && await db.prepare('SELECT 1 FROM cost_items WHERE item_code=? AND id<>?').get(code, prior.id)) throw bad(`이미 있는 품목코드입니다: ${code}`);
+  const date = dateStr(body.effective_date || today(), '원가 변동 시점'), calc = costCompute(f, await costRatesAt(date), await costPricesAt(date)), old = JSON.parse(prior.totals || '{}');
+  const costChanged = costCostKey(f) !== costCostKey(prior) || Math.abs((calc.totals.total || 0) - (old.total || 0)) > 0.005;
+  const changed = COST_ITEM_COLS.filter(k => (prior[k] ?? null) !== (f[k] ?? null)); if (code !== prior.item_code) changed.push('item_code'); if (active !== prior.active) changed.push('active');
+  if (!changed.length && !costChanged) return { ...costRowOut(prior, null, []), unchanged: true };
+  let stmts;
+  if (costChanged) {
+    const reason = str(body.reason, 200); if (!reason) throw bad('원가가 바뀌었습니다. 변경 사유를 적으세요(예: 원단 단가 인상, 포장 사양 변경).');
+    if (prior.rev_date && date < prior.rev_date) throw bad(`변동 시점은 마지막 리비전 시점(${prior.rev_date}) 이후로 넣으세요.`);
+    const rev = prior.rev + 1, tok = randomHex(8), gd = tokGuard('cost_items', prior.id, prior.revision + 1, tok), rs = costRevSql(prior.id, rev, date, reason, 'manual', f, calc, user.name);
+    stmts = [{ sql: `UPDATE cost_items SET item_code=?,${COST_ITEM_COLS.map(k => k + '=?').join(',')},active=?,rev=?,rev_date=?,totals=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`,
+      args: [code, ...COST_ITEM_COLS.map(k => f[k]), active, rev, date, JSON.stringify(calc.totals), pushHist(prior, { by: user.name, what: `Rev.${rev} ${reason} · 원가 ${old.total ?? '-'} → ${calc.totals.total}`, fields: changed, tok }), user.name, prior.id, prior.revision] },
+      { sql: rs.sql.replace(') VALUES(?,?,?,?,?,?,?,?,?,?)', ') SELECT ?,?,?,?,?,?,?,?,?,? WHERE ' + gd.sql), args: [...rs.args, ...gd.args] }];
+  } else {
+    const t2 = { ...old, sale_price: calc.totals.sale_price, margin: calc.totals.margin, margin_rate: calc.totals.margin_rate, piece_cost: calc.totals.piece_cost };
+    stmts = [{ sql: `UPDATE cost_items SET item_code=?,${COST_ITEM_COLS.map(k => k + '=?').join(',')},active=?,totals=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`,
+      args: [code, ...COST_ITEM_COLS.map(k => f[k]), active, JSON.stringify(t2), pushHist(prior, { by: user.name, what: active !== prior.active ? (active ? '다시 사용' : '사용 중지') : '수정(원가 변동 없음)', fields: changed }), user.name, prior.id, prior.revision] }];
+  }
+  const res = await db.batch(stmts); if (!(res[0].meta?.changes ?? res[0].changes)) throw conflict();
+  const r = await mustGet('cost_items', prior.id); return costRowOut(r, (await costLive([r], today()))[0], await db.prepare('SELECT item_id, rev, effective_date, totals FROM cost_item_revs WHERE item_id=? ORDER BY rev').all(r.id));
+});
+route('POST', '/api/cost/items/recalc', async ({ user, body }) => {
+  requireCost(user); const date = dateStr(body.effective_date || today(), '변동 시점'), reason = str(body.reason, 200);
+  if (!body.dry && !reason) throw bad('재산출 사유를 적으세요(예: 2026 공통 기준 적용).');
+  const ids = Array.isArray(body.ids) ? body.ids.map(optId).filter(Boolean) : null;
+  return costRecalc(user, { ids, material_id: optId(body.material_id), rates: !!body.rates, date, reason, cause: body.rates ? 'rates' : body.material_id ? 'material' : 'manual', dry: !!body.dry });
+});
 // 15.312 통합 번호 검색(메뉴 찾기 칸): NC-·COA-·CHG-·AUD-·VAL-·REL-·RSK-·문서번호·설비번호·시험법·의뢰 번호와 제목으로 기록을 찾는다.
 // 열람 제한이 있는 품질 문서는 qdocVisible로 거르고, 나머지는 화면(메뉴 권한)에서 다시 거른다. 종류마다 5건, 모두 25건까지.
 route('GET', '/api/find', async ({ user, query }) => {
@@ -5361,6 +5648,7 @@ route('GET', '/api/find', async ({ user, query }) => {
   await add('method', '시험법', '#/quality/methods', "SELECT id, method_no, name, status FROM test_methods WHERE method_no LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\' ORDER BY method_no LIMIT 5", r => ({ id: r.id, no: r.method_no, label: r.name, state: r.status === 'active' ? '사용' : '폐지' }));
   await add('ra', '위험성평가', '#/prod/risk', "SELECT id, ra_no, method, title, status FROM risk_assessments WHERE ra_no LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\' ORDER BY id DESC LIMIT 5", r => ({ id: r.id, no: r.ra_no, label: `${RA_METHOD[r.method]} · ${r.title}`, state: RA_STATUS[r.status] }));
   if (isResearcher(user)) await add('devcost', '개발원가', '#/dev/cost', "SELECT id, cost_no, title, status FROM dev_costs WHERE cost_no LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\' ORDER BY id DESC LIMIT 5", r => ({ id: r.id, no: r.cost_no, label: r.title, state: DC_STATUS[r.status] })); // 15.316 연구소만
+  if (hasRole(user, 'purchase')) await add('costitem', '원가 산출', '#/purchase/cost', "SELECT id, item_code, name, active FROM cost_items WHERE item_code LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\' ORDER BY item_code LIMIT 5", r => ({ id: r.id, no: r.item_code, label: r.name, state: r.active ? '사용' : '중지' })); // 15.318 구매만
   await add('request', '의뢰', '', "SELECT id, req_no, type, title, status FROM requests WHERE req_no LIKE ? ESCAPE '\\' OR (req_no IS NOT NULL AND title LIKE ? ESCAPE '\\') ORDER BY id DESC LIMIT 5", r => ({ id: r.id, no: r.req_no, label: r.title, rtype: r.type, state: r.status }));
   return { rows: rows.slice(0, 25) };
 });

@@ -2386,6 +2386,7 @@ if (typeof document !== "undefined") document.addEventListener('click', e => {
 // (3) 기록 찾기: 메뉴 찾기 칸에 번호·제목을 치면 그 기록을 바로 연다.
 const FIND_OPEN = {
   devcost: id => costOpen(id), // 15.316
+  costitem: id => costItemOpen(id), // 15.318
   ra: id => raOpen(id), // 15.313
   nc: id => ncOpen(id), coa: id => coaOpen(id), change: id => chgOpen(id), doc: id => qdocOpen(id), audit: id => audOpen(id), validation: id => valOpen(id), reliability: id => relOpen(id), equipment: id => eqOpen(id),
   risk: async id => { const r = (await api('GET', '/api/risks')).rows.find(x => x.id === id); if (r) riskOpen(r); },
@@ -2976,6 +2977,369 @@ async function pageDevCost(main) {
     const o = e.target.closest('[data-dc-open]'); if (o) return costOpen(Number(o.dataset.dcOpen)).catch(fail);
     const s = e.target.closest('[data-dc-start]'); if (s) { const d = data.dev_requests.find(x => x.id === Number(s.dataset.dcStart)); costOpen(null, { dev_request_id: d.id, title: `${d.title}${d.cost_count ? ` ${d.cost_count + 1}차` : ''} 원가`, customer: d.customer || '' }).catch(fail); }
   });
+  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  await load();
+}
+
+// ── 15.318 구매 › 원가 산출 관리 ──
+// 품목별 원가(엑셀식 원가표 · 리비전) · 원가 백데이터(원부자재 시점별 단가) · 공통 기준(인건비·경비율·환율, 시점별) · 원가 추이.
+const COST_KIND_LABEL = { product: '제조', goods: '상품' };
+const COST_LINE_LABEL = { mat: '원부자재', labor: '인건비', exp: '기타 직접비' };
+const COST_CAUSE_LABEL = { manual: '직접 수정', material: '단가 변경', rates: '공통 기준 변경', create: '최초 산출' };
+const COST_CURS = ['KRW', 'USD', 'EUR', 'JPY', 'CNY'];
+const cFmt = (v, d = 2) => v == null || v === '' || !Number.isFinite(Number(v)) ? '' : Number(v).toLocaleString('ko-KR', { maximumFractionDigits: d });
+const cPct = v => v == null ? '' : `${v > 0 ? '+' : ''}${cFmt(v, 2)}%`;
+const cPctChip = v => v == null ? '<span class="muted">—</span>' : `<span class="chip ${v > 0 ? 'red' : v < 0 ? 'green' : ''}">${esc(cPct(v))}</span>`;
+function costExprC(src) {
+  let s = String(src ?? '').trim(); if (s.startsWith('=')) s = s.slice(1); s = s.replace(/[,₩\s]/g, '').replace(/×/g, '*').replace(/÷/g, '/'); if (!s) return null;
+  let i = 0; const bad = () => { throw new Error('식'); };
+  const num = () => { const m = /^(\d+(\.\d*)?|\.\d+)/.exec(s.slice(i)); if (!m) bad(); i += m[0].length; return Number(m[0]); };
+  const factor = () => { if (s[i] === '(') { i++; const v = expr(); if (s[i] !== ')') bad(); i++; return v; } if (s[i] === '-') { i++; return -factor(); } if (s[i] === '+') { i++; return factor(); } return num(); };
+  const term = () => { let v = factor(); for (;;) { if (s[i] === '*') { i++; v *= factor(); } else if (s[i] === '/') { i++; const d = factor(); if (d === 0) bad(); v /= d; } else return v; } };
+  const expr = () => { let v = term(); for (;;) { if (s[i] === '+') { i++; v += term(); } else if (s[i] === '-') { i++; v -= term(); } else return v; } };
+  const v = expr(); if (i !== s.length || !Number.isFinite(v)) bad(); return v;
+}
+const costTry = src => { try { return { v: costExprC(src) }; } catch { return { err: true }; } };
+// 서버 costCompute와 같은 식(화면 미리 보기). 단가는 지금(오늘) 백데이터 단가.
+function costComputeC(h, lines, rates, mats) {
+  const o = h.overrides || {}, num = v => v === '' || v == null ? null : Number(v), pick = k => num(o[k]) ?? Number(rates?.[k] || 0);
+  const used = { labor_rate: pick('labor_rate'), mfg_rate: pick('mfg_rate'), sga_rate: pick('sga_rate'), defect_rate: pick('defect_rate') }, errs = [];
+  const out = lines.map((l, i) => {
+    const q = costTry(l.qty), qty = q.err ? (errs.push(i), 0) : q.v ?? 1, loss = Number(l.loss) || 0; let unit = 0, src = 'manual';
+    if (l.type === 'mat' && l.material_id && !l.manual_price) { const m = mats.find(x => x.id === Number(l.material_id)); unit = m?.krw_price ?? 0; src = m?.krw_price == null ? 'missing' : 'master'; }
+    else { const p = costTry(l.price); if (p.err) errs.push(i); unit = p.v ?? 0; }
+    let amount = 0;
+    if (l.type === 'labor') { const c = costTry(l.capa), w = costTry(l.workers); if (c.err || w.err) errs.push(i); const capa = c.v, workers = w.v ?? 1; amount = capa > 0 ? used.labor_rate * workers * qty / capa : qty * unit; if (capa > 0) src = 'rate'; }
+    else if (l.type === 'mat') amount = qty * unit * (1 + loss / 100); else amount = qty * unit;
+    return { amount, unit, src };
+  });
+  const sum = t => lines.reduce((s, l, i) => s + (l.type === t ? out[i].amount : 0), 0), material = sum('mat'), labor = sum('labor'), other = sum('exp'), direct = material + labor + other;
+  const defect = direct * used.defect_rate / 100, mfg = direct * used.mfg_rate / 100, sga = (h.sga_base === 'mfg' ? direct + mfg : direct) * used.sga_rate / 100, total = direct + defect + mfg + sga;
+  const sale = h.sale_price === '' || h.sale_price == null ? null : Number(h.sale_price), pcs = Number(h.pieces) > 0 ? Number(h.pieces) : null;
+  return { out, errs, used, totals: { material, labor, other, direct, defect, mfg, sga, total, piece_cost: pcs ? total / pcs : null, sale_price: sale, margin: sale == null ? null : sale - total, margin_rate: sale ? (sale - total) / sale * 100 : null } };
+}
+// 작은 선 그래프(SVG): series [{label, color, points:[{x:'YYYY-MM-DD', y, tip}]}]
+function costChart(series, { h = 200, fmt = v => cFmt(v, 0) } = {}) {
+  const pts = series.flatMap(s => s.points); if (!pts.length) return '<p class="muted small">리비전이 쌓이면 그래프가 그려집니다.</p>';
+  const xs = [...new Set(pts.map(p => p.x))].sort(), ys = pts.map(p => p.y).filter(Number.isFinite), lo = Math.min(...ys), hi = Math.max(...ys), pad = (hi - lo) * 0.12 || Math.abs(hi) * 0.05 || 1;
+  const W = 640, L = 64, R = 16, T = 12, B = 28, y0 = lo - pad, y1 = hi + pad, X = x => L + (xs.length === 1 ? (W - L - R) / 2 : xs.indexOf(x) * (W - L - R) / (xs.length - 1)), Y = y => T + (y1 - y) / (y1 - y0) * (h - T - B);
+  const grid = [0, 0.5, 1].map(f => { const v = y0 + (y1 - y0) * f; return `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" class="cc-grid"/><text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end" class="cc-ax">${esc(fmt(v))}</text>`; }).join('');
+  const xl = xs.map((x, i) => (xs.length <= 8 || i % Math.ceil(xs.length / 8) === 0 || i === xs.length - 1) ? `<text x="${X(x)}" y="${h - 8}" text-anchor="middle" class="cc-ax">${esc(x.slice(2))}</text>` : '').join('');
+  const lines = series.map(s => { const p = s.points.filter(q => Number.isFinite(q.y)).sort((a, b) => a.x.localeCompare(b.x)); if (!p.length) return ''; return `<polyline fill="none" stroke="${s.color}" stroke-width="2" ${s.dash ? 'stroke-dasharray="5 4"' : ''} points="${p.map(q => `${X(q.x)},${Y(q.y)}`).join(' ')}"/>${p.map(q => `<circle cx="${X(q.x)}" cy="${Y(q.y)}" r="3.5" fill="${s.color}"><title>${esc(`${s.label} ${q.x} · ${fmt(q.y)}${q.tip ? ' · ' + q.tip : ''}`)}</title></circle>`).join('')}`; }).join('');
+  return `<div class="cc-wrap"><svg viewBox="0 0 ${W} ${h}" class="cc-svg" role="img" aria-label="${esc(series.map(s => s.label).join(', '))} 추이">${grid}${xl}${lines}</svg><div class="cc-legend">${series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.label)}</span>`).join('')}</div></div>`;
+}
+// 엑셀식 그리드 키보드·붙여넣기(원가 줄 공용): Enter·↓ 아래, ↑ 위(마지막 줄 Enter → 줄 추가), 여러 칸·줄 붙여넣기
+function costGridKeys(table, { rows, keys, addRow, draw, setVal, onChange }) {
+  const focus = (r, k) => { const el = table.querySelector(`[data-r="${r}"][data-k="${k}"]`); if (el && !el.disabled) { el.focus(); el.select?.(); } };
+  table.addEventListener('keydown', e => {
+    const t = e.target.closest('[data-k]'); if (!t) return; const r = Number(t.dataset.r), k = t.dataset.k;
+    if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); if (r === rows().length - 1) { addRow(); draw(); } focus(r + 1, k); return; }
+    if (t.tagName === 'SELECT' || t.type === 'date') return;
+    if (e.key === 'ArrowDown' && r < rows().length - 1) { e.preventDefault(); focus(r + 1, k); } else if (e.key === 'ArrowUp' && r > 0) { e.preventDefault(); focus(r - 1, k); }
+  });
+  table.addEventListener('paste', e => {
+    const t = e.target.closest('[data-k]'); if (!t) return; const text = e.clipboardData?.getData('text/plain') || ''; if (!/[\t\n]/.test(text.trim())) return;
+    e.preventDefault(); const data = text.replace(/\r/g, '').replace(/\n$/, '').split('\n').map(x => x.split('\t')), start = keys.indexOf(t.dataset.k), r0 = Number(t.dataset.r); if (start < 0) return;
+    data.forEach((vals, i) => { while (rows().length <= r0 + i) addRow(); vals.forEach((v, j) => { const k = keys[start + j]; if (k) setVal(rows()[r0 + i], k, v.trim()); }); });
+    onChange(); draw(); toast(`${data.length}줄을 붙여넣었습니다.`); focus(r0, t.dataset.k);
+  });
+  return focus;
+}
+async function costItemOpen(id = null, pre = {}) {
+  const list = await api('GET', '/api/cost/items'), it = id ? list.rows.find(x => x.id === id) : null; if (id && !it) return toast('품목을 찾을 수 없습니다.', 'err');
+  const mats = list.materials, rates = list.rates, h0 = it || { kind: 'product', sga_base: 'direct', overrides: {}, ...pre };
+  const lines = (it?.lines || pre.lines || []).map(l => ({ ...l }));
+  if (!lines.length) lines.push({ type: 'mat', qty: '', loss: 0 }, { type: 'mat' }, { type: 'labor', qty: '1' });
+  const revs = it ? (await api('GET', `/api/cost/items/${it.id}/revs`)).rows : [];
+  const ov = h0.overrides || {}, ratePh = k => rates?.[k] != null ? `공통 ${cFmt(rates[k], 4)}` : '공통 기준 없음';
+  const matOpt = sel => `<option value="">직접 입력</option>${mats.map(m => `<option value="${m.id}"${Number(sel) === m.id ? ' selected' : ''}>${esc(m.code)} · ${esc(m.name)}${m.krw_price != null ? ` · ₩${cFmt(m.krw_price, 4)}/${esc(m.unit || '')}` : ' · 단가 없음'}</option>`).join('')}`;
+  const m = modal(`<h3>${it ? `${esc(it.item_code)} · ${esc(it.name)} <span class="chip">Rev.${it.rev}</span>${it.active ? '' : ' <span class="chip">사용 중지</span>'}${it.stale ? ' <span class="chip yellow" title="지금 단가·기준으로 다시 계산하면 원가가 다릅니다">재산출 필요</span>' : ''}` : '새 품목 원가'}</h3>
+    ${it ? `<p class="small muted">마지막 리비전 ${esc(it.rev_date || '')}${it.prev_total != null ? ` · 직전 원가 ${cFmt(it.prev_total)}원 → ${cFmt(it.totals.total)}원 ${esc(cPct(it.change_pct))}` : ''} · 원가가 바뀌는 수정은 저장할 때 변동 시점·사유를 받아 새 리비전으로 남깁니다.</p>` : ''}
+    <form class="stack" data-ci-form><div class="form-grid ci-head">
+      <label>품목코드<input name="item_code" maxlength="40" value="${esc(h0.item_code || '')}" placeholder="비우면 자동(CI-0001)"></label>
+      <label class="span2">품목명 *<input name="name" required maxlength="150" value="${esc(h0.name || '')}" placeholder='예) CF707 (5.5"*4.5") (200SH)'></label>
+      <label>규격<input name="spec" maxlength="150" value="${esc(h0.spec || '')}"></label>
+      <label>구분<select name="kind">${Object.entries(COST_KIND_LABEL).map(([k, l]) => `<option value="${k}"${h0.kind === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label>분류<input name="category" maxlength="50" value="${esc(h0.category || '')}" list="ciCats" placeholder="부직포 와이퍼·장갑·마스크"></label>
+      <label class="span2">제품등록 연결<select name="bom_id"><option value="">—</option>${list.boms.map(b => `<option value="${b.id}"${b.id === Number(h0.bom_id) ? ' selected' : ''}>${esc(b.product_code || '')} ${esc(b.product)}</option>`).join('')}</select></label>
+      <label>원가 단위<input name="unit" maxlength="20" value="${esc(h0.unit || '')}" placeholder="PK·BOX·EA"></label>
+      <label>낱개 수<input name="pieces" inputmode="decimal" value="${esc(h0.pieces ?? '')}" placeholder="예) 200(장)"><span class="hint">장당 원가 = 원가 ÷ 낱개 수</span></label>
+      <label>포장사양<input name="pack_spec" maxlength="100" value="${esc(h0.pack_spec || '')}" placeholder="200SH/PK, 10PK/BOX"></label>
+      <label>주요 고객사<input name="customer" maxlength="100" value="${esc(h0.customer || '')}"></label>
+      <label>판매가(원/${esc(h0.unit || '단위')})<input name="sale_price" inputmode="decimal" value="${esc(h0.sale_price ?? '')}"></label>
+      <label>판관비 기준<select name="sga_base"><option value="direct"${h0.sga_base !== 'mfg' ? ' selected' : ''}>직접비 × 판관비율</option><option value="mfg"${h0.sga_base === 'mfg' ? ' selected' : ''}>(직접비 + 제조경비) × 판관비율</option></select></label>
+      <label>시간당 인건비(원)<input name="ov_labor_rate" inputmode="decimal" value="${esc(ov.labor_rate ?? '')}" placeholder="${esc(ratePh('labor_rate'))}"></label>
+      <label>제조경비율(%)<input name="ov_mfg_rate" inputmode="decimal" value="${esc(ov.mfg_rate ?? '')}" placeholder="${esc(ratePh('mfg_rate'))}"></label>
+      <label>판관비율(%)<input name="ov_sga_rate" inputmode="decimal" value="${esc(ov.sga_rate ?? '')}" placeholder="${esc(ratePh('sga_rate'))}"></label>
+      <label>불량률(%, 가산)<input name="ov_defect_rate" inputmode="decimal" value="${esc(ov.defect_rate ?? '')}" placeholder="${esc(ratePh('defect_rate'))}"></label>
+      <label class="span3">비고<input name="note" maxlength="1000" value="${esc(h0.note || '')}"></label></div>
+      <datalist id="ciCats">${[...new Set(list.rows.map(r => r.category).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('')}</datalist>
+      <fieldset class="vendor-sec"><legend>원가 내역 <span class="hint">칸에 식을 그대로 써도 됩니다(예: 245000/1500*0.32, =9000*4). 원부자재는 백데이터를 고르면 그 시점 원화 단가를 씁니다. 인건비는 시간당 처리량을 넣으면 「시간당 인건비 × 인원 × 작업량 ÷ 처리량」. Enter·↑↓ 이동, 엑셀 여러 칸 붙여넣기.</span></legend>
+        <div class="table-wrap dc-wrap ci-wrap"><table class="grid dc-grid ci-grid" data-no-sort data-no-filter data-keep-cols data-no-reorder data-no-autoalign><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
+        <div class="actions"><button type="button" class="btn small" data-ci-add="mat">＋ 원부자재</button><button type="button" class="btn small" data-ci-add="labor">＋ 인건비 공정</button><button type="button" class="btn small" data-ci-add="exp">＋ 기타 직접비</button><span class="grow"></span></div>
+      </fieldset>
+      <div class="ci-sum" data-ci-sum></div>
+      ${it ? `<fieldset class="vendor-sec"><legend>원가 리비전 <span class="hint">원가가 바뀐 시점마다 그때의 원가 줄·단가·기준·합계를 그대로 남깁니다</span></legend><div data-ci-chart></div><div class="table-wrap"><table class="grid ci-revs" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>Rev</th><th>변동 시점</th><th>원인</th><th>사유</th><th>원부자재</th><th>인건비</th><th>원가</th><th>낱개당</th><th>직전 대비</th><th>판매가 · 마진율</th><th>작성</th><th></th></tr></thead><tbody>${[...revs].reverse().map((r, i, a) => { const p = a[i + 1], pct = p?.totals.total ? (r.totals.total - p.totals.total) / p.totals.total * 100 : null; return `<tr><td class="c"><b>Rev.${r.rev}</b></td><td class="c nowrap">${esc(r.effective_date)}</td><td class="c nowrap">${esc(r.cause_label)}</td><td>${esc(r.reason)}</td><td class="r">${cFmt(r.totals.material)}</td><td class="r">${cFmt(r.totals.labor)}</td><td class="r"><b>${cFmt(r.totals.total)}</b></td><td class="r">${cFmt(r.totals.piece_cost, 4)}</td><td class="c">${cPctChip(pct == null ? null : Math.round(pct * 100) / 100)}</td><td class="r">${r.totals.sale_price != null ? `${cFmt(r.totals.sale_price)}<div class="small ${r.totals.margin < 0 ? 'err-text' : 'muted'}">${cFmt(r.totals.margin_rate)}%</div>` : '<span class="muted">—</span>'}</td><td class="nowrap small">${esc(r.created_by)}<div class="muted">${esc(String(r.created_at).slice(0, 16))}</div></td><td class="nowrap"><button type="button" class="btn small" data-ci-rev="${r.rev}">보기·비교</button></td></tr>`; }).join('')}</tbody></table></div></fieldset>` : ''}
+      <div class="actions">${it ? `<button type="button" class="btn" data-ci-hist>이력</button><button type="button" class="btn" data-ci-xlsx>엑셀</button><button type="button" class="btn ${it.active ? 'danger' : ''}" data-ci-active>${it.active ? '사용 중지' : '다시 사용'}</button>${it.stale ? '<button type="button" class="btn" data-ci-recalc>지금 단가로 재산출</button>' : ''}` : ''}<span class="grow"></span><button class="btn primary">${it ? '저장' : '원가 산출(Rev.0)'}</button></div>
+    </form>`, { wide: true });
+  m.el.classList.add('ci-modal');
+  const form = $('[data-ci-form]', m.el), table = $('.ci-grid', form), touched = () => { if (m.el.parentElement) m.el.parentElement.dataset.dirty = '1'; };
+  const head = () => { const v = formObj(form); return { ...v, overrides: { labor_rate: v.ov_labor_rate, mfg_rate: v.ov_mfg_rate, sga_rate: v.ov_sga_rate, defect_rate: v.ov_defect_rate } }; };
+  const COLS = [['type', '구분', 92], ['material_id', '원가 백데이터', 170], ['name', '항목명', 120], ['spec', '규격', 76], ['unit', '단위', 64], ['qty', '소요량·작업량', 104], ['price', '단가(원)', 104], ['loss', '로스%', 56], ['capa', '시간당 처리량', 92], ['workers', '인원', 50], ['note', '비고', 90]];
+  const cell = (k, l, r, w) => {
+    const v = l[k] ?? '', at = `data-r="${r}" data-k="${k}" style="min-width:${w}px"`, ty = l.type || 'mat';
+    if (k === 'type') return `<td><select ${at}>${Object.entries(COST_LINE_LABEL).map(([a, b]) => `<option value="${a}"${ty === a ? ' selected' : ''}>${b}</option>`).join('')}</select></td>`;
+    if (k === 'material_id') return ty === 'mat' ? `<td><select ${at}>${matOpt(v)}</select>${l.material_id ? `<label class="chk ci-own"><input type="checkbox" data-r="${r}" data-k="manual_price"${l.manual_price ? ' checked' : ''}> 단가 직접</label>` : ''}</td>` : '<td class="muted small c">—</td>';
+    if (k === 'price' && ty === 'mat' && l.material_id && !l.manual_price) return `<td class="r small" data-ci-auto="${r}"></td>`;
+    if (k === 'price' && ty === 'labor' && costTry(l.capa).v > 0) return `<td class="r small muted" data-ci-auto="${r}"></td>`;
+    if ((k === 'loss' && ty !== 'mat') || ((k === 'capa' || k === 'workers') && ty !== 'labor')) return '<td class="muted small c">—</td>';
+    const ex = ['qty', 'price', 'capa', 'workers'].includes(k), bad = ex && costTry(v).err;
+    return `<td><input ${at} value="${esc(v)}" class="${ex || k === 'loss' ? 'r' : ''}${bad ? ' ci-bad' : ''}"${ex ? ' inputmode="text" spellcheck="false"' : k === 'loss' ? ' inputmode="decimal"' : ''}${k === 'qty' ? ' placeholder="1"' : k === 'workers' ? ' placeholder="1"' : ''}></td>`;
+  };
+  const sum = () => {
+    const h = head(), c = costComputeC(h, lines, rates, mats), t = c.totals;
+    lines.forEach((l, i) => { const a = $(`[data-ci-amt="${i}"]`, table); if (a) a.textContent = cFmt(c.out[i].amount, 4); const u = $(`[data-ci-auto="${i}"]`, table); if (u) u.innerHTML = c.out[i].src === 'missing' ? '<span class="err-text">단가 없음</span>' : c.out[i].src === 'rate' ? `시간당 ${cFmt(c.used.labor_rate, 2)}` : `₩${cFmt(c.out[i].unit, 4)}`; });
+    $$('[data-k]', table).forEach(el => { if (['qty', 'price', 'capa', 'workers'].includes(el.dataset.k)) el.classList.toggle('ci-bad', !!costTry(el.value).err); });
+    $('tfoot', table).innerHTML = `<tr class="dc-total"><td></td><td colspan="${COLS.length}" class="r"><b>원부자재 ${cFmt(t.material)} · 인건비 ${cFmt(t.labor)}${t.other ? ` · 기타 ${cFmt(t.other)}` : ''}</b></td><td class="r"><b>${cFmt(t.direct)}</b></td><td colspan="2"></td></tr>`;
+    const prev = it?.totals?.total, dPct = prev ? (t.total - prev) / prev * 100 : null;
+    $('[data-ci-sum]', form).innerHTML = `<dl class="dc-kpi ci-kpi"><div><dt>원부자재</dt><dd>${cFmt(t.material)}</dd></div><div><dt>인건비</dt><dd>${cFmt(t.labor)}</dd></div>${t.other ? `<div><dt>기타 직접비</dt><dd>${cFmt(t.other)}</dd></div>` : ''}<div><dt>직접비</dt><dd>${cFmt(t.direct)}</dd></div>
+      ${t.defect ? `<div><dt>불량 가산(${cFmt(c.used.defect_rate)}%)</dt><dd>${cFmt(t.defect)}</dd></div>` : ''}<div><dt>제조경비(${cFmt(c.used.mfg_rate)}%)</dt><dd>${cFmt(t.mfg)}</dd></div><div><dt>판관비(${cFmt(c.used.sga_rate)}%${h.sga_base === 'mfg' ? ', 직접비+제조경비' : ''})</dt><dd>${cFmt(t.sga)}</dd></div>
+      <div class="em"><dt>원가 (원/${esc(h.unit || '단위')})</dt><dd>${cFmt(t.total)}원</dd></div>${t.piece_cost != null ? `<div class="em"><dt>낱개당(÷${cFmt(h.pieces)})</dt><dd>${cFmt(t.piece_cost, 4)}원</dd></div>` : ''}
+      ${t.sale_price != null ? `<div class="${t.margin < 0 ? 'neg' : 'pos'}"><dt>판매가 ${cFmt(t.sale_price)} · 이윤</dt><dd>${cFmt(t.margin)}원 · ${cFmt(t.margin_rate)}%</dd></div>` : ''}
+      ${prev != null ? `<div class="${Math.abs(t.total - prev) > 0.005 ? 'chg' : ''}"><dt>지금 Rev.${it.rev} 원가 대비</dt><dd>${cFmt(prev)} → ${cFmt(t.total)} <small>${esc(cPct(dPct == null ? null : Math.round(dPct * 100) / 100))}</small></dd></div>` : ''}</dl>
+      <p class="small muted">적용 기준: 시간당 인건비 ${cFmt(c.used.labor_rate, 4)}원 · 제조경비 ${cFmt(c.used.mfg_rate)}% · 판관비 ${cFmt(c.used.sga_rate)}% · 불량 ${cFmt(c.used.defect_rate)}%${rates?.effective_date ? ` (공통 기준 ${esc(rates.effective_date)}~${Object.values(h.overrides).some(v => v !== '' && v != null) ? ', 일부 품목 덮어쓰기' : ''})` : ' — 공통 기준이 없습니다. 「공통 기준」 탭에서 먼저 넣으세요.'}${c.errs.length ? ` · <b class="err-text">식이 잘못된 칸 ${new Set(c.errs).size}줄</b>` : ''}</p>`;
+    return c;
+  };
+  const draw = () => {
+    $('thead', table).innerHTML = `<tr><th class="c">No</th>${COLS.map(([, l]) => `<th>${esc(l)}</th>`).join('')}<th>금액(원)</th><th></th></tr>`;
+    $('tbody', table).innerHTML = lines.map((l, r) => `<tr class="ci-${l.type || 'mat'}"><td class="c">${r + 1}</td>${COLS.map(([k, , w]) => cell(k, l, r, w)).join('')}<td class="r dc-amt" data-ci-amt="${r}"></td><td class="nowrap"><button type="button" class="btn small" data-ci-dup="${r}" title="줄 복사">⧉</button> <button type="button" class="btn small" data-ci-rm="${r}" aria-label="${r + 1}번 줄 삭제">×</button></td></tr>`).join('') || `<tr><td colspan="${COLS.length + 3}" class="empty">원가 줄이 없습니다.</td></tr>`;
+    sum();
+  };
+  draw();
+  const setVal = (l, k, v) => { if (k === 'type') l.type = Object.entries(COST_LINE_LABEL).find(([a, b]) => a === v || b.startsWith(v) || (v && b.includes(v)))?.[0] || (/인건|공정|작업/.test(v) ? 'labor' : /기타|외주|운송/.test(v) ? 'exp' : 'mat'); else if (k === 'loss') l.loss = String(v).replace('%', ''); else l[k] = v; };
+  const onEdit = e => {
+    const t = e.target.closest('[data-k]'); if (!t) return; const r = Number(t.dataset.r), l = lines[r]; if (!l) return; touched();
+    const k = t.dataset.k; if (k === 'manual_price') { l.manual_price = t.checked; if (t.checked && !l.price) { const mm = mats.find(x => x.id === Number(l.material_id)); l.price = mm?.krw_price ?? ''; } draw(); return; }
+    l[k] = t.value;
+    if (k === 'type') { draw(); return; }
+    if (k === 'material_id') { const mm = mats.find(x => x.id === Number(t.value)); if (mm) { if (!l.name) l.name = mm.name; if (!l.unit) l.unit = mm.unit; if (!l.spec) l.spec = mm.spec; } l.manual_price = false; draw(); return; }
+    if (k === 'capa') { const before = !!$(`[data-ci-auto="${r}"]`, table), now = l.type === 'labor' && costTry(l.capa).v > 0; if (before !== now) { draw(); return; } }
+    sum();
+  };
+  table.addEventListener('input', onEdit); table.addEventListener('change', onEdit);
+  form.addEventListener('input', e => { if (!e.target.closest('.ci-grid')) sum(); });
+  const newLine = type => ({ type: type || lines.at(-1)?.type || 'mat', qty: type === 'labor' ? '1' : '', loss: 0 });
+  costGridKeys(table, { rows: () => lines, keys: ['type', 'name', 'spec', 'unit', 'qty', 'price', 'loss', 'capa', 'workers', 'note'], addRow: () => lines.push(newLine()), draw, setVal, onChange: touched });
+  form.addEventListener('click', e => {
+    const a = e.target.closest('[data-ci-add]'); if (a) { lines.push(newLine(a.dataset.ciAdd)); touched(); draw(); $(`[data-r="${lines.length - 1}"][data-k="${a.dataset.ciAdd === 'mat' ? 'material_id' : 'name'}"]`, table)?.focus(); return; }
+    const d = e.target.closest('[data-ci-dup]'); if (d) { const i = Number(d.dataset.ciDup), { key, ...rest } = lines[i]; void key; lines.splice(i + 1, 0, { ...rest }); touched(); draw(); return; }
+    const x = e.target.closest('[data-ci-rm]'); if (x) { lines.splice(Number(x.dataset.ciRm), 1); touched(); draw(); return; }
+    const rv = e.target.closest('[data-ci-rev]'); if (rv) costRevView(it, revs, Number(rv.dataset.ciRev));
+  });
+  if (it && revs.length) $('[data-ci-chart]', form).innerHTML = costChart([{ label: '원가', color: '#3b6fd8', points: revs.map(r => ({ x: r.effective_date, y: r.totals.total, tip: `Rev.${r.rev} ${r.reason}` })) }, { label: '판매가', color: '#2f9e44', dash: true, points: revs.filter(r => r.totals.sale_price != null).map(r => ({ x: r.effective_date, y: r.totals.sale_price })) }]);
+  const body = () => { const h = head(); delete h.ov_labor_rate; delete h.ov_mfg_rate; delete h.ov_sga_rate; delete h.ov_defect_rate; return { ...h, lines: lines.filter(l => l.material_id || String(l.name || '').trim() || String(l.price || '').trim()).map(l => Object.fromEntries(Object.entries(l).filter(([k]) => !['qty_v', 'capa_v', 'workers_v', 'amount', 'unit_price', 'price_src', 'price_date'].includes(k)))) }; };
+  const reopen = async (r, msg) => { toast(msg); m.close(); qReload(); await costItemOpen(r.id); };
+  form.onsubmit = async e => {
+    e.preventDefault(); const c = sum(); if (c.errs.length) return toast(`식이 잘못된 칸이 있습니다(${[...new Set(c.errs)].map(i => i + 1).join(', ')}번 줄).`, 'err');
+    try {
+      if (!it) { const v = await promptBox('원가 산출(Rev.0)', `<p class="small">원가 <b>${cFmt(c.totals.total)}원</b>으로 처음 산출합니다.</p><div class="form-grid"><label>산출 시점 *<input type="date" name="effective_date" required value="${todayStr()}"></label><label class="span2">메모<input name="reason" maxlength="200" placeholder="예) 2026 원가 기준 최초 등록"></label></div><p class="small muted">시점의 백데이터 단가·공통 기준으로 계산합니다(오늘이 아니면 화면 숫자와 조금 다를 수 있습니다).</p>`); if (!v) return; return reopen(await api('POST', '/api/cost/items', { ...body(), ...v, request_id: crypto.randomUUID() }), 'Rev.0 원가를 산출했습니다.'); }
+      const b = body(), costKey = x => JSON.stringify([x.lines.map(l => [l.type, l.material_id ? Number(l.material_id) : null, !!l.manual_price, l.name || '', l.spec || '', l.unit || '', String(l.qty ?? ''), String(l.price ?? ''), Number(l.loss) || 0, String(l.capa ?? ''), String(l.workers ?? ''), l.note || '']), x.sga_base, Number(x.pieces) || null, x.kind, ['labor_rate', 'mfg_rate', 'sga_rate', 'defect_rate'].map(k => x.overrides?.[k] === '' || x.overrides?.[k] == null ? null : Number(x.overrides[k]))]);
+      let costChanged = costKey(b) !== costKey({ ...it, lines: it.lines }) || Math.abs(c.totals.total - (it.totals.total || 0)) > 0.005;
+      let extra = {};
+      const ask = async () => {
+        const pct = it.totals.total ? (c.totals.total - it.totals.total) / it.totals.total * 100 : null;
+        const v = await promptBox(`새 리비전 Rev.${it.rev + 1} 저장`, `<p class="small">원가 <b>${cFmt(it.totals.total)}원 → ${cFmt(c.totals.total)}원</b> ${cPctChip(pct == null ? null : Math.round(pct * 100) / 100)}</p><div class="form-grid"><label>원가 변동 시점 *<input type="date" name="effective_date" required value="${todayStr()}" min="${esc(it.rev_date || '')}"></label><label class="span2">변경 사유 *<input name="reason" required maxlength="200" placeholder="예) 원단 공급가 인상(5월), 포장 사양 변경"></label></div><p class="small muted">Rev.${it.rev}은(는) 그대로 남고, 이 시점부터 새 원가가 적용됩니다.</p>`);
+        if (!v) return false; extra = v; return true;
+      };
+      if (costChanged && !await ask()) return;
+      let r; try { r = await api('PUT', `/api/cost/items/${it.id}`, { ...b, ...extra, revision: it.revision }); }
+      catch (err) { if (costChanged || !/원가가 바뀌었습니다/.test(err.message || '')) throw err; costChanged = true; if (!await ask()) return; r = await api('PUT', `/api/cost/items/${it.id}`, { ...b, ...extra, revision: it.revision }); } /* 서버 계산으로 원가가 바뀐 경우(시점 단가 등) 사유를 받아 다시 */
+      reopen(r, r.rev !== it.rev ? `Rev.${r.rev}로 저장했습니다.` : '저장했습니다(원가 변동 없음).');
+    } catch (err) { fail(err); }
+  };
+  $('[data-ci-active]', m.el)?.addEventListener('click', async () => { try { const r = await api('PUT', `/api/cost/items/${it.id}`, { active: !it.active, revision: it.revision }); reopen(r, it.active ? '사용 중지했습니다.' : '다시 사용합니다.'); } catch (err) { fail(err); } });
+  $('[data-ci-recalc]', m.el)?.addEventListener('click', async () => { const v = await promptBox('지금 단가·기준으로 재산출', `<p class="small">원가 ${cFmt(it.totals.total)}원 → ${cFmt(it.live?.total)}원</p><div class="form-grid"><label>변동 시점 *<input type="date" name="effective_date" required value="${todayStr()}" min="${esc(it.rev_date || '')}"></label><label class="span2">사유 *<input name="reason" required maxlength="200" placeholder="예) 백데이터 단가 반영"></label></div>`); if (!v) return; try { const r = await api('POST', '/api/cost/items/recalc', { ids: [it.id], ...v }); toast(r.changed.length ? `Rev.${r.changed[0].rev}로 재산출했습니다.` : '원가 변동이 없습니다.'); m.close(); qReload(); await costItemOpen(it.id); } catch (err) { fail(err); } });
+  $('[data-ci-hist]', m.el)?.addEventListener('click', () => qHistory(it.item_code, it.history, {}));
+  $('[data-ci-xlsx]', m.el)?.addEventListener('click', () => costItemXlsx(it, revs));
+}
+function costRevView(it, revs, rev) {
+  const r = revs.find(x => x.rev === rev), p = revs.filter(x => x.rev < rev).at(-1); if (!r) return;
+  const key = l => l.key || `${l.type}:${l.name}`, pm = new Map((p?.lines || []).map(l => [key(l), l])), seen = new Set();
+  const rows = r.lines.map(l => { const o = pm.get(key(l)); seen.add(key(l)); const d = o ? l.amount - o.amount : null; return `<tr class="${!o ? 'ci-new' : Math.abs(d) > 0.00005 ? 'ci-chg' : ''}"><td>${esc(COST_LINE_LABEL[l.type] || l.type)}</td><td>${esc(l.name || '')}${l.spec ? ` <span class="muted small">${esc(l.spec)}</span>` : ''}</td><td class="r">${cFmt(l.qty_v, 4)}</td><td class="r">${l.type === 'labor' && l.capa_v ? `<span class="small muted">÷${cFmt(l.capa_v, 2)}/h</span>` : cFmt(l.unit_price, 4)}${o && o.unit_price !== l.unit_price && !(l.type === 'labor' && l.capa_v) ? `<div class="small muted">← ${cFmt(o.unit_price, 4)}</div>` : ''}</td><td class="r">${l.loss ? cFmt(l.loss) + '%' : ''}</td><td class="r"><b>${cFmt(l.amount, 4)}</b></td><td class="r">${o ? (Math.abs(d) > 0.00005 ? `<span class="${d > 0 ? 'err-text' : 'ok-text'}">${d > 0 ? '+' : ''}${cFmt(d, 4)}</span>` : '<span class="muted">같음</span>') : '<span class="chip">새 줄</span>'}</td></tr>`; }).join('')
+    + (p?.lines || []).filter(l => !seen.has(key(l))).map(l => `<tr class="ci-del"><td>${esc(COST_LINE_LABEL[l.type] || l.type)}</td><td><s>${esc(l.name || '')}</s></td><td></td><td></td><td></td><td class="r"><s>${cFmt(l.amount, 4)}</s></td><td class="r"><span class="chip">빠짐</span></td></tr>`).join('');
+  const t = r.totals, pt = p?.totals, row = (lbl, k, d = 2) => `<tr><th>${lbl}</th><td class="r">${pt ? cFmt(pt[k], d) : ''}</td><td class="r"><b>${cFmt(t[k], d)}</b></td><td class="r">${pt && pt[k] != null && t[k] != null ? cFmt(t[k] - pt[k], d) : ''}</td></tr>`;
+  const rt = r.rates || {}, prt = p?.rates || {}, rateTxt = x => `인건비 ${cFmt(x.labor_rate, 4)} · 제조경비 ${cFmt(x.mfg_rate)}% · 판관비 ${cFmt(x.sga_rate)}% · 불량 ${cFmt(x.defect_rate)}%`;
+  const mm = modal(`<h3>${esc(it.item_code)} · Rev.${r.rev} <span class="small muted">${esc(r.effective_date)} · ${esc(r.cause_label)}</span></h3><p class="small">${esc(r.reason)} · ${esc(r.created_by)} ${esc(String(r.created_at).slice(0, 16))}</p>
+    <div class="table-wrap"><table class="grid" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>구분</th><th>항목</th><th>소요량</th><th>단가</th><th>로스</th><th>금액</th><th>${p ? `Rev.${p.rev} 대비` : '직전 없음'}</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="table-wrap"><table class="grid ci-cmp" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th></th><th>${p ? `Rev.${p.rev} (${esc(p.effective_date)})` : '—'}</th><th>Rev.${r.rev} (${esc(r.effective_date)})</th><th>차이</th></tr></thead><tbody>${row('원부자재', 'material')}${row('인건비', 'labor')}${row('기타 직접비', 'other')}${row('직접비', 'direct')}${row('불량 가산', 'defect')}${row('제조경비', 'mfg')}${row('판관비', 'sga')}${row('원가', 'total')}${row('낱개당 원가', 'piece_cost', 4)}${row('판매가', 'sale_price')}${row('마진율(%)', 'margin_rate')}</tbody></table></div>
+    <p class="small muted">적용 기준 Rev.${r.rev}: ${esc(rateTxt(rt))}${p && rateTxt(prt) !== rateTxt(rt) ? `<br>Rev.${p.rev}: ${esc(rateTxt(prt))}` : ''}</p>
+    <div class="actions"><span class="grow"></span><button type="button" class="btn" data-x>닫기</button></div>`, { wide: true });
+  mm.el.querySelector('[data-x]').onclick = () => mm.close();
+}
+function costItemXlsx(it, revs) {
+  const t = it.totals, rows = it.lines.map((l, i) => [i + 1, COST_LINE_LABEL[l.type] || l.type, l.name || '', l.spec || '', l.unit || '', l.qty || '', l.material_id && !l.manual_price ? '(백데이터)' : l.price || '', l.loss || '', l.capa || '', l.workers || '', l.note || '']);
+  rows.push(Array(11).fill(''), ['', '원부자재', t.material], ['', '인건비', t.labor], ['', '기타 직접비', t.other], ['', '직접비', t.direct], ['', '불량 가산', t.defect], ['', '제조경비', t.mfg], ['', '판관비', t.sga], ['', '원가', t.total], ['', '낱개당 원가', t.piece_cost ?? ''], ['', '판매가', t.sale_price ?? ''], ['', '마진율(%)', t.margin_rate ?? ''], Array(11).fill(''), ['Rev', '변동 시점', '원인', '사유', '원가', '낱개당', '작성'], ...revs.map(r => [r.rev, r.effective_date, r.cause_label, r.reason, r.totals.total, r.totals.piece_cost ?? '', r.created_by]));
+  xlsxDownload(`원가_${it.item_code}_Rev${it.rev}.xlsx`, { sheet: it.item_code, titles: [`${it.item_code} · ${it.name} · Rev.${it.rev} (${it.rev_date || ''})`, `${it.spec || ''} ${it.pack_spec || ''} · 원가 단위 ${it.unit || ''}`], columns: ['No', '구분', '항목', '규격', '단위', '소요량·작업량(식)', '단가(식)', '로스%', '시간당 처리량', '인원', '비고'].map(label => ({ label, type: 'text' })), rows });
+}
+async function pageCostItems(main) {
+  main.innerHTML = `<h1>원가 산출 관리 <span class="dept">구매</span></h1>
+    <p class="muted">품목별 원가표(원부자재 · 인건비 공정 · 기타 직접비 → 직접비 · 불량 · 제조경비 · 판관비 → 원가)를 엑셀처럼 관리합니다. 원가가 바뀔 때마다 <b>변동 시점·사유와 함께 리비전</b>을 남기고, 「원가 백데이터」 단가나 「공통 기준」이 바뀌면 영향 품목을 한꺼번에 재산출합니다.</p>
+    <div class="ip-tiles" id="ciTiles"></div>
+    <form class="toolbar list-filters" data-read-only id="ciFilters"><label class="lf-sel">구분<select name="kind"><option value="">전체</option>${Object.entries(COST_KIND_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">상태<select name="st"><option value="active">사용 중</option><option value="loss">원가 미달(판매가 &lt; 원가)</option><option value="noprice">판매가 미기재</option><option value="stale">재산출 필요</option><option value="month">이번 달 변동</option><option value="off">사용 중지</option><option value="">전체</option></select></label><label class="lf-sel">분류<select name="cat"><option value="">전체</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="코드·품목·고객사·원부자재"></label><span class="grow"></span><span id="ciTools" class="ip-tools"></span></form>
+    <div id="ciList"></div>`;
+  const form = $('#ciFilters', main); let data = { rows: [] };
+  const load = async () => { data = await api('GET', '/api/cost/items'); if (!main.isConnected) return; const cats = [...new Set(data.rows.map(r => r.category).filter(Boolean))].sort(), cs = form.elements.cat, cur = cs.value; cs.innerHTML = '<option value="">전체</option>' + cats.map(c => `<option${c === cur ? ' selected' : ''}>${esc(c)}</option>`).join(''); draw(); };
+  main.qReload = () => load().catch(fail);
+  const draw = () => {
+    const v = formObj(form), q = (v.q || '').trim().toLowerCase(), act = data.rows.filter(r => r.active), month = data.today.slice(0, 7);
+    const loss = act.filter(r => r.totals.sale_price != null && r.totals.margin < 0), noprice = act.filter(r => r.totals.sale_price == null), stale = act.filter(r => r.stale), mon = act.filter(r => (r.rev_date || '').startsWith(month) && r.rev > 0);
+    const avg = act.filter(r => r.totals.margin_rate != null), avgM = avg.length ? avg.reduce((s, r) => s + r.totals.margin_rate, 0) / avg.length : null;
+    qTiles('ciTiles', [['품목', act.length], ['원가 미달', loss.length, loss.length ? 'red' : ''], ['판매가 미기재', noprice.length, noprice.length ? 'yellow' : ''], ['재산출 필요', stale.length, stale.length ? 'yellow' : ''], ['이번 달 원가 변동', mon.length], ['평균 마진율', avgM == null ? '—' : cFmt(avgM, 1) + '%', avgM != null && avgM < 10 ? 'yellow' : 'green']]);
+    $('#ciTools', main).innerHTML = `<button type="button" class="btn primary" data-ci-new>＋ 품목 원가</button>${stale.length ? `<button type="button" class="btn" data-ci-stale>재산출 필요 ${stale.length}건 일괄 재산출</button>` : ''}`;
+    const rows = data.rows.filter(r => (v.st === 'active' ? r.active : v.st === 'off' ? !r.active : v.st === 'loss' ? r.active && r.totals.sale_price != null && r.totals.margin < 0 : v.st === 'noprice' ? r.active && r.totals.sale_price == null : v.st === 'stale' ? r.active && r.stale : v.st === 'month' ? r.active && (r.rev_date || '').startsWith(month) && r.rev > 0 : true)
+      && (!v.kind || r.kind === v.kind) && (!v.cat || r.category === v.cat) && (!q || [r.item_code, r.name, r.spec, r.customer, r.category, ...r.lines.map(l => l.name)].join(' ').toLowerCase().includes(q)));
+    $('#ciList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table ci-list"><thead><tr><th>품목코드</th><th>품목 · 규격</th><th>구분</th><th>원부자재</th><th>인건비</th><th>직접비</th><th>제조경비</th><th>판관비</th><th>원가</th><th>낱개당</th><th>판매가</th><th>이윤 · 마진율</th><th>Rev · 변동 시점</th><th>직전 대비</th><th></th></tr></thead><tbody>${rows.map(r => { const t = r.totals; return `<tr data-ci-row="${r.id}" class="${!r.active ? 'row-off' : t.sale_price != null && t.margin < 0 ? 'ip-over' : ''}"><td class="nowrap" data-card-primary><b>${esc(r.item_code)}</b></td><td>${esc(r.name)}${r.spec || r.customer ? `<div class="small muted">${esc([r.spec, r.customer].filter(Boolean).join(' · '))}</div>` : ''}</td><td class="c nowrap">${esc(r.kind_label)}${r.category ? `<div class="small muted">${esc(r.category)}</div>` : ''}</td><td class="r">${cFmt(t.material)}</td><td class="r">${cFmt(t.labor)}</td><td class="r">${cFmt(t.direct)}</td><td class="r">${cFmt(t.mfg)}</td><td class="r">${cFmt(t.sga)}</td><td class="r"><b>${cFmt(t.total)}</b>${r.stale ? `<div class="small"><span class="chip yellow" title="지금 단가·기준이면 ${cFmt(r.live?.total)}원">재산출 ${esc(cFmt(r.live?.total))}</span></div>` : ''}</td><td class="r">${cFmt(t.piece_cost, 4)}</td><td class="r">${t.sale_price != null ? cFmt(t.sale_price) : '<span class="muted">미기재</span>'}</td><td class="r">${t.margin != null ? `${cFmt(t.margin)}<div class="small ${t.margin < 0 ? 'err-text' : 'muted'}">${cFmt(t.margin_rate)}%</div>` : '<span class="muted">—</span>'}</td><td class="c nowrap">Rev.${r.rev}<div class="small muted">${esc(r.rev_date || '')}</div></td><td class="c">${cPctChip(r.change_pct)}</td><td><button type="button" class="btn small" data-ci-open="${r.id}">열기</button></td></tr>`; }).join('')}</tbody></table></div>`
+      : `<div class="empty">${data.rows.length ? '조건에 맞는 품목이 없습니다.' : '등록된 품목 원가가 없습니다. 먼저 「공통 기준」(시간당 인건비·경비율)과 「원가 백데이터」(원단·포장재 단가)를 넣고, 「＋ 품목 원가」로 원가표를 만드세요.'}</div>`;
+  };
+  main.addEventListener('click', async e => {
+    if (e.target.closest('[data-ci-new]')) return costItemOpen().catch(fail);
+    const o = e.target.closest('[data-ci-open]'); if (o) return costItemOpen(Number(o.dataset.ciOpen)).catch(fail);
+    if (e.target.closest('[data-ci-stale]')) { const st = data.rows.filter(r => r.active && r.stale); const v = await promptBox(`재산출 필요 ${st.length}건 일괄 재산출`, `<p class="small">지금 백데이터 단가·공통 기준으로 다시 계산해 원가가 바뀐 품목마다 새 리비전을 남깁니다.</p><div class="form-grid"><label>변동 시점 *<input type="date" name="effective_date" required value="${data.today}"></label><label class="span2">사유 *<input name="reason" required maxlength="200" placeholder="예) 5월 원단 공급가 인상 반영"></label></div>`); if (!v) return; try { const r = await api('POST', '/api/cost/items/recalc', { ids: st.map(x => x.id), ...v }); toast(`${r.changed.length}건 새 리비전${r.skipped.length ? `, ${r.skipped.length}건 건너뜀(${r.skipped[0].why})` : ''}`, r.skipped.length ? 'err' : 'ok'); qReload(); } catch (err) { fail(err); } }
+  });
+  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  await load();
+}
+// ── 원가 백데이터 ──
+const costKrw = v => { const n = x => Number(String(x ?? '').replace(/,/g, '')) || 0; return ((n(v.price) + n(v.surcharge)) * (v.currency === 'KRW' ? 1 : n(v.fx))) + n(v.extra_krw); };
+const costPriceFields = (v, rates) => `<div class="form-grid"><label>통화<select name="currency">${COST_CURS.map(c => `<option${(v.currency || 'KRW') === c ? ' selected' : ''}>${c}</option>`).join('')}</select></label><label>단가 *<input name="price" required inputmode="decimal" value="${esc(v.price ?? '')}" placeholder="예) 0.3632 ($/SQM)"></label><label>할증(서차지)<input name="surcharge" inputmode="decimal" value="${esc(v.surcharge ?? '')}" placeholder="0"></label>
+  <label>환율(원/외화)<input name="fx" inputmode="decimal" value="${esc(v.currency && v.currency !== 'KRW' ? v.fx ?? '' : '')}" placeholder="${esc(Object.entries(rates?.fx || {}).map(([k, x]) => `${k} ${x}`).join(' · ') || '공통 기준 환율')}"></label><label>부대비(원/단위)<input name="extra_krw" inputmode="decimal" value="${esc(v.extra_krw ?? '')}" placeholder="슬리팅·물류·통관"><span class="hint">원화로 단위당 더함</span></label><label>인코텀즈<input name="incoterms" maxlength="30" value="${esc(v.incoterms || '')}" placeholder="CPT BUSAN·DDP"></label>
+  <label>적용 시점 *<input type="date" name="effective_date" required value="${esc(v.effective_date || todayStr())}"></label><label class="span2">사유<input name="reason" maxlength="200" value="${esc(v.reason || '')}" placeholder="예) 26년 5월 공급가 +4%"></label></div><p class="small" data-krw></p>`;
+const costKrwLive = (form, rates) => { const upd = () => { const v = formObj(form); if (v.currency !== 'KRW' && !v.fx) v.fx = rates?.fx?.[v.currency] || 0; form.querySelector('[data-krw]').innerHTML = `원화 단가 = (단가 + 할증) × 환율 + 부대비 = <b>₩${cFmt(costKrw(v), 4)}</b>${v.currency !== 'KRW' && !form.elements.fx.value ? ` <span class="muted">(공통 기준 ${esc(v.currency)} ${esc(v.fx)})</span>` : ''}`; form.elements.fx.disabled = v.currency === 'KRW'; }; form.addEventListener('input', upd); form.addEventListener('change', upd); upd(); };
+async function costMatOpen(id = null, data) {
+  const mat = id ? data.rows.find(x => x.id === id) : null, rates = data.rates;
+  const prices = mat ? (await api('GET', `/api/cost/materials/${mat.id}/prices`)).rows : [];
+  const m = modal(`<h3>${mat ? `${esc(mat.code)} · ${esc(mat.name)}${mat.active ? '' : ' <span class="chip">사용 중지</span>'}` : '원부자재 등록'}</h3>
+    <form class="stack" data-cm-form><div class="form-grid"><label>코드<input name="code" maxlength="40" value="${esc(mat?.code || '')}" placeholder="비우면 자동(M-0001)"></label><label class="span2">원부자재명 *<input name="name" required maxlength="150" value="${esc(mat?.name || '')}" placeholder="예) SONTARA 8864 원단"></label><label>규격<input name="spec" maxlength="150" value="${esc(mat?.spec || '')}" placeholder="56GSM · 140MM"></label>
+      <label>분류<input name="category" maxlength="30" value="${esc(mat?.category || '')}" list="cmCats" placeholder="원단·포장재·부자재·약품·상품"></label><label>공급사<input name="supplier" maxlength="100" value="${esc(mat?.supplier || '')}"></label><label>단위<input name="unit" maxlength="20" value="${esc(mat?.unit || '')}" placeholder="SQM·kg·EA·ROLL"></label><label class="span2">비고<input name="note" maxlength="500" value="${esc(mat?.note || '')}"></label></div>
+      <datalist id="cmCats">${[...new Set(data.rows.map(r => r.category).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('')}</datalist>
+      ${mat ? '' : `<fieldset class="vendor-sec"><legend>첫 단가</legend>${costPriceFields({ currency: 'KRW' }, rates)}</fieldset>`}
+      ${mat ? `<fieldset class="vendor-sec"><legend>단가 이력(시점별) <span class="hint">원가는 그 시점의 단가로 계산되고, 지난 리비전은 당시 단가를 그대로 갖고 있습니다</span></legend><div data-cm-chart></div>
+        <div class="table-wrap"><table class="grid" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>적용 시점</th><th>통화</th><th>단가</th><th>할증</th><th>환율</th><th>부대비</th><th>원화 단가</th><th>직전 대비</th><th>인코텀즈</th><th>사유</th><th>등록</th><th></th></tr></thead><tbody>${[...prices].reverse().map((p, i, a) => { const prev = a[i + 1], pct = prev?.krw_price ? (p.krw_price - prev.krw_price) / prev.krw_price * 100 : null; return `<tr class="${p.effective_date > data.today ? 'cm-future' : ''}"><td class="c nowrap">${esc(p.effective_date)}${p.effective_date > data.today ? ' <span class="chip yellow">예정</span>' : ''}</td><td class="c">${esc(p.currency)}</td><td class="r">${cFmt(p.price, 4)}</td><td class="r">${p.surcharge ? cFmt(p.surcharge, 4) : ''}</td><td class="r">${p.currency === 'KRW' ? '' : cFmt(p.fx, 2)}</td><td class="r">${p.extra_krw ? cFmt(p.extra_krw, 4) : ''}</td><td class="r"><b>${cFmt(p.krw_price, 4)}</b></td><td class="c">${cPctChip(pct == null ? null : Math.round(pct * 100) / 100)}</td><td class="c">${esc(p.incoterms)}</td><td>${esc(p.reason)}</td><td class="small nowrap">${esc(p.created_by)}</td><td>${prices.length > 1 ? `<button type="button" class="btn small" data-cm-pdel="${p.id}" title="잘못 넣은 단가 지우기">×</button>` : ''}</td></tr>`; }).join('')}</tbody></table></div>
+        <div class="actions"><button type="button" class="btn primary" data-cm-price>단가 변경(새 시점)</button></div></fieldset>
+        <fieldset class="vendor-sec"><legend>쓰는 품목 ${mat.used_by.length}개</legend>${mat.used_by.length ? `<div class="chip-wrap">${mat.used_by.map(u => `<button type="button" class="btn small" data-cm-item="${u.id}">${esc(u.item_code)} ${esc(u.name)}</button>`).join(' ')}</div>` : '<p class="small muted">아직 이 원부자재를 쓰는 품목 원가표가 없습니다.</p>'}</fieldset>` : ''}
+      <div class="actions">${mat ? `<button type="button" class="btn" data-cm-hist>이력</button><button type="button" class="btn ${mat.active ? 'danger' : ''}" data-cm-active>${mat.active ? '사용 중지' : '다시 사용'}</button>` : ''}<span class="grow"></span><button class="btn ${mat ? '' : 'primary'}">${mat ? '정보 저장' : '등록'}</button></div></form>`, { wide: true });
+  const form = $('[data-cm-form]', m.el); if (!mat) costKrwLive(form, rates);
+  if (mat && prices.length) $('[data-cm-chart]', form).innerHTML = costChart([{ label: `원화 단가(₩/${mat.unit || '단위'})`, color: '#e8590c', points: prices.map(p => ({ x: p.effective_date, y: p.krw_price, tip: p.reason })) }], { fmt: v => cFmt(v, 2) });
+  const done = async (msg, reopen = true) => { toast(msg); m.close(); qReload(); if (reopen && mat) { const d = await api('GET', '/api/cost/materials'); await costMatOpen(mat.id, d); } };
+  form.onsubmit = async e => { e.preventDefault(); const v = formObj(form); try { if (mat) await api('PUT', `/api/cost/materials/${mat.id}`, { ...v, revision: mat.revision }); else await api('POST', '/api/cost/materials', { ...v, request_id: crypto.randomUUID() }); done(mat ? '저장했습니다.' : '등록했습니다.', !!mat); } catch (err) { fail(err); } };
+  $('[data-cm-active]', m.el)?.addEventListener('click', async () => { try { await api('PUT', `/api/cost/materials/${mat.id}`, { active: !mat.active, revision: mat.revision }); done(mat.active ? '사용 중지했습니다.' : '다시 사용합니다.'); } catch (err) { fail(err); } });
+  $('[data-cm-hist]', m.el)?.addEventListener('click', () => qHistory(mat.code, mat.history, {}));
+  $$('[data-cm-pdel]', m.el).forEach(b => b.addEventListener('click', async () => { if (!await confirmBox('이 단가 이력을 지울까요? 잘못 넣은 경우에만 지우세요(지난 리비전은 당시 단가를 그대로 갖고 있습니다).')) return; try { await api('DELETE', `/api/cost/materials/${mat.id}/prices/${b.dataset.cmPdel}`); done('지웠습니다.'); } catch (err) { fail(err); } }));
+  $$('[data-cm-item]', m.el).forEach(b => b.addEventListener('click', () => { m.close(); costItemOpen(Number(b.dataset.cmItem)).catch(fail); }));
+  $('[data-cm-price]', m.el)?.addEventListener('click', () => costPriceOpen(mat, data, () => done('단가를 바꿨습니다.')));
+}
+async function costPriceOpen(mat, data, after) {
+  const cur = mat.current || {}, rates = data.rates;
+  const m = modal(`<h3>단가 변경 · ${esc(mat.code)} ${esc(mat.name)}</h3><p class="small muted">지금 단가: ${cur.krw_price != null ? `₩${cFmt(cur.krw_price, 4)} (${esc(cur.effective_date)}, ${esc(cur.currency)} ${cFmt(cur.price, 4)})` : '없음'} · 쓰는 품목 ${mat.used_by.length}개</p>
+    <form class="stack" data-cp-form>${costPriceFields({ ...cur, effective_date: todayStr(), reason: '' }, rates)}
+      <div data-cp-impact></div>
+      <label class="chk"><input type="checkbox" name="recalc" value="1" checked> 영향 품목을 이 시점으로 재산출해 리비전 남기기</label>
+      <div class="actions"><button type="button" class="btn" data-cp-dry>영향 미리 보기</button><span class="grow"></span><button class="btn primary">단가 저장</button></div></form>`, { wide: true });
+  const form = $('[data-cp-form]', m.el); costKrwLive(form, rates);
+  const showImpact = imp => { $('[data-cp-impact]', form).innerHTML = imp.changed.length ? `<div class="table-wrap"><table class="grid" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>품목</th><th>지금 원가</th><th>새 원가</th><th>변동률</th><th>판매가</th><th>새 마진율</th></tr></thead><tbody>${imp.changed.map(x => `<tr><td><b>${esc(x.item_code)}</b> ${esc(x.name)}</td><td class="r">${cFmt(x.old_total)}</td><td class="r"><b>${cFmt(x.new_total)}</b></td><td class="c">${cPctChip(x.pct)}</td><td class="r">${cFmt(x.sale_price)}</td><td class="r ${x.new_margin_rate != null && x.new_margin_rate < 0 ? 'err-text' : ''}">${x.new_margin_rate == null ? '' : cFmt(x.new_margin_rate) + '%'}</td></tr>`).join('')}</tbody></table></div>${imp.skipped?.length ? `<p class="small err-text">${esc(imp.skipped.map(s => `${s.item_code}: ${s.why}`).join(' / '))}</p>` : ''}` : '<p class="small muted">원가가 바뀌는 품목이 없습니다.</p>'; };
+  const val = () => { const v = formObj(form); return { ...v, recalc: !!(v.recalc && v.recalc.length) }; };
+  $('[data-cp-dry]', form).onclick = async () => { try { const r = await api('POST', `/api/cost/materials/${mat.id}/prices`, { ...val(), dry: true }); showImpact(r.impact); } catch (err) { fail(err); } };
+  form.onsubmit = async e => { e.preventDefault(); try { const r = await api('POST', `/api/cost/materials/${mat.id}/prices`, { ...val(), request_id: crypto.randomUUID() }); m.close(); toast(r.recalculated ? `단가를 저장하고 ${r.impact.changed.length}개 품목을 재산출했습니다(새 리비전).${r.impact.skipped.length ? ` 건너뜀 ${r.impact.skipped.length}` : ''}` : `단가를 저장했습니다. 영향 품목 ${r.impact.changed.length}개는 「재산출 필요」로 표시됩니다.`); after(); } catch (err) { fail(err); } };
+}
+async function pageCostMaterials(main) {
+  main.innerHTML = `<h1>원가 산출 관리 <span class="dept">구매</span></h1>
+    <p class="muted">원단·포장재·부자재·상품 매입 단가(BACK DATA)를 <b>시점별로</b> 쌓습니다. 원화 단가 = (단가 + 할증) × 환율 + 부대비(슬리팅·물류·통관 원/단위). 단가를 바꾸면 그 원부자재를 쓰는 품목의 원가 영향을 미리 보고, 그 시점으로 재산출해 리비전을 남길 수 있습니다.</p>
+    <div class="ip-tiles" id="cmTiles"></div>
+    <form class="toolbar list-filters" data-read-only id="cmFilters"><label class="lf-sel">분류<select name="cat"><option value="">전체</option></select></label><label class="lf-sel">사용<select name="st"><option value="active">사용 중</option><option value="unused">쓰는 품목 없음</option><option value="future">예정 단가 있음</option><option value="off">사용 중지</option><option value="">전체</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="코드·원부자재·공급사"></label><span class="grow"></span><span id="cmTools" class="ip-tools"><button type="button" class="btn" data-cm-bulk>엑셀 붙여넣기 등록</button><button type="button" class="btn primary" data-cm-new>＋ 원부자재</button></span></form>
+    <div id="cmList"></div>`;
+  const form = $('#cmFilters', main); let data = { rows: [] };
+  const load = async () => { data = await api('GET', '/api/cost/materials'); if (!main.isConnected) return; const cats = [...new Set(data.rows.map(r => r.category).filter(Boolean))].sort(), cs = form.elements.cat, cur = cs.value; cs.innerHTML = '<option value="">전체</option>' + cats.map(c => `<option${c === cur ? ' selected' : ''}>${esc(c)}</option>`).join(''); draw(); };
+  main.qReload = () => load().catch(fail);
+  const draw = () => {
+    const v = formObj(form), q = (v.q || '').trim().toLowerCase(), act = data.rows.filter(r => r.active), month = data.today.slice(0, 7);
+    qTiles('cmTiles', [['원부자재', act.length], ['이번 달 단가 변경', act.filter(r => (r.current?.effective_date || '').startsWith(month) && r.price_count > 1).length], ['예정 단가', act.filter(r => r.next).length, act.some(r => r.next) ? 'yellow' : ''], ['쓰는 품목 없음', act.filter(r => !r.used_by.length).length]]);
+    const rows = data.rows.filter(r => (v.st === 'active' ? r.active : v.st === 'off' ? !r.active : v.st === 'unused' ? r.active && !r.used_by.length : v.st === 'future' ? !!r.next : true) && (!v.cat || r.category === v.cat) && (!q || [r.code, r.name, r.spec, r.supplier, r.category].join(' ').toLowerCase().includes(q)));
+    $('#cmList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table cm-list"><thead><tr><th>코드</th><th>원부자재 · 규격</th><th>분류</th><th>공급사</th><th>단위</th><th>통화 · 단가</th><th>환율</th><th>부대비</th><th>원화 단가</th><th>직전 대비</th><th>적용 시점</th><th>예정</th><th>쓰는 품목</th><th></th></tr></thead><tbody>${rows.map(r => { const c = r.current; return `<tr data-cm-row="${r.id}" class="${r.active ? '' : 'row-off'}"><td class="nowrap" data-card-primary><b>${esc(r.code)}</b></td><td>${esc(r.name)}${r.spec ? `<div class="small muted">${esc(r.spec)}</div>` : ''}</td><td class="c">${esc(r.category)}</td><td>${esc(r.supplier)}</td><td class="c">${esc(r.unit)}</td><td class="r nowrap">${c ? `${c.currency === 'KRW' ? '' : esc(c.currency) + ' '}${cFmt(c.price, 4)}${c.surcharge ? `<div class="small muted">+할증 ${cFmt(c.surcharge, 4)}</div>` : ''}` : '<span class="err-text">없음</span>'}</td><td class="r">${c && c.currency !== 'KRW' ? cFmt(c.fx, 2) : ''}</td><td class="r">${c?.extra_krw ? cFmt(c.extra_krw, 4) : ''}</td><td class="r"><b>${c ? cFmt(c.krw_price, 4) : ''}</b></td><td class="c">${cPctChip(r.change_pct)}</td><td class="c nowrap">${esc(c?.effective_date || '')}</td><td class="c nowrap">${r.next ? `<span class="chip yellow" title="₩${cFmt(r.next.krw_price, 4)}">${esc(r.next.effective_date)}</span>` : ''}</td><td class="c">${r.used_by.length || ''}</td><td><button type="button" class="btn small" data-cm-open="${r.id}">열기</button></td></tr>`; }).join('')}</tbody></table></div>`
+      : `<div class="empty">${data.rows.length ? '조건에 맞는 원부자재가 없습니다.' : '등록된 백데이터가 없습니다. 「＋ 원부자재」나 「엑셀 붙여넣기 등록」으로 원단·포장재 단가를 넣으세요.'}</div>`;
+  };
+  main.addEventListener('click', async e => {
+    if (e.target.closest('[data-cm-new]')) return costMatOpen(null, data).catch(fail);
+    const o = e.target.closest('[data-cm-open]'); if (o) return costMatOpen(Number(o.dataset.cmOpen), data).catch(fail);
+    if (e.target.closest('[data-cm-bulk]')) {
+      const cols = ['code', 'name', 'spec', 'category', 'supplier', 'unit', 'currency', 'price', 'surcharge', 'fx', 'extra_krw', 'effective_date', 'reason'];
+      const v = await promptBox('엑셀 붙여넣기 등록', `<p class="small">엑셀에서 아래 열 순서로 복사해 붙여넣으세요(머리글 줄은 빼고). 코드가 이미 있으면 단가가 다를 때만 그 시점 단가로 쌓고, 없으면 새로 등록합니다.</p><p class="small muted">코드 · 원부자재명 · 규격 · 분류 · 공급사 · 단위 · 통화(KRW/USD…) · 단가 · 할증 · 환율 · 부대비(원) · 적용일(YYYY-MM-DD) · 사유</p><label>붙여넣기<textarea name="tsv" rows="10" required placeholder="SONTARA-8864	SONTARA 8864	56GSM	원단	듀폰	SQM	USD	0.3632	0	1400	75.79	2026-05-01	5월 인상"></textarea></label>`, { wide: true });
+      if (!v) return; const rows = v.tsv.replace(/\r/g, '').split('\n').map(l => l.split('\t')).filter(a => a.some(x => x.trim())).map(a => Object.fromEntries(cols.map((k, i) => [k, (a[i] || '').trim()]))).map(o => ({ ...o, currency: (o.currency || 'KRW').toUpperCase(), effective_date: (o.effective_date.match(/\d{4}[-./]\d{1,2}[-./]\d{1,2}/)?.[0] || '').replace(/[./]/g, '-').replace(/-(\d)(?=-|$)/g, '-0$1') || undefined }));
+      try { const r = await api('POST', '/api/cost/materials/bulk', { rows }); toast(`새로 ${r.created} · 새 시점 단가 ${r.priced} · 같은 단가 ${r.same}${r.errors.length ? ` · 오류 ${r.errors.length}(${r.errors[0]})` : ''}`, r.errors.length ? 'err' : 'ok'); qReload(); } catch (err) { fail(err); }
+    }
+  });
+  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  await load();
+}
+// ── 공통 기준 ──
+async function pageCostRates(main) {
+  main.innerHTML = `<h1>원가 산출 관리 <span class="dept">구매</span></h1>
+    <p class="muted">모든 품목 원가에 공통으로 쓰는 기준을 <b>시점별 버전</b>으로 관리합니다. 시간당 인건비(1 WH 실지출: 기본급·잔업·특근·수당·상여 ÷ 근무시간, 인상률 반영), 제조경비율·판관비율(3개년 재무제표 기준), 불량률(가산), 환율. 품목은 원가표에서 따로 덮어쓸 수 있습니다.</p>
+    <div id="crNow"></div>
+    <section class="card"><h2>기준 이력 <span class="small muted">새 버전을 넣으면 그 시점부터 적용되고, 지난 리비전은 당시 기준을 그대로 갖고 있습니다</span></h2><div id="crList"></div><div class="actions"><span class="grow"></span><button type="button" class="btn primary" data-cr-new>＋ 새 기준(시점)</button></div></section>`;
+  let data; const load = async () => { data = await api('GET', '/api/cost/rates'); if (main.isConnected) draw(); };
+  main.qReload = () => load().catch(fail);
+  const fx = r => Object.entries(r.fx || {}).map(([k, v]) => `${k} ${cFmt(v, 2)}`).join(' · ');
+  const draw = () => {
+    const c = data.current;
+    $('#crNow', main).innerHTML = c ? `<dl class="dc-kpi cr-now"><div class="em"><dt>시간당 인건비(1 WH)</dt><dd>${cFmt(c.labor_rate, 4)}원</dd></div><div><dt>제조경비율</dt><dd>${cFmt(c.mfg_rate)}%</dd></div><div><dt>판관비율</dt><dd>${cFmt(c.sga_rate)}%</dd></div><div><dt>불량률(가산)</dt><dd>${cFmt(c.defect_rate)}%</dd></div><div><dt>환율</dt><dd class="small">${esc(fx(c) || '—')}</dd></div><div><dt>적용 시점</dt><dd>${esc(c.effective_date)}${data.next ? `<small class="muted"> · 예정 ${esc(data.next.effective_date)}</small>` : ''}</dd></div></dl>` : '<div class="empty">공통 기준이 없습니다. 「＋ 새 기준」으로 시간당 인건비·제조경비율·판관비율을 먼저 넣으세요.</div>';
+    $('#crList', main).innerHTML = data.rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>적용 시점</th><th>시간당 인건비</th><th>제조경비율</th><th>판관비율</th><th>불량률</th><th>환율</th><th>사유</th><th>비고</th><th>등록</th><th></th></tr></thead><tbody>${data.rows.map(r => `<tr class="${r.effective_date > data.today ? 'cm-future' : r.id === c?.id ? 'cr-cur' : ''}"><td class="c nowrap"><b>${esc(r.effective_date)}</b>${r.id === c?.id ? ' <span class="chip green">지금</span>' : r.effective_date > data.today ? ' <span class="chip yellow">예정</span>' : ''}</td><td class="r">${cFmt(r.labor_rate, 4)}</td><td class="r">${cFmt(r.mfg_rate)}%</td><td class="r">${cFmt(r.sga_rate)}%</td><td class="r">${cFmt(r.defect_rate)}%</td><td class="small">${esc(fx(r))}</td><td>${esc(r.reason)}</td><td class="small">${esc(r.note)}</td><td class="small nowrap">${esc(r.created_by)}<div class="muted">${esc(String(r.created_at).slice(0, 10))}</div></td><td>${data.rows.length > 1 ? `<button type="button" class="btn small" data-cr-del="${r.id}" title="잘못 넣은 기준 지우기">×</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '';
+  };
+  main.addEventListener('click', async e => {
+    const d = e.target.closest('[data-cr-del]'); if (d) { if (!await confirmBox('이 기준 버전을 지울까요? 잘못 넣은 경우에만 지우세요.')) return; try { await api('DELETE', `/api/cost/rates/${d.dataset.crDel}`); toast('지웠습니다.'); qReload(); } catch (err) { fail(err); } return; }
+    if (!e.target.closest('[data-cr-new]')) return;
+    const c = data.current || {};
+    const v = await promptBox('새 공통 기준', `<div class="form-grid"><label>적용 시점 *<input type="date" name="effective_date" required value="${todayStr()}"></label><label>시간당 인건비(원) *<input name="labor_rate" required inputmode="decimal" value="${esc(c.labor_rate ?? '')}"></label><label>제조경비율(%) *<input name="mfg_rate" required inputmode="decimal" value="${esc(c.mfg_rate ?? '')}" placeholder="예) 10"></label><label>판관비율(%) *<input name="sga_rate" required inputmode="decimal" value="${esc(c.sga_rate ?? '')}" placeholder="예) 12"></label><label>불량률(%, 가산)<input name="defect_rate" inputmode="decimal" value="${esc(c.defect_rate ?? 0)}"></label>
+      ${COST_CURS.slice(1).map(k => `<label>${k} 환율<input name="fx_${k}" inputmode="decimal" value="${esc(c.fx?.[k] ?? '')}"></label>`).join('')}<label class="span3">사유${data.rows.length ? ' *' : ''}<input name="reason" maxlength="200"${data.rows.length ? ' required' : ''} placeholder="예) 2026 최저임금 인상·3개년 재무제표 갱신"></label><label class="span3">비고<input name="note" maxlength="500"></label></div>
+      <details class="cr-calc"><summary>시간당 인건비 계산 도우미</summary><div class="form-grid"><label>기간 인건비 합계(원)<input data-c="pay" inputmode="decimal" placeholder="기본급+잔업+특근+수당+상여"></label><label>기간 근무시간(h)<input data-c="hrs" inputmode="decimal" placeholder="통상+잔업+특근"></label><label>인상률(%)<input data-c="up" inputmode="decimal" placeholder="예) 2"></label></div><p class="small" data-c-out></p><button type="button" class="btn small" data-c-use>이 값 넣기</button></details>`,
+      { wide: true, onOpen: el => { const g = k => Number(String(el.querySelector(`[data-c="${k}"]`).value).replace(/,/g, '')) || 0, calc = () => { const h = g('hrs'), x = h ? g('pay') / h * (1 + g('up') / 100) : 0; el.querySelector('[data-c-out]').textContent = x ? `= ${cFmt(x, 4)}원/WH` : ''; return x; }; el.querySelector('.cr-calc').addEventListener('input', calc); el.querySelector('[data-c-use]').onclick = () => { const x = calc(); if (x) el.querySelector('[name=labor_rate]').value = Math.round(x * 10000) / 10000; }; } });
+    if (!v) return;
+    const fxv = Object.fromEntries(COST_CURS.slice(1).map(k => [k, v['fx_' + k]]).filter(([, x]) => x));
+    try {
+      await api('POST', '/api/cost/rates', { ...v, fx: fxv, request_id: crypto.randomUUID() });
+      const imp = await api('POST', '/api/cost/items/recalc', { rates: true, effective_date: v.effective_date, dry: true });
+      if (imp.changed.length && await confirmBox(`새 기준을 넣었습니다. 공통 기준을 쓰는 품목 ${imp.changed.length}개의 원가가 바뀝니다(예: ${imp.changed[0].item_code} ${cFmt(imp.changed[0].old_total)} → ${cFmt(imp.changed[0].new_total)}). ${v.effective_date} 시점으로 재산출해 리비전을 남길까요?`)) {
+        const r = await api('POST', '/api/cost/items/recalc', { rates: true, effective_date: v.effective_date, reason: `공통 기준 변경 · ${v.reason || '최초'}` }); toast(`${r.changed.length}개 품목 재산출(새 리비전)${r.skipped.length ? `, 건너뜀 ${r.skipped.length}` : ''}`);
+      } else toast('새 기준을 넣었습니다.');
+      qReload();
+    } catch (err) { fail(err); }
+  });
+  await load();
+}
+// ── 원가 추이 ──
+async function pageCostTrend(main) {
+  main.innerHTML = `<h1>원가 산출 관리 <span class="dept">구매</span></h1>
+    <p class="muted">품목마다 직전 리비전 대비 원가 변동과 판매 차익·마진율, 품목·원부자재를 고르면 시점별 추이 그래프를 봅니다(내부용).</p>
+    <div class="ct-pick"><section class="card"><h2>품목 원가 추이</h2><label class="lf-sel">품목<select id="ctItem"><option value="">고르세요</option></select></label><div id="ctItemBox"></div></section>
+      <section class="card"><h2>원부자재 단가 추이</h2><label class="lf-sel">원부자재<select id="ctMat"><option value="">고르세요</option></select></label><div id="ctMatBox"></div></section></div>
+    <form class="toolbar list-filters" data-read-only id="ctFilters"><label class="lf-sel">확인<select name="st"><option value="">전체</option><option value="loss">원가 미달</option><option value="noprice">판매가 미기재</option><option value="up">원가 상승</option><option value="down">원가 하락</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="코드·품목"></label><span class="grow"></span><span class="ip-tools"></span></form>
+    <div id="ctList"></div>`;
+  const form = $('#ctFilters', main); let items, mats;
+  const load = async () => { [items, mats] = await Promise.all([api('GET', '/api/cost/items'), api('GET', '/api/cost/materials')]); if (!main.isConnected) return;
+    $('#ctItem', main).innerHTML = '<option value="">고르세요</option>' + items.rows.filter(r => r.active).map(r => `<option value="${r.id}">${esc(r.item_code)} · ${esc(r.name)}</option>`).join('');
+    $('#ctMat', main).innerHTML = '<option value="">고르세요</option>' + mats.rows.filter(r => r.active).map(r => `<option value="${r.id}">${esc(r.code)} · ${esc(r.name)}</option>`).join(''); draw(); };
+  main.qReload = () => load().catch(fail);
+  const status = r => r.totals.sale_price == null ? '판매가 미기재' : r.totals.margin < 0 ? '원가 미달' : '정상';
+  const draw = () => {
+    const v = formObj(form), q = (v.q || '').trim().toLowerCase();
+    const rows = items.rows.filter(r => r.active && (!v.st || (v.st === 'loss' ? status(r) === '원가 미달' : v.st === 'noprice' ? status(r) === '판매가 미기재' : v.st === 'up' ? r.change_pct > 0 : r.change_pct < 0)) && (!q || [r.item_code, r.name].join(' ').toLowerCase().includes(q)));
+    $('#ctList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ct-list"><thead><tr><th>구분</th><th>품목</th><th>판매가</th><th>직전 원가</th><th>현재 원가</th><th>원가 증감</th><th>변동률</th><th>판매 차익</th><th>마진율</th><th>확인</th><th>최근 변동</th><th>리비전</th></tr></thead><tbody>${rows.map(r => { const t = r.totals, s = status(r); return `<tr class="${s === '원가 미달' ? 'ip-over' : ''}"><td class="c">${esc(r.kind_label)}</td><td><b>${esc(r.item_code)}</b> ${esc(r.name)}</td><td class="r">${t.sale_price != null ? cFmt(t.sale_price) : ''}</td><td class="r">${cFmt(r.prev_total)}</td><td class="r"><b>${cFmt(t.total)}</b></td><td class="r">${r.prev_total != null ? cFmt(t.total - r.prev_total) : ''}</td><td class="c">${cPctChip(r.change_pct)}</td><td class="r">${t.margin != null ? cFmt(t.margin) : ''}</td><td class="r ${t.margin < 0 ? 'err-text' : ''}">${t.margin_rate != null ? cFmt(t.margin_rate) + '%' : ''}</td><td class="c"><span class="chip ${s === '원가 미달' ? 'red' : s === '판매가 미기재' ? 'yellow' : 'green'}">${s}</span></td><td class="c nowrap">${esc(r.rev_date || '')}</td><td class="c">${r.rev_count}</td></tr>`; }).join('')}</tbody></table></div>` : '<div class="empty">조건에 맞는 품목이 없습니다.</div>';
+  };
+  $('#ctItem', main).addEventListener('change', async e => { const id = Number(e.target.value), box = $('#ctItemBox', main); if (!id) { box.innerHTML = ''; return; } const r = (await api('GET', `/api/cost/items/${id}/revs`)).rows;
+    box.innerHTML = costChart([{ label: '원가', color: '#3b6fd8', points: r.map(x => ({ x: x.effective_date, y: x.totals.total, tip: `Rev.${x.rev} ${x.reason}` })) }, { label: '판매가', color: '#2f9e44', dash: true, points: r.filter(x => x.totals.sale_price != null).map(x => ({ x: x.effective_date, y: x.totals.sale_price })) }, { label: '원부자재', color: '#e8590c', points: r.map(x => ({ x: x.effective_date, y: x.totals.material })) }])
+      + `<div class="table-wrap"><table class="grid" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>Rev</th><th>시점</th><th>원인</th><th>사유</th><th>원가</th><th>변동률</th></tr></thead><tbody>${[...r].reverse().map((x, i, a) => { const p = a[i + 1], pct = p?.totals.total ? Math.round((x.totals.total - p.totals.total) / p.totals.total * 10000) / 100 : null; return `<tr><td class="c">Rev.${x.rev}</td><td class="c">${esc(x.effective_date)}</td><td class="c">${esc(x.cause_label)}</td><td>${esc(x.reason)}</td><td class="r"><b>${cFmt(x.totals.total)}</b></td><td class="c">${cPctChip(pct)}</td></tr>`; }).join('')}</tbody></table></div><div class="actions"><button type="button" class="btn small" data-ct-open="${id}">원가표 열기</button></div>`; });
+  $('#ctMat', main).addEventListener('change', async e => { const id = Number(e.target.value), box = $('#ctMatBox', main); if (!id) { box.innerHTML = ''; return; } const d = await api('GET', `/api/cost/materials/${id}/prices`);
+    box.innerHTML = costChart([{ label: `원화 단가(₩/${d.material.unit || '단위'})`, color: '#e8590c', points: d.rows.map(p => ({ x: p.effective_date, y: p.krw_price, tip: p.reason })) }], { fmt: v => cFmt(v, 2) }) + `<p class="small muted">${d.rows.map(p => `${p.effective_date} ₩${cFmt(p.krw_price, 4)}`).join(' → ')}</p>`; });
+  main.addEventListener('click', e => { const o = e.target.closest('[data-ct-open]'); if (o) costItemOpen(Number(o.dataset.ctOpen)).catch(fail); });
   form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }

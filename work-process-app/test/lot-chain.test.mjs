@@ -1179,3 +1179,57 @@ test('15.316 development cost sheets: auto amounts (qty x price x fx), direct/SG
   assert.ok((await admin('GET', '/api/find?q=' + c.cost_no)).body.rows.some(x => x.type === 'devcost'));
   assert.ok(!(await prod('GET', '/api/find?q=' + c.cost_no)).body.rows.some(x => x.type === 'devcost'), 'non-researcher cannot find');
 });
+
+test('15.318 cost calculation reproduces the Excel sheets (nonwoven CF707 200SH, poly NX-808 25sh), point-in-time prices/rates, revisions on change, recalc, purchase-only', async () => {
+  assert.equal((await prod('GET', '/api/cost/items')).status, 403);
+  // 공통 기준: 1 WH 13,853.3979원 · 제조경비 10% · 판관비 12% · 불량률 0
+  assert.equal((await admin('POST', '/api/cost/rates', { effective_date: '2026-01-01', labor_rate: 13853.3979, mfg_rate: 10, sga_rate: 12, defect_rate: 0, fx: { USD: 1400 }, request_id: rid() })).status, 200);
+  // 백데이터: SONTARA 8864 = ($0.3632 + 0) × 1400 + 슬리팅·로스·운송 75.7891 = 584.2691원/SQM
+  let mat = (await admin('POST', '/api/cost/materials', { code: 'SONTARA-8864', name: 'SONTARA 8864', category: '원단', supplier: '듀폰', unit: 'SQM', currency: 'USD', price: 0.3632, extra_krw: 75.7891, incoterms: 'CPT BUSAN', effective_date: '2026-01-01', request_id: rid() })).body;
+  assert.equal(mat.current.krw_price, 584.2691);
+  const lines = [
+    { type: 'mat', material_id: mat.id, name: '원단', qty: '0.14*0.114*200', loss: 1 },
+    { type: 'mat', name: '개별 포장지', price: '245000/1500*0.32' }, { type: 'mat', name: '대봉투', price: '187/50' }, { type: 'mat', name: 'BOX', price: '=2050/50' },
+    { type: 'labor', name: '절단', qty: '200', capa: '9000*4' }, { type: 'labor', name: '1차포장', qty: '1', capa: '750/4' },
+  ];
+  let it = (await admin('POST', '/api/cost/items', { item_code: 'CF707-200', name: 'CF707 (5.5"*4.5") (200SH)', unit: 'PK', pieces: 200, sale_price: 2650, customer: '크린컨테크', lines, effective_date: '2026-01-02', request_id: rid() })).body;
+  const t = it.totals;
+  assert.deepEqual([t.material, t.labor, t.direct, t.mfg, t.sga, t.total, t.piece_cost, t.margin, t.margin_rate], [1980.64, 150.85, 2131.49, 213.15, 255.78, 2600.42, 13.0021, 49.58, 1.87]);
+  assert.equal(it.rev, 0);
+  assert.equal((await admin('POST', '/api/cost/items', { item_code: 'X', name: 'x', lines: [{ type: 'mat', name: 'a', price: '1/0' }] })).status, 400);
+  assert.equal((await admin('POST', '/api/cost/items', { item_code: 'X', name: 'x', lines: [{ type: 'mat', name: 'a', price: 'alert(1)' }] })).status, 400);
+  // 폴리 NX-808(25sh): 판관비 = (직접비+제조경비)×12%, 불량률 0.5% 가산(품목 덮어쓰기) → 엑셀 인상원가 80.0514
+  const nx = (await admin('POST', '/api/cost/items', { item_code: 'NX-808-25', name: 'NX-808 (25sh)', kind: 'product', sga_base: 'mfg', overrides: { defect_rate: 0.5 }, sale_price: 102, lines: [
+    { type: 'mat', name: '원단', price: '1370', qty: '1/36', loss: 5 }, { type: 'mat', name: '속포장지', price: '(3.09-2.79)/3.09' }, { type: 'mat', name: '박스내 포장지', price: '80/1000' }, { type: 'mat', name: 'BOX', price: '965/1000' },
+    { type: 'labor', name: '재단', qty: '1', capa: '2200' }, { type: 'labor', name: '정렬/포장', qty: '1', capa: '800' }], effective_date: '2026-01-02', request_id: rid() })).body;
+  assert.equal(nx.totals.total, 80.05); assert.equal(nx.totals.defect, 0.32);
+  // 머리 정보만 바뀌면 리비전 없음 · 원가 바뀌면 사유 필수 · 시점은 마지막 리비전 이후
+  it = (await admin('PUT', `/api/cost/items/${it.id}`, { revision: it.revision, customer: '크린컨테크 외' })).body; assert.equal(it.rev, 0);
+  const l2 = it.lines.map(l => l.name === 'BOX' ? { ...l, price: '2200/50' } : l);
+  assert.equal((await admin('PUT', `/api/cost/items/${it.id}`, { revision: it.revision, lines: l2 })).status, 400, 'reason required');
+  assert.equal((await admin('PUT', `/api/cost/items/${it.id}`, { revision: it.revision, lines: l2, reason: 'BOX 단가', effective_date: '2025-12-31' })).status, 400, 'date before last rev');
+  it = (await admin('PUT', `/api/cost/items/${it.id}`, { revision: it.revision, lines: l2, reason: 'BOX 단가 2,050 → 2,200', effective_date: '2026-03-01' })).body;
+  assert.deepEqual([it.rev, it.rev_date, it.totals.total, it.prev_total, it.change_pct], [1, '2026-03-01', 2604.08, 2600.42, 0.14]);
+  // 단가 변경(5월 +4%): 미리 보기 → 저장 + 영향 품목 재산출 → Rev.2(원인: 단가 변경)
+  const dry = (await admin('POST', `/api/cost/materials/${mat.id}/prices`, { currency: 'USD', price: 0.3777, extra_krw: 75.7891, effective_date: '2026-05-01', reason: '5월 +4%', dry: true })).body;
+  assert.equal(dry.impact.changed.length, 1); assert.equal(dry.impact.changed[0].id, it.id);
+  const pr = (await admin('POST', `/api/cost/materials/${mat.id}/prices`, { currency: 'USD', price: 0.3777, extra_krw: 75.7891, effective_date: '2026-05-01', reason: '5월 +4%', recalc: true, request_id: rid() })).body;
+  assert.equal(pr.impact.changed[0].rev, 2);
+  const revs = (await admin('GET', `/api/cost/items/${it.id}/revs`)).body.rows;
+  assert.deepEqual(revs.map(r => [r.rev, r.effective_date, r.cause]), [[0, '2026-01-02', 'create'], [1, '2026-03-01', 'manual'], [2, '2026-05-01', 'material']]);
+  assert.equal(revs[2].lines[0].unit_price, cr(0.3777 * 1400 + 75.7891));
+  assert.equal(revs[0].lines[0].unit_price, 584.2691, 'old revision keeps the price of its time');
+  // 시점별 단가: 3월 기준 재계산은 옛 단가, 백데이터 목록은 지금(오늘) 단가
+  const mats = (await admin('GET', '/api/cost/materials')).body.rows.find(m => m.id === mat.id); assert.equal(mats.price_count, 2); assert.deepEqual(mats.used_by.map(u => u.id), [it.id]);
+  // 공통 기준 변경(인건비 인상) → 재산출: 공통 기준을 쓰는 품목만, 시점 이후 리비전
+  await admin('POST', '/api/cost/rates', { effective_date: '2026-07-01', labor_rate: 14500, mfg_rate: 10, sga_rate: 12, defect_rate: 0, fx: { USD: 1400 }, reason: '하반기 인건비', request_id: rid() });
+  const rc = (await admin('POST', '/api/cost/items/recalc', { rates: true, effective_date: '2026-07-01', reason: '하반기 인건비 반영' })).body;
+  assert.ok(rc.changed.some(x => x.id === it.id && x.rev === 3) && rc.changed.some(x => x.id === nx.id));
+  assert.equal((await admin('POST', '/api/cost/items/recalc', { rates: true, effective_date: '2026-07-01', reason: '다시' })).body.changed.length, 0, 'no change → no revision');
+  assert.ok((await admin('GET', '/api/find?q=CF707-200')).body.rows.some(x => x.type === 'costitem'));
+  assert.ok(!(await prod('GET', '/api/find?q=CF707-200')).body.rows.some(x => x.type === 'costitem'));
+  // 엑셀 붙여넣기 백데이터: 새 코드는 등록, 같은 코드·다른 단가는 새 시점 단가, 같으면 건너뜀
+  const bulk = (await admin('POST', '/api/cost/materials/bulk', { rows: [{ code: 'BOX-50', name: 'BOX', unit: 'EA', price: 2050, effective_date: '2026-01-01' }, { code: 'SONTARA-8864', name: 'SONTARA 8864', currency: 'USD', price: 0.3777, extra_krw: 75.7891, effective_date: '2026-05-01' }, { code: 'SONTARA-8864', name: 'x', currency: 'USD', price: 0.39, extra_krw: 75.7891, effective_date: '2026-09-01' }] })).body;
+  assert.deepEqual([bulk.created, bulk.same, bulk.priced, bulk.errors.length], [1, 1, 1, 0]);
+});
+function cr(v) { return Math.round(v * 10000) / 10000; }
