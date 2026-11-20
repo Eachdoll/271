@@ -1696,3 +1696,337 @@ async function pageSuppliers(main) {
   form.elements.year.addEventListener('change', () => load().catch(fail)); form.addEventListener('input', e => { if (e.target.name !== 'year') draw(); }); form.elements.show.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }
+
+// ── 15.307 품질 3단계: 생산 › 공무(설비 대장·예방보전) · 품질 › 공정품질(PQC·SPC) · 시험법·신뢰성 ──
+const EQ_STATUS_LABEL = { running: '가동', maintenance: '정비 중', idle: '휴지', disposed: '폐기' };
+const EQ_STATUS_CHIP = { running: 'green', maintenance: 'yellow', idle: '', disposed: '' };
+const EQ_LOG_LABEL = { pm: '예방보전(PM)', failure: '고장', repair: '수리', modify: '개조·이설', other: '기타' };
+const PM_UNIT_LABEL = { day: '일', week: '주', month: '개월', year: '년' };
+const pmRowHtml = (p = {}) => `<tr data-pm-row data-key="${esc(p.key || '')}"><td><input data-pm="name" maxlength="100" value="${esc(p.name || '')}" placeholder="예) 필터 교체"></td><td class="nowrap"><input type="number" data-pm="cycle" min="1" max="999" value="${p.cycle || 1}" class="pm-cycle"><select data-pm="unit">${Object.entries(PM_UNIT_LABEL).map(([k, l]) => `<option value="${k}"${(p.unit || 'month') === k ? ' selected' : ''}>${l}</option>`).join('')}</select></td><td><input data-pm="checks" maxlength="1000" value="${esc((p.checks || []).join(', '))}" placeholder="점검 항목을 쉼표로: 필터 상태, 차압"></td><td><input type="date" data-pm="last_done" value="${esc(p.last_done || '')}"></td><td><input type="date" data-pm="next_due" value="${esc(p.next_due || '')}"></td><td><button type="button" class="btn small danger" data-pm-del>×</button></td></tr>`;
+const pmRead = root => $$('[data-pm-row]', root).map(tr => { const g = k => $(`[data-pm="${k}"]`, tr).value; return { key: tr.dataset.key || undefined, name: g('name').trim(), cycle: g('cycle'), unit: g('unit'), checks: g('checks').split(',').map(x => x.trim()).filter(Boolean), last_done: g('last_done'), next_due: g('next_due') }; }).filter(p => p.name);
+async function eqEdit(e = null, after = null) {
+  const units = await api('GET', '/api/production-units').catch(() => []);
+  const v0 = e || { status: 'running', pm_items: [] };
+  const m = modal(`<h3>${e ? `${esc(e.equip_no)} 설비 수정` : '설비 등록'}</h3><form class="stack" data-eq-form><div class="form-grid">
+    <label>설비번호 <span class="hint">(비우면 EQ-01…)</span><input name="equip_no" maxlength="40" value="${esc(v0.equip_no || '')}"></label>
+    <label class="span2">설비명 *<input name="name" required maxlength="100" value="${esc(v0.name || '')}" placeholder="예) 세탁기 · 커팅기 · 융착기 · 클린룸 공조기"></label>
+    <label>종류<input name="kind" maxlength="50" list="eqKinds" value="${esc(v0.kind || '')}"><datalist id="eqKinds">${['세탁기', '건조기', '커팅기', '융착기', '포장기', '공조기(클린룸)', '순수 제조장치', '컴프레서', '보일러'].map(x => `<option value="${x}">`).join('')}</datalist></label>
+    <label>호기<input name="unit_name" maxlength="50" list="eqUnits" value="${esc(v0.unit_name || '')}"><datalist id="eqUnits">${(Array.isArray(units) ? units : units.rows || []).map(u => `<option value="${esc(u.name)}">`).join('')}</datalist></label>
+    <label>위치<input name="location" maxlength="100" value="${esc(v0.location || '')}" placeholder="예) 2동 세탁실"></label>
+    <label>제조사<input name="maker" maxlength="100" value="${esc(v0.maker || '')}"></label><label>모델명<input name="model" maxlength="100" value="${esc(v0.model || '')}"></label><label>S/N<input name="serial_no" maxlength="100" value="${esc(v0.serial_no || '')}"></label>
+    <label>설치일<input type="date" name="install_date" value="${esc(v0.install_date || '')}"></label><label>담당자<input name="owner_name" maxlength="50" value="${esc(v0.owner_name || ME?.name || '')}"></label>
+    <label>상태<select name="status">${Object.entries(EQ_STATUS_LABEL).map(([k, l]) => `<option value="${k}"${v0.status === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+    <label class="span3">메모<input name="note" maxlength="1000" value="${esc(v0.note || '')}"></label></div>
+    <fieldset class="vendor-sec"><legend>예방보전(PM) 항목 <span class="hint">(다음 예정일은 비우면 직전 수행일 + 주기)</span></legend><div class="table-wrap"><table class="grid pm-edit"><thead><tr><th>항목</th><th>주기</th><th>점검표</th><th>직전 수행일</th><th>다음 예정일</th><th></th></tr></thead><tbody>${(v0.pm_items || []).map(pmRowHtml).join('')}</tbody></table></div><button type="button" class="btn small" data-pm-add>＋ PM 항목</button></fieldset>
+    <div class="actions">${e && !e.log_count ? '<button type="button" class="btn danger" data-eq-del>삭제</button>' : ''}<span class="grow"></span><button type="button" class="btn" data-no>취소</button><button class="btn primary">저장</button></div></form>`, { wide: true });
+  const form = $('[data-eq-form]', m.el), tb = $('.pm-edit tbody', form);
+  if (!e) tb.insertAdjacentHTML('beforeend', pmRowHtml());
+  $('[data-pm-add]', form).onclick = () => tb.insertAdjacentHTML('beforeend', pmRowHtml());
+  form.addEventListener('click', ev => { const d = ev.target.closest('[data-pm-del]'); if (d) d.closest('tr').remove(); });
+  form.addEventListener('change', ev => { if (ev.target.matches('[data-pm="last_done"],[data-pm="cycle"],[data-pm="unit"]')) { const n = $('[data-pm="next_due"]', ev.target.closest('tr')); n.value = ''; } });
+  $('[data-no]', form).onclick = () => m.close();
+  $('[data-eq-del]', form)?.addEventListener('click', async () => { if (!await confirmBox(`${e.equip_no} ${e.name}을(를) 지울까요?`)) return; try { await api('DELETE', `/api/equipment/${e.id}?revision=${e.revision}`); toast('지웠습니다.'); m.close(); qReload(); } catch (err) { fail(err); } });
+  form.onsubmit = async ev => { ev.preventDefault(); try { const body = { ...formObj(form), pm_items: pmRead(form) }; const r = e ? await api('PUT', `/api/equipment/${e.id}`, { ...body, revision: e.revision }) : await api('POST', '/api/equipment', { ...body, request_id: crypto.randomUUID() }); toast(`${r.equip_no} 저장했습니다.`); m.close(); qReload(); after?.(r); } catch (err) { fail(err); } };
+}
+async function eqLog(e, kind = 'pm', pmKey = '') {
+  const pm = e.pm_items, item = () => pm.find(p => p.key === $('[name=pm_key]', box)?.value);
+  let box;
+  const v = await promptBox(`${e.equip_no} ${e.name} · ${kind === 'pm' ? '예방보전 수행' : '고장·수리 기록'}`, `<div class="form-grid">
+    <label>종류<select name="kind">${Object.entries(EQ_LOG_LABEL).filter(([k]) => kind === 'pm' ? k === 'pm' : k !== 'pm').map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
+    <label>일자 *<input type="date" name="log_date" required value="${todayStr()}" max="${todayStr()}"></label><label>작업자<input name="worker_name" maxlength="50" value="${esc(ME?.name || '')}"></label>
+    ${kind === 'pm' ? `<label class="span3">PM 항목 *<select name="pm_key" required>${pm.map(p => `<option value="${esc(p.key)}"${p.key === pmKey ? ' selected' : ''}>${esc(p.name)} (${p.cycle}${PM_UNIT_LABEL[p.unit]}마다 · 예정 ${esc(p.next_due || '')})</option>`).join('')}</select></label><div class="span3" data-pm-checks></div>`
+    : `<label class="span3">증상·작업 내용 *<textarea name="description" rows="2" maxlength="1000" required></textarea></label><label class="span3">조치<textarea name="action" rows="2" maxlength="1000"></textarea></label><label>비가동 시간(h)<input type="number" step="0.5" min="0" name="downtime_hours"></label><label>교체 부품<input name="parts" maxlength="300"></label><label>비용(원)<input type="number" min="0" name="cost"></label>`}
+    <label>기록 뒤 설비 상태<select name="status_after">${Object.entries(EQ_STATUS_LABEL).filter(([k]) => k !== 'disposed').map(([k, l]) => `<option value="${k}"${(kind === 'pm' ? e.status : 'maintenance') === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+    ${kind === 'pm' ? '<label class="span2">메모<input name="description" maxlength="1000"></label>' : ''}</div>`, { wide: true,
+    onOpen: el => { box = el; const draw = () => { const it = item(), c = $('[data-pm-checks]', el); if (!c || !it) return; c.innerHTML = it.checks.length ? `<table class="grid pm-checks"><thead><tr><th>점검 항목</th><th>결과</th><th>메모</th></tr></thead><tbody>${it.checks.map((n, i) => `<tr><td>${esc(n)}</td><td class="nowrap"><label class="chk"><input type="radio" name="ck${i}" value="1" checked> 양호</label> <label class="chk"><input type="radio" name="ck${i}" value="0"> 이상</label></td><td><input name="ckn${i}" maxlength="200"></td></tr>`).join('')}</tbody></table>` : '<p class="small muted">점검표가 없는 항목입니다. 수행만 기록합니다.</p>'; }; $('[name=pm_key]', el)?.addEventListener('change', draw); draw(); },
+    submit: async vals => { const it = kind === 'pm' ? item() : null; const checks = it ? it.checks.map((n, i) => ({ item: n, ok: vals['ck' + i] === '1', note: vals['ckn' + i] || '' })) : []; return api('POST', `/api/equipment/${e.id}/logs`, { ...vals, checks, revision: e.revision, request_id: crypto.randomUUID() }); } });
+  if (v) { toast(kind === 'pm' ? `수행을 기록했습니다${v.log_result === '이상' ? ' — 점검 이상이 있습니다' : ''}.` : '기록했습니다.', v.log_result === '이상' ? 'err' : 'ok'); qReload(); }
+  return v;
+}
+async function eqOpen(id) {
+  const d = await api('GET', `/api/equipment/${id}/logs`), e = d.equipment, can = hasRole('production') || hasRole('quality');
+  const list = (await api('GET', '/api/equipment')).rows.find(x => x.id === id) || e, today = todayStr();
+  const m = modal(`<h3>${esc(e.equip_no)} · ${esc(e.name)} <span class="chip ${EQ_STATUS_CHIP[e.status]}">${esc(e.status_label)}</span></h3>
+    <p class="small muted">${[e.kind, e.unit_name, e.location, [e.maker, e.model].filter(Boolean).join(' '), e.serial_no && 'S/N ' + e.serial_no, e.install_date && '설치 ' + e.install_date, e.owner_name && '담당 ' + e.owner_name].filter(Boolean).map(esc).join(' · ')}</p>
+    <div class="actions wrap">${can ? '<button type="button" class="btn" data-eq-edit>설비 수정</button><button type="button" class="btn" data-eq-fail>고장·수리 기록</button>' : ''}</div>
+    <fieldset class="vendor-sec"><legend>예방보전(PM)</legend>${e.pm_items.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>항목</th><th>주기</th><th>점검표</th><th>직전 수행</th><th>다음 예정</th><th></th></tr></thead><tbody>${e.pm_items.map(p => `<tr><td><b>${esc(p.name)}</b></td><td class="nowrap">${p.cycle}${PM_UNIT_LABEL[p.unit]}</td><td class="small">${p.checks.map(esc).join(', ')}</td><td class="nowrap">${esc(p.last_done || '—')}</td><td class="nowrap">${esc(p.next_due || '')}${qDd(p.next_due, today, e.status !== 'disposed', 7)}</td><td>${can && e.status !== 'disposed' ? `<button type="button" class="btn small primary" data-eq-pm="${esc(p.key)}">수행</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">PM 항목이 없습니다. 「설비 수정」에서 넣으세요.</p>'}</fieldset>
+    <fieldset class="vendor-sec"><legend>설비 이력 <span class="hint">(올해 고장 ${list.fails_year || 0}건 · 비가동 ${list.downtime_year || 0}h · PM ${list.pm_year || 0}회)</span></legend>${d.rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>일자</th><th>종류</th><th>내용</th><th>결과·조치</th><th>비가동</th><th>작업자</th></tr></thead><tbody>${d.rows.map(l => `<tr class="${l.result === '이상' || l.kind === 'failure' ? 'ip-soon' : ''}"><td class="nowrap">${esc(l.log_date)}</td><td class="nowrap">${esc(l.kind_label)}${l.pm_name ? `<div class="small muted">${esc(l.pm_name)}</div>` : ''}</td><td>${esc(l.description)}${l.checks.length ? `<div class="small">${l.checks.map(c => `${esc(c.item)} ${c.ok ? '양호' : '<b class="txt-red">이상</b>'}${c.note ? ` (${esc(c.note)})` : ''}`).join(' · ')}</div>` : ''}</td><td>${l.result ? `<span class="chip ${l.result === '이상' ? 'red' : 'green'}">${esc(l.result)}</span> ` : ''}${esc(l.action)}${l.parts ? `<div class="small muted">부품 ${esc(l.parts)}</div>` : ''}</td><td>${l.downtime_hours ?? ''}</td><td>${esc(l.worker_name)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">이력이 없습니다.</p>'}</fieldset>`, { wide: true });
+  const reopen = () => { m.close(); eqOpen(id).catch(fail); };
+  $('[data-eq-edit]', m.el)?.addEventListener('click', () => { m.close(); eqEdit(list, () => eqOpen(id)).catch(fail); });
+  $('[data-eq-fail]', m.el)?.addEventListener('click', async () => { if (await eqLog(e, 'failure')) reopen(); });
+  m.el.addEventListener('click', async ev => { const b = ev.target.closest('[data-eq-pm]'); if (b && await eqLog(e, 'pm', b.dataset.eqPm)) reopen(); });
+}
+async function pageEquipment(main) {
+  main.innerHTML = `<h1>설비 대장·이력 <span class="dept">생산 · 공무</span></h1>
+  <p class="muted">생산설비(호기·위치·제조사)와 예방보전(PM) 항목·주기, 고장·수리 이력을 관리합니다. PM 일정은 「예방보전(PM) 일정」에서 한눈에 봅니다. 등록·기록은 생산·품질 담당이 합니다.</p>
+  <div class="ip-tiles" id="eqTiles"></div>
+  <form class="toolbar list-filters" data-read-only id="eqFilters"><label class="lf-sel">상태<select name="st"><option value="live">폐기 빼고</option><option value="">전체</option>${Object.entries(EQ_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}<option value="due">PM 7일 안·지남</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="설비번호·설비명·호기·위치·제조사"></label><span class="grow"></span><span id="eqTools" class="ip-tools"></span></form>
+  <div id="eqList"></div>`;
+  const form = $('#eqFilters', main); let data = { rows: [], today: todayStr() };
+  const load = async () => { data = await api('GET', '/api/equipment'); if (main.isConnected) draw(); };
+  main.qReload = () => load().catch(fail);
+  const due = r => r.status !== 'disposed' && r.next_pm && ipDday(r.next_pm, data.today) <= 7;
+  const draw = () => {
+    const v = formObj(form), q = (v.q || '').trim().toLowerCase(), all = data.rows;
+    qTiles('eqTiles', [['설비(폐기 빼고)', all.filter(r => r.status !== 'disposed').length], ['가동', all.filter(r => r.status === 'running').length, 'green'], ['정비 중', all.filter(r => r.status === 'maintenance').length, all.some(r => r.status === 'maintenance') ? 'yellow' : ''], ['PM 7일 안·지남', all.filter(due).length, all.some(due) ? 'red' : ''], ['올해 고장', all.reduce((s, r) => s + r.fails_year, 0)], ['올해 비가동(h)', all.reduce((s, r) => s + r.downtime_year, 0)]]);
+    $('#eqTools', main).innerHTML = data.can_manage ? '<button type="button" class="btn primary" id="eqNewBtn">＋ 설비 등록</button>' : '';
+    const rows = all.filter(r => (v.st === 'live' ? r.status !== 'disposed' : v.st === 'due' ? due(r) : !v.st || r.status === v.st) && (!q || [r.equip_no, r.name, r.unit_name, r.location, r.maker, r.model, r.kind].join(' ').toLowerCase().includes(q)));
+    $('#eqList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>설비번호</th><th>설비명</th><th>호기</th><th>위치</th><th>제조사 · 모델</th><th>PM 항목</th><th>다음 PM</th><th>올해 고장 · 비가동</th><th>상태</th><th></th></tr></thead><tbody>${rows.map(r => `<tr data-eq-row="${r.id}" class="${due(r) ? (ipDday(r.next_pm, data.today) < 0 ? 'ip-over' : 'ip-soon') : ''}${r.status === 'disposed' ? ' row-off' : ''}"><td class="nowrap" data-card-primary><b>${esc(r.equip_no)}</b></td><td><b>${esc(r.name)}</b>${r.kind ? `<div class="small muted">${esc(r.kind)}</div>` : ''}</td><td>${esc(r.unit_name)}</td><td>${esc(r.location)}</td><td>${esc([r.maker, r.model].filter(Boolean).join(' · '))}</td><td>${r.pm_items.length}</td><td class="nowrap">${esc(r.next_pm || '')}${qDd(r.next_pm, data.today, r.status !== 'disposed', 7)}</td><td class="nowrap">${r.fails_year}건 · ${r.downtime_year}h</td><td><span class="chip ${EQ_STATUS_CHIP[r.status]}">${esc(r.status_label)}</span></td><td><button type="button" class="btn small" data-eq-open="${r.id}">열기</button></td></tr>`).join('')}</tbody></table></div>`
+      : `<div class="empty">${all.length ? '조건에 맞는 설비가 없습니다.' : '등록된 설비가 없습니다. 「＋ 설비 등록」으로 세탁기·커팅기 등과 PM 항목을 넣으세요.'}</div>`;
+  };
+  main.addEventListener('click', e => {
+    const t = e.target.closest('[data-q-tile]'); if (t) { form.elements.st.value = ['live', 'running', 'maintenance', 'due', 'live', 'live'][Number(t.dataset.qTile)]; draw(); return; }
+    if (e.target.closest('#eqNewBtn')) return eqEdit().catch(fail);
+    const o = e.target.closest('[data-eq-open]'); if (o) eqOpen(Number(o.dataset.eqOpen)).catch(fail);
+  });
+  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-eq-row]'); if (tr && !e.target.closest('button')) eqOpen(Number(tr.dataset.eqRow)).catch(fail); });
+  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  await load();
+}
+async function pagePm(main) {
+  main.innerHTML = `<h1>예방보전(PM) 일정 <span class="dept">생산 · 공무</span></h1>
+  <p class="muted">모든 설비의 예방보전 항목을 다음 예정일 순으로 봅니다. 「수행」으로 점검표를 체크하면 직전 수행일과 다음 예정일(수행일 + 주기)이 바뀌고 설비 이력에 남습니다. 점검 중 「이상」이 하나라도 있으면 결과가 「이상」으로 기록됩니다.</p>
+  <div class="ip-tiles" id="pmTiles"></div>
+  <form class="toolbar list-filters" data-read-only id="pmFilters"><label class="lf-sel">기한<select name="due"><option value="30">30일 안·지남</option><option value="7">7일 안·지남</option><option value="over">지남</option><option value="">전체</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="설비·호기·위치·PM 항목"></label></form>
+  <div id="pmList"></div>`;
+  const form = $('#pmFilters', main); let data = { rows: [], today: todayStr() };
+  const load = async () => { data = await api('GET', '/api/equipment'); if (main.isConnected) draw(); };
+  main.qReload = () => load().catch(fail);
+  const draw = () => {
+    const v = formObj(form), q = (v.q || '').trim().toLowerCase();
+    const items = data.rows.filter(e => e.status !== 'disposed').flatMap(e => e.pm_items.map(p => ({ e, p, d: ipDday(p.next_due, data.today) }))).sort((a, b) => (a.p.next_due || '9').localeCompare(b.p.next_due || '9'));
+    qTiles('pmTiles', [['PM 항목', items.length], ['지남', items.filter(x => x.d < 0).length, items.some(x => x.d < 0) ? 'red' : ''], ['7일 안', items.filter(x => x.d >= 0 && x.d <= 7).length, items.some(x => x.d >= 0 && x.d <= 7) ? 'yellow' : ''], ['30일 안', items.filter(x => x.d >= 0 && x.d <= 30).length]]);
+    const rows = items.filter(x => (v.due === 'over' ? x.d < 0 : v.due ? x.d !== null && x.d <= Number(v.due) : true) && (!q || [x.e.equip_no, x.e.name, x.e.unit_name, x.e.location, x.p.name].join(' ').toLowerCase().includes(q)));
+    $('#pmList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>다음 예정</th><th>설비</th><th>호기 · 위치</th><th>PM 항목</th><th>주기</th><th>점검표</th><th>직전 수행</th><th></th></tr></thead><tbody>${rows.map(x => `<tr class="${x.d < 0 ? 'ip-over' : x.d <= 7 ? 'ip-soon' : ''}"><td class="nowrap"><b>${esc(x.p.next_due || '')}</b>${qDd(x.p.next_due, data.today, true, 7)}</td><td data-card-primary><b>${esc(x.e.equip_no)}</b> ${esc(x.e.name)}${x.e.status !== 'running' ? ` <span class="chip ${EQ_STATUS_CHIP[x.e.status]}">${esc(x.e.status_label)}</span>` : ''}</td><td>${esc([x.e.unit_name, x.e.location].filter(Boolean).join(' · '))}</td><td><b>${esc(x.p.name)}</b></td><td class="nowrap">${x.p.cycle}${PM_UNIT_LABEL[x.p.unit]}</td><td class="small">${x.p.checks.map(esc).join(', ')}</td><td class="nowrap">${esc(x.p.last_done || '—')}</td><td class="nowrap">${data.can_manage ? `<button type="button" class="btn small primary" data-pm-do="${x.e.id}" data-key="${esc(x.p.key)}">수행</button> ` : ''}<button type="button" class="btn small" data-pm-eq="${x.e.id}">설비</button></td></tr>`).join('')}</tbody></table></div>`
+      : `<div class="empty">${items.length ? '조건에 맞는 PM이 없습니다. 「기한」을 「전체」로 바꿔 보세요.' : 'PM 항목이 있는 설비가 없습니다. 「설비 대장·이력」에서 설비와 PM 항목을 넣으세요.'}</div>`;
+  };
+  main.addEventListener('click', e => {
+    const t = e.target.closest('[data-q-tile]'); if (t) { form.elements.due.value = ['', 'over', '7', '30'][Number(t.dataset.qTile)]; draw(); return; }
+    const d = e.target.closest('[data-pm-do]'); if (d) return eqLog(data.rows.find(r => r.id === Number(d.dataset.pmDo)), 'pm', d.dataset.key).catch(fail);
+    const o = e.target.closest('[data-pm-eq]'); if (o) eqOpen(Number(o.dataset.pmEq)).catch(fail);
+  });
+  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  await load();
+}
+
+// C1 공정품질(PQC)
+const PQC_KIND_LABEL = { process: '공정 조건·측정', env: '환경측정' };
+const pqcSpec = p => p.lsl != null && p.usl != null ? `${p.lsl} ~ ${p.usl}` : p.lsl != null ? `≥ ${p.lsl}` : `≤ ${p.usl}`;
+const fmtN = (v, d = 3) => v == null ? '—' : Number(v).toFixed(d).replace(/\.?0+$/, '');
+async function ppEdit(p = null, kind = 'process') {
+  const v0 = p || { kind };
+  const v = await promptBox(p ? '관리항목 수정' : '관리항목 등록', `<div class="form-grid">
+    <label>구분<select name="kind">${Object.entries(PQC_KIND_LABEL).map(([k, l]) => `<option value="${k}"${v0.kind === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+    <label>공정 · 측정 위치 *<input name="place" required maxlength="100" list="ppPlaces" value="${esc(v0.place || '')}" placeholder="예) 세탁 · 클린룸 A존"><datalist id="ppPlaces">${['세탁', '건조', '커팅', '융착', '포장', '클린룸 A존', '클린룸 B존', '순수 제조'].map(x => `<option value="${x}">`).join('')}</datalist></label>
+    <label>관리항목 *<input name="item" required maxlength="100" list="ppItems" value="${esc(v0.item || '')}"><datalist id="ppItems">${['수온', '세탁 시간', '세제 농도', '건조 온도', '커팅 속도', '융착 온도', '압력', '파티클(0.5㎛)', '온도', '습도', '차압', '비저항'].map(x => `<option value="${x}">`).join('')}</datalist></label>
+    <label>단위<input name="unit" maxlength="20" value="${esc(v0.unit || '')}" placeholder="℃ · % · Pa · ea/ft³"></label><label>하한(LSL)<input type="number" step="any" name="lsl" value="${v0.lsl ?? ''}"></label><label>상한(USL)<input type="number" step="any" name="usl" value="${v0.usl ?? ''}"></label>
+    <label>목표<input type="number" step="any" name="target" value="${v0.target ?? ''}"></label><label>측정 주기<input name="cycle" maxlength="50" value="${esc(v0.cycle || '')}" placeholder="예) 2시간 · 매일 · 매주"></label>
+    ${p ? `<label>사용<select name="active"><option value="1"${p.active ? ' selected' : ''}>사용</option><option value="0"${p.active ? '' : ' selected'}>사용 안 함</option></select></label>` : ''}
+    <label class="span3">메모<input name="note" maxlength="500" value="${esc(v0.note || '')}"></label></div>`, { wide: true,
+    submit: async vals => p ? api('PUT', `/api/pqc/points/${p.id}`, { ...vals, revision: p.revision }) : api('POST', '/api/pqc/points', vals) });
+  if (v) { toast('저장했습니다.'); qReload(); }
+}
+async function pqcRecord(points, pointId = null) {
+  const live = points.filter(p => p.active); if (!live.length) return toast('먼저 관리항목을 등록하세요.', 'err');
+  const row = () => `<tr data-mrow><td><input type="date" data-m="measured_on" value="${todayStr()}" max="${todayStr()}"></td><td><input type="time" data-m="measured_time"></td><td><input type="number" step="any" data-m="value" class="pqc-v"></td><td><input data-m="lot" maxlength="100"></td><td><input data-m="machine" maxlength="50"></td><td><input data-m="note" maxlength="300"></td><td data-m-judge></td><td><button type="button" class="btn small danger" data-m-del>×</button></td></tr>`;
+  const m = modal(`<h3>공정 측정값 입력</h3><form class="stack" data-pqc-form>
+    <label>관리항목 *<select name="point_id">${live.map(p => `<option value="${p.id}"${p.id === pointId ? ' selected' : ''}>${esc(PQC_KIND_LABEL[p.kind])} · ${esc(p.place)} · ${esc(p.item)} (${esc(pqcSpec(p))} ${esc(p.unit)})</option>`).join('')}</select></label>
+    <p class="small muted">엑셀에서 「값」 또는 「값·LOT·호기」 열을 복사해 첫 칸에 붙여넣으면 줄이 늘어납니다. 기준을 벗어나면 빨갛게 표시됩니다.</p>
+    <div class="table-wrap"><table class="grid pqc-grid"><thead><tr><th>측정일</th><th>시각</th><th>측정값 *</th><th>LOT</th><th>호기</th><th>메모</th><th>판정</th><th></th></tr></thead><tbody>${row()}${row()}${row()}</tbody></table></div>
+    <div class="actions"><button type="button" class="btn small" data-m-add>＋ 줄</button><span class="grow"></span><button type="button" class="btn" data-no>취소</button><button class="btn primary">저장</button></div></form>`, { wide: true });
+  const form = $('[data-pqc-form]', m.el), tb = $('tbody', form), pt = () => points.find(p => p.id === Number(form.elements.point_id.value));
+  const judge = () => { const p = pt(); $$('[data-mrow]', tb).forEach(tr => { const v = $('[data-m=value]', tr).value, c = $('[data-m-judge]', tr); if (v === '') { c.innerHTML = ''; tr.classList.remove('ip-over'); return; } const n = Number(v), out = (p.lsl != null && n < p.lsl) || (p.usl != null && n > p.usl); c.innerHTML = out ? '<span class="chip red">이탈</span>' : '<span class="chip green">적합</span>'; tr.classList.toggle('ip-over', out); }); };
+  form.addEventListener('input', judge); form.elements.point_id.addEventListener('change', judge);
+  $('[data-m-add]', form).onclick = () => tb.insertAdjacentHTML('beforeend', row());
+  $('[data-no]', form).onclick = () => m.close();
+  form.addEventListener('click', e => { const d = e.target.closest('[data-m-del]'); if (d) d.closest('tr').remove(); });
+  tb.addEventListener('paste', e => { const inp = e.target.closest('[data-m=value]'); if (!inp) return; const text = e.clipboardData.getData('text'); if (!/[\n\t]/.test(text.trim())) return; e.preventDefault();
+    const lines = text.replace(/\r/g, '').split('\n').filter(l => l.trim()); let tr = inp.closest('tr');
+    for (const l of lines) { if (!tr) { tb.insertAdjacentHTML('beforeend', row()); tr = tb.lastElementChild; } const [v, lot, mc] = l.split('\t'); $('[data-m=value]', tr).value = (v || '').trim().replace(/,/g, ''); if (lot != null) $('[data-m=lot]', tr).value = lot.trim(); if (mc != null) $('[data-m=machine]', tr).value = mc.trim(); tr = tr.nextElementSibling; }
+    judge(); });
+  form.onsubmit = async e => { e.preventDefault(); const rows = $$('[data-mrow]', tb).map(tr => Object.fromEntries($$('[data-m]', tr).filter(i => i.matches('input')).map(i => [i.dataset.m, i.value]))).filter(r => r.value !== ''); if (!rows.length) return toast('측정값을 넣으세요.', 'err');
+    try { const r = await api('POST', '/api/pqc/measures', { rows: rows.map(x => ({ ...x, point_id: form.elements.point_id.value })), request_id: crypto.randomUUID() }); toast(`${r.saved}개 저장${r.out_of_spec ? ` — 기준 이탈 ${r.out_of_spec}개` : ''}.`, r.out_of_spec ? 'err' : 'ok'); m.close(); qReload(); } catch (err) { fail(err); } };
+}
+async function pqcAbnormal(pre = {}) {
+  const v = await promptBox('공정 이상발생 등록', `<p class="small muted">등록하면 부적합·CAPA(출처: 공정 이상)로 올라가 품질이 원인분석·조치를 진행합니다.</p><div class="form-grid">
+    <label>공정 · 항목<input name="source_no" maxlength="80" value="${esc(pre.source_no || '')}"></label><label>등급<select name="grade"><option value="minor">경미</option><option value="major">중대</option><option value="critical">치명</option></select></label><label>발생일<input type="date" name="found_date" value="${esc(pre.found_date || todayStr())}"></label>
+    <label class="span3">이상 내용 *<input name="title" required maxlength="200" value="${esc(pre.title || '')}"></label><label class="span3">상세<textarea name="detail" rows="2" maxlength="2000">${esc(pre.detail || '')}</textarea></label>
+    <label>품목<input name="item" maxlength="200"></label><label>LOT<input name="lot" maxlength="100" value="${esc(pre.lot || '')}"></label><label>수량<input type="number" step="any" name="qty"></label>
+    <label class="span3">즉시 조치<input name="containment" maxlength="1000" placeholder="예) 라인 정지, 해당 LOT 격리"></label></div>`, { wide: true,
+    submit: async vals => api('POST', '/api/ncs', { ...vals, source_type: 'process', kind: '공정 이상', owner_name: ME?.name || '', request_id: crypto.randomUUID() }) });
+  if (v) { toast(`${v.nc_no} 이상발생을 등록했습니다.`); qReload(); }
+  return v;
+}
+function spcSvg(c, which, point) {
+  const W = 900, H = 230, L = 52, R = 70, T = 14, B = 34, pts = c.points.map(p => which === 'x' ? p.x : p.r), idx = pts.map((v, i) => [v, i]).filter(([v]) => v != null);
+  const lines = which === 'x' ? [['UCL', c.ucl, 'ctl'], ['CL', c.cl, 'cl'], ['LCL', c.lcl, 'ctl'], ['USL', point.usl, 'spec'], ['LSL', point.lsl, 'spec']] : [['UCL', c.r_ucl, 'ctl'], ['CL', c.r_cl, 'cl'], ['LCL', c.r_lcl, 'ctl']];
+  const vals = [...idx.map(([v]) => v), ...lines.map(l => l[1]).filter(v => v != null)], lo = Math.min(...vals), hi = Math.max(...vals), pad = (hi - lo) * 0.08 || 1, y0 = lo - pad, y1 = hi + pad;
+  const X = i => L + (c.points.length < 2 ? (W - L - R) / 2 : i * (W - L - R) / (c.points.length - 1)), Y = v => T + (y1 - v) / (y1 - y0) * (H - T - B);
+  const out = new Set(c.out), step = Math.ceil(c.points.length / 12), dup = new Set(c.points.map(p => p.label)).size < c.points.length;
+  // 오른쪽 이름표가 겹치지 않게(예: LCL·LSL이 가까울 때) 13px씩 벌린다
+  const labs = lines.filter(l => l[1] != null).map(([n, v, k]) => ({ n, v, k, y: Y(v) + 4 })).sort((a, b) => a.y - b.y); labs.forEach((l, i) => { if (i && l.y - labs[i - 1].y < 13) l.y = labs[i - 1].y + 13; });
+  return `<svg class="spc-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="${which === 'x' ? (c.type === 'xbar-r' ? 'X̄ 관리도' : 'I 관리도') : (c.type === 'xbar-r' ? 'R 관리도' : 'MR 관리도')}">
+    ${labs.map(({ n, v, k, y }) => `<line class="spc-${k}" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text class="spc-lab spc-${k}-t" x="${W - R + 6}" y="${y}">${n} ${fmtN(v)}</text>`).join('')}
+    <polyline class="spc-line" points="${idx.map(([v, i]) => `${X(i)},${Y(v)}`).join(' ')}"/>
+    ${idx.map(([v, i]) => `<circle class="spc-pt${out.has(i) ? ' out' : ''}" cx="${X(i)}" cy="${Y(v)}" r="${out.has(i) ? 4.5 : 3.2}"><title>${esc(c.points[i].label)}: ${fmtN(v)}</title></circle>`).join('')}
+    ${c.points.map((p, i) => i % step ? '' : `<text class="spc-x" x="${X(i)}" y="${H - 12}" text-anchor="middle">${dup ? i + 1 : esc(/^\d{4}-/.test(p.label) ? String(p.label).slice(5) : p.label)}</text>`).join('')}
+    <text class="spc-lab" x="6" y="${T + 8}">${which === 'x' ? (c.type === 'xbar-r' ? 'X̄' : 'I') : (c.type === 'xbar-r' ? 'R' : 'MR')}</text></svg>`;
+}
+async function pagePqc(main) {
+  const tab0 = (() => { try { return sessionStorage.getItem('qPqcTab') || 'process'; } catch { return 'process'; } })();
+  main.innerHTML = `<h1>공정품질(PQC) <span class="dept">품질</span></h1>
+  <p class="muted">공정별 관리항목(온도·시간·농도 등)과 클린룸 환경(파티클·온습도·차압)의 기준과 측정값을 기록하고, 측정값으로 관리도(X̄-R·I-MR)와 공정능력(Cp·Cpk)을 봅니다. 기준은 품질이, 측정값은 생산·품질이 넣습니다. 이상이 생기면 「이상발생」으로 CAPA에 올립니다.</p>
+  <div class="seg q-tabs" id="pqcTabs"><button type="button" data-tab="process">공정 조건·측정</button><button type="button" data-tab="env">환경측정</button><button type="button" data-tab="spc">SPC·공정능력</button><button type="button" data-tab="nc">이상발생</button></div>
+  <div class="ip-tiles" id="pqcTiles"></div><div id="pqcBody"></div>`;
+  let tab = tab0, pts = { rows: [] }, spcState = { point: null, from: addDays(todayStr(), -90), to: todayStr(), group: 'day' };
+  const load = async () => { pts = await api('GET', '/api/pqc/points'); if (main.isConnected) await draw(); };
+  main.qReload = () => load().catch(fail);
+  const body = $('#pqcBody', main);
+  const draw = async () => {
+    $$('#pqcTabs button', main).forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+    if (tab === 'process' || tab === 'env') {
+      const list = pts.rows.filter(p => p.kind === tab), ms = (await api('GET', `/api/pqc/measures?kind=${tab}&from=${addDays(todayStr(), -30)}`)).rows; if (!main.isConnected || !['process', 'env'].includes(tab)) return;
+      qTiles('pqcTiles', [['관리항목', list.filter(p => p.active).length], ['30일 측정', ms.length], ['30일 기준 이탈', ms.filter(m => m.out_of_spec).length, ms.some(m => m.out_of_spec) ? 'red' : ''], ['최근 값 이탈 항목', list.filter(p => p.last?.out_of_spec).length, list.some(p => p.last?.out_of_spec) ? 'red' : '']]);
+      body.innerHTML = `<div class="toolbar list-filters"><label class="list-search">찾기<input type="search" data-pqc-q placeholder="${tab === 'env' ? '위치·항목' : '공정·항목'}·LOT·호기"></label><span class="grow"></span>${pts.can_manage ? `<button type="button" class="btn" data-pp-new>＋ ${tab === 'env' ? '측정 지점' : '관리항목'}</button>` : ''}${pts.can_record ? '<button type="button" class="btn primary" data-pqc-rec>측정값 입력</button>' : ''}</div>
+        ${list.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>${tab === 'env' ? '위치' : '공정'}</th><th>관리항목</th><th>기준</th><th>측정 주기</th><th>최근 값</th><th>30일 측정 · 이탈</th><th></th></tr></thead><tbody>${list.map(p => `<tr class="${p.active ? (p.last?.out_of_spec ? 'ip-over' : '') : 'row-off'}"><td><b>${esc(p.place)}</b></td><td data-card-primary><b>${esc(p.item)}</b>${p.active ? '' : ' <span class="chip">사용 안 함</span>'}</td><td class="nowrap">${esc(pqcSpec(p))} ${esc(p.unit)}${p.target != null ? `<div class="small muted">목표 ${p.target}</div>` : ''}</td><td>${esc(p.cycle)}</td><td class="nowrap">${p.last ? `<b class="${p.last.out_of_spec ? 'txt-red' : ''}">${fmtN(p.last.value, 4)}</b> <span class="small muted">${esc(p.last.measured_on)}</span>` : '<span class="muted">—</span>'}</td><td>${p.n30} · ${p.out30 ? `<span class="chip red">${p.out30}</span>` : 0}</td><td class="nowrap">${pts.can_record && p.active ? `<button type="button" class="btn small primary" data-pqc-rec="${p.id}">입력</button> ` : ''}<button type="button" class="btn small" data-pqc-spc="${p.id}">관리도</button>${pts.can_manage ? ` <button type="button" class="btn small" data-pp-edit="${p.id}">수정</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">${tab === 'env' ? '측정 지점이 없습니다. 클린룸 파티클·온습도·차압 지점을 등록하세요.' : '관리항목이 없습니다. 세탁 수온·시간, 융착 온도 같은 공정 조건을 등록하세요.'}</div>`}
+        <h3 class="pqc-h">최근 30일 측정값</h3>${ms.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>측정일시</th><th>${tab === 'env' ? '위치' : '공정'} · 항목</th><th>측정값</th><th>기준</th><th>LOT · 호기</th><th>측정자</th><th></th></tr></thead><tbody data-pqc-ms>${ms.slice(0, 300).map(x => `<tr class="${x.out_of_spec ? 'ip-over' : ''}" data-text="${esc([x.place, x.item, x.lot, x.machine, x.measurer].join(' ').toLowerCase())}"><td class="nowrap">${esc(x.measured_on)} ${esc(x.measured_time)}</td><td>${esc(x.place)} · <b>${esc(x.item)}</b></td><td class="nowrap"><b>${fmtN(x.value, 4)}</b> ${esc(x.unit)} ${x.out_of_spec ? '<span class="chip red">이탈</span>' : ''}</td><td class="nowrap small">${esc(pqcSpec(x))}</td><td>${esc([x.lot, x.machine].filter(Boolean).join(' · '))}</td><td>${esc(x.measurer)}</td><td class="nowrap">${x.out_of_spec ? `<button type="button" class="btn small" data-pqc-nc="${x.id}">이상발생</button> ` : ''}${pts.can_manage || (x.created_by === ME?.name && String(x.created_at).slice(0, 10) === todayStr()) ? `<button type="button" class="btn small danger" data-pqc-del="${x.id}" title="측정값 지우기">×</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">최근 30일 측정값이 없습니다.</p>'}`;
+      body.qMs = ms;
+    } else if (tab === 'spc') {
+      const live = pts.rows.filter(p => p.active || p.n30); if (!spcState.point && live[0]) spcState.point = live[0].id;
+      body.innerHTML = `<form class="toolbar list-filters" data-read-only data-spc-form><label class="lf-sel">관리항목<select name="point">${live.map(p => `<option value="${p.id}"${p.id === spcState.point ? ' selected' : ''}>${esc(p.place)} · ${esc(p.item)}</option>`).join('')}</select></label><label>기간<input type="date" name="from" value="${spcState.from}"></label><label>~<input type="date" name="to" value="${spcState.to}"></label><label class="lf-sel">부분군<select name="group"><option value="day"${spcState.group === 'day' ? ' selected' : ''}>같은 날(X̄-R)</option><option value="lot"${spcState.group === 'lot' ? ' selected' : ''}>같은 LOT(X̄-R)</option><option value="none"${spcState.group === 'none' ? ' selected' : ''}>하나씩(I-MR)</option></select></label></form><div data-spc-out></div>`;
+      qTiles('pqcTiles', []);
+      const f = $('[data-spc-form]', body), outEl = $('[data-spc-out]', body);
+      const run = async () => { const v = formObj(f); Object.assign(spcState, { point: Number(v.point), from: v.from, to: v.to, group: v.group }); if (!spcState.point) { outEl.innerHTML = '<div class="empty">관리항목이 없습니다.</div>'; return; }
+        const s = await api('GET', `/api/pqc/spc?point_id=${spcState.point}&from=${v.from}&to=${v.to}&group=${v.group}`); if (!outEl.isConnected) return;
+        if (!s.chart) { outEl.innerHTML = `<div class="empty">측정값이 ${s.n || 0}개라 관리도를 그릴 수 없습니다(2개 이상).</div>`; return; }
+        const p = s.point, capCls = v2 => v2 == null ? '' : v2 >= 1.33 ? 'green' : v2 >= 1 ? 'yellow' : 'red';
+        qTiles('pqcTiles', [['표본 수', s.n], ['평균', fmtN(s.mean)], ['σ(군내)', fmtN(s.sigma)], ['Cp', fmtN(s.cp, 2), capCls(s.cp)], ['Cpk', fmtN(s.cpk, 2), capCls(s.cpk)], ['Ppk', fmtN(s.ppk, 2), capCls(s.ppk)], ['규격 이탈', s.out_of_spec, s.out_of_spec ? 'red' : ''], ['관리 이탈 점', s.chart.out.length, s.chart.out.length ? 'red' : '']]);
+        outEl.innerHTML = `${s.enough ? '' : `<p class="spc-note">표본이 ${s.n}개(25개 미만)라 Cp·Cpk는 <b>참고값</b>입니다.</p>`}
+          <div class="spc-box"><div class="spc-title">${s.chart.type === 'xbar-r' ? `X̄ 관리도 (부분군 ${s.chart.size}개)` : 'I 관리도 (개별값)'} · ${esc(p.place)} ${esc(p.item)} ${esc(p.unit)} · 규격 ${esc(pqcSpec(p))}</div>${spcSvg(s.chart, 'x', p)}
+          <div class="spc-title">${s.chart.type === 'xbar-r' ? 'R 관리도(범위)' : 'MR 관리도(이동범위)'}</div>${spcSvg(s.chart, 'r', p)}</div>
+          <p class="small muted spc-formula">Cp = (USL − LSL) ÷ 6σ · Cpk = min(USL − μ, μ − LSL) ÷ 3σ · σ는 군내 산포(R̄/d₂ 또는 MR̄/1.128), Pp·Ppk는 전체 표준편차(${fmtN(s.sd)}). 1.33 이상 양호(초록), 1.0~1.33 보통(노랑), 1.0 미만 부족(빨강). 관리 한계를 벗어난 점은 빨간 점입니다.</p>`; };
+      f.addEventListener('change', () => run().catch(fail)); await run();
+    } else {
+      const nc = await api('GET', '/api/ncs?source_type=process'); if (!main.isConnected || tab !== 'nc') return;
+      const live = r => !['closed', 'void'].includes(r.status);
+      qTiles('pqcTiles', [['진행 중', nc.rows.filter(live).length, nc.rows.some(live) ? 'yellow' : ''], ['종결', nc.rows.filter(r => r.status === 'closed').length, 'green']]);
+      body.innerHTML = `<div class="toolbar list-filters"><span class="grow"></span>${pts.can_record ? '<button type="button" class="btn primary" data-pqc-nc-new>＋ 이상발생 등록</button>' : ''}</div>${nc.rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>번호</th><th>발생일</th><th>공정 · 항목</th><th>이상 내용</th><th>LOT</th><th>등급</th><th>담당</th><th>단계</th><th></th></tr></thead><tbody>${nc.rows.map(r => `<tr class="${r.status === 'void' ? 'row-off' : ''}"><td class="nowrap" data-card-primary><b>${esc(r.nc_no)}</b></td><td class="nowrap">${esc(r.found_date)}</td><td>${esc(r.source_no)}</td><td><b>${esc(r.title)}</b></td><td>${esc(r.lot)}</td><td><span class="chip ${r.grade === 'critical' ? 'red' : r.grade === 'major' ? 'yellow' : ''}">${esc(r.grade_label)}</span></td><td>${esc(r.owner_name)}</td><td><span class="chip ${NC_STATUS_CHIP[r.status] || ''}">${esc(r.status_label)}</span></td><td>${hasRole('quality') ? `<button type="button" class="btn small" data-pqc-nc-open="${r.id}">열기</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">공정 이상발생 기록이 없습니다.</div>'}`;
+    }
+  };
+  main.addEventListener('click', async e => {
+    const tb = e.target.closest('#pqcTabs [data-tab]'); if (tb) { tab = tb.dataset.tab; try { sessionStorage.setItem('qPqcTab', tab); } catch {} return draw().catch(fail); }
+    if (e.target.closest('[data-pp-new]')) return ppEdit(null, tab).catch(fail);
+    const pe = e.target.closest('[data-pp-edit]'); if (pe) return ppEdit(pts.rows.find(p => p.id === Number(pe.dataset.ppEdit))).catch(fail);
+    const rc = e.target.closest('[data-pqc-rec]'); if (rc) return pqcRecord(pts.rows.filter(p => p.kind === tab || tab === 'spc'), Number(rc.dataset.pqcRec) || null).catch(fail);
+    const sp = e.target.closest('[data-pqc-spc]'); if (sp) { spcState.point = Number(sp.dataset.pqcSpc); tab = 'spc'; return draw().catch(fail); }
+    const nc = e.target.closest('[data-pqc-nc]'); if (nc) { const x = body.qMs.find(m => m.id === Number(nc.dataset.pqcNc)); return pqcAbnormal({ source_no: `${x.place} · ${x.item}`, title: `${x.item} ${fmtN(x.value, 4)}${x.unit} 기준(${pqcSpec(x)}) 이탈`, lot: x.lot, found_date: x.measured_on, detail: `${x.measured_on} ${x.measured_time} ${x.machine ? x.machine + ' ' : ''}측정자 ${x.measurer}` }).catch(fail); }
+    if (e.target.closest('[data-pqc-nc-new]')) return pqcAbnormal().catch(fail);
+    const no = e.target.closest('[data-pqc-nc-open]'); if (no) return ncOpen(Number(no.dataset.pqcNcOpen)).catch(fail);
+    const dl = e.target.closest('[data-pqc-del]'); if (dl) { if (!await confirmBox('이 측정값을 지울까요?')) return; try { await api('DELETE', `/api/pqc/measures/${dl.dataset.pqcDel}`); toast('지웠습니다.'); load(); } catch (err) { fail(err); } }
+  });
+  main.addEventListener('input', e => { if (!e.target.matches('[data-pqc-q]')) return; const q = e.target.value.trim().toLowerCase(); $$('[data-pqc-ms] tr', body).forEach(tr => { tr.hidden = !!q && !tr.dataset.text.includes(q); }); });
+  await load();
+}
+
+// C3 시험법·신뢰성
+const REL_STATUS_LABEL = { planned: '계획', testing: '시험 중', done: '완료', void: '취소' };
+const REL_CHIP = { planned: 'yellow', testing: 'yellow', done: 'green', void: '' };
+async function tmEdit(t = null) {
+  const inst = (await api('GET', '/api/instruments')).rows.filter(i => i.status !== 'disposed'), chosen = t?.instrument_ids || [];
+  let fileEl = null;
+  const v = await promptBox(t ? `${t.method_no} 시험법 수정` : '시험법 등록', `<div class="form-grid">
+    <label>번호 <span class="hint">(비우면 TM-01…)</span><input name="method_no" maxlength="40" value="${esc(t?.method_no || '')}"${t ? ' disabled' : ''}></label>
+    <label class="span2">시험법 이름 *<input name="name" required maxlength="200" value="${esc(t?.name || '')}" placeholder="예) 액중 파티클 시험 · 흡수속도 시험"></label>
+    <label class="span2">관련 규격<input name="standard" maxlength="200" list="tmStd" value="${esc(t?.standard || '')}"><datalist id="tmStd">${['IEST-RP-CC004', 'IEST-RP-CC005', 'ASTM E2090', 'ASTM F51', 'KS K 0901', 'ISO 14644-1', '사내 규격'].map(x => `<option value="${x}">`).join('')}</datalist></label>
+    ${t ? `<label>상태<select name="status"><option value="active"${t.status === 'active' ? ' selected' : ''}>사용</option><option value="obsolete"${t.status === 'obsolete' ? ' selected' : ''}>폐지</option></select></label>` : ''}
+    <label class="span3">측정 항목<input name="items" maxlength="500" value="${esc(t?.items || '')}" placeholder="예) 0.5㎛ 이상 파티클 수, LPC"></label>
+    <label class="span3">시험 조건·방법 요약<textarea name="conditions" rows="3" maxlength="2000">${esc(t?.conditions || '')}</textarea></label>
+    <label class="span2">SOP 파일 (PDF·사진)${t?.file ? ` · 현재 ${qFileLink(t.file)}` : ''}<input type="file" data-q-file accept="application/pdf,image/jpeg,image/png,image/webp"></label>
+    <label class="span3">메모<input name="note" maxlength="1000" value="${esc(t?.note || '')}"></label></div>
+    <fieldset class="vendor-sec"><legend>사용 계측기 <span class="hint">(검교정 관리의 계측기)</span></legend><div class="q-chk">${inst.map(i => `<label class="chk"><input type="checkbox" name="instrument_ids" value="${i.id}"${chosen.includes(i.id) ? ' checked' : ''}> ${esc(i.mgmt_no)} ${esc(i.name)}${i.next_due ? ` <span class="small muted">교정 ${esc(i.next_due)}</span>` : ''}</label>`).join('') || '<span class="muted small">검교정 관리에 등록된 계측기가 없습니다.</span>'}</div></fieldset>
+    ${t ? '<label class="chk"><input type="checkbox" name="revise" value="1"> 개정으로 저장(Rev +1)</label><label>개정 내용<input name="summary" maxlength="300"></label>' : ''}`, { wide: true,
+    onOpen: el => { fileEl = $('[data-q-file]', el); },
+    submit: async vals => { const files = await qFiles(fileEl); const b = { ...vals, instrument_ids: (vals.instrument_ids || []).map(Number), files, revise: (vals.revise || []).length > 0 }; return t ? api('PUT', `/api/test-methods/${t.id}`, { ...b, revision: t.revision }) : api('POST', '/api/test-methods', { ...b, request_id: crypto.randomUUID() }); } });
+  if (v) { toast(`${v.method_no} 저장했습니다.`); qReload(); }
+}
+const relSpecRow = (s = {}) => `<tr data-spec-row><td><input data-s="name" maxlength="100" value="${esc(s.name || '')}" placeholder="예) 인장강도"></td><td><input data-s="unit" maxlength="20" value="${esc(s.unit || '')}" class="rel-unit"></td><td><input type="number" step="any" data-s="min" value="${s.min ?? ''}" class="rel-n"></td><td><input type="number" step="any" data-s="max" value="${s.max ?? ''}" class="rel-n"></td><td><button type="button" class="btn small danger" data-spec-del>×</button></td></tr>`;
+async function relOpen(id = null) {
+  const [list, tms] = await Promise.all([api('GET', '/api/reliability'), api('GET', '/api/test-methods')]);
+  const r = id ? list.rows.find(x => x.id === id) : null; if (id && !r) return toast('시험을 찾을 수 없습니다.', 'err');
+  const v0 = r || { status: 'planned', spec: [], points: [] }, can = list.can_manage, lock = !can || ['done', 'void'].includes(v0.status), dis = lock ? ' disabled' : '';
+  const next = { planned: 'testing', testing: 'done' }[v0.status];
+  const m = modal(`<h3>${r ? `${esc(r.test_no)} · ${esc(r.title)} <span class="chip ${REL_CHIP[r.status]}">${esc(r.status_label)}</span>${r.judge ? ` <span class="chip ${r.judge === '적합' ? 'green' : 'red'}">${esc(r.judge)}</span>` : ''}` : '신뢰성평가 계획'}</h3>
+    ${r ? qStepper(['planned', 'testing', 'done'], REL_STATUS_LABEL, r.status) : ''}
+    <form class="stack" data-rel-form><div class="form-grid">
+      <label class="span2">시험명 *<input name="title" required maxlength="200" value="${esc(v0.title || '')}" placeholder="예) 내열 85℃ 500h · 보관 안정성 6개월"${dis}></label>
+      <label>시험법<select name="method_id"${dis}><option value="">—</option>${tms.rows.filter(t => t.status === 'active' || t.id === v0.method_id).map(t => `<option value="${t.id}"${t.id === v0.method_id ? ' selected' : ''}>${esc(t.method_no)} ${esc(t.name)}</option>`).join('')}</select></label>
+      <label>대상 품목<input name="item" maxlength="200" value="${esc(v0.item || '')}"${dis}></label><label>LOT<input name="lot" maxlength="100" value="${esc(v0.lot || '')}"${dis}></label><label>담당<input name="owner_name" maxlength="50" value="${esc(v0.owner_name || ME?.name || '')}"${dis}></label>
+      <label class="span3">시험 조건<input name="conditions" maxlength="1000" value="${esc(v0.conditions || '')}" placeholder="예) 85℃ · 85%RH · 500시간"${dis}></label>
+      <label>시작일<input type="date" name="start_date" value="${esc(v0.start_date || '')}"${dis}></label><label>종료일<input type="date" name="end_date" value="${esc(v0.end_date || '')}"${dis}></label></div>
+      <fieldset class="vendor-sec"><legend>평가 항목 · 기준</legend><div class="table-wrap"><table class="grid rel-spec"><thead><tr><th>항목</th><th>단위</th><th>하한</th><th>상한</th><th></th></tr></thead><tbody>${(v0.spec.length ? v0.spec : lock ? [] : [{}]).map(relSpecRow).join('')}</tbody></table></div>${lock ? '' : '<button type="button" class="btn small" data-spec-add>＋ 항목</button>'}</fieldset>
+      <fieldset class="vendor-sec"><legend>측정 <span class="hint">(시점마다 한 줄: 초기 · 중간 · 최종. 기준 밖이면 빨강)</span></legend><div class="table-wrap" data-rel-points></div>${lock ? '' : '<button type="button" class="btn small" data-pt-add>＋ 측정 시점</button>'}<div data-rel-judge class="rel-judge"></div></fieldset>
+      <label>메모<input name="note" maxlength="1000" value="${esc(v0.note || '')}"${dis}></label>
+      <div class="actions">${r ? '<button type="button" class="btn" data-rel-hist>이력</button>' : ''}${r && can && !lock ? '<button type="button" class="btn danger" data-rel-to="void">취소</button>' : ''}<span class="grow"></span>${!lock ? '<button class="btn">저장</button>' : ''}${r && can && next ? `<button type="button" class="btn primary" data-rel-to="${next}">${next === 'testing' ? '저장하고 시험 시작' : '저장하고 완료(판정)'}</button>` : ''}</div>
+    </form>`, { wide: true });
+  const form = $('[data-rel-form]', m.el), specTb = $('.rel-spec tbody', form), ptBox = $('[data-rel-points]', form);
+  let points = v0.points.map(p => ({ ...p }));
+  const specs = () => $$('[data-spec-row]', specTb).map(tr => Object.fromEntries($$('[data-s]', tr).map(i => [i.dataset.s, i.value.trim()]))).filter(s => s.name);
+  const readPts = () => { $$('[data-pt]', ptBox).forEach((tr, i) => { points[i] = { label: $('[data-p=label]', tr).value.trim(), date: $('[data-p=date]', tr).value, values: $$('[data-pv]', tr).map(x => x.value === '' ? null : Number(x.value)) }; }); };
+  const drawPts = () => { const sp = specs(); ptBox.innerHTML = `<table class="grid rel-pts"><thead><tr><th>측정 시점</th><th>측정일</th>${sp.map(s => `<th>${esc(s.name)}${s.unit ? ` (${esc(s.unit)})` : ''}<div class="small muted">${s.min !== '' && s.max !== '' ? `${esc(s.min)} ~ ${esc(s.max)}` : s.min !== '' ? `≥ ${esc(s.min)}` : s.max !== '' ? `≤ ${esc(s.max)}` : ''}</div></th>`).join('')}${lock ? '' : '<th></th>'}</tr></thead><tbody>${points.map((p, i) => `<tr data-pt="${i}"><td><input data-p="label" maxlength="50" value="${esc(p.label || '')}" placeholder="초기"${dis}></td><td><input type="date" data-p="date" value="${esc(p.date || '')}"${dis}></td>${sp.map((s, k) => { const v = p.values?.[k], out = v != null && ((s.min !== '' && v < Number(s.min)) || (s.max !== '' && v > Number(s.max))); return `<td class="${out ? 'rel-out' : ''}"><input type="number" step="any" data-pv="${k}" value="${v ?? ''}" class="rel-n"${dis}></td>`; }).join('')}${lock ? '' : `<td><button type="button" class="btn small danger" data-pt-del="${i}">×</button></td>`}</tr>`).join('') || `<tr><td colspan="${sp.length + 3}" class="muted">측정 시점이 없습니다.</td></tr>`}</tbody></table>`;
+    judgePts(); };
+  // 값 칸은 다시 그리지 않고 제자리에서 빨강·판정만 바꾼다(다시 그리면 방금 누른 칸이 사라져 입력이 날아감)
+  const judgePts = () => { const sp = specs(), isOut = (v, s) => v != null && s && ((s.min !== '' && v < Number(s.min)) || (s.max !== '' && v > Number(s.max)));
+    $$('[data-pv]', ptBox).forEach(inp => { const v = inp.value === '' ? null : Number(inp.value); inp.closest('td').classList.toggle('rel-out', !!isOut(v, sp[Number(inp.dataset.pv)])); });
+    const vals = points.flatMap(p => (p.values || []).map((v, k) => [v, sp[k]])).filter(([v, s]) => v != null && s), bad2 = vals.some(([v, s]) => isOut(v, s));
+    $('[data-rel-judge]', form).innerHTML = vals.length ? `현재 판정: <span class="chip ${bad2 ? 'red' : 'green'}">${bad2 ? '부적합' : '적합'}</span> <span class="small muted">(완료할 때 확정)</span>` : ''; };
+  drawPts();
+  specTb.addEventListener('change', () => { readPts(); drawPts(); });
+  ptBox.addEventListener('input', () => { readPts(); judgePts(); });
+  $('[data-spec-add]', form)?.addEventListener('click', () => specTb.insertAdjacentHTML('beforeend', relSpecRow()));
+  $('[data-pt-add]', form)?.addEventListener('click', () => { readPts(); points.push({ label: points.length ? '' : '초기', date: todayStr(), values: [] }); drawPts(); });
+  form.addEventListener('click', e => { const d = e.target.closest('[data-spec-del]'); if (d) { d.closest('tr').remove(); readPts(); drawPts(); } const p = e.target.closest('[data-pt-del]'); if (p) { readPts(); points.splice(Number(p.dataset.ptDel), 1); drawPts(); } });
+  const body = () => { readPts(); const v = formObj(form); return { ...v, spec_json: specs(), points_json: points.filter(p => p.label) }; };
+  const save = async (status, extra = {}) => { try { const res = r ? await api('PUT', `/api/reliability/${r.id}`, { ...body(), ...(status ? { status } : {}), revision: r.revision, ...extra }) : await api('POST', '/api/reliability', { ...body(), request_id: crypto.randomUUID() }); toast(status === 'done' ? `완료 — 판정 ${res.judge}` : status ? `「${REL_STATUS_LABEL[status]}」(으)로 넘겼습니다.` : '저장했습니다.'); m.close(); qReload(); await relOpen(res.id); } catch (e) { fail(e); } };
+  form.onsubmit = e => { e.preventDefault(); save(null); };
+  $$('[data-rel-to]', m.el).forEach(b => b.addEventListener('click', async () => { const to = b.dataset.relTo; if (to === 'void') { const v = await promptBox('시험 취소', '<label>사유 *<input name="reason" required maxlength="300"></label>'); if (v) save('void', v); return; } save(to); }));
+  $('[data-rel-hist]', m.el)?.addEventListener('click', () => qHistory(r.test_no, r.history, REL_STATUS_LABEL));
+}
+async function pageMethods(main) {
+  const tab0 = (() => { try { return sessionStorage.getItem('qTmTab') || 'methods'; } catch { return 'methods'; } })();
+  main.innerHTML = `<h1>시험법·신뢰성 <span class="dept">품질</span></h1>
+  <p class="muted">시험법 대장(번호·관련 규격·측정 항목·조건·사용 계측기·SOP·판)과 신뢰성평가(내열·수명·보관 등: 계획 → 시험 중 → 완료·판정)를 관리합니다. 사용 계측기는 검교정 관리의 다음 교정일을 함께 보여 줍니다.</p>
+  <div class="seg q-tabs" id="tmTabs"><button type="button" data-tab="methods">시험법 대장</button><button type="button" data-tab="rel">신뢰성평가</button></div>
+  <div class="ip-tiles" id="tmTiles"></div>
+  <form class="toolbar list-filters" data-read-only id="tmFilters"><label class="list-search">찾기<input type="search" name="q" placeholder="번호·이름·규격·품목·LOT"></label><span class="grow"></span><span id="tmTools" class="ip-tools"></span></form>
+  <div id="tmList"></div>`;
+  const form = $('#tmFilters', main); let tab = tab0, tm = { rows: [] }, rel = { rows: [] };
+  const load = async () => { [tm, rel] = await Promise.all([api('GET', '/api/test-methods'), api('GET', '/api/reliability')]); if (main.isConnected) draw(); };
+  main.qReload = () => load().catch(fail);
+  const draw = () => {
+    $$('#tmTabs button', main).forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+    const q = (formObj(form).q || '').trim().toLowerCase();
+    if (tab === 'methods') {
+      const calOver = t => t.instruments.some(i => i.next_due && i.next_due < tm.today);
+      qTiles('tmTiles', [['사용 중 시험법', tm.rows.filter(t => t.status === 'active').length, 'green'], ['교정 지난 계측기 사용', tm.rows.filter(t => t.status === 'active' && calOver(t)).length, tm.rows.some(t => t.status === 'active' && calOver(t)) ? 'red' : ''], ['폐지', tm.rows.filter(t => t.status === 'obsolete').length]]);
+      $('#tmTools', main).innerHTML = tm.can_manage ? '<button type="button" class="btn primary" id="tmNewBtn">＋ 시험법</button>' : '';
+      const rows = tm.rows.filter(t => !q || [t.method_no, t.name, t.standard, t.items].join(' ').toLowerCase().includes(q));
+      $('#tmList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>번호</th><th>시험법</th><th>관련 규격</th><th>측정 항목</th><th>사용 계측기</th><th>판</th><th>SOP</th><th>상태</th><th></th></tr></thead><tbody>${rows.map(t => `<tr class="${t.status === 'obsolete' ? 'row-off' : calOver(t) ? 'ip-over' : ''}"><td class="nowrap" data-card-primary><b>${esc(t.method_no)}</b></td><td><b>${esc(t.name)}</b>${t.conditions ? `<div class="small muted tm-cond">${esc(t.conditions)}</div>` : ''}</td><td>${esc(t.standard)}</td><td class="small">${esc(t.items)}</td><td class="small">${t.instruments.map(i => `${esc(i.mgmt_no)} ${esc(i.name)}${i.next_due ? qDd(i.next_due, tm.today, true, 30) : ''}`).join('<br>')}</td><td class="nowrap">Rev.${t.rev}</td><td>${qFileLink(t.file, '열기') || '<span class="muted small">—</span>'}</td><td><span class="chip ${t.status === 'active' ? 'green' : ''}">${t.status === 'active' ? '사용' : '폐지'}</span></td><td class="nowrap"><button type="button" class="btn small" data-tm-hist="${t.id}">이력</button>${tm.can_manage ? ` <button type="button" class="btn small" data-tm-edit="${t.id}">수정</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">${tm.rows.length ? '조건에 맞는 시험법이 없습니다.' : '등록된 시험법이 없습니다. 「＋ 시험법」으로 파티클·흡수속도 시험 등을 넣으세요.'}</div>`;
+    } else {
+      qTiles('tmTiles', [['계획', rel.rows.filter(r => r.status === 'planned').length], ['시험 중', rel.rows.filter(r => r.status === 'testing').length, rel.rows.some(r => r.status === 'testing') ? 'yellow' : ''], ['완료 · 적합', rel.rows.filter(r => r.status === 'done' && r.judge === '적합').length, 'green'], ['완료 · 부적합', rel.rows.filter(r => r.status === 'done' && r.judge === '부적합').length, rel.rows.some(r => r.judge === '부적합') ? 'red' : '']]);
+      $('#tmTools', main).innerHTML = rel.can_manage ? '<button type="button" class="btn primary" id="relNewBtn">＋ 신뢰성평가</button>' : '';
+      const rows = rel.rows.filter(r => !q || [r.test_no, r.title, r.item, r.lot, r.conditions].join(' ').toLowerCase().includes(q));
+      $('#tmList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>번호</th><th>시험명</th><th>품목 · LOT</th><th>조건</th><th>기간</th><th>측정</th><th>판정</th><th>단계</th><th></th></tr></thead><tbody>${rows.map(r => `<tr data-rel-row="${r.id}" class="${r.status === 'void' ? 'row-off' : ''}"><td class="nowrap" data-card-primary><b>${esc(r.test_no)}</b></td><td><b>${esc(r.title)}</b></td><td>${esc(r.item)}${r.lot ? `<div class="small muted">${esc(r.lot)}</div>` : ''}</td><td class="small">${esc(r.conditions)}</td><td class="nowrap">${esc(r.start_date || '')}${r.end_date ? ` ~ ${esc(r.end_date)}` : ''}</td><td>${r.points.length}회</td><td>${r.judge ? `<span class="chip ${r.judge === '적합' ? 'green' : 'red'}">${esc(r.judge)}</span>` : r.judge_now ? `<span class="small muted">현재 ${esc(r.judge_now)}</span>` : ''}</td><td><span class="chip ${REL_CHIP[r.status]}">${esc(r.status_label)}</span></td><td><button type="button" class="btn small" data-rel-open="${r.id}">열기</button></td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">${rel.rows.length ? '조건에 맞는 시험이 없습니다.' : '등록된 신뢰성평가가 없습니다.'}</div>`;
+    }
+  };
+  main.addEventListener('click', e => {
+    const tb = e.target.closest('#tmTabs [data-tab]'); if (tb) { tab = tb.dataset.tab; try { sessionStorage.setItem('qTmTab', tab); } catch {} draw(); return; }
+    if (e.target.closest('#tmNewBtn')) return tmEdit().catch(fail);
+    if (e.target.closest('#relNewBtn')) return relOpen().catch(fail);
+    const te = e.target.closest('[data-tm-edit]'); if (te) return tmEdit(tm.rows.find(t => t.id === Number(te.dataset.tmEdit))).catch(fail);
+    const th = e.target.closest('[data-tm-hist]'); if (th) { const t = tm.rows.find(x => x.id === Number(th.dataset.tmHist)); return qHistory(`${t.method_no} ${t.name}`, t.history); }
+    const ro = e.target.closest('[data-rel-open]'); if (ro) relOpen(Number(ro.dataset.relOpen)).catch(fail);
+  });
+  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-rel-row]'); if (tr && !e.target.closest('button')) relOpen(Number(tr.dataset.relRow)).catch(fail); });
+  form.addEventListener('input', draw); form.onsubmit = e => e.preventDefault();
+  await load();
+}

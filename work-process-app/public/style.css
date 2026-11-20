@@ -3951,3 +3951,22 @@ table.chg-imp td { vertical-align: middle; } table.chg-imp td:last-child input {
 table.chg-imp tr.chg-yes td:first-child { font-weight: 700; color: var(--text); }
 .sup-total { font-size: 14px; }
 .scoa-files { display: grid; gap: 6px; }
+
+/* 15.307 공무(설비·PM) · 공정품질(SPC) · 시험법·신뢰성 */
+.txt-red { color: #e03131; }
+.pm-cycle { width: 64px; } .pm-edit select { margin-left: 4px; } .pm-edit td input:not([type=number]) { width: 100%; }
+.pqc-grid input { width: 100%; min-width: 80px; } .pqc-grid .pqc-v { min-width: 90px; }
+.pqc-h { margin: 18px 0 6px; font-size: 15px; }
+.spc-box { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 8px 10px; }
+.spc-title { font-size: 13px; font-weight: 600; margin: 4px 0; }
+.spc-svg { width: 100%; height: auto; display: block; }
+.spc-svg .spc-line { fill: none; stroke: var(--accent); stroke-width: 1.6; }
+.spc-svg .spc-pt { fill: var(--accent); } .spc-svg .spc-pt.out { fill: #e03131; }
+.spc-svg .spc-cl { stroke: #2f9e44; stroke-width: 1.2; } .spc-svg .spc-ctl { stroke: #e03131; stroke-width: 1; stroke-dasharray: 5 4; } .spc-svg .spc-spec { stroke: #f08c00; stroke-width: 1.2; stroke-dasharray: 2 3; }
+.spc-svg text { font-size: 11px; fill: var(--muted); } .spc-svg .spc-cl-t { fill: #2f9e44; } .spc-svg .spc-ctl-t { fill: #e03131; } .spc-svg .spc-spec-t { fill: #e67700; }
+.spc-note { padding: 6px 10px; border-radius: 6px; background: var(--yellow-bg); color: var(--yellow); font-size: 13px; }
+.spc-formula { margin-top: 6px; }
+.rel-n { width: 90px; } .rel-unit { width: 70px; }
+table.rel-pts td.rel-out { background: color-mix(in srgb, #e03131 12%, var(--panel)); } table.rel-pts td.rel-out input { color: #c92a2a; font-weight: 700; background: transparent; }
+.rel-judge { margin-top: 6px; }
+.tm-cond { max-width: 360px; white-space: pre-line; }

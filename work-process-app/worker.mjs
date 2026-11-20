@@ -506,7 +506,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'qualifications', 'supplier_evals', 'supplier_coas'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'qualifications', 'supplier_evals', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -4053,7 +4053,8 @@ route('GET', '/api/ncs', async ({ user, query }) => {
   return { rows: (await db.prepare(`SELECT * FROM nonconformities ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY CASE WHEN status IN ('closed','void') THEN 1 ELSE 0 END, COALESCE(due_date,'9999'), id DESC LIMIT 1000`).all(...args)).map(ncRow), can_manage: hasRole(user, 'quality'), can_close: hasRole(user, 'quality_approver'), today: today() };
 });
 route('POST', '/api/ncs', async ({ user, body }) => {
-  requireRole(user, 'quality', '품질'); const key = str(body.request_id, 80) || null;
+  if (!(body.source_type === 'process' && hasRole(user, 'production'))) requireRole(user, 'quality', '품질'); // 15.307 공정 이상발생은 생산도 등록
+  const key = str(body.request_id, 80) || null;
   if (key) { const old = await db.prepare('SELECT * FROM nonconformities WHERE request_id=?').get(key); if (old) return ncRow(old); }
   const st = NC_SOURCE[body.source_type] ? body.source_type : 'other'; let sid = null, sno = '', fill = {};
   if (['iqc', 'oqc', 'analysis', 'voc'].includes(st) && body.source_id) { const q = await getRequest(Number(body.source_id) || 0); sid = q.id; sno = q.req_no; const qd = JSON.parse(q.data || '{}'); fill = { item: q.title, lot: q.lot || qd.lot_etc || (['있음', '없음'].includes(qd.lot) ? '' : qd.lot || '') }; }
@@ -4477,6 +4478,300 @@ route('PUT', '/api/supplier-coas/:id', async ({ user, params, body }) => {
   } catch (error) { await removePhotos(added.map(x => x.file)); throw error; }
   await removePhotos(cur.filter(x => !keepNames.includes(x.file)).map(x => x.file));
   return scoaRow(await db.prepare('SELECT * FROM supplier_coas WHERE inspection_id=?').get(q.id), q);
+});
+// ── 15.307 품질 3단계: 생산 › 공무(설비·예방보전) · 품질 › 공정품질(PQC·SPC) · 시험법·신뢰성 ──
+// 설비·예방보전은 생산(담당·책임자)과 품질이 등록·수행 기록, 보기는 메뉴를 볼 수 있는 사람.
+const addDaysISO = (d, n) => { const [y, m, dd] = d.split('-').map(Number); return new Date(Date.UTC(y, m - 1, dd + n)).toISOString().slice(0, 10); };
+const canPlant = user => hasRole(user, 'production') || hasRole(user, 'quality');
+const requirePlant = user => { if (!canPlant(user)) throw new HttpError(403, '설비·예방보전은 생산·품질 담당이 기록합니다. (관리자에게 권한 요청)'); };
+const EQ_STATUS = { running: '가동', maintenance: '정비 중', idle: '휴지', disposed: '폐기' };
+const EQ_LOG_KIND = { pm: '예방보전(PM)', failure: '고장', repair: '수리', modify: '개조·이설', other: '기타' };
+const PM_UNIT = { day: '일', week: '주', month: '개월', year: '년' };
+const EQ_COLS = ['name', 'kind', 'unit_name', 'location', 'maker', 'model', 'serial_no', 'install_date', 'owner_name', 'status', 'pm_items', 'note'];
+function pmNext(done, cycle, unit) {
+  if (!done || !cycle) return null; const [y, m, d] = done.split('-').map(Number);
+  if (unit === 'day' || unit === 'week') return new Date(Date.UTC(y, m - 1, d + cycle * (unit === 'week' ? 7 : 1))).toISOString().slice(0, 10);
+  const months = unit === 'year' ? cycle * 12 : cycle, t = new Date(Date.UTC(y, m - 1 + months, d)); if (t.getUTCDate() !== d) t.setUTCDate(0); return t.toISOString().slice(0, 10);
+}
+function pmItems(list, prior = []) {
+  if (list == null) return prior; if (!Array.isArray(list) || list.length > 30) throw bad('예방보전 항목은 30개까지입니다.');
+  const keys = new Set();
+  return list.map(x => {
+    const o = x && typeof x === 'object' ? x : {}, old = prior.find(p => p.key === o.key) || {};
+    const key = /^[a-f0-9]{8}$/.test(o.key || '') ? o.key : randomHex(4); if (keys.has(key)) throw bad('예방보전 항목이 겹칩니다.'); keys.add(key);
+    const unit = PM_UNIT[o.unit] ? o.unit : 'month', cycle = intIn(o.cycle, 'PM 주기', 1, 999, 1);
+    const checks = (Array.isArray(o.checks) ? o.checks : String(o.checks || '').split(/\n|,/)).map(c => str(c, 100)).filter(Boolean).slice(0, 30);
+    const last = qDate(o.last_done === undefined ? old.last_done : o.last_done, 'PM 직전 수행일');
+    let next = qDate(o.next_due === undefined ? old.next_due : o.next_due, 'PM 다음 예정일');
+    if (!next || (last && (old.cycle !== cycle || old.unit !== unit || old.last_done !== last) && o.next_due === undefined)) next = pmNext(last, cycle, unit) || next || today();
+    return { key, name: reqStr(o.name, 'PM 항목명', 100), cycle, unit, checks, last_done: last, next_due: next, owner: str(o.owner ?? old.owner, 50) };
+  });
+}
+function eqBody(o0, prior = {}) {
+  const o = o0 && typeof o0 === 'object' ? o0 : {}, pick = k => o[k] === undefined ? prior[k] : o[k];
+  const status = pick('status') || 'running'; if (!EQ_STATUS[status]) throw bad('설비 상태를 고르세요.');
+  return { name: reqStr(pick('name'), '설비명', 100), kind: str(pick('kind'), 50), unit_name: str(pick('unit_name'), 50), location: str(pick('location'), 100), maker: str(pick('maker'), 100), model: str(pick('model'), 100), serial_no: str(pick('serial_no'), 100),
+    install_date: qDate(pick('install_date'), '설치일'), owner_name: str(pick('owner_name'), 50), status, pm_items: JSON.stringify(pmItems(o.pm_items, JSON.parse(prior.pm_items || '[]'))), note: str(pick('note'), 1000) };
+}
+const eqRow = (r, stat = {}) => { const pm = JSON.parse(r.pm_items || '[]'); return { ...r, pm_items: pm, history: JSON.parse(r.history || '[]'), status_label: EQ_STATUS[r.status] || r.status, next_pm: pm.map(p => p.next_due).filter(Boolean).sort()[0] || null, ...stat }; };
+async function eqStats() {
+  const y = today().slice(0, 4), out = {};
+  for (const s of await db.prepare("SELECT equipment_id, SUM(CASE WHEN kind='failure' AND substr(log_date,1,4)=? THEN 1 ELSE 0 END) AS fails, SUM(CASE WHEN kind IN ('failure','repair') AND substr(log_date,1,4)=? THEN COALESCE(downtime_hours,0) ELSE 0 END) AS downtime, SUM(CASE WHEN kind='pm' AND substr(log_date,1,4)=? THEN 1 ELSE 0 END) AS pms, MAX(log_date) AS last_log, COUNT(*) AS logs FROM equipment_logs GROUP BY equipment_id").all(y, y, y)) out[s.equipment_id] = { fails_year: s.fails, downtime_year: s.downtime, pm_year: s.pms, last_log: s.last_log, log_count: s.logs };
+  return out;
+}
+route('GET', '/api/equipment', async ({ user }) => { const st = await eqStats(); return { rows: (await db.prepare("SELECT * FROM equipment ORDER BY CASE WHEN status='disposed' THEN 1 ELSE 0 END, equip_no LIMIT 3000").all()).map(r => eqRow(r, st[r.id] || { fails_year: 0, downtime_year: 0, pm_year: 0, last_log: null, log_count: 0 })), can_manage: canPlant(user), today: today() }; });
+route('POST', '/api/equipment', async ({ user, body }) => {
+  requirePlant(user); const key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM equipment WHERE request_id=?').get(key); if (old) return eqRow(old); }
+  const f = eqBody(body), no = str(body.equip_no, 40).toUpperCase();
+  if (no && await db.prepare('SELECT 1 FROM equipment WHERE equip_no=?').get(no)) throw bad(`이미 있는 설비번호입니다: ${no}`);
+  const r = await db.prepare(`INSERT INTO equipment(equip_no,${EQ_COLS.join(',')},history,request_id,created_by) VALUES(${no ? '?' : nextDocNo('equipment', 'equip_no')},${EQ_COLS.map(() => '?').join(',')},?,?,?)`)
+    .run(...(no ? [no] : ['EQ-', 'EQ-', 'EQ-']), ...EQ_COLS.map(k => f[k]), JSON.stringify([{ at: now(), by: user.name, what: '등록' }]), key, user.name);
+  return eqRow(await mustGet('equipment', r.lastInsertRowid));
+});
+route('PUT', '/api/equipment/:id', async ({ user, params, body }) => {
+  requirePlant(user); const prior = await mustGet('equipment', params.id);
+  if (Number(body.revision) !== prior.revision) throw conflict();
+  const f = eqBody(body, prior), no = body.equip_no === undefined ? prior.equip_no : reqStr(body.equip_no, '설비번호', 40).toUpperCase();
+  if (no !== prior.equip_no && await db.prepare('SELECT 1 FROM equipment WHERE equip_no=? AND id<>?').get(no, prior.id)) throw bad(`이미 있는 설비번호입니다: ${no}`);
+  const changed = EQ_COLS.filter(k => (prior[k] ?? null) !== (f[k] ?? null)); if (no !== prior.equip_no) changed.push('equip_no'); if (!changed.length) return eqRow(prior);
+  const r = await db.prepare(`UPDATE equipment SET equip_no=?,${EQ_COLS.map(k => k + '=?').join(',')},history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`)
+    .run(no, ...EQ_COLS.map(k => f[k]), pushHist(prior, { by: user.name, what: '수정', fields: changed, ...(prior.status !== f.status ? { status: [prior.status, f.status] } : {}) }), user.name, prior.id, prior.revision);
+  if (!r.changes) throw conflict();
+  return eqRow(await mustGet('equipment', prior.id));
+});
+route('DELETE', '/api/equipment/:id', async ({ user, params, query }) => {
+  requirePlant(user); const prior = await mustGet('equipment', params.id);
+  if (Number(query.revision) !== prior.revision) throw conflict();
+  if (await db.prepare('SELECT 1 FROM equipment_logs WHERE equipment_id=?').get(prior.id)) throw bad('이력이 있는 설비는 지울 수 없습니다. 상태를 「폐기」로 바꾸세요.');
+  await db.prepare('DELETE FROM equipment WHERE id=? AND revision=?').run(prior.id, prior.revision); return { ok: true };
+});
+const eqLogRow = r => ({ ...r, checks: JSON.parse(r.checks || '[]'), kind_label: EQ_LOG_KIND[r.kind] || r.kind });
+route('GET', '/api/equipment/:id/logs', async ({ params }) => { const e = await mustGet('equipment', params.id); return { equipment: eqRow(e), rows: (await db.prepare('SELECT * FROM equipment_logs WHERE equipment_id=? ORDER BY log_date DESC, id DESC LIMIT 500').all(e.id)).map(eqLogRow) }; });
+// 이력 기록: PM 수행이면 점검표 결과로 정상/이상을 정하고 그 항목의 직전 수행일·다음 예정일을 넘긴다. 고장·수리는 비가동 시간·조치, 설비 상태도 함께 바꿀 수 있다.
+route('POST', '/api/equipment/:id/logs', async ({ user, params, body }) => {
+  requirePlant(user); const key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM equipment_logs WHERE request_id=?').get(key); if (old) return eqLogRow(old); }
+  const e = await mustGet('equipment', params.id); if (Number(body.revision) !== e.revision) throw conflict();
+  if (e.status === 'disposed') throw bad('폐기된 설비입니다.');
+  const kind = EQ_LOG_KIND[body.kind] ? body.kind : null; if (!kind) throw bad('기록 종류를 고르세요.');
+  const date = dateStr(body.log_date || today(), '일자'); if (date > today()) throw bad('일자가 오늘보다 늦습니다.');
+  const num0 = (v, label) => v === '' || v == null ? null : (() => { const n = num(v, label); if (n < 0) throw bad(`${label}은(는) 0 이상으로 넣으세요.`); return n; })();
+  const pm = JSON.parse(e.pm_items || '[]'); let item = null, checks = [], result = str(body.result, 20);
+  if (kind === 'pm') {
+    item = pm.find(p => p.key === body.pm_key); if (!item) throw bad('수행한 예방보전 항목을 고르세요.');
+    checks = (Array.isArray(body.checks) ? body.checks : []).slice(0, 30).map(c => ({ item: str(c?.item, 100), ok: c?.ok === true || c?.ok === 1 || c?.ok === '1', note: str(c?.note, 200) })).filter(c => c.item);
+    if (item.checks.length && item.checks.some(n => !checks.some(c => c.item === n))) throw bad('점검표 항목을 모두 확인하세요.');
+    result = checks.some(c => !c.ok) ? '이상' : '정상';
+  } else if (!str(body.description, 1000)) throw bad('내용(증상·작업)을 적으세요.');
+  const status = body.status_after && EQ_STATUS[body.status_after] ? body.status_after : e.status;
+  const newPm = item ? pm.map(p => p.key === item.key && (!p.last_done || date >= p.last_done) ? { ...p, last_done: date, next_due: pmNext(date, p.cycle, p.unit) } : p) : pm;
+  const results = await db.batch([
+    { sql: "UPDATE equipment SET pm_items=?,status=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?",
+      args: [JSON.stringify(newPm), status, pushHist(e, { by: user.name, what: `${EQ_LOG_KIND[kind]} 기록${item ? ' · ' + item.name : ''}`, ...(status !== e.status ? { status: [e.status, status] } : {}) }), user.name, e.id, e.revision] },
+    { sql: 'INSERT INTO equipment_logs(equipment_id,kind,log_date,pm_key,pm_name,checks,result,downtime_hours,description,action,parts,cost,worker_name,request_id,created_by) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM equipment WHERE id=? AND revision=?)',
+      args: [e.id, kind, date, item?.key || '', item?.name || '', JSON.stringify(checks), result, num0(body.downtime_hours, '비가동 시간'), str(body.description, 1000), str(body.action, 1000), str(body.parts, 300), num0(body.cost, '비용'), str(body.worker_name, 50) || user.name, key, user.name, e.id, e.revision + 1] },
+  ]);
+  if (!results[0].meta.changes) throw conflict();
+  return { ...eqRow(await mustGet('equipment', e.id)), log_result: result };
+});
+
+// C1 공정품질(PQC): 관리항목(공정 조건·환경측정 지점)과 측정값, SPC(X̄-R 또는 I-MR 관리도, Cp·Cpk). 기준은 품질이, 측정값은 생산·품질이 넣는다.
+const PQC_KIND = { process: '공정 조건·측정', env: '환경측정' };
+function ppBody(o0, prior = {}) {
+  const o = o0 && typeof o0 === 'object' ? o0 : {}, pick = k => o[k] === undefined ? prior[k] : o[k];
+  const kind = pick('kind') || 'process'; if (!PQC_KIND[kind]) throw bad('구분을 고르세요.');
+  const n = (v, l) => v === '' || v == null ? null : num(v, l);
+  const f = { kind, place: reqStr(pick('place'), kind === 'env' ? '측정 위치' : '공정', 100), item: reqStr(pick('item'), '관리항목', 100), unit: str(pick('unit'), 20), lsl: n(pick('lsl'), '하한'), usl: n(pick('usl'), '상한'), target: n(pick('target'), '목표'), cycle: str(pick('cycle'), 50), active: pick('active') === 0 || pick('active') === false || pick('active') === '0' ? 0 : 1, note: str(pick('note'), 500) };
+  if (f.lsl == null && f.usl == null) throw bad('기준(하한 또는 상한)을 하나 이상 넣으세요.');
+  if (f.lsl != null && f.usl != null && f.lsl >= f.usl) throw bad('하한은 상한보다 작아야 합니다.');
+  return f;
+}
+const PP_COLS = ['kind', 'place', 'item', 'unit', 'lsl', 'usl', 'target', 'cycle', 'active', 'note'];
+const outOf = (v, lsl, usl) => (lsl != null && v < lsl) || (usl != null && v > usl) ? 1 : 0;
+route('GET', '/api/pqc/points', async ({ user }) => {
+  const from = addDaysISO(today(), -30);
+  const stats = await db.prepare('SELECT point_id, COUNT(*) AS n30, SUM(out_of_spec) AS out30, MAX(measured_on) AS last_on FROM process_measures WHERE measured_on>=? GROUP BY point_id').all(from);
+  const lastV = await db.prepare('SELECT m.point_id, m.value, m.measured_on, m.out_of_spec FROM process_measures m WHERE m.id IN (SELECT MAX(id) FROM process_measures GROUP BY point_id)').all();
+  return { rows: (await db.prepare('SELECT * FROM process_points ORDER BY active DESC, kind, place, item').all()).map(p => ({ ...p, kind_label: PQC_KIND[p.kind], ...(stats.find(s => s.point_id === p.id) || { n30: 0, out30: 0, last_on: null }), last: lastV.find(l => l.point_id === p.id) || null })),
+    can_manage: isQuality(user), can_record: canPlant(user), today: today() };
+});
+route('POST', '/api/pqc/points', async ({ user, body }) => {
+  requireRole(user, 'quality', '품질'); const f = ppBody(body);
+  if (await db.prepare('SELECT 1 FROM process_points WHERE kind=? AND place=? AND item=?').get(f.kind, f.place, f.item)) throw bad(`이미 있는 관리항목입니다: ${f.place} · ${f.item}`);
+  const r = await db.prepare(`INSERT INTO process_points(${PP_COLS.join(',')},created_by) VALUES(${PP_COLS.map(() => '?').join(',')},?)`).run(...PP_COLS.map(k => f[k]), user.name);
+  return mustGet('process_points', r.lastInsertRowid);
+});
+route('PUT', '/api/pqc/points/:id', async ({ user, params, body }) => {
+  requireRole(user, 'quality', '품질'); const prior = await mustGet('process_points', params.id);
+  if (Number(body.revision) !== prior.revision) throw conflict();
+  const f = ppBody(body, prior);
+  if (await db.prepare('SELECT 1 FROM process_points WHERE kind=? AND place=? AND item=? AND id<>?').get(f.kind, f.place, f.item, prior.id)) throw bad(`이미 있는 관리항목입니다: ${f.place} · ${f.item}`);
+  const r = await db.prepare(`UPDATE process_points SET ${PP_COLS.map(k => k + '=?').join(',')},revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`).run(...PP_COLS.map(k => f[k]), user.name, prior.id, prior.revision);
+  if (!r.changes) throw conflict();
+  return mustGet('process_points', prior.id);
+});
+route('DELETE', '/api/pqc/points/:id', async ({ user, params, query }) => {
+  requireRole(user, 'quality', '품질'); const prior = await mustGet('process_points', params.id);
+  if (Number(query.revision) !== prior.revision) throw conflict();
+  if (await db.prepare('SELECT 1 FROM process_measures WHERE point_id=?').get(prior.id)) throw bad('측정값이 있는 관리항목은 지울 수 없습니다. 「사용 안 함」으로 바꾸세요.');
+  await db.prepare('DELETE FROM process_points WHERE id=? AND revision=?').run(prior.id, prior.revision); return { ok: true };
+});
+route('GET', '/api/pqc/measures', async ({ query }) => {
+  const where = [], args = [];
+  if (query.point_id) { where.push('m.point_id=?'); args.push(Number(query.point_id) || 0); }
+  if (query.kind && PQC_KIND[query.kind]) { where.push('p.kind=?'); args.push(query.kind); }
+  if (query.from) { where.push('m.measured_on>=?'); args.push(dateStr(query.from, '시작일')); }
+  if (query.to) { where.push('m.measured_on<=?'); args.push(dateStr(query.to, '종료일')); }
+  if (query.out === '1') where.push('m.out_of_spec=1');
+  applyListKeyword(where, args, query.q, ['p.place', 'p.item', 'm.lot', 'm.machine', 'm.measurer']);
+  return { rows: await db.prepare(`SELECT m.*, p.kind, p.place, p.item, p.unit FROM process_measures m JOIN process_points p ON p.id=m.point_id ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY m.measured_on DESC, m.measured_time DESC, m.id DESC LIMIT 3000`).all(...args) };
+});
+route('POST', '/api/pqc/measures', async ({ user, body }) => {
+  if (!canPlant(user)) throw new HttpError(403, '공정 측정값은 생산·품질 담당이 넣습니다.');
+  const key = str(body.request_id, 80) || null;
+  if (key && await db.prepare('SELECT 1 FROM process_measures WHERE request_id=?').get(key + ':0')) return { ok: true, saved: 0, repeated: true };
+  const list = Array.isArray(body.rows) ? body.rows : []; if (!list.length || list.length > 300) throw bad('측정값을 1~300개 넣으세요.');
+  const points = await db.prepare('SELECT * FROM process_points').all(), cmds = []; let out = 0;
+  list.forEach((x, i) => {
+    const p = points.find(q => q.id === Number(x?.point_id)); if (!p) throw bad(`${i + 1}번째 줄: 관리항목을 고르세요.`); if (!p.active) throw bad(`${p.place} · ${p.item}은(는) 사용 안 함입니다.`);
+    const v = num(x.value, `${p.item} 측정값`), d = dateStr(x.measured_on || today(), '측정일'); if (d > today()) throw bad('측정일이 오늘보다 늦습니다.');
+    const o = outOf(v, p.lsl, p.usl); out += o;
+    cmds.push({ sql: 'INSERT INTO process_measures(point_id,measured_on,measured_time,value,lsl,usl,out_of_spec,lot,machine,measurer,note,request_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      args: [p.id, d, /^\d{2}:\d{2}$/.test(x.measured_time || '') ? x.measured_time : '', v, p.lsl, p.usl, o, str(x.lot, 100), str(x.machine, 50), str(x.measurer, 50) || user.name, str(x.note, 300), key ? `${key}:${i}` : null, user.name] });
+  });
+  await db.batch(cmds);
+  return { ok: true, saved: cmds.length, out_of_spec: out };
+});
+route('DELETE', '/api/pqc/measures/:id', async ({ user, params }) => {
+  const m = await mustGet('process_measures', params.id);
+  if (!isQuality(user) && !(m.created_by === user.name && String(m.created_at).slice(0, 10) === today())) throw new HttpError(403, '측정값은 품질이나, 넣은 사람이 그날 안에만 지웁니다.');
+  await db.prepare('DELETE FROM process_measures WHERE id=?').run(m.id); return { ok: true };
+});
+// SPC: 같은 날(또는 같은 LOT) 값을 한 부분군으로. 부분군 크기가 2~10이면 X̄-R, 아니면(1개씩) I-MR 관리도. 표본 25개 미만이면 참고값.
+const SPC_C = { 2: [1.880, 0, 3.267, 1.128], 3: [1.023, 0, 2.574, 1.693], 4: [0.729, 0, 2.282, 2.059], 5: [0.577, 0, 2.114, 2.326], 6: [0.483, 0, 2.004, 2.534], 7: [0.419, 0.076, 1.924, 2.704], 8: [0.373, 0.136, 1.864, 2.847], 9: [0.337, 0.184, 1.816, 2.970], 10: [0.308, 0.223, 1.777, 3.078] };
+const r4 = v => v == null || !Number.isFinite(v) ? null : Math.round(v * 10000) / 10000;
+function spcCalc(values, groups, lsl, usl) {
+  const n = values.length; if (n < 2) return { n, enough: false };
+  const mean = values.reduce((s, v) => s + v, 0) / n, sd = Math.sqrt(values.reduce((s, v) => s + (v - mean) ** 2, 0) / (n - 1));
+  const sizes = groups.map(g => g.values.length), counts = {}; sizes.forEach(s => { counts[s] = (counts[s] || 0) + 1; });
+  const mode = Math.min(10, Number(Object.entries(counts).sort((a, b) => b[1] - a[1] || b[0] - a[0])[0][0]));
+  let chart, sigma;
+  if (mode >= 2 && groups.filter(g => g.values.length >= mode).length >= 2) {
+    const [A2, D3, D4, d2] = SPC_C[mode], sub = groups.filter(g => g.values.length >= mode).map(g => { const v = g.values.slice(0, mode); return { label: g.label, x: v.reduce((s, a) => s + a, 0) / mode, r: Math.max(...v) - Math.min(...v) }; });
+    const xbb = sub.reduce((s, g) => s + g.x, 0) / sub.length, rb = sub.reduce((s, g) => s + g.r, 0) / sub.length; sigma = rb / d2;
+    chart = { type: 'xbar-r', size: mode, points: sub, cl: xbb, ucl: xbb + A2 * rb, lcl: xbb - A2 * rb, r_cl: rb, r_ucl: D4 * rb, r_lcl: D3 * rb };
+  } else {
+    const pts = groups.flatMap(g => g.values.map(v => ({ label: g.label, x: v }))); pts.forEach((p, i) => { p.r = i ? Math.abs(p.x - pts[i - 1].x) : null; });
+    const mrs = pts.slice(1).map(p => p.r), mrb = mrs.reduce((s, v) => s + v, 0) / (mrs.length || 1); sigma = mrb / 1.128;
+    chart = { type: 'i-mr', size: 1, points: pts, cl: mean, ucl: mean + 2.66 * mrb, lcl: mean - 2.66 * mrb, r_cl: mrb, r_ucl: 3.267 * mrb, r_lcl: 0 };
+  }
+  const cap = s => !(s > 0) ? {} : { cp: lsl != null && usl != null ? (usl - lsl) / (6 * s) : null, cpu: usl != null ? (usl - mean) / (3 * s) : null, cpl: lsl != null ? (mean - lsl) / (3 * s) : null };
+  const w = cap(sigma), o = cap(sd);
+  const cpk = [w.cpu, w.cpl].filter(v => v != null), ppk = [o.cpu, o.cpl].filter(v => v != null);
+  chart.out = chart.points.map((p, i) => (p.x > chart.ucl || p.x < chart.lcl || (p.r != null && p.r > chart.r_ucl)) ? i : -1).filter(i => i >= 0);
+  for (const k of ['cl', 'ucl', 'lcl', 'r_cl', 'r_ucl', 'r_lcl']) chart[k] = r4(chart[k]); chart.points.forEach(p => { p.x = r4(p.x); p.r = r4(p.r); });
+  return { n, enough: n >= 25, mean: r4(mean), sd: r4(sd), sigma: r4(sigma), cp: r4(w.cp), cpk: cpk.length ? r4(Math.min(...cpk)) : null, pp: r4(o.cp), ppk: ppk.length ? r4(Math.min(...ppk)) : null, out_of_spec: values.filter(v => outOf(v, lsl, usl)).length, chart };
+}
+route('GET', '/api/pqc/spc', async ({ query }) => {
+  const p = await mustGet('process_points', Number(query.point_id) || 0), args = [p.id], where = ['point_id=?'];
+  if (query.from) { where.push('measured_on>=?'); args.push(dateStr(query.from, '시작일')); }
+  if (query.to) { where.push('measured_on<=?'); args.push(dateStr(query.to, '종료일')); }
+  const rows = await db.prepare(`SELECT * FROM process_measures WHERE ${where.join(' AND ')} ORDER BY measured_on, measured_time, id LIMIT 5000`).all(...args);
+  const by = query.group === 'lot' ? 'lot' : query.group === 'none' ? 'none' : 'day', groups = [];
+  for (const m of rows) { const label = by === 'none' ? `${m.measured_on} ${m.measured_time}`.trim() : by === 'lot' ? m.lot || '(LOT 없음)' : m.measured_on; const g = by === 'none' ? null : groups.find(x => x.label === label); if (g) g.values.push(m.value); else groups.push({ label, values: [m.value] }); }
+  return { point: p, group: by, ...spcCalc(rows.map(m => m.value), by === 'none' ? groups.map(g => ({ ...g })) : groups, p.lsl, p.usl) };
+});
+
+// C3 시험법·신뢰성(품질)
+const TM_COLS = ['name', 'standard', 'items', 'conditions', 'instrument_ids', 'status', 'note'];
+async function tmBody(o0, prior = {}) {
+  const o = o0 && typeof o0 === 'object' ? o0 : {}, pick = k => o[k] === undefined ? prior[k] : o[k];
+  let ids = pick('instrument_ids'); if (typeof ids === 'string') { try { ids = JSON.parse(ids || '[]'); } catch { ids = []; } }
+  ids = [...new Set((Array.isArray(ids) ? ids : []).map(Number).filter(n => Number.isSafeInteger(n) && n > 0))].slice(0, 20);
+  for (const id of ids) if (!await db.prepare('SELECT 1 FROM instruments WHERE id=?').get(id)) throw bad('사용 계측기를 다시 고르세요.');
+  const status = pick('status') || 'active'; if (!['active', 'obsolete'].includes(status)) throw bad('상태를 고르세요.');
+  return { name: reqStr(pick('name'), '시험법 이름', 200), standard: str(pick('standard'), 200), items: str(pick('items'), 500), conditions: str(pick('conditions'), 2000), instrument_ids: JSON.stringify(ids), status, note: str(pick('note'), 1000) };
+}
+async function tmRows(where = '', args = []) {
+  const inst = await db.prepare('SELECT id,mgmt_no,name,next_due,status FROM instruments').all();
+  return (await db.prepare(`SELECT * FROM test_methods ${where} ORDER BY status, method_no LIMIT 2000`).all(...args)).map(r => { const ids = JSON.parse(r.instrument_ids || '[]'), f = JSON.parse(r.file_json || '{}'); const o = { ...r, instrument_ids: ids, instruments: ids.map(id => inst.find(i => i.id === id)).filter(Boolean), file: f.file ? f : null, history: JSON.parse(r.history || '[]') }; delete o.file_json; return o; });
+}
+route('GET', '/api/test-methods', async ({ user }) => ({ rows: await tmRows(), can_manage: isQuality(user), today: today() }));
+route('POST', '/api/test-methods', async ({ user, body }) => {
+  requireRole(user, 'quality', '품질'); const key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT id FROM test_methods WHERE request_id=?').get(key); if (old) return (await tmRows('WHERE id=?', [old.id]))[0]; }
+  const f = await tmBody(body), no = str(body.method_no, 40).toUpperCase();
+  if (no && await db.prepare('SELECT 1 FROM test_methods WHERE method_no=?').get(no)) throw bad(`이미 있는 시험법 번호입니다: ${no}`);
+  const files = await saveDocFiles(body.files, 1);
+  try {
+    const r = await db.prepare(`INSERT INTO test_methods(method_no,${TM_COLS.join(',')},file_json,history,request_id,created_by) VALUES(${no ? '?' : nextDocNo('test_methods', 'method_no')},${TM_COLS.map(() => '?').join(',')},?,?,?,?)`)
+      .run(...(no ? [no] : ['TM-', 'TM-', 'TM-']), ...TM_COLS.map(k => f[k]), JSON.stringify(files[0] || {}), JSON.stringify([{ at: now(), by: user.name, what: '제정 Rev.0' }]), key, user.name);
+    return (await tmRows('WHERE id=?', [Number(r.lastInsertRowid)]))[0];
+  } catch (error) { await removePhotos(files.map(x => x.file)); throw error; }
+});
+// 고치기. 「개정」(revise)으로 저장하면 판(Rev)이 하나 오르고 개정 내용이 이력에 남는다. SOP 파일을 바꾸면 이전 파일도 이력(보관)으로.
+route('PUT', '/api/test-methods/:id', async ({ user, params, body }) => {
+  requireRole(user, 'quality', '품질'); const prior = await mustGet('test_methods', params.id);
+  if (Number(body.revision) !== prior.revision) throw conflict();
+  const f = await tmBody(body, prior), oldFile = JSON.parse(prior.file_json || '{}'), files = await saveDocFiles(body.files, 1), file = files[0] || oldFile;
+  try {
+    const revise = !!body.revise, summary = str(body.summary, 300); if (revise && !summary) throw bad('개정 내용을 적으세요.');
+    const changed = TM_COLS.filter(k => (prior[k] ?? null) !== (f[k] ?? null)); if (file.file !== oldFile.file) changed.push('file');
+    if (!changed.length && !revise) return (await tmRows('WHERE id=?', [prior.id]))[0];
+    const r = await db.prepare(`UPDATE test_methods SET ${TM_COLS.map(k => k + '=?').join(',')},file_json=?,rev=rev+?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`)
+      .run(...TM_COLS.map(k => f[k]), JSON.stringify(file), revise ? 1 : 0, pushHist(prior, { by: user.name, what: revise ? `개정 Rev.${prior.rev + 1}` : '수정', fields: changed, ...(summary ? { reason: summary } : {}), ...(file.file !== oldFile.file && oldFile.file ? { old_file: oldFile } : {}) }), user.name, prior.id, prior.revision);
+    if (!r.changes) throw conflict();
+    return (await tmRows('WHERE id=?', [prior.id]))[0];
+  } catch (error) { await removePhotos(files.map(x => x.file)); throw error; }
+});
+const REL_STATUS = { planned: '계획', testing: '시험 중', done: '완료', void: '취소' };
+const REL_COLS = ['title', 'item', 'lot', 'method_id', 'conditions', 'start_date', 'end_date', 'spec_json', 'points_json', 'owner_name', 'note'];
+function relBody(o0, prior = {}) {
+  const o = o0 && typeof o0 === 'object' ? o0 : {}, pick = k => o[k] === undefined ? prior[k] : o[k];
+  const parse = (v, d) => typeof v === 'string' ? (() => { try { return JSON.parse(v || d); } catch { return JSON.parse(d); } })() : v;
+  const spec = (parse(pick('spec_json'), '[]') || []).slice(0, 20).map(s => { const n = (v, l) => v === '' || v == null ? null : num(v, l); const x = { name: reqStr(s?.name, '평가 항목', 100), unit: str(s?.unit, 20), min: n(s?.min, '하한'), max: n(s?.max, '상한') }; if (x.min != null && x.max != null && x.min > x.max) throw bad(`${x.name}: 하한이 상한보다 큽니다.`); return x; });
+  const points = (parse(pick('points_json'), '[]') || []).slice(0, 30).map(p => ({ label: reqStr(p?.label, '측정 시점(예: 초기·500h)', 50), date: qDate(p?.date, '측정일'), values: spec.map((_, i) => { const v = Array.isArray(p?.values) ? p.values[i] : null; return v === '' || v == null ? null : num(v, '측정값'); }) }));
+  const f = { title: reqStr(pick('title'), '시험명', 200), item: str(pick('item'), 200), lot: str(pick('lot'), 100), method_id: optId(pick('method_id')), conditions: str(pick('conditions'), 1000), start_date: qDate(pick('start_date'), '시작일'), end_date: qDate(pick('end_date'), '종료일'), spec_json: JSON.stringify(spec), points_json: JSON.stringify(points), owner_name: str(pick('owner_name'), 50), note: str(pick('note'), 1000) };
+  if (f.start_date && f.end_date && f.end_date < f.start_date) throw bad('종료일이 시작일보다 빠릅니다.');
+  return f;
+}
+function relJudge(f) {
+  const spec = JSON.parse(f.spec_json), points = JSON.parse(f.points_json), vals = points.flatMap(p => p.values.map((v, i) => [v, spec[i]])).filter(([v]) => v != null);
+  if (!vals.length) return '';
+  return vals.some(([v, s]) => (s.min != null && v < s.min) || (s.max != null && v > s.max)) ? '부적합' : '적합';
+}
+const relRow = r => ({ ...r, spec: JSON.parse(r.spec_json || '[]'), points: JSON.parse(r.points_json || '[]'), history: JSON.parse(r.history || '[]'), status_label: REL_STATUS[r.status] || r.status, judge_now: relJudge(r) });
+route('GET', '/api/reliability', async ({ user }) => ({ rows: (await db.prepare("SELECT * FROM reliability_tests ORDER BY CASE WHEN status IN ('done','void') THEN 1 ELSE 0 END, id DESC LIMIT 1000").all()).map(relRow), can_manage: isQuality(user), today: today() }));
+route('POST', '/api/reliability', async ({ user, body }) => {
+  requireRole(user, 'quality', '품질'); const key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM reliability_tests WHERE request_id=?').get(key); if (old) return relRow(old); }
+  const f = relBody(body); if (f.method_id) await mustGet('test_methods', f.method_id);
+  const prefix = 'REL-' + today().slice(2).replace(/-/g, '') + '-';
+  const r = await db.prepare(`INSERT INTO reliability_tests(test_no,${REL_COLS.join(',')},history,request_id,created_by) VALUES(${nextDocNo('reliability_tests', 'test_no')},${REL_COLS.map(() => '?').join(',')},?,?,?)`)
+    .run(prefix, prefix, prefix, ...REL_COLS.map(k => f[k]), JSON.stringify([{ at: now(), by: user.name, what: '계획 등록' }]), key, user.name);
+  return relRow(await mustGet('reliability_tests', r.lastInsertRowid));
+});
+route('PUT', '/api/reliability/:id', async ({ user, params, body }) => {
+  requireRole(user, 'quality', '품질'); const prior = await mustGet('reliability_tests', params.id);
+  if (Number(body.revision) !== prior.revision) throw conflict();
+  if (['done', 'void'].includes(prior.status) && !(body.status && body.status !== prior.status && hasRole(user, 'quality_approver'))) throw bad(`${REL_STATUS[prior.status]}된 시험입니다. 다시 열려면 품질책임자가 상태를 바꾸세요.`);
+  const f = relBody(body, prior), to = body.status && REL_STATUS[body.status] ? body.status : prior.status, reason = str(body.reason, 300);
+  if (f.method_id && f.method_id !== prior.method_id) await mustGet('test_methods', f.method_id);
+  let judge = prior.judge;
+  if (to !== prior.status) {
+    if (to === 'void') { if (!reason) throw bad('취소 사유를 적으세요.'); }
+    else if (to === 'testing') { if (!f.start_date) f.start_date = today(); if (!JSON.parse(f.spec_json).length) throw bad('평가 항목·기준을 하나 이상 넣어야 시험을 시작합니다.'); }
+    else if (to === 'done') { judge = relJudge(f); if (!judge) throw bad('측정값을 넣어야 완료합니다.'); if (!f.end_date) f.end_date = today(); }
+    else if (to === 'planned' || to === 'testing') judge = '';
+  }
+  if (to === 'testing' && prior.status === 'done') judge = '';
+  const changed = REL_COLS.filter(k => (prior[k] ?? null) !== (f[k] ?? null));
+  if (!changed.length && to === prior.status) return relRow(prior);
+  const r = await db.prepare(`UPDATE reliability_tests SET ${REL_COLS.map(k => k + '=?').join(',')},status=?,judge=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`)
+    .run(...REL_COLS.map(k => f[k]), to, judge, pushHist(prior, { by: user.name, what: to !== prior.status ? '단계' : '수정', ...(to !== prior.status ? { status: [prior.status, to] } : {}), fields: changed, ...(judge !== prior.judge && judge ? { reason: `판정 ${judge}` } : {}), ...(reason ? { reason } : {}) }), user.name, prior.id, prior.revision);
+  if (!r.changes) throw conflict();
+  return relRow(await mustGet('reliability_tests', prior.id));
 });
 route('GET', '/api/rnd-specs', async ({ user }) => { const { raw, ...lib } = await rndSpecLibrary(); return { ...lib, can_manage: isResearcher(user) }; });
 route('PUT', '/api/rnd-specs', async ({ user, body }) => {

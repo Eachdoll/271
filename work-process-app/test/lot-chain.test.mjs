@@ -897,3 +897,45 @@ test('15.306 QA system: controlled documents (draft, review, approve, revise, ob
   // 지운 판이 없는 초안만 삭제
   const dd = await admin('POST', '/api/qdocs', { kind: 'form', title: '점검표', request_id: rid() }); assert.equal((await admin('DELETE', `/api/qdocs/${dd.body.id}?revision=${dd.body.revision}`)).body.ok, true);
 });
+
+test('15.307 equipment register with PM schedule and logs (production), process points and measures with SPC/Cp/Cpk, process abnormal NC by production, test methods and reliability tests', async () => {
+  // 설비·PM: 생산도 등록, PM 수행 → 다음 예정일 넘김, 점검 이상 → 「이상」
+  const e = await prod('POST', '/api/equipment', { name: '세탁기 1호기', unit_name: '세탁 1호기', location: '2동', pm_items: [{ name: '필터 교체', cycle: 1, unit: 'month', checks: ['필터 상태', '차압'], last_done: '2026-01-15' }], request_id: rid() });
+  assert.equal(e.status, 200, JSON.stringify(e.body)); assert.equal(e.body.equip_no, 'EQ-01'); assert.equal(e.body.pm_items[0].next_due, '2026-02-15'); assert.equal(e.body.next_pm, '2026-02-15');
+  const pmKey = e.body.pm_items[0].key;
+  assert.match((await prod('POST', `/api/equipment/${e.body.id}/logs`, { kind: 'pm', pm_key: pmKey, checks: [{ item: '필터 상태', ok: true }], revision: e.body.revision })).body.error, /점검표/);
+  const l1 = await prod('POST', `/api/equipment/${e.body.id}/logs`, { kind: 'pm', pm_key: pmKey, log_date: '2026-03-01', checks: [{ item: '필터 상태', ok: true }, { item: '차압', ok: false, note: '높음' }], revision: e.body.revision, request_id: rid() });
+  assert.equal(l1.status, 200, JSON.stringify(l1.body)); assert.equal(l1.body.log_result, '이상'); assert.equal(l1.body.pm_items[0].last_done, '2026-03-01'); assert.equal(l1.body.pm_items[0].next_due, '2026-04-01');
+  assert.equal((await prod('POST', `/api/equipment/${e.body.id}/logs`, { kind: 'failure', description: 'x', revision: e.body.revision })).status, 409);
+  const l2 = await prod('POST', `/api/equipment/${e.body.id}/logs`, { kind: 'failure', log_date: today, description: '모터 과열 정지', action: '베어링 교체', downtime_hours: 3, status_after: 'maintenance', revision: l1.body.revision, request_id: rid() });
+  assert.equal(l2.body.status, 'maintenance');
+  const eq = (await admin('GET', '/api/equipment')).body.rows.find(x => x.id === e.body.id); assert.equal(eq.fails_year, today.startsWith('2026') ? 1 : 0); assert.equal(eq.log_count, 2);
+  assert.equal((await admin('GET', `/api/equipment/${e.body.id}/logs`)).body.rows.length, 2);
+  assert.match((await admin('DELETE', `/api/equipment/${e.body.id}?revision=${l2.body.revision}`)).body.error, /폐기/);
+  // 공정 관리항목(품질) · 측정값(생산) · 이탈 표시 · SPC
+  assert.equal((await prod('POST', '/api/pqc/points', { place: '세탁', item: '수온', lsl: 60, usl: 80 })).status, 403);
+  const pt = await admin('POST', '/api/pqc/points', { place: '세탁', item: '수온', unit: '℃', lsl: 60, usl: 80, cycle: '2시간' }); assert.equal(pt.status, 200, JSON.stringify(pt.body));
+  assert.match((await admin('POST', '/api/pqc/points', { place: '세탁', item: '수온', lsl: 1 })).body.error, /이미/);
+  const vals = [70, 71, 69, 72, 70, 68, 71, 70, 69, 85];
+  const ms = await prod('POST', '/api/pqc/measures', { rows: vals.map((v, i) => ({ point_id: pt.body.id, measured_on: `2026-03-0${1 + Math.floor(i / 2)}`, value: v, lot: 'L' + i })), request_id: rid() });
+  assert.equal(ms.status, 200, JSON.stringify(ms.body)); assert.deepEqual([ms.body.saved, ms.body.out_of_spec], [10, 1]);
+  const spc = (await admin('GET', `/api/pqc/spc?point_id=${pt.body.id}`)).body;
+  assert.equal(spc.chart.type, 'xbar-r'); assert.equal(spc.chart.size, 2); assert.equal(spc.chart.points.length, 5); assert.equal(spc.n, 10); assert.equal(spc.enough, false); assert.equal(spc.out_of_spec, 1); assert.ok(spc.cpk < spc.cp);
+  const imr = (await admin('GET', `/api/pqc/spc?point_id=${pt.body.id}&group=none`)).body; assert.equal(imr.chart.type, 'i-mr'); assert.equal(imr.chart.points.length, 10);
+  assert.equal((await admin('GET', '/api/pqc/measures?out=1')).body.rows.length, 1);
+  const nc = await prod('POST', '/api/ncs', { source_type: 'process', source_no: '세탁 · 수온', title: '수온 85℃ 이탈', lot: 'L9', kind: '공정 이상', request_id: rid() }); assert.equal(nc.status, 200, JSON.stringify(nc.body)); assert.equal(nc.body.source_type, 'process');
+  assert.equal((await prod('POST', '/api/ncs', { source_type: 'iqc', title: 'x' })).status, 403);
+  // 시험법(계측기 연결·개정) · 신뢰성
+  const inst = (await admin('POST', '/api/instruments', { mgmt_no: 'PC-307', name: '파티클 카운터', status: 'in_use', cal_type: 'external', cycle_months: 12, request_id: rid() })).body;
+  const tm = await admin('POST', '/api/test-methods', { name: '액중 파티클 시험', standard: 'IEST-RP-CC004', instrument_ids: [inst.id], request_id: rid() });
+  assert.equal(tm.status, 200, JSON.stringify(tm.body)); assert.equal(tm.body.method_no, 'TM-01'); assert.equal(tm.body.instruments[0].mgmt_no, 'PC-307');
+  assert.match((await admin('PUT', `/api/test-methods/${tm.body.id}`, { revise: true, revision: tm.body.revision })).body.error, /개정 내용/);
+  const tm2 = await admin('PUT', `/api/test-methods/${tm.body.id}`, { revise: true, summary: '세척 조건 추가', conditions: '초순수 1L', revision: tm.body.revision }); assert.equal(tm2.body.rev, 1);
+  const rel = await admin('POST', '/api/reliability', { title: '내열 500h', item: 'CF707', method_id: tm.body.id, request_id: rid() }); assert.match(rel.body.test_no, new RegExp(`^REL-${ymd}-01$`));
+  assert.match((await admin('PUT', `/api/reliability/${rel.body.id}`, { status: 'testing', revision: rel.body.revision })).body.error, /평가 항목/);
+  const r1 = await admin('PUT', `/api/reliability/${rel.body.id}`, { status: 'testing', spec_json: [{ name: '인장강도', unit: 'N', min: 10 }], revision: rel.body.revision }); assert.equal(r1.body.status, 'testing'); assert.equal(r1.body.start_date, today);
+  assert.match((await admin('PUT', `/api/reliability/${rel.body.id}`, { status: 'done', revision: r1.body.revision })).body.error, /측정값/);
+  const r2 = await admin('PUT', `/api/reliability/${rel.body.id}`, { status: 'done', points_json: [{ label: '초기', values: [15] }, { label: '500h', values: [9] }], revision: r1.body.revision });
+  assert.equal(r2.status, 200, JSON.stringify(r2.body)); assert.equal(r2.body.judge, '부적합'); assert.equal(r2.body.status, 'done');
+  assert.equal((await admin('PUT', `/api/reliability/${rel.body.id}`, { note: 'x', revision: r2.body.revision })).status, 400, 'done is locked');
+});
