@@ -3894,3 +3894,15 @@ table.grid thead th input[type=checkbox] { margin: 0; width: 16px; height: 16px;
 table.grid thead th:has(> input[type=checkbox]), table.grid thead th:has(> label > input[type=checkbox]) { padding-top: 4px !important; padding-bottom: 4px !important; line-height: 1; }
 .btn.small, table .btn, .m-grid .btn { white-space: nowrap; }
 @media (max-width: 860px) { #main table td .btn.small, #main table td button.small { white-space: nowrap !important; min-width: max-content; flex: 0 0 auto; } }
+
+/* 15.302 지식재산권 관리 */
+.ip-tiles { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }
+.ip-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 120px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); cursor: pointer; text-align: left; }
+.ip-tile span { font-size: 12.5px; color: var(--muted); } .ip-tile b { font-size: 20px; }
+.ip-tile.green b { color: #2f9e44; } .ip-tile.yellow { border-color: #f59f00; background: color-mix(in srgb, #f59f00 8%, var(--panel)); } .ip-tile.yellow b { color: #e67700; }
+.ip-tile.red { border-color: #e03131; background: color-mix(in srgb, #e03131 8%, var(--panel)); } .ip-tile.red b { color: #c92a2a; }
+.ip-dd { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 10px; font-size: 12px; font-weight: 700; background: var(--bg); color: var(--muted); }
+.ip-dd.soon { background: #fff3bf; color: #e67700; } .ip-dd.over { background: #ffe3e3; color: #c92a2a; }
+table.ip-table tr.ip-soon > td { background-color: color-mix(in srgb, #f59f00 7%, var(--panel)); }
+table.ip-table tr.ip-over > td { background-color: color-mix(in srgb, #e03131 7%, var(--panel)); }
+.ip-calc { display: flex; align-items: flex-end; }

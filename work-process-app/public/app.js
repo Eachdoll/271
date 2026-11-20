@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.301';
+const APP_VERSION = '15.302';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -385,7 +385,7 @@ const NAV = [
     ['#/quality/list', '분석 관리'],
     ['#/quality/voc/list', 'VOC 관리'],
   ] },
-  { group: '연구소', items: [['#/dev/list', '개발 관리'], ['#/dev/schedule', '스케줄 관리'], ['#/dev/analysis', '연구 분석 관리'], ['#/dev/specs', '검사규격 항목설정']] }, // 15.276 · 15.285 · 15.295 메뉴 이름 개발 → 연구소, 연구소 검사규격
+  { group: '연구소', items: [['#/dev/list', '개발 관리'], ['#/dev/schedule', '스케줄 관리'], ['#/dev/analysis', '연구 분석 관리'], ['#/dev/specs', '검사규격 항목설정'], ['#/dev/ip', '지식재산권 관리']] }, // 15.302 지식재산권 // 15.276 · 15.285 · 15.295 메뉴 이름 개발 → 연구소, 연구소 검사규격
   { group: '생산', items: [
     { sub: '샘플(제품)', items: [['#/prod/list', '제품 샘플리스트']] },
     ['#/prod/orders', '생산의뢰 접수'],
@@ -591,6 +591,7 @@ const PAGES = {
   '#/dev/analysis': () => pageWorkList('rnd_analysis'), // 15.285 연구팀 분석 관리
   '#/dev/analysis/request': main => pageRndData(main), // 15.288 분석데이터 입력(연구원)
   '#/dev/specs': main => pageRndSpecs(main), // 15.295 연구소 검사규격 항목설정
+  '#/dev/ip': main => pageIpRights(main), // 15.302 지식재산권 관리
   '#/dev/schedule': main => pageDevRoadmap(main), // 15.276 개발 스케줄 관리(로드맵)
   '#/prod/request': () => { location.replace('#/sales/sample/product'); }, // 15.183 영업으로 옮김(예전 즐겨찾기)
   '#/sales/sample/product': () => pageIntake('sample'), // 15.183 제품 샘플의뢰(영업)

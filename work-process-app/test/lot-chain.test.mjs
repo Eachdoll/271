@@ -713,3 +713,24 @@ test('15.299 production request linked to a sales order is marked shipped automa
   assert.equal(after.shipped, true); assert.equal(after.shipped_date, today); assert.match(after.shipped_by, /수주 출하 완료 자동/);
   assert.equal((await admin('GET', `/api/production-requests/${other.id}`)).body.shipped, false, 'unlinked request untouched');
 });
+
+test('15.302 intellectual property rights: researchers register, edit and renew; dates and duplicates checked; others read only', async () => {
+  const base = { kind: '특허', country: 'KR', title: '흡수성 부직포 와이퍼', app_no: '10-2020-0001', app_date: '2020-03-02', reg_date: '2022-05-10', reg_no: '10-2400001', expire_date: '2040-03-02', next_due: '2026-05-10', due_kind: '연차료 납부', status: 'registered', holder: '서울세미텍' };
+  assert.equal((await admin('POST', '/api/ip-rights', { ...base, kind: '없는것' })).status, 400);
+  assert.equal((await admin('POST', '/api/ip-rights', { ...base, reg_date: '2019-01-01' })).status, 400, 'reg before application');
+  assert.equal((await admin('POST', '/api/ip-rights', { ...base, reg_no: '' })).status, 400, 'registered needs a number');
+  assert.equal((await prod('POST', '/api/ip-rights', base)).status, 403);
+  const r = await admin('POST', '/api/ip-rights', { ...base, request_id: rid() }); assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.status_label, '등록완료'); assert.equal(r.body.history.length, 1);
+  assert.equal((await admin('POST', '/api/ip-rights', { ...base, request_id: rid() })).status, 400, 'duplicate registration number');
+  const list = await prod('GET', '/api/ip-rights'); assert.equal(list.status, 200); assert.equal(list.body.can_manage, false); assert.ok(list.body.rows.some(x => x.id === r.body.id));
+  assert.equal((await admin('POST', `/api/ip-rights/${r.body.id}/renew`, { revision: r.body.revision, next_due: '2026-05-01' })).status, 400, 'next due must move forward');
+  const n = await admin('POST', `/api/ip-rights/${r.body.id}/renew`, { revision: r.body.revision, next_due: '2027-05-10', note: '5년차' }); assert.equal(n.status, 200, JSON.stringify(n.body));
+  assert.equal(n.body.next_due, '2027-05-10'); assert.equal(n.body.history.at(-1).what, '갱신'); assert.equal(n.body.history.at(-1).due, '2026-05-10');
+  assert.equal((await admin('PUT', `/api/ip-rights/${r.body.id}`, { ...base, status: 'expired', revision: r.body.revision })).status, 409, 'stale revision');
+  const e = await admin('PUT', `/api/ip-rights/${r.body.id}`, { ...base, next_due: '2027-05-10', status: 'expired', revision: n.body.revision }); assert.equal(e.status, 200, JSON.stringify(e.body));
+  assert.deepEqual(e.body.history.at(-1).status, ['registered', 'expired']);
+  const tm = (await admin('POST', '/api/ip-rights', { kind: '상표', title: 'SST', status: 'filed', app_date: '2025-01-01' })).body; assert.equal(tm.reg_no, '');
+  assert.equal((await admin('POST', `/api/ip-rights/${tm.id}/renew`, { revision: tm.revision, next_due: '2030-01-01' })).status, 400, 'only registered rights renew');
+  assert.equal((await admin('DELETE', `/api/ip-rights/${tm.id}?revision=${tm.revision}`)).status, 200);
+});

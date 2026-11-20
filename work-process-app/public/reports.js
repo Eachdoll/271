@@ -711,3 +711,125 @@ async function pageRndSpecs(main) {
   form.addEventListener('input', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }
+
+// 15.302 연구소 › 지식재산권 관리: 보유 권리(특허·실용신안·디자인·상표·저작권 등)와 갱신 기한(연차료 납부·존속기간 갱신) 관리
+const IP_KIND_INFO = { // 국내 기준 참고값(정확한 기한은 특허청·대리인 확인). term: 존속기간, from: 기산일, due: 갱신 방식
+  '특허': { term: 20, from: 'app', due: 'annual', hint: '출원일부터 20년 · 등록 뒤 매년 연차료' },
+  '실용신안': { term: 10, from: 'app', due: 'annual', hint: '출원일부터 10년 · 등록 뒤 매년 연차료' },
+  '디자인': { term: 20, from: 'app', due: 'annual', hint: '출원일부터 20년 · 등록 뒤 매년 연차료' },
+  '상표': { term: 10, from: 'reg', due: 'renew', hint: '등록일부터 10년 · 10년마다 존속기간 갱신(만료 1년 전부터 신청)' },
+  '저작권': { term: 0, hint: '등록 없이 생기며 보통 저작자 사후 70년(업무상 저작물은 공표 후 70년) · 갱신 없음' },
+  '반도체 배치설계': { term: 10, from: 'reg', due: 'none', hint: '설정등록일부터 10년' },
+  '영업비밀': { term: 0, hint: '등록 제도 없음 · 비밀 관리 현황 점검용' },
+  '기타': { term: 0, hint: '' },
+};
+const IP_STATUS_CHIP = { prep: '', filed: 'yellow', exam: 'yellow', registered: 'green', rejected: 'red', abandoned: '', expired: '' };
+const ipAddYears = (d, n) => { if (!d) return ''; const [y, m, dd] = d.split('-').map(Number); const t = new Date(Date.UTC(y + n, m - 1, dd)); if (t.getUTCMonth() !== m - 1) t.setUTCDate(0); return t.toISOString().slice(0, 10); };
+const ipDday = (d, today) => d ? Math.round((Date.parse(d) - Date.parse(today)) / 86400000) : null;
+// 다음 기한 제안: 연차료는 등록일 기준 해마다 같은 날(오늘 이후 첫 날), 상표·배치설계는 만료일
+function ipSuggest(kind, appDate, regDate, today) {
+  const k = IP_KIND_INFO[kind] || {}; const base = k.from === 'app' ? appDate : regDate;
+  const expire = k.term && base ? ipAddYears(base, k.term) : '';
+  let next = '', dueKind = '';
+  if (k.due === 'annual' && regDate) { let n = 1; let d = ipAddYears(regDate, n); while (d && d < today && n < 30) d = ipAddYears(regDate, ++n); next = expire && d > expire ? '' : d; dueKind = '연차료 납부'; }
+  else if (k.due === 'renew' && expire) { next = expire; dueKind = '존속기간 갱신'; }
+  else if (k.due === 'none' && expire) { next = ''; dueKind = ''; }
+  return { expire, next, dueKind };
+}
+async function pageIpRights(main) {
+  main.innerHTML = `<h1>지식재산권 관리 <span class="dept">연구소</span></h1>
+  <p class="muted">회사가 가진 특허·실용신안·디자인·상표 등을 한곳에 모아 <b>언제까지 유효한지, 다음에 무엇을 언제 해야 하는지</b>(연차료 납부·존속기간 갱신) 관리합니다. 기한이 지나면 빨강, 90일 안이면 노랑으로 보입니다. 기간 자동 계산은 국내 기준 참고값이니 정확한 날짜는 특허청·대리인 안내로 확인해 고치세요.</p>
+  <div class="ip-tiles" id="ipTiles"></div>
+  <form class="toolbar list-filters" data-read-only id="ipFilters">
+    <label class="lf-sel">구분<select name="kind"><option value="">전체</option>${Object.keys(IP_KIND_INFO).map(k => `<option>${k}</option>`).join('')}</select></label>
+    <label class="lf-sel">상태<select name="status"><option value="">전체</option><option value="live">살아 있는 권리(소멸·거절·포기 빼고)</option>${Object.entries({ prep: '출원 준비', filed: '출원중', exam: '심사중', registered: '등록완료', rejected: '거절(불허)', abandoned: '포기·취하', expired: '소멸(만료)' }).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>
+    <label class="lf-sel">기한<select name="due"><option value="">전체</option><option value="soon">90일 안 · 지남</option><option value="over">기한 지남</option></select></label>
+    <label class="list-search">찾기<input type="search" name="q" placeholder="등록·출원번호·명칭·권리자·제품·담당자"></label>
+    <span class="grow"></span><span id="ipTools"></span>
+  </form>
+  <div id="ipList"></div>`;
+  const form = $('#ipFilters', main); let data = { rows: [], can_manage: false, today: todayStr() };
+  const load = async () => { data = await api('GET', '/api/ip-rights'); if (main.isConnected) draw(); };
+  const dueCls = r => { const d = ipDday(r.next_due, data.today); return d === null || !['registered', 'filed', 'exam'].includes(r.status) ? '' : d < 0 ? 'over' : d <= 90 ? 'soon' : ''; };
+  const live = r => !['rejected', 'abandoned', 'expired'].includes(r.status);
+  const filtered = () => { const v = formObj(form), q = (v.q || '').trim().toLowerCase();
+    return data.rows.filter(r => (!v.kind || r.kind === v.kind) && (!v.status || (v.status === 'live' ? live(r) : r.status === v.status)) && (!v.due || (v.due === 'over' ? dueCls(r) === 'over' : !!dueCls(r)))
+      && (!q || [r.reg_no, r.app_no, r.title, r.holder, r.product, r.owner_name, r.agent, r.note].join(' ').toLowerCase().includes(q))); };
+  const draw = () => {
+    const rows = data.rows, over = rows.filter(r => dueCls(r) === 'over').length, soon = rows.filter(r => dueCls(r) === 'soon').length;
+    $('#ipTiles', main).innerHTML = [['전체', rows.length, ''], ['등록완료', rows.filter(r => r.status === 'registered').length, 'green'], ['출원·심사중', rows.filter(r => ['prep', 'filed', 'exam'].includes(r.status)).length, ''], ['90일 안 기한', soon, soon ? 'yellow' : ''], ['기한 지남', over, over ? 'red' : '']]
+      .map(([l, n, c], i) => `<button type="button" class="ip-tile ${c}" data-ip-tile="${i}"><span>${l}</span><b>${n}</b></button>`).join('');
+    $('#ipTools', main).innerHTML = `<button type="button" class="btn" id="ipXlsx">엑셀</button>${data.can_manage ? ' <button type="button" class="btn primary" id="ipNew">＋ 지식재산권 등록</button>' : ''}`;
+    const list = filtered();
+    $('#ipList', main).innerHTML = list.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>구분</th><th>등록번호 · 출원번호</th><th>지식재산권명</th><th>권리자</th><th>출원일</th><th>등록일</th><th>유효기간</th><th>다음 기한</th><th>상태</th><th>담당자</th><th></th></tr></thead><tbody>${list.map(r => { const d = ipDday(r.next_due, data.today), cls = dueCls(r);
+      return `<tr data-ip-row="${r.id}" class="${cls ? 'ip-' + cls : ''}${live(r) ? '' : ' row-off'}"><td class="nowrap"><b>${esc(r.kind)}</b>${r.country && r.country !== 'KR' ? ` <span class="chip">${esc(r.country)}</span>` : ''}</td>
+        <td class="nowrap">${r.reg_no ? `<b>${esc(r.reg_no)}</b>` : '<span class="muted">미등록</span>'}${r.app_no ? `<div class="small muted">출원 ${esc(r.app_no)}</div>` : ''}</td>
+        <td data-card-primary><b>${esc(r.title)}</b>${r.product ? `<div class="small muted">${esc(r.product)}</div>` : ''}</td><td>${esc(r.holder)}</td>
+        <td class="nowrap">${esc(r.app_date || '')}</td><td class="nowrap">${esc(r.reg_date || '')}</td><td class="nowrap">${r.expire_date ? `~ ${esc(r.expire_date)}` : '<span class="muted">—</span>'}</td>
+        <td class="nowrap">${r.next_due ? `${esc(r.next_due)} <span class="ip-dd ${cls}">${d < 0 ? `D+${-d}` : d === 0 ? 'D-DAY' : `D-${d}`}</span>${r.due_kind ? `<div class="small muted">${esc(r.due_kind)}</div>` : ''}` : '<span class="muted">—</span>'}</td>
+        <td><span class="chip ${IP_STATUS_CHIP[r.status] || ''}">${esc(r.status_label)}</span></td><td>${esc(r.owner_name)}</td>
+        <td class="nowrap">${data.can_manage ? `<button type="button" class="btn small" data-ip-edit="${r.id}">수정</button>${r.status === 'registered' && r.next_due ? ` <button type="button" class="btn small primary" data-ip-renew="${r.id}">갱신 처리</button>` : ''}` : ''} <button type="button" class="btn small" data-ip-hist="${r.id}">이력</button></td></tr>`; }).join('')}</tbody></table></div>`
+      : `<div class="empty">${data.rows.length ? '조건에 맞는 지식재산권이 없습니다.' : '아직 등록한 지식재산권이 없습니다. 「＋ 지식재산권 등록」으로 특허·디자인·상표 등을 넣어 두면 갱신 기한을 함께 관리합니다.'}</div>`;
+  };
+  const editor = async (r = null) => {
+    const v = r || { kind: '특허', country: 'KR', status: 'filed' }, statusOpts = Object.entries({ prep: '출원 준비', filed: '출원중', exam: '심사중', registered: '등록완료', rejected: '거절(불허)', abandoned: '포기·취하', expired: '소멸(만료)' });
+    const m = modal(`<h3>${r ? '지식재산권 수정' : '지식재산권 등록'}</h3><form class="stack" data-ip-form>
+      <fieldset class="vendor-sec"><legend>기본</legend><div class="form-grid">
+        <label>구분 *<select name="kind" required>${Object.keys(IP_KIND_INFO).map(k => `<option${v.kind === k ? ' selected' : ''}>${k}</option>`).join('')}</select></label>
+        <label>상태 *<select name="status" required>${statusOpts.map(([k, l]) => `<option value="${k}"${v.status === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label>국가 <span class="hint">(KR·US·CN·JP·EP·PCT 등)</span><input name="country" maxlength="30" value="${esc(v.country || 'KR')}" list="ipCountry"><datalist id="ipCountry">${['KR', 'US', 'CN', 'JP', 'EP', 'PCT', 'VN'].map(c => `<option value="${c}">`).join('')}</datalist></label>
+        <label class="span3">지식재산권명 *<input name="title" required maxlength="200" value="${esc(v.title || '')}" placeholder="예) 흡수성이 향상된 부직포 와이퍼 및 그 제조방법"></label>
+        <label>등록번호<input name="reg_no" maxlength="60" value="${esc(v.reg_no || '')}" placeholder="예) 10-2345678"></label>
+        <label>출원번호<input name="app_no" maxlength="60" value="${esc(v.app_no || '')}" placeholder="예) 10-2024-0012345"></label>
+        <label>권리자<input name="holder" maxlength="100" value="${esc(v.holder || '')}" placeholder="예) 서울세미텍(주)"></label>
+        <label>관련 제품<input name="product" maxlength="200" value="${esc(v.product || '')}"></label>
+        <label>담당자<input name="owner_name" maxlength="50" value="${esc(v.owner_name || '')}"></label>
+        <label>대리인(특허사무소)<input name="agent" maxlength="100" value="${esc(v.agent || '')}"></label>
+      </div></fieldset>
+      <fieldset class="vendor-sec"><legend>기간 · 갱신 <span class="hint" data-ip-hint></span></legend><div class="form-grid">
+        <label>출원일<input type="date" name="app_date" value="${esc(v.app_date || '')}"></label>
+        <label>등록일<input type="date" name="reg_date" value="${esc(v.reg_date || '')}"></label>
+        <label>유효기간(만료일)<input type="date" name="expire_date" value="${esc(v.expire_date || '')}"></label>
+        <label>다음 기한<input type="date" name="next_due" value="${esc(v.next_due || '')}"></label>
+        <label>기한 내용<input name="due_kind" maxlength="30" value="${esc(v.due_kind || '')}" list="ipDueKind" placeholder="연차료 납부 · 존속기간 갱신"><datalist id="ipDueKind"><option value="연차료 납부"><option value="존속기간 갱신"><option value="심사청구"><option value="의견서 제출"><option value="해외 출원(우선권)"></datalist></label>
+        <div class="ip-calc"><button type="button" class="btn small" data-ip-calc>기간 자동 계산</button></div>
+      </div></fieldset>
+      <label>메모<textarea name="note" rows="2" maxlength="1000">${esc(v.note || '')}</textarea></label>
+      <div class="actions">${r ? '<button type="button" class="btn danger" data-ip-del>삭제</button>' : ''}<span class="grow"></span><button type="button" class="btn" data-no>취소</button><button class="btn primary">저장</button></div></form>`, { wide: true });
+    const f = $('[data-ip-form]', m.el), el = n => f.elements[n];
+    const hint = () => { $('[data-ip-hint]', f).textContent = IP_KIND_INFO[el('kind').value]?.hint ? `(${IP_KIND_INFO[el('kind').value].hint} · 참고값)` : ''; };
+    const calc = (force) => { const s = ipSuggest(el('kind').value, el('app_date').value, el('reg_date').value, data.today);
+      if (s.expire && (force || !el('expire_date').value)) el('expire_date').value = s.expire; if (force || !el('next_due').value) el('next_due').value = s.next || el('next_due').value; if (s.dueKind && (force || !el('due_kind').value)) el('due_kind').value = s.dueKind; };
+    hint(); el('kind').onchange = () => { hint(); calc(false); }; el('app_date').onchange = () => calc(false); el('reg_date').onchange = () => calc(false);
+    $('[data-ip-calc]', f).onclick = () => { calc(true); toast('구분·출원일·등록일로 유효기간과 다음 기한을 채웠습니다(참고값).'); };
+    $('[data-no]', f).onclick = () => m.close();
+    $('[data-ip-del]', f)?.addEventListener('click', async () => { if (!await confirmBox(`「${r.title}」을(를) 목록에서 지울까요? 권리를 잃은 경우에는 지우지 말고 상태를 「소멸(만료)」·「포기·취하」로 바꾸면 이력이 남습니다.`)) return; try { await api('DELETE', `/api/ip-rights/${r.id}?revision=${r.revision}`); toast('지웠습니다.'); m.close(); await load(); } catch (e) { fail(e); } });
+    f.onsubmit = async e => { e.preventDefault(); const body = formObj(f), btn = $('button.primary', f); btn.disabled = true;
+      try { if (r) await api('PUT', `/api/ip-rights/${r.id}`, { ...body, revision: r.revision }); else await api('POST', '/api/ip-rights', { ...body, request_id: crypto.randomUUID() }); toast('저장했습니다.'); m.close(); await load(); }
+      catch (error) { fail(error); if (error.status === 409) load().catch(() => {}); } finally { btn.disabled = false; } };
+  };
+  const renew = async r => {
+    const k = IP_KIND_INFO[r.kind] || {}, nextSug = k.due === 'renew' ? ipAddYears(r.next_due, 10) : ipAddYears(r.next_due, 1), expSug = k.due === 'renew' ? ipAddYears(r.expire_date || r.next_due, 10) : r.expire_date || '';
+    const next = expSug && nextSug > expSug ? '' : nextSug;
+    const v = await promptBox(`갱신 처리 · ${r.title}`, `<p>${esc(r.kind)} ${esc(r.reg_no || '')} · 지금 기한 <b>${esc(r.next_due)}</b> ${esc(r.due_kind || '')}</p><p class="small muted">${k.due === 'renew' ? '상표 존속기간 갱신: 만료일과 다음 기한을 10년 뒤로 넘깁니다.' : '연차료 납부: 다음 기한을 1년 뒤로 넘깁니다(만료일을 넘으면 비움).'} 날짜는 고칠 수 있습니다.</p>
+      <div class="form-grid"><label>처리일 *<input type="date" name="done_date" required value="${todayStr()}"></label><label>다음 기한<input type="date" name="next_due" value="${esc(next)}"></label><label>유효기간(만료일)<input type="date" name="expire_date" value="${esc(expSug)}"></label>
+      <label class="span3">메모<input name="note" maxlength="300" placeholder="예) 4년차 연차료 납부 · 영수증 번호"></label></div>`, { wide: true });
+    if (!v) return; try { await api('POST', `/api/ip-rights/${r.id}/renew`, { ...v, revision: r.revision, due_kind: r.due_kind }); toast('갱신 처리했습니다.'); await load(); } catch (e) { fail(e); }
+  };
+  const history = r => modal(`<h3>이력 · ${esc(r.title)}</h3>${(r.history || []).length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>일시</th><th>담당</th><th>내용</th></tr></thead><tbody>${[...r.history].reverse().map(h => `<tr><td class="nowrap">${esc(String(h.at || '').slice(0, 16))}</td><td>${esc(h.by || '')}</td><td>${h.what === '갱신' ? `<b>갱신</b> ${esc(h.kind || '')} · 처리 ${esc(h.done || '')} · 기한 ${esc(h.due || '—')} → ${esc(h.next || '없음')}${h.expire ? ` · 만료 ${esc(h.expire[0] || '—')} → ${esc(h.expire[1] || '—')}` : ''}${h.note ? ` · ${esc(h.note)}` : ''}` : h.what === '수정' ? `수정 (${(h.fields || []).length}칸)${h.status ? ` · 상태 ${esc(IP_STATUS_LABEL[h.status[0]] || h.status[0])} → ${esc(IP_STATUS_LABEL[h.status[1]] || h.status[1])}` : ''}` : esc(h.what || '')}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">이력이 없습니다.</p>'}`, { wide: true });
+  main.addEventListener('click', e => {
+    const t = e.target.closest('[data-ip-tile]'); if (t) { const i = Number(t.dataset.ipTile); form.elements.status.value = i === 1 ? 'registered' : ''; form.elements.due.value = i === 3 ? 'soon' : i === 4 ? 'over' : ''; if (i === 2) form.elements.status.value = 'filed'; draw(); return; }
+    if (e.target.closest('#ipNew')) return editor().catch?.(fail);
+    if (e.target.closest('#ipXlsx')) { const list = filtered(); if (!list.length) return toast('내보낼 줄이 없습니다.', 'err');
+      return xlsxDownload(`지식재산권_${data.today}.xlsx`, { sheet: '지식재산권', titles: ['지식재산권 관리', data.today], columns: ['구분', '국가', '등록번호', '출원번호', '지식재산권명', '권리자', '관련 제품', '출원일', '등록일', '유효기간', '다음 기한', '기한 내용', '상태', '담당자', '대리인', '메모'].map(label => ({ label, type: 'text' })),
+        rows: list.map(r => [r.kind, r.country, r.reg_no, r.app_no, r.title, r.holder, r.product, r.app_date || '', r.reg_date || '', r.expire_date || '', r.next_due || '', r.due_kind, r.status_label, r.owner_name, r.agent, r.note]) }); }
+    const find = a => data.rows.find(x => x.id === Number(e.target.closest(`[${a}]`)?.getAttribute(a)));
+    if (e.target.closest('[data-ip-edit]')) return editor(find('data-ip-edit'));
+    if (e.target.closest('[data-ip-renew]')) return renew(find('data-ip-renew')).catch(fail);
+    if (e.target.closest('[data-ip-hist]')) return history(find('data-ip-hist'));
+  });
+  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-ip-row]'); if (tr && data.can_manage && !e.target.closest('button')) editor(data.rows.find(x => x.id === Number(tr.dataset.ipRow))); });
+  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  await load();
+}
+const IP_STATUS_LABEL = { prep: '출원 준비', filed: '출원중', exam: '심사중', registered: '등록완료', rejected: '거절(불허)', abandoned: '포기·취하', expired: '소멸(만료)' };

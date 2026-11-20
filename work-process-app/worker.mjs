@@ -506,7 +506,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -3749,6 +3749,61 @@ async function rndSpecWrite(prior, specs) {
   if (!changed.changes) throw new HttpError(409, '다른 사람이 검사규격을 바꿨습니다. 다시 열어 주세요.');
   return JSON.parse(value);
 }
+// 15.302 연구소 지식재산권 관리: 보유 권리와 갱신(연차료·존속기간 갱신) 기한. 보기는 연구소 메뉴를 볼 수 있는 사람, 등록·수정·갱신·삭제는 연구원·관리자.
+const IP_KINDS = ['특허', '실용신안', '디자인', '상표', '저작권', '반도체 배치설계', '영업비밀', '기타'];
+const IP_STATUS = { prep: '출원 준비', filed: '출원중', exam: '심사중', registered: '등록완료', rejected: '거절(불허)', abandoned: '포기·취하', expired: '소멸(만료)' };
+function ipBody(body) {
+  const o = body && typeof body === 'object' ? body : {};
+  if (!IP_KINDS.includes(o.kind)) throw bad('구분을 고르세요.');
+  if (!Object.keys(IP_STATUS).includes(o.status)) throw bad('상태를 고르세요.');
+  const d = (v, label) => v === '' || v == null ? null : dateStr(v, label);
+  const f = { kind: o.kind, country: str(o.country, 30) || 'KR', title: reqStr(o.title, '지식재산권명', 200), reg_no: str(o.reg_no, 60), app_no: str(o.app_no, 60),
+    app_date: d(o.app_date, '출원일'), reg_date: d(o.reg_date, '등록일'), expire_date: d(o.expire_date, '유효기간(만료일)'), next_due: d(o.next_due, '다음 기한'), due_kind: str(o.due_kind, 30),
+    status: o.status, holder: str(o.holder, 100), owner_name: str(o.owner_name, 50), product: str(o.product, 200), agent: str(o.agent, 100), note: str(o.note, 1000) };
+  if (f.app_date && f.reg_date && f.reg_date < f.app_date) throw bad('등록일이 출원일보다 빠릅니다.');
+  if (f.reg_date && f.expire_date && f.expire_date < f.reg_date) throw bad('유효기간(만료일)이 등록일보다 빠릅니다.');
+  if (f.status === 'registered' && !f.reg_no) throw bad('등록완료는 등록번호를 넣으세요.');
+  return f;
+}
+const ipRow = r => ({ ...r, history: JSON.parse(r.history || '[]'), status_label: IP_STATUS[r.status] || r.status });
+const requireIpManager = user => { if (!isResearcher(user)) throw new HttpError(403, '지식재산권은 연구원(개발·개발책임자)·관리자만 등록·수정합니다.'); };
+const IP_COLS = ['kind', 'country', 'title', 'reg_no', 'app_no', 'app_date', 'reg_date', 'expire_date', 'next_due', 'due_kind', 'status', 'holder', 'owner_name', 'product', 'agent', 'note'];
+route('GET', '/api/ip-rights', async ({ user }) => ({ rows: (await db.prepare('SELECT * FROM ip_rights ORDER BY CASE WHEN next_due IS NULL THEN 1 ELSE 0 END, next_due, id DESC LIMIT 2000').all()).map(ipRow), kinds: IP_KINDS, status: IP_STATUS, can_manage: isResearcher(user), today: today() }));
+route('POST', '/api/ip-rights', async ({ user, body }) => {
+  requireIpManager(user); const f = ipBody(body), key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM ip_rights WHERE request_id=?').get(key); if (old) return ipRow(old); }
+  if (f.reg_no && await db.prepare('SELECT 1 FROM ip_rights WHERE kind=? AND country=? AND reg_no=?').get(f.kind, f.country, f.reg_no)) throw bad(`이미 등록된 ${f.kind} 등록번호입니다: ${f.reg_no}`);
+  const r = await db.prepare(`INSERT INTO ip_rights(${IP_COLS.join(',')},history,request_id,created_by) VALUES(${IP_COLS.map(() => '?').join(',')},?,?,?)`).run(...IP_COLS.map(k => f[k]), JSON.stringify([{ at: now(), by: user.name, what: '등록' }]), key, user.name);
+  return ipRow(await mustGet('ip_rights', r.lastInsertRowid));
+});
+route('PUT', '/api/ip-rights/:id', async ({ user, params, body }) => {
+  requireIpManager(user); const prior = await mustGet('ip_rights', params.id), f = ipBody(body);
+  if (Number(body.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  if (f.reg_no && await db.prepare('SELECT 1 FROM ip_rights WHERE kind=? AND country=? AND reg_no=? AND id<>?').get(f.kind, f.country, f.reg_no, prior.id)) throw bad(`이미 등록된 ${f.kind} 등록번호입니다: ${f.reg_no}`);
+  const changed = IP_COLS.filter(k => (prior[k] ?? null) !== (f[k] ?? null)); if (!changed.length) return ipRow(prior);
+  const hist = [...JSON.parse(prior.history || '[]'), { at: now(), by: user.name, what: '수정', fields: changed, ...(prior.status !== f.status ? { status: [prior.status, f.status] } : {}) }].slice(-100);
+  const r = await db.prepare(`UPDATE ip_rights SET ${IP_COLS.map(k => k + '=?').join(',')},history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`).run(...IP_COLS.map(k => f[k]), JSON.stringify(hist), user.name, prior.id, prior.revision);
+  if (!r.changes) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  return ipRow(await mustGet('ip_rights', prior.id));
+});
+// 갱신 처리: 연차료 납부·존속기간 갱신을 마쳤을 때 다음 기한(·만료일)을 넘기고 이력에 남긴다.
+route('POST', '/api/ip-rights/:id/renew', async ({ user, params, body }) => {
+  requireIpManager(user); const prior = await mustGet('ip_rights', params.id);
+  if (Number(body.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  if (prior.status !== 'registered') throw bad('등록완료된 권리만 갱신 처리합니다.');
+  const done = dateStr(body.done_date || today(), '처리일'), next = body.next_due ? dateStr(body.next_due, '다음 기한') : null, exp = body.expire_date ? dateStr(body.expire_date, '유효기간(만료일)') : prior.expire_date;
+  if (next && prior.next_due && next <= prior.next_due) throw bad('다음 기한은 지금 기한보다 뒤여야 합니다.');
+  if (next && exp && next > exp) throw bad('다음 기한이 유효기간(만료일)보다 뒤입니다.');
+  const hist = [...JSON.parse(prior.history || '[]'), { at: now(), by: user.name, what: '갱신', done, due: prior.next_due, next, kind: str(body.due_kind, 30) || prior.due_kind, ...(exp !== prior.expire_date ? { expire: [prior.expire_date, exp] } : {}), note: str(body.note, 300) }].slice(-100);
+  const r = await db.prepare("UPDATE ip_rights SET next_due=?,expire_date=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?").run(next, exp, JSON.stringify(hist), user.name, prior.id, prior.revision);
+  if (!r.changes) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  return ipRow(await mustGet('ip_rights', prior.id));
+});
+route('DELETE', '/api/ip-rights/:id', async ({ user, params, query }) => {
+  requireIpManager(user); const prior = await mustGet('ip_rights', params.id);
+  if (Number(query.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  await db.prepare('DELETE FROM ip_rights WHERE id=? AND revision=?').run(prior.id, prior.revision); return { ok: true };
+});
 route('GET', '/api/rnd-specs', async ({ user }) => { const { raw, ...lib } = await rndSpecLibrary(); return { ...lib, can_manage: isResearcher(user) }; });
 route('PUT', '/api/rnd-specs', async ({ user, body }) => {
   if (!isResearcher(user)) throw new HttpError(403, '연구소 검사규격은 연구원(개발·개발책임자)만 설정합니다.');
