@@ -3742,3 +3742,9 @@ tr.book-memo > td { background: var(--bg); font-style: italic; }
 .rq-more[open] > summary { margin-bottom: 8px; }
 @media (max-width: 700px) { .rq-key { grid-template-columns: 1fr; } .rq-kv { grid-template-columns: 84px 1fr; } }
 @media print { .rq-more > summary { display: none; } }
+
+/* 15.283 반제품 없는 품목: 투입 자재 LOT 고르기 */
+.fm-grid .fm-h th { background: var(--ns-panel, #f1f3f5); text-align: left; }
+.fm-grid tr.fm-fail td { color: var(--muted); }
+.fm-grid input[type=number] { width: 110px; text-align: right; }
+[data-fa-mats].on { border-color: var(--accent); color: var(--accent); }

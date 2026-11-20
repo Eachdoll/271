@@ -532,3 +532,19 @@ test('15.279 non-woven (부직포) bags need no washing; a plan can be closed sh
   assert.ok(log.some(x => /\[완료 처리\] 계획 10 중 4 생산 \(부족 6\) · 원단 부족/.test(x)), JSON.stringify(log));
   assert.equal((await prod('PUT', `/api/schedules/${plan.id}`, { set_done: 0 })).body.done, 0);
 });
+
+test('15.283 product without a semi step (부직포와이퍼): work-in-progress without bags, then complete with chosen material LOTs', async () => {
+  const raw = (await admin('POST', '/api/boms', { product: '부직포롤', product_code: 'NWR2', item_category: '원자재', kind: 'finished', base_qty: 1, unit: 'kg', materials: [] })).body;
+  await admin('POST', '/api/receipts', { receipt_date: today, vendor: '공급', request_id: rid(), lines: [{ bom_id: raw.id, lot: 'NWR-A', qty: 30 }, { bom_id: raw.id, lot: 'NWR-B', qty: 30 }] });
+  const fin = (await admin('POST', '/api/boms', { product: '부직포와이퍼 완제품', product_code: 'NWW', item_category: '제품', kind: 'finished', base_qty: 1, unit: 'BOX', materials: [{ item: '부직포롤', item_category: '원자재', qty: 0.5, unit: 'kg' }] })).body;
+  const plan = (await admin('POST', '/api/schedules', { kind: 'finished', period: 'day', start_date: today, qty: 40, bom_id: fin.id })).body;
+  const wip = await prod('POST', `/api/schedules/${plan.id}/actuals`, { production_date: today, qty: '', work_status: 'progress', request_id: rid() });
+  assert.equal(wip.status, 200, JSON.stringify(wip.body)); assert.equal(wip.body.lot, `${ymd}_NWW_P1`);
+  const done = await prod('POST', `/api/actuals/${wip.body.id}/complete`, { qty: 20, inputs: [{ item: '부직포롤', lot: 'NWR-B', qty: 10 }] });
+  assert.equal(done.status, 200, JSON.stringify(done.body));
+  const bal = Object.fromEntries((await prod('GET', '/api/inventory/lots?q=' + encodeURIComponent('부직포롤'))).body.rows.map(r => [r.lot, r.balance]));
+  assert.equal(bal['NWR-B'], 20); assert.equal(bal['NWR-A'], 30, 'chosen LOT used, not FIFO');
+  // 반제품이 있는 품목은 여전히 봉투가 있어야 작업중
+  const semiFin = sqlite.prepare("SELECT id FROM schedules WHERE bom_snapshot LIKE '%반제품%' LIMIT 1").get();
+  if (semiFin) assert.equal((await prod('POST', `/api/schedules/${semiFin.id}/actuals`, { production_date: today, qty: '', work_status: 'progress', request_id: rid() })).status, 400);
+});

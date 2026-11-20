@@ -4531,7 +4531,7 @@ route('POST', '/api/schedules/:id/actuals', async ({ user, params, body }) => {
   const bags = await packBags(body.bags); // 15.249 이날 포장에 쓴 세탁 완료 봉투 LOT
   // 15.249 완제품 LOT: 직접 적지 않으면 포장일_품목코드_P순번(261121_NX808_P1).
   const snap = JSON.parse(schedule.bom_snapshot || '{}');
-  if (progress && !bags.length) throw bad('작업중으로 저장하려면 포장에 쓸 봉투 LOT을 고르세요.');
+  if (progress && !bags.length && (snap.materials || []).some(m => m.item_category === '반제품')) throw bad('작업중으로 저장하려면 포장에 쓸 봉투 LOT을 고르세요.'); // 15.283 반제품 없는 품목(부직포와이퍼 등)은 봉투 없이
   const lot = qty > 0 || progress ? (str(body.lot, 100) || await nextFinishedLot(date, lotCode(snap.product_code, schedule.product))) : '';
   const wo = `WOR_${date.replace(/-/g, '')}_`; // 15.230 작업지시번호 WOR_YYYYMMDD_001(실적 날짜 기준)
   const cmds = [{ sql: "INSERT INTO production_actuals(schedule_id,production_date,qty,note,author_id,author_name,request_id,lot,work_order,work_status) VALUES(?,?,?,?,?,?,?,?,(SELECT ? || printf('%03d', COALESCE(MAX(CAST(substr(work_order, 14) AS INTEGER)), 0) + 1) FROM production_actuals WHERE substr(work_order, 1, 13)=?),?)", args: [schedule.id, date, qty, note, user.id, user.name, key, lot, wo, wo, progress ? 'progress' : 'done'] },
