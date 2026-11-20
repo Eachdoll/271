@@ -3773,3 +3773,14 @@ tr.book-memo > td { background: var(--bg); font-style: italic; }
 .ad-imp { max-height: 340px; overflow: auto; }
 .ad-imp tr[data-imp-row] { cursor: pointer; }
 .rnd-data-form .actions { justify-content: flex-end; }
+
+/* 15.289 체크·라디오 이름표(label.inline)가 줄 끝까지 늘어나 빈 곳을 눌러도 체크되던 것: 글자 폭만큼만 */
+label.inline { width: fit-content; max-width: 100%; justify-self: start; }
+.stack > label.inline, .semi-use > label.inline { align-self: flex-start; }
+
+/* 15.289 분석의뢰 양식 좌우 배치: 한 칸(w1) 고르기 칸은 옆으로 나란히, 선택지는 칸 안에서 줄바꿈 */
+.pick-field.w1 { min-width: 0; }
+.pick-field.w1 .seg-line { flex-wrap: wrap; row-gap: 6px; }
+.pick-field.w1 .seg-pick { flex-wrap: wrap; }
+.pick-field.w1 .seg-line input[type=text] { min-width: 0; flex: 1 1 110px; }
+.pick-field.w1 legend .hint { display: block; font-size: 11.5px; }

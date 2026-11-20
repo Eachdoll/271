@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.288';
+const APP_VERSION = '15.289';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -2260,7 +2260,7 @@ function fieldInput(f, r = {}) {
   const v = f.core ? r[f.k] : (r.data || {})[f.k];
   const etc = (r.data || {})[f.k + '_etc'] || '';
   const label = `${esc(f.label)}${f.req ? ' *' : ''}${f.hint ? ` <span class="hint">(${esc(f.hint)})</span>` : ''}`;
-  const cls = f.full || f.t === 'textarea' || f.t === 'checks' || (f.t === 'radio' && f.opts.length > 3) ? 'span3' : f.t === 'radio' ? 'span2' : '';
+  const cls = f.w === 1 ? 'w1' : f.w === 2 ? 'span2' : f.full || f.t === 'textarea' || f.t === 'checks' || (f.t === 'radio' && f.opts.length > 3) ? 'span3' : f.t === 'radio' ? 'span2' : ''; // 15.289 w: 좌우 배치용 폭(1칸·2칸)
   if (f.t === 'textarea') return `<label class="${cls}">${label}<textarea name="${f.k}" rows="3" ${f.req ? 'required' : ''}>${esc(v)}</textarea></label>`;
   if (f.t === 'radio' || f.t === 'checks') {
     const type = f.t === 'radio' ? 'radio' : 'checkbox';
