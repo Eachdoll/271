@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.289';
+const APP_VERSION = '15.290';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -393,7 +393,7 @@ const NAV = [
     ['#/prod/lot-trace', 'LOT 연결 조회'], // 15.249 완제품 ↔ 봉투(반제품) ↔ 원자재 LOT
   ] },
   { group: '물류', items: [
-    ['#/logistics/receive', '입고 관리'],
+    { sub: '입고', items: [['#/logistics/receipt/new', '입고 입력'], ['#/logistics/receive', '입고목록'], ['#/logistics/receipts', '입고증 목록']] }, // 15.290 출하처럼 입고도 메뉴에서 나눠 고름(관리 탭 없앰)
     { sub: '출하', items: [['#/logistics/ship-orders', '출하지시'], ['#/logistics/ship', '출하 관리']] },
     ['#/logistics/stock', '재고 현황'],
     ['#/logistics/lots', 'LOT·QR 관리'], // 15.231 LOT 관리 · QR 일괄 발행 · 파렛트 묶음 · QR 스캔을 한 관리 화면(탭)으로
@@ -703,7 +703,6 @@ const MANAGE = {
   '#/purchase/book': { title: '매입 거래처별 장부', tabs: [['#/purchase/book', '전표별 장부'], ['#/purchase/ledger', '품목 줄별 원장']] },
   '#/admin/users': { title: '회원 관리', tabs: [['#/admin/users', '회원 정보'], ['#/admin/users/roles', '사용 권한'], ['#/admin/users/menus', '메뉴 보기']] },
   // 15.213 입력·목록 메뉴 통일
-  '#/logistics/receive': { title: '입고 관리', tabs: [['#/logistics/receipt/new', '입고 입력'], ['#/logistics/receive', '입고목록'], ['#/logistics/receipts', '입고증 목록']] },
   '#/logistics/ship': { title: '출하 관리', tabs: [['#/logistics/ship/new', '출하 입력'], ['#/logistics/ship', '출하 목록']] },
   '#/purchase/laundry': { title: '불량·폐기 관리', tabs: [['#/purchase/laundry/new', '불량·폐기 입력'], ['#/purchase/laundry', '불량·폐기 목록']] },
   '#/prod/semi': { title: '반제품 생산 관리', tabs: [['#/prod/semi/new', '생산계획 입력'], ['#/prod/semi', '생산일정']] },
@@ -714,7 +713,7 @@ const MANAGE = {
   '#/dev/list': { title: '개발 관리', tabs: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
   '#/dev/analysis': { title: '연구 분석 관리', tabs: [['#/dev/analysis/request', '분석데이터 입력'], ['#/dev/analysis', '분석리스트']] }, // 15.285 · 15.288
 };
-const ROUTE_ALIAS = { '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/calendar': '#/sales/bills', '#/logistics/qr': '#/logistics/lots', '#/logistics/pallets': '#/logistics/lots', '#/logistics/scan': '#/logistics/lots', '#/sales/reps': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users', '#/logistics/receipt/new': '#/logistics/receive', '#/logistics/receipt/other': '#/logistics/receive', '#/logistics/receipts': '#/logistics/receive', '#/logistics/ship/new': '#/logistics/ship', '#/purchase/laundry/new': '#/purchase/laundry', '#/prod/semi/new': '#/prod/semi', '#/prod/semi/cut/new': '#/prod/semi/cut', '#/prod/semi/wash/new': '#/prod/semi/wash', '#/quality/request': '#/quality/list', '#/quality/voc/request': '#/quality/voc/list', '#/dev/request': '#/dev/list', '#/dev/analysis/request': '#/dev/analysis' };
+const ROUTE_ALIAS = { '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/calendar': '#/sales/bills', '#/logistics/qr': '#/logistics/lots', '#/logistics/pallets': '#/logistics/lots', '#/logistics/scan': '#/logistics/lots', '#/sales/reps': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users', '#/logistics/receipt/other': '#/logistics/receipt/new', '#/logistics/ship/new': '#/logistics/ship', '#/purchase/laundry/new': '#/purchase/laundry', '#/prod/semi/new': '#/prod/semi', '#/prod/semi/cut/new': '#/prod/semi/cut', '#/prod/semi/wash/new': '#/prod/semi/wash', '#/quality/request': '#/quality/list', '#/quality/voc/request': '#/quality/voc/list', '#/dev/request': '#/dev/list', '#/dev/analysis/request': '#/dev/analysis' };
 const navRoute = r => ROUTE_ALIAS[String(r || '#/').split('?')[0]] || String(r || '#/').split('?')[0];
 const TAB_ON = { '#/logistics/receipt/other': '#/logistics/receipt/new' }; // 15.234 기타입고도 「입고 입력」 탭에 불
 function managedTabs(main, route) {
@@ -741,7 +740,8 @@ const FLOW_KEY = 'wpa:flow', FLOW_FOLD = 'wpa:flow-fold';
 const flowStore = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } return null; };
 function processGuide(main, route) {
   $('.proc-guide', main)?.remove();
-  const r0 = TAB_ON[route] || route, r = PROCESS_FLOWS.some(f => f.steps.some(([h]) => h === r0)) ? r0 : navRoute(r0), flows = PROCESS_FLOWS.filter(f => f.steps.some(([h]) => h === r) && (!f.on || f.on.includes(r))); if (!flows.length) return; // 15.287 on: 이 흐름을 보여 줄 화면(품질 화면에서만) 의뢰 화면(별칭)도 제 단계로
+  const FLOW_ALIAS = { '#/logistics/receipt/new': '#/logistics/receive', '#/logistics/receipts': '#/logistics/receive' }; // 15.290 입고 입력·입고증 목록도 「입고확인」 단계
+  const r0 = TAB_ON[route] || route, r = PROCESS_FLOWS.some(f => f.steps.some(([h]) => h === r0)) ? r0 : FLOW_ALIAS[navRoute(r0)] || navRoute(r0), flows = PROCESS_FLOWS.filter(f => f.steps.some(([h]) => h === r) && (!f.on || f.on.includes(r))); if (!flows.length) return; // 15.287 on: 이 흐름을 보여 줄 화면(품질 화면에서만) 의뢰 화면(별칭)도 제 단계로
   const anchor = $('.manage-tabs', main) || $('h1', main); if (!anchor || anchor.closest('.modal')) return;
   const box = document.createElement('nav'); box.className = 'proc-guide'; box.setAttribute('aria-label', '업무 흐름 안내');
   const draw = () => {
