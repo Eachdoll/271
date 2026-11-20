@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.280';
+const APP_VERSION = '15.281';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -893,6 +893,7 @@ async function render() {
   refreshNavBadges();
   const page = canSeeRoute(route) ? PAGES[location.hash || '#/'] || pageHome : pageNoMenu;
   try { await page($('#main')); if (page === pageHome || page === pageTasks) applyMenuAccess($('#main')); if (page !== pageNoMenu) favoriteTools($('#main'), route); applyView($('#main'), route); foldHelp($('#main')); erpEntryBar($('#main'), route); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  try { autoRememberLists($('#main')); } catch { /* 15.281 조회 조건 기억은 편의 기능 */ }
   try { managedTabs($('#main'), route.split('?')[0]); } catch { /* 15.213 */ }
   try { processGuide($('#main'), route.split('?')[0]); } catch { /* 15.280 업무 흐름 안내는 편의 기능 */ }
   try { pageTabs($('#main'), route); } catch { /* 탭은 편의 기능 */ }
