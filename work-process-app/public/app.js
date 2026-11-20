@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.272';
+const APP_VERSION = '15.277';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -384,7 +384,7 @@ const NAV = [
     ['#/quality/list', '분석 관리'],
     ['#/quality/voc/list', 'VOC 관리'],
   ] },
-  { group: '개발', items: [['#/dev/list', '개발 관리']] },
+  { group: '개발', items: [['#/dev/list', '개발 관리'], ['#/dev/schedule', '스케줄 관리']] }, // 15.276
   { group: '생산', items: [
     { sub: '샘플(제품)', items: [['#/prod/list', '제품 샘플리스트']] },
     ['#/prod/orders', '생산의뢰 접수'],
@@ -575,6 +575,7 @@ const PAGES = {
   '#/quality/voc/list': () => pageWorkList('voc'),
   '#/dev/request': () => pageIntake('development'),
   '#/dev/list': () => pageWorkList('development'),
+  '#/dev/schedule': main => pageDevRoadmap(main), // 15.276 개발 스케줄 관리(로드맵)
   '#/prod/request': () => { location.replace('#/sales/sample/product'); }, // 15.183 영업으로 옮김(예전 즐겨찾기)
   '#/sales/sample/product': () => pageIntake('sample'), // 15.183 제품 샘플의뢰(영업)
   '#/sales/sample/goods': () => pageIntake('sample_goods'), // 15.183 상품 샘플의뢰(영업)
@@ -2392,16 +2393,23 @@ async function pageWorkList(type) {
     $('#workCounts').innerHTML = ['waiting', 'progress', 'done'].map((s) => `${statusChip(s)} ${all.filter((r) => r.status === s).length}`).join(' &nbsp; ');
     const t = todayStr();
     $('#workList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid click wl-oneline" data-allow-reorder>
-      <thead><tr><th>접수번호</th>${type === 'analysis' ? '<th>검사구분</th>' : ''}<th>${cfg.titleLabel}</th>${type === 'development' ? '<th>타겟단가</th>' : ''}<th>고객사</th>${type === 'voc' ? '<th>수량</th><th>LOT</th>' : ''}<th>입력자(의뢰자)</th><th>완료희망일</th>${type === 'analysis' ? '<th>판정</th>' : ''}<th>상태</th></tr></thead>
+      <thead><tr><th>접수번호</th>${type === 'analysis' ? '<th>검사구분</th>' : ''}<th>${cfg.titleLabel}</th>${type === 'development' ? '<th>타겟단가</th>' : ''}<th>고객사</th>${type === 'voc' ? '<th>수량</th><th>LOT</th>' : ''}<th>입력자(의뢰자)</th>${type === 'development' ? '<th>개발 담당</th><th>영업 담당</th>' : ''}<th>완료희망일</th>${type === 'analysis' ? '<th>판정</th>' : ''}<th>상태</th></tr></thead>
       <tbody>${rows.map((r) => `<tr data-id="${r.id}" class="${type === 'analysis' && qcOf(r) === 'exempt' ? 'row-exempt' : type === 'analysis' && qcOf(r) === 'fail' ? 'row-red' : r.status === 'done' ? 'row-done' : ''}">
         <td class="nowrap">${esc(r.req_no)}</td>${type === 'analysis' ? `<td><span class="chip">${esc(r.category)}</span></td>` : ''}
         <td class="wl-title" title="${esc([r.title, r.source_type ? `${r.source_type === 'purchase_order' ? '발주입고' : '기타입고'} · ${r.data.item_category || '미분류'} · 입고 ${r.data.received_qty ?? ''}` : '', r.result_note || ''].filter(Boolean).join('\n'))}"><b>${esc(r.title)}</b>${lineInfo(r)}${r.source_type ? `<div class="small muted">${r.source_type === 'purchase_order' ? '발주입고' : '기타입고'} · ${esc(r.data.item_category || '미분류')} · 입고 ${fmtNum(r.data.received_qty)}${r.data.coa_requested ? ' · COA 요청' : ''}</div>` : ''}${r.result_note ? `<div class="small muted">${esc(r.result_note)}</div>` : ''}</td>${type === 'development' ? `<td>${esc(r.target_price)}</td>` : ''}
-        <td>${esc(r.customer)}</td>${type === 'voc' ? `<td>${fmtNum(r.data.qty)} ${esc(r.data.unit)}</td><td>${esc(r.data.lot || '미확인')}</td>` : ''}<td>${esc(r.requester_name)}</td>
+        <td>${esc(r.customer)}</td>${type === 'voc' ? `<td>${fmtNum(r.data.qty)} ${esc(r.data.unit)}</td><td>${esc(r.data.lot || '미확인')}</td>` : ''}<td>${esc(r.requester_name)}</td>${type === 'development' ? `<td>${esc(r.dev_owner_name || '')}</td><td>${esc(r.sales_owner_name || '')}</td>` : ''}
         <td class="${r.status !== 'done' && r.due_date && r.due_date < t ? 'overdue' : ''}">${esc(r.due_date || '')}</td>
         ${type === 'analysis' ? `<td class="nowrap">${qcOf(r) ? qualityInspectionBadge(qcOf(r)) : '<span class="small muted">규격 미지정</span>'}</td>` : ''}
-        <td>${mgr ? `<select class="st-select st-${r.status}" data-st="${r.id}" aria-label="상태">${['waiting', 'progress', 'done'].map((s) => `<option value="${s}" ${r.status === s ? 'selected' : ''}>${STATUS[s]}</option>`).join('')}</select>` : statusChip(r.status)} ${commentButton("request", r.id, r.title)}</td></tr>`).join('')}</tbody></table></div>`
+        <td>${mgr ? `<select class="st-select st-${r.status}" data-st="${r.id}" aria-label="상태">${['waiting', 'progress', 'done'].map((s) => `<option value="${s}" ${r.status === s ? 'selected' : ''}>${STATUS[s]}</option>`).join('')}</select>` : statusChip(r.status)} ${type === 'development' ? `<button type="button" class="btn small" data-dev-case="${r.id}" title="담당자·스케줄·소통">진행건${r.comment_count ? ` 💬 ${r.comment_count}` : ''}</button>` : commentButton("request", r.id, r.title)}</td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">해당하는 항목이 없습니다.</div>';
-    $$('#workList tr[data-id]').forEach((tr) => (tr.onclick = (e) => { if (e.target.closest('select')) return; requestDetail(type, rows.find((x) => x.id == tr.dataset.id), load); }));
+    // 15.277 개발: 더블클릭 → 진행건 창(담당자·스케줄·소통). 한 번 누르기는 잠깐 기다렸다 의뢰서.
+    let clickTimer = 0;
+    $$('#workList tr[data-id]').forEach((tr) => {
+      tr.onclick = (e) => { if (e.target.closest('select, button')) return; const open = () => requestDetail(type, rows.find((x) => x.id == tr.dataset.id), load);
+        if (type !== 'development') return open(); clearTimeout(clickTimer); if (e.detail > 1) return; clickTimer = setTimeout(open, 260); };
+      if (type === 'development') tr.ondblclick = (e) => { if (e.target.closest('select, button')) return; clearTimeout(clickTimer); devCaseWindow(Number(tr.dataset.id), load).catch(fail); };
+    });
+    $$('#workList [data-dev-case]').forEach((b) => (b.onclick = (e) => { e.stopPropagation(); devCaseWindow(Number(b.dataset.devCase), load).catch(fail); }));
     $$('#workList [data-st]').forEach((s) => (s.onchange = async () => { try { await api('POST', `/api/requests/${s.dataset.st}/status`, { status: s.value }); toast(`${STATUS[s.value]}(으)로 변경`); load(); } catch (e) { fail(e); load(); } }));
   };
   $$('#stSeg button').forEach((b) => (b.onclick = () => { status = b.dataset.s; $$('#stSeg button').forEach((x) => x.classList.toggle('on', x === b)); filterForm.requestSubmit(); }));

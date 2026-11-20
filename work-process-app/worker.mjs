@@ -549,14 +549,27 @@ async function catalogItem(user, { bom_id, item, unit, item_category }) {
 }
 route('GET', '/api/vendors', async ({ query }) => {
   const where = [], args = [];
-  applyListKeyword(where, args, query.q, ['name', 'code', 'contact_name', 'phone']);
+  applyListKeyword(where, args, query.q, ['name', 'code', 'contact_name', 'phone', 'biz_name', "(SELECT group_concat(c.name || ' ' || c.site || ' ' || c.phone || ' ' || c.mobile || ' ' || c.email, ' ') FROM vendor_contacts c WHERE c.vendor_id=vendors.id)"]); // 15.274 담당자 목록도 검색
   if (query.type) {
     if (query.type === 'none') where.push('is_purchase=0 AND is_sales=0');
     else if (VENDOR_TYPES[query.type]) where.push(query.only === '1' ? `${VENDOR_TYPES[query.type]}=1` : `(${VENDOR_TYPES[query.type]}=1 OR (is_purchase=0 AND is_sales=0))`);
     else throw bad('거래처 구분을 확인하세요.');
   }
-  return (await db.prepare(`SELECT * FROM vendors ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY name LIMIT 1000`).all(...args)).map(decodeVendor);
+  const rows = (await db.prepare(`SELECT * FROM vendors ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY name LIMIT 1000`).all(...args)).map(decodeVendor);
+  const contacts = new Map(); for (const c of await db.prepare('SELECT * FROM vendor_contacts ORDER BY vendor_id, sort, id').all()) { if (!contacts.has(c.vendor_id)) contacts.set(c.vendor_id, []); contacts.get(c.vendor_id).push(c); } // 15.274
+  return rows.map(v => ({ ...v, contacts: contacts.get(v.id) || [] }));
 });
+// 15.274 담당자 목록(최대 30명): 이름 필수, 사업장·부서/직위/전화/휴대폰/이메일/용도/메모. 보내면 통째로 바꿈.
+function vendorContacts(list) {
+  if (list === undefined) return undefined;
+  if (!Array.isArray(list) || list.length > 30) throw bad('담당자는 30명까지 넣을 수 있습니다.');
+  return list.map((c, i) => { const x = c && typeof c === 'object' ? c : {}, name = str(x.name, 50); if (!name) return null;
+    const email = str(x.email, 100); if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw bad(`담당자 ${i + 1}번(${name}) 이메일 형식을 확인하세요.`);
+    return { name, site: str(x.site, 50), title: str(x.title, 50), phone: str(x.phone, 30), mobile: str(x.mobile, 30), email, role: str(x.role, 50), note: str(x.note, 200), sort: i };
+  }).filter(Boolean);
+}
+const contactCmds = (vendorRef, list) => [{ sql: `DELETE FROM vendor_contacts WHERE vendor_id=${vendorRef.sql}`, args: vendorRef.args },
+  ...list.map(c => ({ sql: `INSERT INTO vendor_contacts(vendor_id,name,site,title,phone,mobile,email,role,note,sort) VALUES(${vendorRef.sql},?,?,?,?,?,?,?,?,?)`, args: [...vendorRef.args, c.name, c.site, c.title, c.phone, c.mobile, c.email, c.role, c.note, c.sort] }))];
 // 매입처 기본 운송비 조건(15.69): 최대 10줄. when: always(항상)·gte(발주 금액이 amount 이상)·lt(미만), fee: 운송비, per: order(1건당)·line(품목당), note: 착불 등.
 function freightTerms(list) {
   if (list === undefined) return undefined;
@@ -602,7 +615,7 @@ function vendorFlag(value) {
 }
 route('POST', '/api/vendors', async ({ user, body }) => {
   const [name, contact, phone] = vendorFields(body);
-  const extra = vendorExtra(body); // 15.267 저장 전에 형식 확인
+  const extra = vendorExtra(body), contacts = vendorContacts(body.contacts); // 15.267 저장 전에 형식 확인 · 15.274 담당자 목록
   const tax = vendorTaxValues(body); if (tax && TAX_VENDOR_FIELDS.some(k => k !== 'tax_reverse' && tax[k]) && !hasRole(user, 'sales') && !hasRole(user, 'purchase')) throw new HttpError(403, '사업자 정보는 영업·구매 담당자나 관리자가 넣습니다. 사업자 칸을 비우고 등록하세요.'); // 15.266
   if (await db.prepare('SELECT 1 FROM vendors WHERE name_key=?').get(nameKey(name))) throw new HttpError(409, '이미 등록된 거래처입니다. 목록에서 수정하세요.');
   const code = vendorCode(body.code);
@@ -611,6 +624,7 @@ route('POST', '/api/vendors', async ({ user, body }) => {
   try { r = await db.prepare(`INSERT INTO vendors(name,name_key,contact_name,phone,created_by,is_purchase,is_sales,freight_terms,sales_rep,code) VALUES(?,?,?,?,?,?,?,?,?,${code ? '?' : VENDOR_AUTO_CODE})`).run(name, nameKey(name), contact, phone, user.name, vendorFlag(body.is_purchase) || 0, vendorFlag(body.is_sales) || 0, JSON.stringify(freightTerms(body.freight_terms) || []), repName(body.sales_rep), ...(code ? [code] : [])); }
   catch (error) { if (/UNIQUE/i.test(String(error && error.message))) throw new HttpError(409, '그 사이 같은 이름이나 코드의 거래처가 등록되었습니다. 새로 불러오세요.'); throw error; }
   if (tax) await db.prepare(`UPDATE vendors SET ${TAX_VENDOR_FIELDS.map(k => `${k}=?`).join(',')} WHERE id=?`).run(...TAX_VENDOR_FIELDS.map(k => tax[k]), r.lastInsertRowid); // 15.266
+  if (contacts?.length) await db.batch(contactCmds({ sql: '?', args: [r.lastInsertRowid] }, contacts)); // 15.274
   { const x = extra, keys = Object.keys(x).filter(k => x[k]); if (keys.length) await db.prepare(`UPDATE vendors SET ${keys.map(k => `${k}=?`).join(',')} WHERE id=?`).run(...keys.map(k => x[k]), r.lastInsertRowid); } // 15.267
   return decodeVendor(await mustGet('vendors', r.lastInsertRowid));
 });
@@ -628,6 +642,7 @@ route('PUT', '/api/vendors/:id', async ({ user, params, body }) => {
   const rep = body.sales_rep === undefined ? row.sales_rep || '' : repName(body.sales_rep); // 15.224
   const tax = vendorTaxValues(body, row); if (vendorTaxChanged(tax, row) && !hasRole(user, 'sales') && !hasRole(user, 'purchase')) throw new HttpError(403, '사업자 정보는 영업·구매 담당자나 관리자가 고칩니다.'); // 15.266
   const cmds = [{ sql: 'UPDATE vendors SET name=?,name_key=?,contact_name=?,phone=?,is_purchase=?,is_sales=?,freight_terms=?,code=?,sales_rep=?,updated_by=?,updated_at=? WHERE id=?', args: [name, nameKey(name), contact, phone, purchase, sales, terms === undefined ? row.freight_terms : JSON.stringify(terms), code || '', rep, user.name, now(), row.id] }];
+  { const list = vendorContacts(body.contacts); if (list) cmds.push(...contactCmds({ sql: '?', args: [row.id] }, list)); } // 15.274 담당자 목록 통째로
   { const x = vendorExtra(body, row), keys = Object.keys(x).filter(k => x[k] !== (row[k] ?? '')); if (keys.length) cmds.push({ sql: `UPDATE vendors SET ${keys.map(k => `${k}=?`).join(',')} WHERE id=?`, args: [...keys.map(k => x[k]), row.id] }); } // 15.267
   if (vendorTaxChanged(tax, row)) cmds.push({ sql: `UPDATE vendors SET ${TAX_VENDOR_FIELDS.map(k => `${k}=?`).join(',')} WHERE id=?`, args: [...TAX_VENDOR_FIELDS.map(k => tax[k]), row.id] }); // 15.266 사업자 정보도 같은 저장에서
   if ((code || '') !== (row.code || '')) cmds.push({ sql: "UPDATE sales_orders SET customer_code=? WHERE status='open' AND REPLACE(LOWER(customer),' ','')=?", args: [code || '', row.name_key] }); // 15.104 열린 수주만 새 코드로(끝난 수주는 당시 코드)
@@ -653,7 +668,7 @@ route('DELETE', '/api/vendors/:id', async ({ user, params }) => {
     const n = (await db.prepare(`SELECT COUNT(*) c FROM ${table} WHERE ${customerKey(col)}=?`).get(key)).c; if (n) uses.push(`${label} ${n}건`);
   }
   if (uses.length) throw new HttpError(409, `${row.name}은(는) ${uses.join(', ')}에 쓰인 거래처라 삭제할 수 없습니다. 이름·연락처를 고쳐 쓰세요.`);
-  await db.prepare('DELETE FROM vendors WHERE id=?').run(row.id); return { ok: true }; // past orders keep the vendor name they were saved with
+  await db.batch([{ sql: 'DELETE FROM vendor_contacts WHERE vendor_id=?', args: [row.id] }, { sql: 'DELETE FROM vendors WHERE id=?', args: [row.id] }]); return { ok: true }; // 15.274 그 거래처의 담당자 목록도 // past orders keep the vendor name they were saved with
 });
 // What we most recently bought from this vendor, newest first, one line per item/size/unit.
 route('GET', '/api/vendors/recent-items', async ({ query }) => {
@@ -3488,6 +3503,56 @@ function decodeRequest(r) { return { ...r, data: JSON.parse(r.data || '{}') }; }
 async function getRequest(id) { const r = (await db.prepare('SELECT * FROM requests WHERE id=?').get(id)); if (!r) throw new HttpError(404, '의뢰를 찾을 수 없습니다.'); return r; }
 function roleLabel(type) { return { voc: '품질', analysis: '품질', development: '연구소', sample: '생산', sample_goods: '구매' }[type]; }
 
+// 15.276 개발 스케줄 관리(로드맵): 개발 의뢰 + 계획(구분·기간·진행률·현재·다음) + 공정표
+const DEV_TERMS = ['', 'short', 'mid', 'long'], DEV_STEP = ['todo', 'doing', 'done'];
+route('GET', '/api/dev-roadmap', async ({ query }) => {
+  const where = ["r.type='development'"], args = [];
+  // 15.277 id 하나만(개발리스트 더블클릭 팝업): 상태와 상관없이
+  if (query.id) { if (!/^[1-9]\d*$/.test(String(query.id))) throw bad('항목 번호가 올바르지 않습니다.'); where.push('r.id=?'); args.push(Number(query.id)); }
+  else { where.push("r.status<>'rejected'"); if (query.done !== '1') where.push("r.status<>'done'"); }
+  const rows = await db.prepare(`SELECT r.id, r.req_no, r.title, r.customer, r.status, r.due_date, r.target_price, r.requester_name, r.created_at, p.term, p.start_date, p.target_date, p.progress, p.current_stage, p.next_step, p.next_date, p.note, p.updated_by, p.updated_at,
+      p.dev_owner_id, COALESCE(p.dev_owner_name,'') AS dev_owner_name, p.sales_owner_id, COALESCE(p.sales_owner_name,'') AS sales_owner_name,
+      (SELECT COUNT(*) FROM progress_comments c WHERE c.entity_type='request' AND c.entity_id=r.id AND c.content<>'(삭제됨)') AS comment_count,
+      (SELECT c.author_name || ' · ' || substr(c.created_at,6,11) || ' · ' || substr(c.content,1,80) FROM progress_comments c WHERE c.entity_type='request' AND c.entity_id=r.id AND c.content<>'(삭제됨)' ORDER BY c.id DESC LIMIT 1) AS last_comment
+    FROM requests r LEFT JOIN dev_plans p ON p.request_id=r.id WHERE ${where.join(' AND ')} ORDER BY COALESCE(NULLIF(p.target_date,''), r.due_date, '9999') , r.id LIMIT 500`).all(...args);
+  const steps = new Map(); for (const st of await db.prepare(`SELECT * FROM dev_plan_steps ${query.id ? 'WHERE request_id=? ' : ''}ORDER BY request_id, sort, id`).all(...(query.id ? [Number(query.id)] : []))) { if (!steps.has(st.request_id)) steps.set(st.request_id, []); steps.get(st.request_id).push(st); }
+  return { rows: rows.map(r => ({ ...r, term: r.term || '', progress: r.progress || 0, steps: steps.get(r.id) || [] })) };
+});
+// 15.277 담당자(개발·영업): 개발 담당·개발 승인권자·영업·관리자가 지정. 바뀌면 소통 내역에 [담당자] 한 줄을 같이 남김.
+route('PUT', '/api/dev-roadmap/:id/owners', async ({ user, params, body }) => {
+  if (!hasRole(user, 'dev') && !hasRole(user, 'dev_approver') && !hasRole(user, 'sales')) throw new HttpError(403, '담당자는 개발·영업 담당자가 지정합니다.');
+  const r = await mustGet('requests', params.id); if (r.type !== 'development') throw bad('개발 의뢰가 아닙니다.');
+  const pick = async (v, label) => { if (v === '' || v == null || v === 0 || v === '0') return null; if (!/^[1-9]\d*$/.test(String(v))) throw bad(`${label}을(를) 다시 고르세요.`); const u = await db.prepare("SELECT id,name FROM users WHERE id=? AND approval_status='approved'").get(Number(v)); if (!u) throw bad(`${label}을(를) 찾을 수 없습니다.`); return u; };
+  const dev = await pick(body.dev_owner_id, '개발 담당자'), sales = await pick(body.sales_owner_id, '영업 담당자');
+  const prev = await db.prepare('SELECT dev_owner_name, sales_owner_name FROM dev_plans WHERE request_id=?').get(r.id) || { dev_owner_name: '', sales_owner_name: '' };
+  const changes = [];
+  if ((prev.dev_owner_name || '') !== (dev?.name || '')) changes.push(`개발 ${prev.dev_owner_name || '없음'} → ${dev?.name || '없음'}`);
+  if ((prev.sales_owner_name || '') !== (sales?.name || '')) changes.push(`영업 ${prev.sales_owner_name || '없음'} → ${sales?.name || '없음'}`);
+  if (!changes.length) return { ok: true, changed: false };
+  await db.batch([
+    { sql: `INSERT INTO dev_plans(request_id,dev_owner_id,dev_owner_name,sales_owner_id,sales_owner_name,updated_by,updated_at) VALUES(?,?,?,?,?,?,?)
+      ON CONFLICT(request_id) DO UPDATE SET dev_owner_id=excluded.dev_owner_id,dev_owner_name=excluded.dev_owner_name,sales_owner_id=excluded.sales_owner_id,sales_owner_name=excluded.sales_owner_name`,
+      args: [r.id, dev?.id ?? null, dev?.name || '', sales?.id ?? null, sales?.name || '', user.name, now()] },
+    { sql: 'INSERT INTO progress_comments(entity_type,entity_id,content,author_id,author_name) VALUES(?,?,?,?,?)', args: ['request', r.id, `[담당자] ${changes.join(' · ')}`, user.id, user.name] }]);
+  return { ok: true, changed: true };
+});
+route('PUT', '/api/dev-roadmap/:id', async ({ user, params, body }) => {
+  if (!hasRole(user, 'dev') && !hasRole(user, 'dev_approver')) throw new HttpError(403, '개발 스케줄은 개발 담당자가 고칩니다.');
+  const r = await mustGet('requests', params.id); if (r.type !== 'development') throw bad('개발 의뢰가 아닙니다.');
+  const d = (v, label) => v === '' || v == null ? '' : dateStr(v, label);
+  const term = DEV_TERMS.includes(body.term) ? body.term : bad('구분을 다시 고르세요.'); if (term instanceof Error) throw term;
+  const start = d(body.start_date, '시작일'), target = d(body.target_date, '완료예정일'), next = d(body.next_date, '다음 예정일');
+  if (start && target && target < start) throw bad('완료예정일은 시작일 이후여야 합니다.');
+  const progress = Math.round(Number(body.progress) || 0); if (progress < 0 || progress > 100) throw bad('진행률은 0~100입니다.');
+  const steps = (Array.isArray(body.steps) ? body.steps : []).slice(0, 40).map((x, i) => { const name = str(x?.name, 100); if (!name) return null; const s1 = d(x.start_date, `공정 ${i + 1} 시작일`), s2 = d(x.end_date, `공정 ${i + 1} 종료일`); if (s1 && s2 && s2 < s1) throw bad(`공정 「${name}」 종료일이 시작일보다 빠릅니다.`); return { name, start_date: s1, end_date: s2, status: DEV_STEP.includes(x.status) ? x.status : 'todo', note: str(x.note, 200), sort: i }; }).filter(Boolean);
+  await db.batch([
+    { sql: `INSERT INTO dev_plans(request_id,term,start_date,target_date,progress,current_stage,next_step,next_date,note,updated_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(request_id) DO UPDATE SET term=excluded.term,start_date=excluded.start_date,target_date=excluded.target_date,progress=excluded.progress,current_stage=excluded.current_stage,next_step=excluded.next_step,next_date=excluded.next_date,note=excluded.note,updated_by=excluded.updated_by,updated_at=excluded.updated_at`,
+      args: [r.id, term, start, target, progress, str(body.current_stage, 300), str(body.next_step, 300), next, str(body.note, 500), user.name, now()] },
+    { sql: 'DELETE FROM dev_plan_steps WHERE request_id=?', args: [r.id] },
+    ...steps.map(x => ({ sql: 'INSERT INTO dev_plan_steps(request_id,name,start_date,end_date,status,note,sort) VALUES(?,?,?,?,?,?,?)', args: [r.id, x.name, x.start_date, x.end_date, x.status, x.note, x.sort] }))]);
+  return { ok: true };
+});
 route('GET', '/api/requests', async ({ query }) => {
   const type = String(query.type || ''); if (!Object.hasOwn(REQUEST_TYPES, type)) throw bad('의뢰 종류가 올바르지 않습니다.');
   const where = ['type=?']; const args = [type];
@@ -3499,7 +3564,7 @@ route('GET', '/api/requests', async ({ query }) => {
   applyListDates(where, args, query, 'substr(created_at,1,10)');
   applyListKeyword(where, args, query.q, ['req_no','title','spec','lot','customer','requester_name','result_note',"json_extract(data,'$.extra')", "json_extract(data,'$.purpose')", "json_extract(data,'$.lot_etc')", "json_extract(data,'$.lot')"]);
   // 15.78 수입·출하 검사 판정(측정값이 저장된 경우 pass/fail/pending)을 목록에 함께 준다.
-  return (await db.prepare(`SELECT requests.*, (SELECT m.result FROM inspection_measurements m WHERE m.request_id=requests.id) AS inspection_result FROM requests WHERE ${where.join(' AND ')} ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'progress' THEN 1 WHEN 'waiting' THEN 2 WHEN 'rejected' THEN 3 ELSE 4 END, id DESC`).all(...args)).map(decodeRequest);
+  return (await db.prepare(`SELECT requests.*, (SELECT m.result FROM inspection_measurements m WHERE m.request_id=requests.id) AS inspection_result${type === 'development' ? `, (SELECT dev_owner_name FROM dev_plans WHERE request_id=requests.id) AS dev_owner_name, (SELECT sales_owner_name FROM dev_plans WHERE request_id=requests.id) AS sales_owner_name, (SELECT COUNT(*) FROM progress_comments c WHERE c.entity_type='request' AND c.entity_id=requests.id AND c.content<>'(삭제됨)') AS comment_count` : ''} FROM requests WHERE ${where.join(' AND ')} ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'progress' THEN 1 WHEN 'waiting' THEN 2 WHEN 'rejected' THEN 3 ELSE 4 END, id DESC`).all(...args)).map(decodeRequest);
 });
 route('POST', '/api/requests', async ({ user, body }) => {
   const type = String(body.type || ''); if (!Object.hasOwn(REQUEST_TYPES, type)) throw bad('의뢰 종류가 올바르지 않습니다.');

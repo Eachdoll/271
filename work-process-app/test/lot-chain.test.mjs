@@ -458,3 +458,54 @@ test('15.271 partner book add: 1-won sales/purchase adjustment bills (negative a
   assert.equal((await admin('GET', '/api/partner-book?' + new URLSearchParams({ side: 'sales', party: '조정거래처', from: today, to: today }))).body.rows.filter(r => r.kind === 'memo').length, 0);
   assert.equal((await prod('POST', '/api/book-entries', { side: 'sales', kind: 'memo', party: '조정거래처', date: today, text: 'x', request_id: rid() })).status, 403);
 });
+
+test('15.274 vendor contacts list: several contacts per site/role, replaced on edit, searchable', async () => {
+  const v = await admin('POST', '/api/vendors', { name: '한솔아이원스', is_sales: true, contacts: [{ name: '백소민 선임', site: '본사', phone: '010-3767-5512', role: '발주' }, { name: '김윤수', site: '안성', email: 'yskim@hansol.com', role: '납품' }, { name: '', site: '빈줄' }] });
+  assert.equal(v.status, 200, JSON.stringify(v.body));
+  let row = (await admin('GET', '/api/vendors?q=' + encodeURIComponent('한솔'))).body[0];
+  assert.deepEqual(row.contacts.map(c => [c.name, c.site, c.role]), [['백소민 선임', '본사', '발주'], ['김윤수', '안성', '납품']]);
+  assert.equal((await admin('GET', '/api/vendors?q=yskim')).body[0]?.name, '한솔아이원스', 'contact email is searchable');
+  const e = await prod('PUT', `/api/vendors/${v.body.id}`, { name: '한솔아이원스', contacts: [{ name: '성하경', site: '본사', role: '세금계산서', email: 'hagyeong@hansol.com' }] });
+  assert.equal(e.status, 200);
+  row = (await admin('GET', '/api/vendors?q=' + encodeURIComponent('한솔'))).body[0];
+  assert.deepEqual(row.contacts.map(c => c.name), ['성하경']);
+  assert.equal((await admin('PUT', `/api/vendors/${v.body.id}`, { name: '한솔아이원스' })).status, 200);
+  assert.equal((await admin('GET', '/api/vendors?q=' + encodeURIComponent('한솔'))).body[0].contacts.length, 1, 'edit without contacts keeps them');
+  assert.equal((await admin('PUT', `/api/vendors/${v.body.id}`, { name: '한솔아이원스', contacts: [{ name: 'x', email: 'bad' }] })).status, 400);
+});
+
+test('15.276 development roadmap: term, dates, progress, current/next and process steps per development request', async () => {
+  const dev = await admin('POST', '/api/requests', { type: 'development', title: '저분진 와이퍼 9인치', customer: '삼성SDI', due_date: '2027-03-31', target_price: '100', data: { extra: 'x' } });
+  assert.equal(dev.status, 200, JSON.stringify(dev.body));
+  const id = dev.body.id;
+  let row = (await admin('GET', '/api/dev-roadmap')).body.rows.find(r => r.id === id); assert.ok(row); assert.equal(row.term, '');
+  assert.equal((await admin('PUT', `/api/dev-roadmap/${id}`, { term: 'x' })).status, 400);
+  assert.equal((await admin('PUT', `/api/dev-roadmap/${id}`, { term: 'mid', start_date: '2026-12-01', target_date: '2026-11-01' })).status, 400, 'target before start');
+  const ok = await admin('PUT', `/api/dev-roadmap/${id}`, { term: 'mid', start_date: '2026-11-01', target_date: '2027-03-31', progress: 40, current_stage: '1차 샘플 평가', next_step: '2차 샘플', next_date: '2026-12-15', steps: [{ name: '샘플 제작', start_date: '2026-11-01', end_date: '2026-11-20', status: 'done' }, { name: '고객 평가', start_date: '2026-11-21', end_date: '2026-12-10', status: 'doing' }, { name: '' }] });
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+  row = (await admin('GET', '/api/dev-roadmap')).body.rows.find(r => r.id === id);
+  assert.equal(row.term, 'mid'); assert.equal(row.progress, 40); assert.equal(row.next_step, '2차 샘플'); assert.deepEqual(row.steps.map(s => [s.name, s.status]), [['샘플 제작', 'done'], ['고객 평가', 'doing']]);
+  assert.equal((await prod('PUT', `/api/dev-roadmap/${id}`, { term: 'long' })).status, 403);
+});
+
+test('15.277 development owners (dev/sales) and the communication thread on a development request', async () => {
+  const dev = await admin('POST', '/api/requests', { type: 'development', title: '항균 마스크', customer: '한솔', due_date: '2027-05-31', target_price: '50', data: { extra: 'x' } });
+  const id = dev.body.id;
+  const users = (await admin('GET', '/api/directory')).body, me = users.find(x => x.name !== '생산'), p = users.find(x => x.name === '생산');
+  assert.equal((await prod('PUT', `/api/dev-roadmap/${id}/owners`, { dev_owner_id: p.id })).status, 403, 'production cannot assign');
+  assert.equal((await admin('PUT', `/api/dev-roadmap/${id}/owners`, { dev_owner_id: 999999 })).status, 400);
+  const ok = await admin('PUT', `/api/dev-roadmap/${id}/owners`, { dev_owner_id: me.id, sales_owner_id: p.id });
+  assert.equal(ok.status, 200, JSON.stringify(ok.body)); assert.equal(ok.body.changed, true);
+  assert.equal((await admin('PUT', `/api/dev-roadmap/${id}/owners`, { dev_owner_id: me.id, sales_owner_id: p.id })).body.changed, false);
+  // 스케줄 저장은 담당자를 지우지 않는다
+  assert.equal((await admin('PUT', `/api/dev-roadmap/${id}`, { term: 'short', progress: 10 })).status, 200);
+  let row = (await admin('GET', '/api/dev-roadmap?id=' + id)).body.rows[0];
+  assert.equal(row.dev_owner_name, me.name); assert.equal(row.sales_owner_name, '생산'); assert.equal(row.term, 'short');
+  assert.equal(row.comment_count, 1, 'owner change logged'); assert.match(row.last_comment, /\[담당자\] 개발 없음 → /);
+  assert.equal((await prod('POST', `/api/comments/request/${id}`, { content: '[영업] 고객 2차 샘플 요청' })).status, 200);
+  row = (await admin('GET', '/api/dev-roadmap?id=' + id)).body.rows[0];
+  assert.equal(row.comment_count, 2); assert.match(row.last_comment, /고객 2차 샘플 요청/);
+  const list = (await admin('GET', '/api/requests?type=development')).body.find(r => r.id === id);
+  assert.equal(list.dev_owner_name, me.name); assert.equal(list.comment_count, 2);
+  assert.equal((await admin('GET', '/api/dev-roadmap?id=abc')).status, 400);
+});
