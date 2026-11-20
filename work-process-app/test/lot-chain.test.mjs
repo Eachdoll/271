@@ -672,3 +672,13 @@ test('15.292 research analysis data in inspection format: spec items + readings,
   assert.equal((await admin('POST', '/api/rnd-analysis-data', { title: '관찰', category: '기타', result_note: '외관 이상 없음' })).status, 200);
   assert.equal((await admin('POST', '/api/rnd-analysis-data', { title: '빈', category: '기타' })).status, 400);
 });
+
+test('15.293 research measurements with several samples (grid like quality analysis results)', async () => {
+  const items = [{ name: '파티클', unit: 'ea', max: 150, count: 2 }, { name: '흡수', unit: 's', min: 0, max: 60, count: 1 }];
+  const r = await admin('POST', '/api/rnd-analysis-data', { title: '비교 시험', category: '경쟁사분석', spec_items: items, samples: [{ lot: '당사', values: { i0: [90, 110], i1: [40] } }, { lot: '경쟁사 A', values: { i0: [180, 200], i1: [55] } }] });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.match(r.body.result_note, /^시료 2개 · 파티클 평균 145 ea \(≤150\) 불합격 · 흡수 평균 47\.5 s \(0~60\) 합격 → 불합격$/, r.body.result_note);
+  const m = (await admin('GET', `/api/requests/${r.body.id}/rnd-measure`)).body;
+  assert.deepEqual(m.measurement.rows.map(x => [x.lot, x.values.i0]), [['당사', [90, 110]], ['경쟁사 A', [180, 200]]]);
+  assert.equal((await admin('POST', '/api/rnd-analysis-data', { title: 'x', category: '기타', spec_items: items, samples: Array.from({ length: 21 }, () => ({ values: { i0: [1, 1], i1: [1] } })) })).status, 400);
+});

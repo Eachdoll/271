@@ -104,14 +104,15 @@ function bomMatPicker(scope, rows, mats) {
 }
 async function pageBomSheet(main) {
   if (!ME.is_admin) { main.innerHTML = '<div class="empty">관리자만 BOM을 관리할 수 있습니다.</div>'; return; }
-  let view = 'product'; try { view = localStorage.getItem('wpa:bom-sheet-view') === 'material' ? 'material' : 'product'; } catch { /* 편의 기능 */ }
+  let view = 'product'; try { const vv = localStorage.getItem('wpa:bom-sheet-view'); view = ['material', 'category'].includes(vv) ? vv : 'product'; } catch { /* 편의 기능 */ }
   main.innerHTML = `<h1>BOM 소요량</h1><p class="muted">제품·반제품마다 구성자재와 기준 수량당 소요량을 한 표로 봅니다. 「수정」을 누르면 그 자리에서 자재를 더하거나 빼고 소요량·단위를 고칩니다. 생산 수량을 넣으면 자재별 필요량을 계산하고, 「자재별」은 자재마다 어느 제품에 얼마나 들어가는지 보여 줍니다.</p>
   <form class="toolbar bs-tools" id="bsTools" data-read-only>
     <label>검색<input name="q" type="search" placeholder="제품·자재 코드나 이름" autocomplete="off"></label>
     <label>분류<select name="cls"><option value="">제품·반제품 전체</option><option value="제품">제품</option><option value="반제품">반제품</option></select></label>
+    <label>제품분류<select name="pcat"><option value="">전체 제품분류</option></select></label>
     <label>생산 수량<input name="calc" type="number" min="0" step="any" placeholder="필요량 계산"></label>
     <label class="inline"><input type="checkbox" name="empty"> 구성자재 없는 것만</label>
-    <div class="seg" role="group" aria-label="보기"><button type="button" data-bs-view="product">제품별</button><button type="button" data-bs-view="material">자재별</button></div>
+    <div class="seg" role="group" aria-label="보기"><button type="button" data-bs-view="product">제품별</button><button type="button" data-bs-view="material">자재별</button><button type="button" data-bs-view="category" title="제품분류(1차 › 2차)로 묶어 보기">분류별</button></div>
     <button type="button" class="btn" data-bs-all="open">전체 펼치기</button><button type="button" class="btn" data-bs-all="close">전체 접기</button>
     <button type="button" class="btn" id="bsXlsx">엑셀</button><a class="btn" href="#/admin/bom">제품등록</a>
   </form>
@@ -125,6 +126,7 @@ async function pageBomSheet(main) {
   const hit = (...xs) => { const q = qOf(); return !q || xs.some(x => String(x || '').toLowerCase().includes(q)); };
   const products = () => all.filter(b => (['제품', '반제품'].includes(b.item_category) || b.materials.length)
       && (!form.elements.cls.value || b.item_category === form.elements.cls.value) && (!form.elements.empty.checked || !b.materials.length)
+      && (!form.elements.pcat.value || (form.elements.pcat.value === '(분류 없음)' ? !catsOf(b) : (catsOf(b) === form.elements.pcat.value || catsOf(b).startsWith(form.elements.pcat.value + ' › ')))) // 15.293 제품분류
       && hit(b.product_code, b.product, ...b.materials.flatMap(m => [m.item, codeOf(m.item)])))
     .sort((a, b) => String(a.product_code || '~').localeCompare(String(b.product_code || '~')) || a.product.localeCompare(b.product, 'ko'));
   const editorHtml = b => `<div class="bs-editor" data-bs-editor="${b.id}">
@@ -135,7 +137,7 @@ async function pageBomSheet(main) {
   // 15.197 하이라키(트리) 모양: 부모 줄(▾ 펼치기·접기) 아래 자식 줄을 └ 선으로 들여 쓴다. 열은 품목코드·품목명·품목분류·제품분류·제품구분·단위·소요량·비고·사용여부.
   const fq = n => Number(n).toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
   const kindOf = b => b.semi_type || (b.item_category === '반제품' || b.kind === 'semi' ? '반제품' : ['제품', '상품', '임가공'].includes(b.item_category) ? '완제품' : '');
-  const catsOf = b => b ? [b.cat1, b.cat2].filter(Boolean).join(' › ') : '';
+  function catsOf(b) { return b ? [b.cat1, b.cat2].filter(Boolean).join(' › ') : ''; }
   const useBox = (on, label) => `<span class="bs-use${on ? ' on' : ''}" role="img" aria-label="${esc(label)} ${on ? '사용' : '사용 안 함'}">${on ? '✓' : ''}</span>`;
   const head = (n, first) => `<thead><tr><th scope="col"><span class="sr-only">펼치기</span></th><th scope="col">${first}코드</th><th scope="col" class="c">NO</th><th scope="col">${first}명</th><th scope="col">품목분류</th><th scope="col">제품분류</th><th scope="col">제품구분</th><th scope="col">단위</th><th scope="col" class="r">소요량</th>${n ? `<th scope="col" class="r">필요량 (${fmtNum(n)})</th>` : ''}<th scope="col">비고</th><th scope="col">사용여부</th><th scope="col"><span class="sr-only">작업</span></th></tr></thead>`;
   const toggle = (key, open, label) => `<button type="button" class="bt-toggle" data-bs-toggle="${esc(key)}" aria-expanded="${open}" aria-label="${esc(label)} ${open ? '접기' : '펼치기'}">${open ? '▾' : '▸'}</button>`;
@@ -198,7 +200,10 @@ async function pageBomSheet(main) {
     const list = products(), n = N(), mats = list.reduce((t, b) => t + b.materials.length, 0), empty = list.filter(b => !b.materials.length).length;
     $$('[data-bs-view]', main).forEach(x => { x.classList.toggle('on', x.dataset.bsView === view); x.setAttribute('aria-pressed', String(x.dataset.bsView === view)); });
     $('#bsSummary', main).textContent = `제품 ${list.length}개 · 자재 줄 ${mats}개${empty ? ` · 구성자재 없는 제품 ${empty}개` : ''}${n ? ` · 생산 ${fmtNum(n)} 기준 필요량 표시` : ''}`;
-    $('#bsList', main).innerHTML = view === 'material' ? materialTable(list) : list.length ? productTable(list) : '<div class="empty">조건에 맞는 제품이 없습니다.</div>';
+    // 15.293 분류별: 제품분류(1차 › 2차)로 묶어 각 묶음마다 같은 트리 표
+    const byCat = () => { const g = new Map(); for (const b of list) { const k = catsOf(b) || '(분류 없음)'; if (!g.has(k)) g.set(k, []); g.get(k).push(b); } return [...g].sort((a, b) => (a[0] === '(분류 없음)') - (b[0] === '(분류 없음)') || a[0].localeCompare(b[0], 'ko')); };
+    $('#bsList', main).innerHTML = view === 'material' ? materialTable(list) : !list.length ? '<div class="empty">조건에 맞는 제품이 없습니다.</div>'
+      : view === 'category' ? byCat().map(([k, bs]) => `<section class="bs-cat"><h3 class="bs-cat-h">${esc(k)} <span class="small muted">제품 ${bs.length}개 · 자재 줄 ${bs.reduce((t, b) => t + b.materials.length, 0)}개</span></h3>${productTable(bs)}</section>`).join('') : productTable(list);
     $$('[data-bs-edit]', main).forEach(x => x.onclick = () => { editing = Number(x.dataset.bsEdit); draw(); $('[data-bs-editor]', main)?.scrollIntoView({ block: 'nearest' }); });
     $$('[data-bs-goto]', main).forEach(x => x.onclick = () => { editing = Number(x.dataset.bsGoto); view = 'product'; collapsed.delete('p' + editing); draw(); $('[data-bs-editor]', main)?.scrollIntoView({ block: 'center' }); });
     $$('[data-bs-toggle]', main).forEach(x => x.onclick = () => { const k = x.dataset.bsToggle, open = x.getAttribute('aria-expanded') !== 'true'; if (open) collapsed.delete(k); else collapsed.add(k); x.setAttribute('aria-expanded', String(open)); x.textContent = open ? '▾' : '▸'; $$(`[data-bs-of="${CSS.escape(k)}"]`, main).forEach(tr => { tr.hidden = !open; }); });
@@ -206,6 +211,8 @@ async function pageBomSheet(main) {
   };
   const load = async () => {
     all = await api('GET', '/api/boms'); if (!main.isConnected) return; cat = bomTreeCatalog(all);
+    { const sel = form.elements.pcat, cur = sel.value, set = new Set(); for (const b of all) if (['제품', '반제품'].includes(b.item_category) || b.materials.length) { if (b.cat1) set.add(b.cat1); const c = catsOf(b); if (c) set.add(c); } // 15.293 제품분류 목록(1차, 1차 › 2차)
+      sel.innerHTML = '<option value="">전체 제품분류</option>' + [...set].sort((a, b) => a.localeCompare(b, 'ko')).map(c => `<option value="${esc(c)}">${c.includes(' › ') ? '　' : ''}${esc(c)}</option>`).join('') + '<option value="(분류 없음)">(분류 없음)</option>'; sel.value = cur; }
     $('#bomMatList', main).innerHTML = all.filter(x => x.item_category !== '제품').map(b => `<option value="${esc(b.product)}">${esc([b.product_code, b.item_category, b.spec].filter(Boolean).join(' · '))}</option>`).join('');
     draw();
   };

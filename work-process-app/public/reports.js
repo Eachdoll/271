@@ -246,63 +246,91 @@ const DEV_TALK = [['진행', '진행내용', '#1c7ed6'], ['영업', '영업 코�
 const DEV_ANA = ['분석', '분석 결과', '#0c8599']; // 15.286 연구 분석 이력
 const devTalkKind = text => { const m = /^\[(진행|영업|요청|담당자|분석)\]\s?/.exec(text || ''); return m ? [m[1], text.slice(m[0].length)] : ['', text || '']; };
 let DEV_DIRECTORY = null;
-// 15.292 검사규격 · 측정값 입력(품질 검사와 같은 형식): 항목·단위·하한·상한·측정 횟수 → 측정값 칸, 평균·판정을 바로 보여 줌
+// 15.292·15.293 검사규격 · 측정값(품질 분석결과와 같은 그리드): 위 검사규격 표(항목·단위·하한·상한·횟수) + 아래 시료별 측정 그리드.
+// 시료 추가·빼기, 「⇄ 종횡 바꾸기」(항목별 ↔ 시료별 묶음), 칸마다 평균·판정, 전체 판정.
 const rndMeasureHtml = () => `<fieldset class="vendor-sec rnd-meas" data-rm><legend>검사규격 · 측정값 <span class="hint">(하한·상한을 넣으면 합격·불합격을 바로 판정)</span></legend>
   <div class="rm-tools"><label>검사규격 불러오기<select data-rm-spec><option value="">— 고르기 —</option></select></label><label>항목 보관함<select data-rm-lib><option value="">— 항목 넣기 —</option></select></label><button type="button" class="btn small" data-rm-add>＋ 항목</button></div>
-  <div class="table-wrap"><table class="grid keep-table rm-table" data-no-sort data-no-filter data-keep-cols><thead><tr><th>측정 항목</th><th>단위</th><th class="r">하한</th><th class="r">상한</th><th class="r">횟수</th><th>측정값</th><th class="r">평균</th><th>판정</th><th></th></tr></thead><tbody data-rm-rows></tbody></table></div>
+  <div class="table-wrap"><table class="grid keep-table rm-spec" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>측정 항목</th><th>단위</th><th class="r">하한</th><th class="r">상한</th><th class="r">측정 횟수</th><th></th></tr></thead><tbody data-rm-spec-rows></tbody></table></div>
+  <div class="insp-samples rm-samples" data-rm-samples></div>
+  <div class="rm-bar"><button type="button" class="btn small" data-rm-mode>⇄ 종횡 바꾸기</button><span class="small muted" data-rm-hint></span></div>
+  <div class="table-wrap insp-wrap"><table class="grid keep-table insp-grid rm-grid" data-no-sort data-no-filter data-keep-cols data-no-reorder data-rm-grid></table></div>
   <p class="rm-total" data-rm-total></p></fieldset>`;
-function rmRow(it = {}, vals = []) {
-  const n = Math.max(1, Math.min(10, Number(it.count) || 1)), v = i => vals[i] ?? '';
-  return `<tr data-rm-row><td><input data-rm="name" maxlength="100" value="${esc(it.name || '')}" placeholder="예) 파티클" aria-label="측정 항목"></td><td><input data-rm="unit" maxlength="30" value="${esc(it.unit || '')}" placeholder="단위" aria-label="단위"></td>
-    <td class="r"><input data-rm="min" type="number" step="any" value="${it.min ?? ''}" aria-label="하한"></td><td class="r"><input data-rm="max" type="number" step="any" value="${it.max ?? ''}" aria-label="상한"></td>
-    <td class="r"><input data-rm="count" type="number" min="1" max="10" step="1" value="${n}" aria-label="측정 횟수"></td>
-    <td><div class="rm-vals">${Array.from({ length: n }, (_, i) => `<input data-rm-v type="number" step="any" value="${v(i)}" aria-label="측정값 ${i + 1}">`).join('')}</div></td><td class="r" data-rm-avg></td><td data-rm-judge></td><td><button type="button" class="btn small danger" data-rm-del aria-label="빼기">×</button></td></tr>`;
-}
-function rmJudge(tr) {
-  const g = k => tr.querySelector(`[data-rm="${k}"]`).value, min = g('min') === '' ? null : Number(g('min')), max = g('max') === '' ? null : Number(g('max'));
-  const vals = [...tr.querySelectorAll('[data-rm-v]')].map(i => i.value === '' ? null : Number(i.value)), got = vals.filter(v => v !== null);
-  const fail = got.some(v => (min !== null && v < min) || (max !== null && v > max));
-  [...tr.querySelectorAll('[data-rm-v]')].forEach(i => i.classList.toggle('rm-out', i.value !== '' && ((min !== null && Number(i.value) < min) || (max !== null && Number(i.value) > max))));
-  tr.querySelector('[data-rm-avg]').textContent = got.length ? fmtNum(Math.round(got.reduce((t, v) => t + v, 0) / got.length * 1000) / 1000) : '';
-  const st = !got.length ? '' : min === null && max === null ? 'info' : fail ? 'fail' : got.length < vals.length ? 'wait' : 'pass';
-  tr.querySelector('[data-rm-judge]').innerHTML = { pass: '<span class="chip green">합격</span>', fail: '<span class="chip red">불합격</span>', wait: '<span class="chip yellow">측정 중</span>', info: '<span class="chip">기록</span>', '': '' }[st];
-  return st;
-}
+const rmRange = it => { const a = it.min === '' || it.min == null ? null : Number(it.min), b = it.max === '' || it.max == null ? null : Number(it.max); return { a, b, txt: a !== null && b !== null ? `${fmtNum(a)} ~ ${fmtNum(b)}` : a !== null ? `≥ ${fmtNum(a)}` : b !== null ? `≤ ${fmtNum(b)}` : '규격 없음' }; };
+const rmJudgeVals = (it, vals) => { const { a, b } = rmRange(it), got = vals.filter(v => v !== '' && v != null).map(Number); if (!got.length) return ['', null]; const fail = got.some(v => (a !== null && v < a) || (b !== null && v > b)); const avg = Math.round(got.reduce((t, v) => t + v, 0) / got.length * 1000) / 1000; return [a === null && b === null ? 'info' : fail ? 'fail' : got.length < (Number(it.count) || 1) ? 'wait' : 'pass', avg]; };
+const RM_CHIP = { pass: '<span class="chip green">합격</span>', fail: '<span class="chip red">불합격</span>', wait: '<span class="chip yellow">측정 중</span>', info: '<span class="chip">기록</span>', '': '' };
+let RM_MODE = (() => { try { return localStorage.getItem('wpa:rm-mode') || 'item'; } catch { return 'item'; } })();
 async function bindRndMeasure(root, init = null) {
-  const box = $('[data-rm]', root), body = $('[data-rm-rows]', box);
-  const total = () => { const st = $$('[data-rm-row]', body).filter(tr => tr.querySelector('[data-rm="name"]').value.trim()).map(rmJudge); const t = $('[data-rm-total]', box);
-    t.innerHTML = !st.length ? '<span class="muted small">측정 항목을 넣으세요(검사규격 불러오기 · 항목 보관함 · ＋ 항목).</span>' : st.includes('fail') ? '전체 판정 <span class="chip red">불합격</span>' : st.includes('wait') ? '전체 판정 <span class="chip yellow">측정 중</span>' : st.includes('pass') ? '전체 판정 <span class="chip green">합격</span>' : '<span class="small muted">규격(하한·상한)이 없어 판정 없이 기록합니다.</span>'; };
-  const add = (it, vals) => { body.insertAdjacentHTML('beforeend', rmRow(it, vals)); };
-  if (init?.items?.length) init.items.forEach(it => add(it, init.values?.[it.key] || [])); else add({});
-  total();
-  box.addEventListener('input', e => { const tr = e.target.closest('[data-rm-row]'); if (!tr) return;
-    if (e.target.dataset.rm === 'count') { const n = Math.max(1, Math.min(10, Number(e.target.value) || 1)), old = [...tr.querySelectorAll('[data-rm-v]')].map(i => i.value); tr.querySelector('.rm-vals').innerHTML = Array.from({ length: n }, (_, i) => `<input data-rm-v type="number" step="any" value="${esc(old[i] ?? '')}" aria-label="측정값 ${i + 1}">`).join(''); }
-    total(); });
-  box.addEventListener('click', e => { if (e.target.closest('[data-rm-add]')) { add({}); body.lastElementChild.querySelector('input').focus(); total(); return; }
-    const d = e.target.closest('[data-rm-del]'); if (d) { const tr = d.closest('tr'); if (body.children.length > 1) tr.remove(); else tr.querySelectorAll('input').forEach(i => { i.value = i.dataset.rm === 'count' ? '1' : ''; }); total(); } });
+  const box = $('[data-rm]', root), specBody = $('[data-rm-spec-rows]', box), grid = $('[data-rm-grid]', box), strip = $('[data-rm-samples]', box);
+  const st = { items: [], samples: [] };
+  const fit = s => { s.vals = st.items.map((it, ii) => { const n = Math.max(1, Math.min(10, Number(it.count) || 1)), old = s.vals?.[ii] || []; return Array.from({ length: n }, (_, k) => old[k] ?? ''); }); };
+  if (init?.items?.length) { st.items = init.items.map(it => ({ name: it.name || '', unit: it.unit || '', min: it.min ?? '', max: it.max ?? '', count: it.count || 1 }));
+    st.samples = (init.rows?.length ? init.rows : [{ lot: '시료 1', values: {} }]).map((r, s) => ({ lot: r.lot || `시료 ${s + 1}`, vals: init.items.map(it => (r.values?.[it.key] || []).map(v => v ?? '')) })); }
+  else { st.items = [{ name: '', unit: '', min: '', max: '', count: 1 }]; st.samples = [{ lot: '시료 1', vals: [] }]; }
+  st.samples.forEach(fit);
+  const specRow = (it, ii) => `<tr data-rm-i="${ii}"><td><input data-rs="name" maxlength="100" value="${esc(it.name)}" placeholder="예) 파티클" aria-label="측정 항목"></td><td><input data-rs="unit" maxlength="30" value="${esc(it.unit)}" placeholder="단위" aria-label="단위"></td><td class="r"><input data-rs="min" type="number" step="any" value="${esc(String(it.min ?? ''))}" aria-label="하한"></td><td class="r"><input data-rs="max" type="number" step="any" value="${esc(String(it.max ?? ''))}" aria-label="상한"></td><td class="r"><input data-rs="count" type="number" min="1" max="10" step="1" value="${it.count}" aria-label="측정 횟수"></td><td><button type="button" class="btn small danger" data-rm-del="${ii}" aria-label="항목 빼기">×</button></td></tr>`;
+  const drawSpec = () => { specBody.innerHTML = st.items.map(specRow).join(''); };
+  const named = () => st.items.map((it, ii) => [it, ii]).filter(([it]) => it.name.trim());
+  const cellJudge = (ii, s) => rmJudgeVals(st.items[ii], st.samples[s].vals[ii]);
+  const total = () => { const all = []; for (const [, ii] of named()) for (let s = 0; s < st.samples.length; s++) { const [j] = cellJudge(ii, s); if (j) all.push(j); }
+    $('[data-rm-total]', box).innerHTML = !named().length ? '<span class="muted small">위 검사규격에 측정 항목을 넣으세요(검사규격 불러오기 · 항목 보관함 · ＋ 항목).</span>' : !all.length ? '<span class="muted small">측정값을 넣으면 평균·판정이 나옵니다.</span>' : `전체 판정 ${all.includes('fail') ? RM_CHIP.fail : all.includes('wait') ? RM_CHIP.wait : all.includes('pass') ? RM_CHIP.pass : '<span class="small muted">규격 없이 기록</span>'} <span class="small muted">· 시료 ${st.samples.length} · 항목 ${named().length}</span>`; };
+  const drawGrid = () => {
+    const list = named(), W = Math.max(1, ...list.map(([it]) => Math.max(1, Math.min(10, Number(it.count) || 1))));
+    strip.innerHTML = `<span class="insp-samples-h">시료</span>${st.samples.map((x, s) => `<span class="insp-s"><b>${s + 1}</b><input data-rm-lot="${s}" maxlength="100" value="${esc(x.lot)}" aria-label="시료 ${s + 1} 이름"><span data-rm-sj="${s}"></span>${st.samples.length > 1 ? `<button type="button" class="btn small danger" data-rm-sdel="${s}" aria-label="시료 ${s + 1} 빼기">×</button>` : ''}</span>`).join('')}<button type="button" class="btn small" data-rm-sadd>＋ 시료 추가</button>`;
+    if (!list.length) { grid.innerHTML = ''; total(); return; }
+    const nums = `${Array.from({ length: W }, (_, k) => `<th class="c insp-n">#${k + 1}</th>`).join('')}<th class="c insp-avg-h">평균</th><th class="c">판정</th>`;
+    const cells = (ii, s) => { const it = st.items[ii], n = st.samples[s].vals[ii].length, [j, avg] = cellJudge(ii, s), { a, b } = rmRange(it);
+      return Array.from({ length: W }, (_, k) => k >= n ? '<td class="insp-blank"></td>' : `<td class="insp-cell"><input type="number" step="any" inputmode="decimal" data-rm-v data-ii="${ii}" data-s="${s}" data-k="${k}" value="${esc(String(st.samples[s].vals[ii][k] ?? ''))}" placeholder="#${k + 1}" class="${st.samples[s].vals[ii][k] !== '' && ((a !== null && Number(st.samples[s].vals[ii][k]) < a) || (b !== null && Number(st.samples[s].vals[ii][k]) > b)) ? 'rm-out' : ''}" aria-label="${esc(it.name)} 시료 ${s + 1} #${k + 1}"></td>`).join('') + `<td class="r insp-avg" data-rm-avg="${ii}-${s}">${avg === null ? '' : fmtNum(avg)}</td><td data-rm-j="${ii}-${s}">${RM_CHIP[j]}</td>`; };
+    const itemTh = (it, rs) => `<th scope="rowgroup" rowspan="${rs}" class="insp-item-c">${esc(it.name)}${it.unit ? ` <span class="small muted">${esc(it.unit)}</span>` : ''}<div class="small muted">${rmRange(it).txt}</div></th>`;
+    const sampTh = (s, rs) => `<th scope="rowgroup" rowspan="${rs}" class="insp-samp-c"><span class="insp-sno">시료 ${s + 1}</span><div class="insp-lot-t" data-rm-lt="${s}">${esc(st.samples[s].lot)}</div></th>`;
+    if (RM_MODE === 'item') grid.innerHTML = `<thead><tr><th class="c insp-item-c">측정 항목 · 규격</th><th class="c insp-samp-c">시료</th>${nums}</tr></thead>${list.map(([it, ii]) => `<tbody class="insp-grp">${st.samples.map((_, s) => `<tr>${!s ? itemTh(it, st.samples.length) : ''}<th class="insp-samp-c" data-rm-lt="${s}">${esc(st.samples[s].lot)}</th>${cells(ii, s)}</tr>`).join('')}</tbody>`).join('')}`;
+    else grid.innerHTML = `<thead><tr><th class="c insp-samp-c">시료</th><th class="c insp-item-c">측정 항목 · 규격</th>${nums}</tr></thead>${st.samples.map((_, s) => `<tbody class="insp-grp">${list.map(([it, ii], n) => `<tr>${!n ? sampTh(s, list.length) : ''}<th class="insp-item-c">${esc(it.name)}${it.unit ? ` <span class="small muted">${esc(it.unit)}</span>` : ''} <span class="small muted">${rmRange(it).txt}</span></th>${cells(ii, s)}</tr>`).join('')}</tbody>`).join('')}`;
+    $('[data-rm-mode]', box).textContent = RM_MODE === 'item' ? '⇄ 종횡 바꾸기 (시료별로 보기)' : '⇄ 종횡 바꾸기 (항목별로 보기)';
+    $('[data-rm-hint]', box).textContent = RM_MODE === 'item' ? '측정 항목별로 묶어 시료를 줄로 보여 줍니다. Enter·방향키로 다음 칸.' : '시료별로 묶어 측정 항목을 줄로 보여 줍니다. Enter·방향키로 다음 칸.';
+    sampleJudges(); total();
+  };
+  const sampleJudges = () => st.samples.forEach((_, s) => { const js = named().map(([, ii]) => cellJudge(ii, s)[0]).filter(Boolean); const el = $(`[data-rm-sj="${s}"]`, strip); if (el) el.innerHTML = js.includes('fail') ? RM_CHIP.fail : js.includes('wait') ? RM_CHIP.wait : js.includes('pass') ? RM_CHIP.pass : ''; });
+  const refresh = (ii, s) => { const [j, avg] = cellJudge(ii, s), { a, b } = rmRange(st.items[ii]); const av = $(`[data-rm-avg="${ii}-${s}"]`, grid), jj = $(`[data-rm-j="${ii}-${s}"]`, grid); if (av) av.textContent = avg === null ? '' : fmtNum(avg); if (jj) jj.innerHTML = RM_CHIP[j];
+    $$(`[data-rm-v][data-ii="${ii}"][data-s="${s}"]`, grid).forEach(i => i.classList.toggle('rm-out', i.value !== '' && ((a !== null && Number(i.value) < a) || (b !== null && Number(i.value) > b)))); sampleJudges(); total(); };
+  drawSpec(); drawGrid();
+  box.addEventListener('input', e => {
+    const sp = e.target.closest('[data-rm-i]'); if (sp && e.target.dataset.rs) { const it = st.items[Number(sp.dataset.rmI)]; it[e.target.dataset.rs] = e.target.value; if (e.target.dataset.rs === 'count') st.samples.forEach(fit); drawGrid(); return; }
+    const v = e.target.closest('[data-rm-v]'); if (v) { st.samples[Number(v.dataset.s)].vals[Number(v.dataset.ii)][Number(v.dataset.k)] = v.value; refresh(Number(v.dataset.ii), Number(v.dataset.s)); return; }
+    const l = e.target.closest('[data-rm-lot]'); if (l) { const s = Number(l.dataset.rmLot); st.samples[s].lot = l.value; $$(`[data-rm-lt="${s}"]`, grid).forEach(x => { x.textContent = l.value; }); }
+  });
+  box.addEventListener('keydown', e => { const v = e.target.closest('[data-rm-v]'); if (v && e.key === 'Enter') { e.preventDefault(); const all = $$('[data-rm-v]', grid), i = all.indexOf(v); all[i + 1]?.focus(); all[i + 1]?.select?.(); } });
+  box.addEventListener('click', e => {
+    if (e.target.closest('[data-rm-add]')) { st.items.push({ name: '', unit: '', min: '', max: '', count: 1 }); st.samples.forEach(fit); drawSpec(); drawGrid(); specBody.lastElementChild.querySelector('input').focus(); return; }
+    const d = e.target.closest('[data-rm-del]'); if (d) { const ii = Number(d.dataset.rmDel); if (st.items.length === 1) { st.items[0] = { name: '', unit: '', min: '', max: '', count: 1 }; } else { st.items.splice(ii, 1); st.samples.forEach(s => s.vals.splice(ii, 1)); } st.samples.forEach(fit); drawSpec(); drawGrid(); return; }
+    if (e.target.closest('[data-rm-sadd]')) { if (st.samples.length >= 20) return toast('시료는 20개까지입니다.', 'err'); const s = { lot: `시료 ${st.samples.length + 1}`, vals: [] }; fit(s); st.samples.push(s); drawGrid(); $(`[data-rm-lot="${st.samples.length - 1}"]`, strip)?.select(); return; }
+    const sd = e.target.closest('[data-rm-sdel]'); if (sd) { st.samples.splice(Number(sd.dataset.rmSdel), 1); drawGrid(); return; }
+    if (e.target.closest('[data-rm-mode]')) { RM_MODE = RM_MODE === 'item' ? 'sample' : 'item'; try { localStorage.setItem('wpa:rm-mode', RM_MODE); } catch { /* 편의 */ } drawGrid(); }
+  });
+  const put = list => { const empty = st.items.every(it => !it.name.trim()); if (empty) st.items = []; for (const it of list) st.items.push({ name: it.name, unit: it.unit || '', min: it.min ?? '', max: it.max ?? '', count: it.count || 1 }); st.samples.forEach(fit); drawSpec(); drawGrid(); };
+  box._rm = st;
   const [specs, lib] = await Promise.all([api('GET', '/api/inspection-specs').then(x => (x.specs || []).filter(s => s.active)).catch(() => []), api('GET', '/api/inspection-items').then(x => x.items || []).catch(() => [])]);
   $('[data-rm-spec]', box).insertAdjacentHTML('beforeend', specs.map((s, i) => `<option value="${i}">${esc(s.kind)} · ${esc(s.item_category)} · ${esc(s.product)} (${s.items.length}항목)</option>`).join(''));
   $('[data-rm-lib]', box).insertAdjacentHTML('beforeend', lib.map((it, i) => `<option value="${i}">${esc(it.group)} · ${esc(it.name)}${it.unit ? ` (${esc(it.unit)})` : ''}</option>`).join(''));
-  $('[data-rm-spec]', box).onchange = e => { const s = specs[Number(e.target.value)]; e.target.value = ''; if (!s) return; const empty = $$('[data-rm-row]', body).every(tr => !tr.querySelector('[data-rm="name"]').value.trim()); if (empty) body.innerHTML = ''; s.items.forEach(it => add(it)); total(); };
-  $('[data-rm-lib]', box).onchange = e => { const it = lib[Number(e.target.value)]; e.target.value = ''; if (!it) return; const first = body.firstElementChild; if (body.children.length === 1 && !first.querySelector('[data-rm="name"]').value.trim()) first.remove(); add(it); total(); };
+  $('[data-rm-spec]', box).onchange = e => { const s = specs[Number(e.target.value)]; e.target.value = ''; if (s) put(s.items); };
+  $('[data-rm-lib]', box).onchange = e => { const it = lib[Number(e.target.value)]; e.target.value = ''; if (it) put([it]); };
 }
 function readRndMeasure(root) {
-  const rows = $$('[data-rm-row]', root).filter(tr => tr.querySelector('[data-rm="name"]').value.trim()), values = {};
-  const spec_items = rows.map((tr, i) => { const g = k => tr.querySelector(`[data-rm="${k}"]`).value.trim(); values['i' + i] = [...tr.querySelectorAll('[data-rm-v]')].map(x => x.value === '' ? null : x.value); return { name: g('name'), unit: g('unit'), min: g('min'), max: g('max'), count: g('count') || 1 }; });
-  return { spec_items, values };
+  const st = $('[data-rm]', root)?._rm; if (!st) return { spec_items: [], samples: [] };
+  const keep = st.items.map((it, ii) => [it, ii]).filter(([it]) => it.name.trim());
+  return { spec_items: keep.map(([it]) => ({ name: it.name.trim(), unit: it.unit, min: it.min, max: it.max, count: it.count || 1 })),
+    samples: st.samples.map((s, n) => ({ lot: s.lot.trim() || `시료 ${n + 1}`, values: Object.fromEntries(keep.map(([, ii], k) => ['i' + k, s.vals[ii].map(v => v === '' ? null : v)])) })) };
 }
-// 측정값 표(읽기 전용) · 측정값 수정 창
+// 측정값 표(읽기 전용): 항목별 묶음 · 시료 줄
 function rndMeasureTable(spec, m) {
   if (!spec?.items?.length) return '';
-  const row = (m?.rows || [])[0] || { values: {} };
-  return `<div class="table-wrap"><table class="grid keep-table rm-view" data-no-sort data-no-filter data-keep-cols><thead><tr><th>측정 항목</th><th>규격</th><th>측정값</th><th class="r">평균</th><th>판정</th></tr></thead><tbody>${spec.items.map(it => { const vals = (row.values[it.key] || []).filter(v => v !== null), avg = vals.length ? Math.round(vals.reduce((t, v) => t + v, 0) / vals.length * 1000) / 1000 : null, bad = vals.some(v => (it.min !== null && v < it.min) || (it.max !== null && v > it.max)), sp = it.min !== null && it.max !== null ? `${fmtNum(it.min)} ~ ${fmtNum(it.max)}` : it.min !== null ? `≥ ${fmtNum(it.min)}` : it.max !== null ? `≤ ${fmtNum(it.max)}` : '—';
-    return `<tr><td><b>${esc(it.name)}</b>${it.unit ? ` <span class="small muted">${esc(it.unit)}</span>` : ''}</td><td class="nowrap">${sp}</td><td>${(row.values[it.key] || []).map(v => v === null ? '<span class="muted">·</span>' : `<span class="${(it.min !== null && v < it.min) || (it.max !== null && v > it.max) ? 'red-text' : ''}">${fmtNum(v)}</span>`).join(' , ')}</td><td class="r">${avg === null ? '' : fmtNum(avg)}</td><td>${!vals.length ? '' : it.min === null && it.max === null ? '<span class="chip">기록</span>' : bad ? '<span class="chip red">불합격</span>' : '<span class="chip green">합격</span>'}</td></tr>`; }).join('')}</tbody></table></div>
-    <p class="small">전체 판정 ${{ pass: '<span class="chip green">합격</span>', fail: '<span class="chip red">불합격</span>', pending: '<span class="chip yellow">측정 중</span>' }[m?.result] || ''} <span class="muted">· ${esc(m?.updated_by || '')} ${esc(String(m?.updated_at || '').slice(0, 16))}${m?.revision > 1 ? ` · 수정 ${m.revision - 1}회` : ''}</span></p>`;
+  const rows = m?.rows?.length ? m.rows : [{ lot: '', values: {} }], W = Math.max(1, ...spec.items.map(it => it.count || 1));
+  return `<div class="table-wrap"><table class="grid keep-table insp-grid rm-view" data-no-sort data-no-filter data-keep-cols><thead><tr><th class="c insp-item-c">측정 항목 · 규격</th><th class="c insp-samp-c">시료</th>${Array.from({ length: W }, (_, k) => `<th class="c insp-n">#${k + 1}</th>`).join('')}<th class="c">평균</th><th class="c">판정</th></tr></thead>${spec.items.map(it => `<tbody class="insp-grp">${rows.map((r, s) => { const vals = (r.values?.[it.key] || []), [j, avg] = rmJudgeVals(it, vals), { a, b } = rmRange(it);
+    return `<tr>${!s ? `<th rowspan="${rows.length}" class="insp-item-c"><b>${esc(it.name)}</b>${it.unit ? ` <span class="small muted">${esc(it.unit)}</span>` : ''}<div class="small muted">${rmRange(it).txt}</div></th>` : ''}<th class="insp-samp-c">${esc(r.lot || `시료 ${s + 1}`)}</th>${Array.from({ length: W }, (_, k) => k >= (it.count || 1) ? '<td class="insp-blank"></td>' : `<td class="r${vals[k] != null && ((a !== null && vals[k] < a) || (b !== null && vals[k] > b)) ? ' red-text' : ''}">${vals[k] == null ? '<span class="muted">·</span>' : fmtNum(vals[k])}</td>`).join('')}<td class="r">${avg === null ? '' : fmtNum(avg)}</td><td>${RM_CHIP[j]}</td></tr>`; }).join('')}</tbody>`).join('')}</table></div>
+    <p class="small">전체 판정 ${{ pass: RM_CHIP.pass, fail: RM_CHIP.fail, pending: RM_CHIP.wait }[m?.result] || ''} <span class="muted">· 시료 ${rows.length} · ${esc(m?.updated_by || '')} ${esc(String(m?.updated_at || '').slice(0, 16))}${m?.revision > 1 ? ` · 수정 ${m.revision - 1}회` : ''}</span></p>`;
 }
 async function rndMeasureEdit(r, after) {
   const cur = await api('GET', `/api/requests/${r.id}/rnd-measure`); let root = null;
   const v = await promptBox(`측정값 ${cur.measurement ? '수정' : '입력'} · ${r.req_no || ''} ${r.title}`, `${rndMeasureHtml()}<label>종합 의견 <span class="hint">(선택)</span><textarea name="result_note" rows="2" maxlength="1000">${esc(cur.memo || '')}</textarea></label>${cur.measurement ? '<label>수정 사유 *<input name="reason" required maxlength="300" placeholder="예) 재측정 값으로 정정"></label>' : ''}`, { wide: true,
-    onOpen: el => { root = el; bindRndMeasure(el, cur.spec ? { items: cur.spec.items, values: cur.measurement?.rows?.[0]?.values || {} } : null).catch(fail); },
+    onOpen: el => { root = el; el.classList.add('insp-modal'); bindRndMeasure(el, cur.spec ? { items: cur.spec.items, rows: cur.measurement?.rows || [] } : null).catch(fail); },
     submit: async val => api('PUT', `/api/requests/${r.id}/rnd-measure`, { ...val, ...readRndMeasure(root) }) });
   if (v) { toast('측정값을 저장했습니다.'); await after?.(); }
 }
@@ -315,7 +343,6 @@ function rndDataFields({ step = '', steps = [], title = '', devs = null, devId =
       <label>분석 구분 *<select name="category" data-ad-req required>${cats.map(c => `<option${c === '시제품분석' ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
       <label class="span2">샘플·시료명 *<input name="title" data-ad-req required maxlength="200" value="${esc(title)}"></label>
       <label>샘플수량<input name="sample_qty" maxlength="50"></label>${devs ? '<label>고객사<input name="customer" maxlength="100" placeholder="개발건을 고르면 그 고객사"></label>' : ''}</div>
-    <fieldset class="vendor-sec"><legend>분석 항목 <span class="hint">(분류)</span></legend><div class="dc-ana-checks">${items.map(i => `<label class="inline"><input type="checkbox" data-ad-item value="${esc(i)}"> ${esc(i)}</label>`).join('')}</div></fieldset>
     ${rndMeasureHtml()}
     <label>종합 의견 <span class="hint">(선택 · 측정값이 없으면 여기에 결과를 적으세요)</span><textarea name="result_note" rows="2" maxlength="1000" placeholder="예) 2차 샘플 대비 파티클 개선, 양산 적용 검토"></textarea></label>
     <label>비고<input name="note" maxlength="300"></label>`;
@@ -333,7 +360,7 @@ async function rndAnalysisData(dev, step = '') {
       const setMode = m => { mode = m; $$('[data-ad-mode]', el).forEach(b => b.classList.toggle('on', b.dataset.adMode === m)); $$('[data-ad-sec]', el).forEach(x => { x.hidden = x.dataset.adSec !== m; }); $$('[data-ad-req]', el).forEach(i => { i.required = m === 'new'; }); };
       el.addEventListener('click', e => { const b = e.target.closest('[data-ad-mode]'); if (b) setMode(b.dataset.adMode); const tr = e.target.closest('[data-imp-row]'); if (tr && !e.target.closest('input')) { const c = $('[data-imp]', tr); c.checked = !c.checked; } });
       $('[data-imp-q]', el)?.addEventListener('input', e => { const q = e.target.value.trim().toLowerCase(); $$('[data-imp-row]', el).forEach(tr => { tr.hidden = q && !tr.dataset.q.includes(q); }); });
-      setMode(mode); bindRndMeasure(el).catch(fail); },
+      setMode(mode); el.classList.add('insp-modal'); bindRndMeasure(el).catch(fail); },
     submit: async val => {
       if (mode === 'import') { const ids = $$('[data-imp]:checked', root).map(c => Number(c.dataset.imp)); if (!ids.length) throw new Error('불러올 분석을 고르세요.'); for (const id of ids) await api('POST', `/api/requests/${id}/dev-link`, { dev_request_id: dev.id, dev_step: step }); return { imported: ids.length }; }
       return api('POST', `/api/dev-roadmap/${dev.id}/analysis-data`, { ...val, items: $$('[data-ad-item]:checked', root).map(i => i.value), ...readRndMeasure(root) }); } });
@@ -352,12 +379,12 @@ async function pageRndData(main) {
     $$('[data-rnd]', main).forEach(tr => tr.onclick = () => rndOpen(Number(tr.dataset.rnd), recent).catch(fail)); };
   if (can) {
     const devs = (await api('GET', '/api/dev-roadmap')).rows, form = $('#rndDataForm', main);
-    form.innerHTML = rndDataFields({ devs }) + '<div class="actions"><button type="reset" class="btn">다시 작성</button><button class="btn primary">분석데이터 저장</button></div>';
+    form.innerHTML = rndDataFields({ devs }) + '<div class="actions"><button class="btn primary">분석데이터 저장</button></div>';
     await bindRndMeasure(form);
     const stepSel = form.elements.dev_step;
     form.elements.dev_request_id.onchange = e => { const d = devs.find(x => x.id === Number(e.target.value)); stepSel.innerHTML = '<option value="">단계 미지정</option>' + (d?.steps || []).map(s => `<option>${esc(s.name)}</option>`).join(''); if (d && !form.elements.title.value) form.elements.title.value = d.title; };
     form.onsubmit = async e => { e.preventDefault(); const btn = $('button.primary', form); btn.disabled = true;
-      try { const r = await api('POST', '/api/rnd-analysis-data', { ...formObj(form), items: $$('[data-ad-item]:checked', form).map(i => i.value), ...readRndMeasure(form) }); toast(`분석데이터를 저장했습니다 · ${r.req_no}`); form.reset(); form.elements.analysis_date.value = todayStr(); stepSel.innerHTML = '<option value="">단계 미지정</option>'; $('[data-rm-rows]', form).innerHTML = rmRow(); await recent(); }
+      try { const r = await api('POST', '/api/rnd-analysis-data', { ...formObj(form), items: $$('[data-ad-item]:checked', form).map(i => i.value), ...readRndMeasure(form) }); toast(`분석데이터를 저장했습니다 · ${r.req_no}`); form.reset(); form.elements.analysis_date.value = todayStr(); stepSel.innerHTML = '<option value="">단계 미지정</option>'; $('[data-rm]', form).outerHTML = rndMeasureHtml(); await bindRndMeasure(form); await recent(); }
       catch (error) { fail(error); } finally { btn.disabled = false; } };
   }
   await recent();

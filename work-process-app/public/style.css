@@ -3812,3 +3812,12 @@ label.inline { width: fit-content; max-width: 100%; justify-self: start; }
 .dr-pan { display: inline-flex; gap: 4px; }
 .dr-drag-hint { margin-left: 2px; }
 @media (max-width: 700px) { .dr-drag-hint { display: none; } }
+/* 15.293 검사규격·측정값 그리드: 표는 내용 폭만큼 */
+.rnd-meas table.rm-spec, .rnd-meas table.rm-grid, .modal table.rm-view { width: auto; max-width: 100%; }
+.rm-spec td:nth-child(1) input { width: 220px; } .rm-spec td:nth-child(2) input { width: 90px; } .rm-spec td:nth-child(3) input, .rm-spec td:nth-child(4) input { width: 100px; text-align: right; } .rm-spec td:nth-child(5) input { width: 70px; text-align: right; }
+.rm-grid .insp-cell input { width: 84px; text-align: right; }
+.rm-grid .insp-item-c, .rm-view .insp-item-c { min-width: 150px; text-align: left; } .rm-grid .insp-samp-c, .rm-view .insp-samp-c { min-width: 110px; text-align: left; }
+.rnd-meas .rm-bar { display: flex; gap: 10px; align-items: center; margin: 8px 0 6px; }
+.rnd-meas .rm-samples { margin-top: 10px; }
+/* 15.293 BOM 소요량 분류별 */
+.bs-cat { margin-bottom: 16px; } .bs-cat-h { margin: 14px 0 6px; padding: 6px 10px; border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 6px; font-size: 15px; }
