@@ -939,3 +939,49 @@ test('15.307 equipment register with PM schedule and logs (production), process 
   assert.equal(r2.status, 200, JSON.stringify(r2.body)); assert.equal(r2.body.judge, '부적합'); assert.equal(r2.body.status, 'done');
   assert.equal((await admin('PUT', `/api/reliability/${rel.body.id}`, { note: 'x', revision: r2.body.revision })).status, 400, 'done is locked');
 });
+
+test('15.308 audits (findings create CAPA, close only when CAPAs closed), validations (stages, approver judge, revalidation date), quality goals with auto KPI, risk register', async () => {
+  // A4 심사: 계획 → 실시 → 지적(중·경 → CAPA 자동) → 시정 중 → CAPA 종결 뒤 종결
+  const a = await admin('POST', '/api/audits', { title: '2026 내부심사', kind: 'internal', target: '생산팀', plan_date: today, checklist: [{ q: '작업표준서 최신판 비치?' }], request_id: rid() });
+  assert.equal(a.status, 200, JSON.stringify(a.body)); assert.match(a.body.audit_no, new RegExp(`^AUD-${ymd}-01$`));
+  const a1 = await admin('PUT', `/api/audits/${a.body.id}`, { status: 'done', checklist: [{ q: '작업표준서 최신판 비치?', result: '부적합' }], revision: a.body.revision }); assert.equal(a1.body.status, 'done'); assert.equal(a1.body.done_date, today);
+  const f1 = await admin('POST', `/api/audits/${a.body.id}/findings`, { grade: 'minor', clause: '7.5.3', content: '구판 작업표준서 사용', request_id: rid() });
+  assert.equal(f1.status, 200, JSON.stringify(f1.body)); assert.equal(f1.body.status, 'correcting'); const fnd = f1.body.findings[0]; assert.match(fnd.nc_no, /^NC-/); assert.ok(fnd.due_date > today);
+  const nc = (await admin('GET', `/api/ncs?source_type=audit&source_id=${a.body.id}`)).body.rows[0]; assert.equal(nc.kind, '심사 지적'); assert.equal(nc.source_no, a.body.audit_no);
+  const f2 = await admin('POST', `/api/audits/${a.body.id}/findings`, { grade: 'obs', content: '게시판 정리 권고', request_id: rid() }); assert.equal(f2.body.findings[1].nc_id, null);
+  assert.match((await admin('PUT', `/api/audits/${a.body.id}`, { status: 'closed', revision: f2.body.revision })).body.error, /열린 지적사항 2건/);
+  await admin('PUT', `/api/audits/${a.body.id}/findings/${f2.body.findings[1].id}`, { obs_done: true });
+  let n1 = await admin('PUT', `/api/ncs/${nc.id}`, { status: 'action', cause_json: { why1: '배포 누락' }, revision: nc.revision });
+  n1 = await admin('PUT', `/api/ncs/${nc.id}`, { status: 'verify', corrective: '문서관리 배포 확인', revision: n1.body.revision });
+  await admin('PUT', `/api/ncs/${nc.id}`, { status: 'closed', verify_result: '유효', verify_date: today, revision: n1.body.revision });
+  const a3 = (await admin('GET', '/api/audits')).body.rows.find(x => x.id === a.body.id); assert.equal(a3.open_findings, 0);
+  const a4 = await admin('PUT', `/api/audits/${a.body.id}`, { status: 'closed', revision: a3.revision }); assert.equal(a4.body.status, 'closed', JSON.stringify(a4.body)); assert.equal(a4.body.closed_by, '관리자');
+  assert.equal((await prod('POST', '/api/audits', { title: 'x', kind: 'internal', plan_date: today })).status, 403);
+  // A6 밸리데이션: 설비 대상, 단계 결과 다 넣어야 판정, 적합이면 재밸리데이션 기한
+  const eq = (await admin('POST', '/api/equipment', { name: '건조기', request_id: rid() })).body;
+  const v = await admin('POST', '/api/validations', { title: '건조기 적격성', kind: 'equipment', target_type: 'equipment', target_id: eq.id, stages: [{ key: 'IQ' }, { key: 'OQ' }, { key: 'PQ' }], cycle_months: 12, request_id: rid() });
+  assert.equal(v.status, 200, JSON.stringify(v.body)); assert.match(v.body.target_label, /건조기/); assert.match(v.body.val_no, /^VAL-/);
+  const v1 = await admin('PUT', `/api/validations/${v.body.id}`, { stages: [{ key: 'IQ', done_date: today, result: '적합' }, { key: 'OQ' }, { key: 'PQ' }], revision: v.body.revision }); assert.equal(v1.body.status, 'running');
+  assert.match((await admin('POST', `/api/validations/${v.body.id}/judge`, { result: 'pass', revision: v1.body.revision })).body.error, /모든 단계/);
+  const v2 = await admin('PUT', `/api/validations/${v.body.id}`, { stages: [{ key: 'IQ', done_date: today, result: '적합' }, { key: 'OQ', done_date: today, result: '적합' }, { key: 'PQ', done_date: today, result: '부적합' }], revision: v1.body.revision });
+  assert.match((await admin('POST', `/api/validations/${v.body.id}/judge`, { result: 'pass', revision: v2.body.revision })).body.error, /부적합 단계/);
+  const v3 = await admin('PUT', `/api/validations/${v.body.id}`, { stages: [{ key: 'IQ', done_date: today, result: '적합' }, { key: 'OQ', done_date: today, result: '적합' }, { key: 'PQ', done_date: today, result: '적합' }], revision: v2.body.revision });
+  const vj = await admin('POST', `/api/validations/${v.body.id}/judge`, { result: 'pass', revision: v3.body.revision }); assert.equal(vj.body.status, 'pass'); assert.ok(vj.body.valid_until > today);
+  assert.equal((await admin('PUT', `/api/validations/${v.body.id}`, { title: 'x', revision: vj.body.revision })).status, 400, 'judged is locked');
+  // M1 KPI: 자동 지표(VOC 건수·CAPA 기한 준수율) + 수동 지표 월별 값
+  const g = await admin('POST', '/api/kpi/goals', { title: 'CAPA 기한 준수', metric: 'capa_ontime', target: 90, request_id: rid() }); assert.equal(g.body.unit, '%'); assert.equal(g.body.direction, 'up');
+  const k = (await admin('GET', '/api/kpi')).body.rows.find(x => x.id === g.body.id); const mm = Number(today.slice(5, 7));
+  assert.equal(k.months[mm - 1].actual, 100, 'closed today within due'); assert.equal(k.ytd, 100); assert.equal(k.met, true);
+  const g2 = await admin('POST', '/api/kpi/goals', { title: '클레임 비용 절감', unit: '만원', direction: 'down', target: 500, budget: 2000000, request_id: rid() });
+  const g3 = await admin('PUT', `/api/kpi/goals/${g2.body.id}`, { values: [{ month: 1, target: 50, actual: 40 }, { month: 2, target: 50, actual: 60 }], revision: g2.body.revision }); assert.equal(g3.status, 200, JSON.stringify(g3.body));
+  const k2 = (await admin('GET', '/api/kpi')).body.rows.find(x => x.id === g2.body.id); assert.deepEqual([k2.months[0].actual, k2.months[1].target, k2.ytd], [40, 50, 50]);
+  assert.equal((await admin('DELETE', `/api/kpi/goals/${g2.body.id}?revision=${g3.body.revision}`)).body.ok, true);
+  // M2 리스크: 점수·등급, 대응 중은 계획·담당, 종결은 재평가
+  const r = await admin('POST', '/api/risks', { content: '주요 원단 단일 공급처', area: '구매', likelihood: 4, impact: 5, request_id: rid() });
+  assert.equal(r.status, 200, JSON.stringify(r.body)); assert.equal(r.body.risk_no, 'RSK-01'); assert.deepEqual([r.body.score, r.body.grade], [20, '상']);
+  assert.match((await admin('PUT', `/api/risks/${r.body.id}`, { status: 'acting', revision: r.body.revision })).body.error, /대응계획/);
+  const r1 = await admin('PUT', `/api/risks/${r.body.id}`, { status: 'acting', plan: '2차 공급처 승인', owner_name: '구매', revision: r.body.revision }); assert.equal(r1.body.status, 'acting');
+  assert.match((await admin('PUT', `/api/risks/${r.body.id}`, { status: 'closed', revision: r1.body.revision })).body.error, /재평가/);
+  const r2 = await admin('PUT', `/api/risks/${r.body.id}`, { status: 'closed', re_likelihood: 2, re_impact: 3, review_date: today, revision: r1.body.revision }); assert.deepEqual([r2.body.status, r2.body.re_score, r2.body.re_grade], ['closed', 6, '하']);
+  assert.match((await admin('POST', '/api/risks', { content: 'x', likelihood: 6, impact: 1 })).body.error, /1~5/);
+});
