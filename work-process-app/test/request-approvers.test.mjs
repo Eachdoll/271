@@ -26,7 +26,7 @@ test('Team responsibility grants separate approval rights, supports reassignment
     const pending = (await applicant('POST', '/api/auth/register', { name: '가입대기', password: 'password', invite: 'responsible-test' })).body.account;
     assert.equal((await admin('PUT', `/api/admin/users/${pending.id}`, { roles: ['quality_approver'] })).status, 400);
     assert.equal((await anon('GET', '/api/approval-managers')).status, 401);
-    assert.deepEqual((await quality('GET', '/api/approval-managers')).body, { analysis: [], development: [] });
+    assert.deepEqual((await quality('GET', '/api/approval-managers')).body, { analysis: [], development: [], rnd_analysis: [] });
     await admin('PUT', `/api/admin/users/${q.id}`, { roles: ['quality'] });
     await admin('PUT', `/api/admin/users/${d.id}`, { roles: ['dev'] });
     assert.equal((await quality('PUT', `/api/admin/users/${q.id}`, { roles: ['quality_approver'] })).status, 403);
@@ -39,7 +39,7 @@ test('Team responsibility grants separate approval rights, supports reassignment
     assert.equal((await admin('GET', '/api/requests?type=analysis')).body.find(r => r.id === analysis.id).status, 'pending');
     await admin('PUT', `/api/admin/users/${q.id}`, { roles: ['quality_approver'] });
     await admin('PUT', `/api/admin/users/${d.id}`, { roles: ['dev_approver'] });
-    assert.deepEqual((await dev('GET', '/api/approval-managers')).body, { analysis: [{ id: q.id, name: q.name }], development: [{ id: d.id, name: d.name }] });
+    assert.deepEqual((await dev('GET', '/api/approval-managers')).body, { analysis: [{ id: q.id, name: q.name }], development: [{ id: d.id, name: d.name }], rnd_analysis: [{ id: d.id, name: d.name }] });
     assert.equal((await quality('POST', `/api/requests/${development.id}/approve`)).status, 403);
     assert.equal((await dev('POST', `/api/requests/${analysis.id}/reject`, { reason: '다른팀' })).status, 403);
     const rejected = await quality('POST', `/api/requests/${analysis.id}/reject`, { reason: '분석항목 확인' });
@@ -61,7 +61,7 @@ test('Team responsibility grants separate approval rights, supports reassignment
     assert.equal((await dev('POST', `/api/requests/${next.id}/approve`)).status, 200);
     assert.deepEqual((await quality('GET', '/api/approval-managers')).body.analysis, [{ id: d.id, name: d.name }]);
     await admin('POST', `/api/admin/users/${d.id}/approval`, { status: 'rejected' });
-    assert.deepEqual((await quality('GET', '/api/approval-managers')).body, { analysis: [], development: [] });
+    assert.deepEqual((await quality('GET', '/api/approval-managers')).body, { analysis: [], development: [], rnd_analysis: [] });
     // Administrator fallback remains available without implicitly assigning any team leader.
     const fallback = (await quality('POST', '/api/requests', { type: 'development', title: '관리자 대행', target_price: '1000원' })).body;
     assert.equal((await admin('POST', `/api/requests/${fallback.id}/approve`)).status, 200);

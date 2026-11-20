@@ -243,8 +243,43 @@ async function devPlanEditor(r, done) {
 }
 // 15.277 개발 진행건 팝업: 담당자(개발·영업) 지정 + 스케줄 요약 + 소통(진행내용·영업 코멘트·요청/질문). 소통은 진행 코멘트(request)와 같은 기록.
 const DEV_TALK = [['진행', '진행내용', '#1c7ed6'], ['영업', '영업 코멘트', '#e8590c'], ['요청', '요청·질문', '#c2255c'], ['', '일반', '#868e96']];
-const devTalkKind = text => { const m = /^\[(진행|영업|요청|담당자)\]\s?/.exec(text || ''); return m ? [m[1], text.slice(m[0].length)] : ['', text || '']; };
+const DEV_ANA = ['분석', '분석 결과', '#0c8599']; // 15.286 연구 분석 이력
+const devTalkKind = text => { const m = /^\[(진행|영업|요청|담당자|분석)\]\s?/.exec(text || ''); return m ? [m[1], text.slice(m[0].length)] : ['', text || '']; };
 let DEV_DIRECTORY = null;
+// 15.287 개발건 단계에 분석데이터 바로 입력(연구 담당): 승인 없이 완료된 연구 분석(RA-)으로 저장 · 단계 연결 · 이력
+async function rndAnalysisData(dev, step = '') {
+  const cfg = REQ.rnd_analysis, cats = cfg.fields.find(f => f.k === 'category').opts, items = cfg.fields.find(f => f.k === 'items').opts;
+  let root = null;
+  const v = await promptBox(`분석데이터 입력 · ${dev.title}`, `<p class="small muted">이 개발건${step ? `의 「${esc(step)}」 단계` : ''}에서 분석한 데이터를 넣습니다. 완료된 연구 분석(RA- 번호)으로 저장되고 단계별 분석 결과·소통 이력에 남습니다. 그래프·성적서는 저장 뒤 분석을 열어 「사진 보기·첨부」로 붙이세요.</p>
+    <div class="form-grid"><label>분석일 *<input type="date" name="analysis_date" required value="${todayStr()}"></label>
+      <label>단계<select name="dev_step"><option value="">단계 미지정</option>${dev.steps.map(s => `<option${s.name === step ? ' selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label>
+      <label>분석 구분 *<select name="category" required>${cats.map(c => `<option${c === '시제품분석' ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
+      <label class="span2">샘플·시료명 *<input name="title" required maxlength="200" value="${esc(dev.title)}${step ? ' ' + esc(step) : ''}"></label>
+      <label>샘플수량<input name="sample_qty" maxlength="50"></label></div>
+    <fieldset class="vendor-sec"><legend>분석 항목</legend><div class="dc-ana-checks">${items.map(i => `<label class="inline"><input type="checkbox" data-ad-item value="${esc(i)}"> ${esc(i)}</label>`).join('')}</div></fieldset>
+    <label>분석 결과 * <span class="hint">(측정값·판정·비교 등)</span><textarea name="result_note" required rows="4" maxlength="1000" placeholder="예) 파티클 95/ft² (기준 150 이하) 합격 · 흡수성능 4.2g/g"></textarea></label>
+    <label>비고<input name="note" maxlength="300"></label>`, { wide: true,
+    onOpen: el => { root = el; },
+    submit: async val => api('POST', `/api/dev-roadmap/${dev.id}/analysis-data`, { ...val, items: $$('[data-ad-item]:checked', root).map(i => i.value) }) });
+  if (v) toast(`분석데이터를 저장했습니다 · ${v.req_no}`);
+  return !!v;
+}
+async function rndOpen(id, after) {
+  const all = await api('GET', '/api/requests?type=rnd_analysis'); const r = all.find(x => x.id === id);
+  if (!r) throw new Error('분석의뢰를 찾을 수 없습니다.');
+  requestDetail('rnd_analysis', r, after);
+}
+async function rndDevLinkBox(r, after) {
+  const devs = (await api('GET', '/api/dev-roadmap?done=1')).rows, cur = r.data?.dev_request_id || '';
+  let root = null;
+  const steps = id => (devs.find(d => d.id === Number(id))?.steps || []).map(s => `<option${s.name === (r.data?.dev_step || '') ? ' selected' : ''}>${esc(s.name)}</option>`).join('');
+  const v = await promptBox('개발건 연결', `<p class="small muted">이 분석을 진행 중인 개발건과 로드맵 단계에 연결하면, 개발 › 스케줄 관리의 진행건 창 「단계별 분석 결과」와 소통 이력에 결과가 남습니다.</p>
+    <label>개발건<select name="dev_request_id"><option value="">연결 안 함</option>${devs.map(d => `<option value="${d.id}"${d.id === Number(cur) ? ' selected' : ''}>${esc(d.req_no || '')} ${esc(d.title)}${d.customer ? ` · ${esc(d.customer)}` : ''}</option>`).join('')}</select></label>
+    <label>단계<select name="dev_step"><option value="">단계 미지정</option>${cur ? steps(cur) : ''}</select></label>`, {
+    onOpen: el => { root = el; el.querySelector('[name=dev_request_id]').onchange = e => { el.querySelector('[name=dev_step]').innerHTML = '<option value="">단계 미지정</option>' + steps(e.target.value); }; },
+    submit: async val => api('POST', `/api/requests/${r.id}/dev-link`, val) });
+  if (v) { toast(v.data?.dev_request_id ? '개발건에 연결했습니다.' : '연결을 끊었습니다.'); await after?.(); }
+}
 async function devCaseWindow(id, done) {
   const load1 = async () => (await api('GET', '/api/dev-roadmap?id=' + id)).rows[0];
   let r = await load1(); if (!r) throw new Error('개발 의뢰를 찾을 수 없습니다.');
@@ -254,12 +289,13 @@ async function devCaseWindow(id, done) {
   const opt = (sel) => `<option value="">미지정</option>${DEV_DIRECTORY.map(u => `<option value="${u.id}"${Number(sel) === u.id ? ' selected' : ''}>${esc(u.name)}${u.department ? ` · ${esc(u.department)}` : ''}${u.position ? ` ${esc(u.position)}` : ''}</option>`).join('')}`;
   let changed = false;
   const m = modal(`<div class="dev-case"><h3>${esc(r.title)} <span class="small muted">${esc(r.req_no || '')}</span></h3><div data-dc-summary></div>
+    <fieldset class="vendor-sec dc-ana"><legend>단계별 분석 결과 <span class="hint">(연구팀 분석 · 로드맵 공정 단계별)</span></legend><div data-dc-ana></div></fieldset>
     <fieldset class="vendor-sec dc-owners"><legend>담당자</legend><div class="form-grid">
       <label>개발 담당자<select name="dev_owner_id" ${canOwn ? '' : 'disabled'}>${opt(r.dev_owner_id)}</select></label>
       <label>영업 담당자<select name="sales_owner_id" ${canOwn ? '' : 'disabled'}>${opt(r.sales_owner_id)}</select></label>
       <div class="dc-owner-act">${canOwn ? '<button type="button" class="btn small primary" data-dc-owner-save>담당자 저장</button>' : '<span class="small muted">개발·영업 담당자가 지정합니다.</span>'}</div></div></fieldset>
     <fieldset class="vendor-sec"><legend>소통 <span class="hint">(진행내용·영업 코멘트·요청을 남기면 모두가 봅니다 · Ctrl+Enter 등록)</span></legend>
-      <div class="dc-filter seg" role="group" aria-label="소통 구분">${[['all', '전체'], ...DEV_TALK.slice(0, 3).map(([k, l]) => [k, l])].map(([k, l]) => `<button type="button" data-dc-f="${k}" class="${k === 'all' ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <div class="dc-filter seg" role="group" aria-label="소통 구분">${[['all', '전체'], ...DEV_TALK.slice(0, 3).map(([k, l]) => [k, l]), [DEV_ANA[0], DEV_ANA[1]]].map(([k, l]) => `<button type="button" data-dc-f="${k}" class="${k === 'all' ? 'on' : ''}">${l}</button>`).join('')}</div>
       <div class="dc-thread" data-dc-thread aria-live="polite"><p class="muted">불러오는 중…</p></div>
       <button type="button" class="btn small" data-dc-older hidden>이전 기록 더 보기</button>
       <form class="dc-send" data-dc-form><div class="seg dc-kind" role="radiogroup" aria-label="글 구분">${DEV_TALK.slice(0, 3).map(([k, l, c]) => `<label style="--c:${c}"><input type="radio" name="kind" value="${k}"${k === defKind ? ' checked' : ''}> ${l}</label>`).join('')}</div>
@@ -273,12 +309,22 @@ async function devCaseWindow(id, done) {
       <div class="dc-prog"><div class="dc-bar" style="--c:${t[2]}"><b style="width:${r.progress || 0}%"></b></div><b>${r.progress || 0}%</b>${end ? `<span>완료예정 <b>${esc(end)}</b>${dd != null && r.status !== 'done' ? ` <span class="${dd < 0 ? 'red-text' : ''}">(${dd >= 0 ? 'D-' + dd : 'D+' + -dd})</span>` : ''}</span>` : ''}</div>
       <div class="small dr-now">${r.current_stage ? `<span>현재 <b>${esc(r.current_stage)}</b></span>` : '<span class="muted">현재 진행현황 미입력</span>'}${r.next_step ? `<span>다음 <b>${esc(r.next_step)}</b>${r.next_date ? ` ${esc(r.next_date)}` : ''}</span>` : ''}${r.steps.length ? `<span>공정 ${r.steps.filter(x => x.status === 'done').length}/${r.steps.length}</span>` : ''}</div>`; };
   summary();
+  // 15.286 단계별 분석 결과: 로드맵 공정 순서대로, 각 단계에 연결된 연구 분석(상태·결과). 단계마다 「＋ 분석의뢰」
+  const canAna = hasRole('dev') || hasRole('dev_approver');
+  const anaBox = () => {
+    const list = r.analyses || [], names = [...r.steps.map(s => s.name), ...list.map(a => a.dev_step).filter(Boolean)].filter((n, i, all) => all.indexOf(n) === i);
+    const groups = [...names.map(n => [n, r.steps.find(s => s.name === n)]), ['', null]];
+    const item = a => `<button type="button" class="dc-ana-item st-${a.status}" data-dc-ana-open="${a.id}">${a.req_no ? `<span class="dc-ana-no">${esc(a.req_no)}</span> ` : ''}<b>${esc(a.title)}</b> <span class="chip">${esc(a.category)}</span> ${statusChip(a.status)}<div class="dc-ana-res">${a.result_note ? `결과 <b>${esc(a.result_note)}</b>` : '<span class="muted">결과 대기</span>'} <span class="small muted">· ${esc(a.analysis_date || String(a.updated_at || a.created_at).slice(0, 10))}</span></div></button>`;
+    $('[data-dc-ana]', el).innerHTML = groups.map(([n, st]) => { const as = list.filter(a => (a.dev_step || '') === n); if (!n && !as.length) return ''; return `<div class="dc-ana-step"><div class="dc-ana-h"><b>${n ? esc(n) : '단계 미지정'}</b>${st ? ` <span class="small muted">${esc((st.start_date || '').slice(5))}~${esc((st.end_date || '').slice(5))}</span> <span class="chip" style="color:${DEV_STEP_STATE[st.status]?.[1]};border-color:${DEV_STEP_STATE[st.status]?.[1]}">${DEV_STEP_STATE[st.status]?.[0] || ''}</span>` : ''}<span class="small muted">분석 ${as.length}건${as.length ? ` · 완료 ${as.filter(a => a.status === 'done').length}` : ''}</span>${canAna ? `<button type="button" class="btn small" data-dc-ana-new="${esc(n)}">＋ 분석데이터</button>` : ''}</div>${as.map(item).join('') || '<p class="small muted dc-ana-none">아직 연결된 분석이 없습니다.</p>'}</div>`; }).join('') || '<p class="small muted">공정표에 단계를 넣으면 단계별로 분석데이터를 넣고 볼 수 있습니다.</p>';
+    if (!r.steps.length && !list.length && canAna) $('[data-dc-ana]', el).insertAdjacentHTML('beforeend', '<div class="actions" style="justify-content:flex-start"><button type="button" class="btn small" data-dc-ana-new="">＋ 분석데이터</button></div>');
+  };
+  anaBox();
   const endpoint = `/api/comments/request/${id}`; let rows = [], next = null, filter = 'all';
   const thread = $('[data-dc-thread]', el);
   const draw = () => {
     const list = rows.slice().sort((a, b) => a.id - b.id).filter(c => filter === 'all' || devTalkKind(c.content)[0] === filter);
-    thread.innerHTML = list.length ? list.map(c => { const [k, body] = devTalkKind(c.content), info = k === '담당자' ? ['담당자', '담당자 변경', '#5f3dc4'] : DEV_TALK.find(x => x[0] === k) || DEV_TALK[3], mine = c.author_id === ME?.id;
-      return `<div class="dc-msg${mine ? ' mine' : ''}${k === '담당자' ? ' sys' : ''}" style="--c:${info[2]}"><div class="dc-meta"><span class="dc-kind-chip">${info[1]}</span><b>${esc(c.author_name)}</b><time>${esc(c.created_at.slice(0, 16))}</time>${mine && c.content !== '(삭제됨)' && k !== '담당자' ? `<button type="button" class="linklike small" data-dc-del="${c.id}">지우기</button>` : ''}</div><div class="dc-body">${esc(body)}</div></div>`; }).join('')
+    thread.innerHTML = list.length ? list.map(c => { const [k, body] = devTalkKind(c.content), info = k === '담당자' ? ['담당자', '담당자 변경', '#5f3dc4'] : k === '분석' ? DEV_ANA : DEV_TALK.find(x => x[0] === k) || DEV_TALK[3], mine = c.author_id === ME?.id;
+      return `<div class="dc-msg${mine ? ' mine' : ''}${k === '담당자' ? ' sys' : ''}" style="--c:${info[2]}"><div class="dc-meta"><span class="dc-kind-chip">${info[1]}</span><b>${esc(c.author_name)}</b><time>${esc(c.created_at.slice(0, 16))}</time>${mine && c.content !== '(삭제됨)' && k !== '담당자' && k !== '분석' ? `<button type="button" class="linklike small" data-dc-del="${c.id}">지우기</button>` : ''}</div><div class="dc-body">${esc(body)}</div></div>`; }).join('')
       : `<p class="muted">${rows.length ? '이 구분의 글이 없습니다.' : '아직 소통 내역이 없습니다. 첫 진행내용이나 코멘트를 남겨 주세요.'}</p>`;
     $('[data-dc-older]', el).hidden = next === null; thread.scrollTop = thread.scrollHeight;
   };
@@ -289,7 +335,9 @@ async function devCaseWindow(id, done) {
     if (e.target.closest('[data-dc-close]')) { m.close(); return; }
     const del = e.target.closest('[data-dc-del]'); if (del) { if (!(await confirmBox('이 글을 지울까요? 쓴 지 10분 안에만 지울 수 있고 자리에 「(삭제됨)」이 남습니다.'))) return; try { await api('DELETE', `${endpoint}/${del.dataset.dcDel}`); changed = true; await loadTalk(); } catch (err) { fail(err); } return; }
     if (e.target.closest('[data-dc-owner-save]')) { try { const res = await api('PUT', `/api/dev-roadmap/${id}/owners`, { dev_owner_id: $('[name=dev_owner_id]', el).value, sales_owner_id: $('[name=sales_owner_id]', el).value }); toast(res.changed ? '담당자를 저장했습니다.' : '바뀐 담당자가 없습니다.'); if (res.changed) { changed = true; r = await load1(); await loadTalk(); } } catch (err) { fail(err); } return; }
-    if (e.target.closest('[data-dc-plan]')) { await devPlanEditor(r, async () => { changed = true; r = await load1(); summary(); }); return; }
+    if (e.target.closest('[data-dc-plan]')) { await devPlanEditor(r, async () => { changed = true; r = await load1(); summary(); anaBox(); }); return; }
+    const an = e.target.closest('[data-dc-ana-new]'); if (an) { if (await rndAnalysisData(r, an.dataset.dcAnaNew)) { changed = true; r = await load1(); anaBox(); await loadTalk(); } return; }
+    const ao = e.target.closest('[data-dc-ana-open]'); if (ao) { await rndOpen(Number(ao.dataset.dcAnaOpen), async () => { changed = true; r = await load1(); anaBox(); await loadTalk(); }); return; }
     if (e.target.closest('[data-dc-req]')) { try { const full = (await api('GET', '/api/requests?' + new URLSearchParams({ type: 'development', q: r.req_no || r.title }))).find(x => x.id === r.id); if (full) requestDetail('development', full, async () => { changed = true; }); else toast('의뢰서를 찾지 못했습니다.'); } catch (err) { fail(err); } }
   });
   const form = $('[data-dc-form]', el);
@@ -358,12 +406,12 @@ async function pageDevRoadmap(main) {
       const [, , color] = DEV_TERM.find(t => t[0] === (r.term || '')) || DEV_TERM[3], end = endOf(r), start = startOf(r), late = isLate(r);
       const bar = start && end ? `<div class="dr-bar${late ? ' late' : ''}" style="left:${pct(start)}%;width:${Math.max(0.8, pct(end) - pct(start))}%;--c:${color}" title="${esc(`${start} ~ ${end} · 진행 ${r.progress || 0}%`)}"><b style="width:${r.progress || 0}%"></b><span>${r.progress || 0}%</span></div>`
         : end ? `<div class="dr-pin" style="left:${pct(end)}%;--c:${color}" title="완료예정 ${esc(end)}">▼</div>` : `<button type="button" class="dr-empty" data-dr-edit="${r.id}" style="left:${pct(today)}%">＋ 일정 넣기</button>`;
-      const steps = r.steps.filter(s => s.start_date && s.end_date).map(s => { const w = Math.max(0.6, pct(s.end_date) - pct(s.start_date)), wpx = w / 100 * W; return `<i class="dr-step st-${s.status}" style="left:${pct(s.start_date)}%;width:${w}%;background:${DEV_STEP_STATE[s.status]?.[1] || '#adb5bd'}" title="${esc(`${s.name} · ${s.start_date}~${s.end_date} · ${DEV_STEP_STATE[s.status]?.[0] || ''}`)}">${wpx >= 46 ? `<span>${esc(s.name)}</span>` : ''}</i>`; }).join('');
+      const steps = r.steps.filter(s => s.start_date && s.end_date).map(s => { const w = Math.max(0.6, pct(s.end_date) - pct(s.start_date)), wpx = w / 100 * W; return `<i class="dr-step st-${s.status}" style="left:${pct(s.start_date)}%;width:${w}%;background:${DEV_STEP_STATE[s.status]?.[1] || '#adb5bd'}" title="${esc(`${s.name} · ${s.start_date}~${s.end_date} · ${DEV_STEP_STATE[s.status]?.[0] || ''}${(r.analyses || []).filter(a => a.dev_step === s.name).map(a => `\n🔬 ${a.req_no || ''} ${a.title} · ${a.result_note || '결과 대기'}`).join('')}`)}">${wpx >= 46 ? `<span>${esc(s.name)}${(r.analyses || []).some(a => a.dev_step === s.name) ? ` 🔬${(r.analyses || []).filter(a => a.dev_step === s.name).length}` : ''}</span>` : ''}</i>`; }).join('');
       const next = r.next_date ? `<em class="dr-next" style="left:${pct(r.next_date)}%" title="${esc(`다음: ${r.next_step || ''} (${r.next_date})`)}">◆</em>` : '';
       const capLeft = Math.max(start && end ? pct(start) : 0, pct(today)), cap = r.current_stage || r.next_step ? `<div class="dr-cap" style="left:min(${capLeft}%, calc(100% - 320px))">${r.current_stage ? `<span>현재 <b>${esc(r.current_stage)}</b></span>` : ''}${r.next_step ? `<span>다음 <b>${esc(r.next_step)}</b>${r.next_date ? ` ${esc(r.next_date.slice(5).replace('-', '/'))}` : ''}</span>` : ''}</div>` : '';
       const dd = ddClass(r);
       return `<div class="dr-row${late ? ' is-late' : ''}" data-dr="${r.id}" tabindex="0" title="눌러서 진행건 열기(담당자·스케줄·소통)">
-        <div class="dr-label"><div class="dr-l1"><b class="dr-title">${esc(r.title)}</b>${r.status === 'done' ? '<span class="chip green">완료</span>' : late ? '<span class="chip red">지연</span>' : ''}${end && r.status !== 'done' ? `<span class="dr-dd ${dd}">${dday(end)}</span>` : ''}${r.comment_count ? `<span class="dr-talk" title="${esc(r.last_comment || '')}">💬 ${r.comment_count}</span>` : ''}${canPlan ? `<button type="button" class="dr-edit" data-dr-edit="${r.id}" title="일정·공정표 입력" aria-label="${esc(r.title)} 일정 입력">✎</button>` : ''}</div>
+        <div class="dr-label"><div class="dr-l1"><b class="dr-title">${esc(r.title)}</b>${r.status === 'done' ? '<span class="chip green">완료</span>' : late ? '<span class="chip red">지연</span>' : ''}${end && r.status !== 'done' ? `<span class="dr-dd ${dd}">${dday(end)}</span>` : ''}${r.comment_count ? `<span class="dr-talk" title="${esc(r.last_comment || '')}">💬 ${r.comment_count}</span>` : ''}${(r.analyses || []).length ? `<span class="dr-ana" title="연구 분석 ${r.analyses.length}건 · 완료 ${r.analyses.filter(a => a.status === 'done').length}">🔬 ${r.analyses.filter(a => a.status === 'done').length}/${r.analyses.length}</span>` : ''}${canPlan ? `<button type="button" class="dr-edit" data-dr-edit="${r.id}" title="일정·공정표 입력" aria-label="${esc(r.title)} 일정 입력">✎</button>` : ''}</div>
           <div class="small muted dr-l2">${esc([r.customer, r.req_no].filter(Boolean).join(' · '))}${end ? ` · 완료예정 ${esc(end)}` : ''}</div>
           <div class="small dr-owners">${r.dev_owner_name ? `<span><i class="dr-av">개</i>${esc(r.dev_owner_name)}</span>` : ''}${r.sales_owner_name ? `<span><i class="dr-av s">영</i>${esc(r.sales_owner_name)}</span>` : ''}${!r.dev_owner_name && !r.sales_owner_name ? '<span class="muted">담당자 미지정</span>' : ''}</div>
           ${r.current_stage || r.next_step ? `<div class="small dr-now">${r.current_stage ? `<span>현재 <b>${esc(r.current_stage)}</b></span>` : ''}${r.next_step ? `<span>다음 <b>${esc(r.next_step)}</b>${r.next_date ? ` ${esc(r.next_date.slice(5))}` : ''}</span>` : ''}</div>` : ''}</div>
@@ -374,7 +422,7 @@ async function pageDevRoadmap(main) {
       : `<div class="empty">조건에 맞는 개발 제품이 없습니다.${kpi ? ' 위 요약 카드의 거르기를 「진행 중」으로 바꿔 보세요.' : ' 개발리스트에 진행 중인 의뢰가 있어야 합니다.'}</div>`;
     const sc = $('.dr-scroll', box); if (sc) sc.scrollLeft = Math.max(0, px(today) - sc.clientWidth * 0.25 + 0);
     $('#drTableN', main).textContent = `${list.length}건`;
-    $('#drTable', main).innerHTML = list.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>구분</th><th>제품</th><th>거래처</th><th>현재 진행현황</th><th>다음 진행예정</th><th>다음 예정일</th><th>완료예정일</th><th class="r">D-day</th><th class="r">진행률</th><th>공정</th><th>개발 담당</th><th>영업 담당</th><th>최근 소통</th></tr></thead><tbody>${list.map(r => { const end = endOf(r), t = DEV_TERM.find(x => x[0] === (r.term || '')) || DEV_TERM[3]; return `<tr data-dr="${r.id}" style="cursor:pointer"><td><span class="chip" style="border-color:${t[2]};color:${t[2]}">${t[1]}</span></td><td><b>${esc(r.title)}</b><div class="small muted">${esc(r.req_no || '')}</div></td><td>${esc(r.customer || '')}</td><td>${esc(r.current_stage || '')}</td><td>${esc(r.next_step || '')}</td><td class="nowrap">${esc(r.next_date || '')}</td><td class="nowrap">${esc(end)}</td><td class="r nowrap"><span class="dr-dd ${ddClass(r)}">${r.status === 'done' ? '' : dday(end)}</span></td><td class="r"><div class="dr-mini"><b style="width:${r.progress || 0}%"></b></div>${r.progress || 0}%</td><td class="small">${r.steps.length ? `${r.steps.filter(s => s.status === 'done').length}/${r.steps.length}` : ''}</td><td>${esc(r.dev_owner_name || '')}</td><td>${esc(r.sales_owner_name || '')}</td><td class="small muted dr-last">${r.comment_count ? `💬 ${r.comment_count} · ${esc(r.last_comment || '')}` : ''}</td></tr>`; }).join('')}</tbody></table></div>` : '';
+    $('#drTable', main).innerHTML = list.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>구분</th><th>제품</th><th>거래처</th><th>현재 진행현황</th><th>다음 진행예정</th><th>다음 예정일</th><th>완료예정일</th><th class="r">D-day</th><th class="r">진행률</th><th>공정</th><th>분석</th><th>개발 담당</th><th>영업 담당</th><th>최근 소통</th></tr></thead><tbody>${list.map(r => { const end = endOf(r), t = DEV_TERM.find(x => x[0] === (r.term || '')) || DEV_TERM[3]; return `<tr data-dr="${r.id}" style="cursor:pointer"><td><span class="chip" style="border-color:${t[2]};color:${t[2]}">${t[1]}</span></td><td><b>${esc(r.title)}</b><div class="small muted">${esc(r.req_no || '')}</div></td><td>${esc(r.customer || '')}</td><td>${esc(r.current_stage || '')}</td><td>${esc(r.next_step || '')}</td><td class="nowrap">${esc(r.next_date || '')}</td><td class="nowrap">${esc(end)}</td><td class="r nowrap"><span class="dr-dd ${ddClass(r)}">${r.status === 'done' ? '' : dday(end)}</span></td><td class="r"><div class="dr-mini"><b style="width:${r.progress || 0}%"></b></div>${r.progress || 0}%</td><td class="small">${r.steps.length ? `${r.steps.filter(s => s.status === 'done').length}/${r.steps.length}` : ''}</td><td class="small">${(r.analyses || []).length ? `🔬 ${r.analyses.filter(a => a.status === 'done').length}/${r.analyses.length}` : ''}</td><td>${esc(r.dev_owner_name || '')}</td><td>${esc(r.sales_owner_name || '')}</td><td class="small muted dr-last">${r.comment_count ? `💬 ${r.comment_count} · ${esc(r.last_comment || '')}` : ''}</td></tr>`; }).join('')}</tbody></table></div>` : '';
   };
   const load = async () => { rows = (await api('GET', '/api/dev-roadmap?' + new URLSearchParams({ done: form.elements.done.checked ? '1' : '' }))).rows; if (main.isConnected) draw(); };
   main.addEventListener('click', e => {

@@ -477,7 +477,7 @@ test('15.274 vendor contacts list: several contacts per site/role, replaced on e
 test('15.276 development roadmap: term, dates, progress, current/next and process steps per development request', async () => {
   const dev = await admin('POST', '/api/requests', { type: 'development', title: '저분진 와이퍼 9인치', customer: '삼성SDI', due_date: '2027-03-31', target_price: '100', data: { extra: 'x' } });
   assert.equal(dev.status, 200, JSON.stringify(dev.body));
-  const id = dev.body.id;
+  const id = dev.body.id; await admin('POST', `/api/requests/${id}/approve`); // 15.285 접수대기는 스케줄에 안 나옴
   let row = (await admin('GET', '/api/dev-roadmap')).body.rows.find(r => r.id === id); assert.ok(row); assert.equal(row.term, '');
   assert.equal((await admin('PUT', `/api/dev-roadmap/${id}`, { term: 'x' })).status, 400);
   assert.equal((await admin('PUT', `/api/dev-roadmap/${id}`, { term: 'mid', start_date: '2026-12-01', target_date: '2026-11-01' })).status, 400, 'target before start');
@@ -566,4 +566,71 @@ test('15.284 purchase request made from a sales order keeps the order link; the 
   assert.ok(found.some(p => p.id === pr.body.id), 'search by order number');
   const plain = await admin('POST', '/api/purchase-requests', { ...base, request_id: rid() });
   assert.equal(plain.body.sales_order_id, null); assert.equal(plain.body.sales_order_no, '');
+});
+
+test('15.285 research-team analysis requests (rnd_analysis) and pending development requests stay off the schedule', async () => {
+  assert.equal((await admin('POST', '/api/requests', { type: 'rnd_analysis', title: '경쟁사 와이퍼', customer: '자체', category: '수입검사', data: {} })).status, 400, 'quality categories are not research categories');
+  const r = await admin('POST', '/api/requests', { type: 'rnd_analysis', title: '경쟁사 와이퍼', customer: '자체', category: '경쟁사분석', data: { items: ['파티클'], sample_qty: '2' } });
+  assert.equal(r.status, 200, JSON.stringify(r.body)); assert.equal(r.body.status, 'pending');
+  assert.equal((await prod('POST', `/api/requests/${r.body.id}/approve`)).status, 403, 'only the research approver');
+  const ok = await admin('POST', `/api/requests/${r.body.id}/approve`);
+  assert.equal(ok.status, 200); assert.match(ok.body.req_no, /^RA-\d{6}-01$/);
+  const list = (await admin('GET', '/api/requests?type=rnd_analysis&scope=list&category=' + encodeURIComponent('경쟁사분석'))).body;
+  assert.deepEqual(list.map(x => x.id), [r.body.id]);
+  assert.ok(!(await admin('GET', '/api/requests?type=analysis&scope=list')).body.some(x => x.id === r.body.id), 'separate from quality analysis');
+  const mgr = (await admin('GET', '/api/approval-managers')).body; assert.ok(Array.isArray(mgr.rnd_analysis));
+  // 개발 스케줄: 접수대기(승인 전) 의뢰는 안 나옴
+  const dev = await admin('POST', '/api/requests', { type: 'development', title: '접수대기 과제', customer: 'X', due_date: '2027-01-31', target_price: '1', data: { extra: 'x' } });
+  assert.ok(!(await admin('GET', '/api/dev-roadmap')).body.rows.some(x => x.id === dev.body.id), 'pending not on the roadmap');
+  await admin('POST', `/api/requests/${dev.body.id}/approve`);
+  assert.ok((await admin('GET', '/api/dev-roadmap')).body.rows.some(x => x.id === dev.body.id), 'approved shows');
+});
+
+test('15.286 research analyses linked to a development item and roadmap step; results kept as history on both', async () => {
+  const dev = (await admin('POST', '/api/requests', { type: 'development', title: '항균 와이퍼', customer: 'A사', due_date: '2027-03-31', target_price: '1', data: { extra: 'x' } })).body;
+  await admin('POST', `/api/requests/${dev.id}/approve`);
+  await admin('PUT', `/api/dev-roadmap/${dev.id}`, { term: 'short', steps: [{ name: '1차 샘플', start_date: '2026-11-01', end_date: '2026-11-30', status: 'doing' }, { name: '고객 평가', start_date: '2026-12-01', end_date: '2026-12-31', status: 'todo' }] });
+  assert.equal((await admin('POST', '/api/requests', { type: 'rnd_analysis', title: 'x', category: '원료분석', data: { dev_request_id: 999999 } })).status, 400);
+  const a1 = (await admin('POST', '/api/requests', { type: 'rnd_analysis', title: '1차 샘플 파티클', category: '시제품분석', data: { items: ['파티클'], dev_request_id: dev.id, dev_step: '1차 샘플' } })).body;
+  assert.equal(a1.data.dev_request_id, dev.id); assert.equal(a1.data.dev_step, '1차 샘플'); assert.equal(a1.data.dev_title, '항균 와이퍼');
+  const a2 = (await admin('POST', '/api/requests', { type: 'rnd_analysis', title: '경쟁사 비교', category: '경쟁사분석', data: {} })).body;
+  for (const a of [a1, a2]) await admin('POST', `/api/requests/${a.id}/approve`);
+  // 결과 입력 → 분석 자체와 개발건 소통에 이력
+  assert.equal((await admin('POST', `/api/requests/${a1.id}/status`, { status: 'progress', result_note: '파티클 120/ft² (기준 150 이하)' })).status, 200);
+  await admin('POST', `/api/requests/${a1.id}/status`, { status: 'done', result_note: '파티클 95/ft² 합격' });
+  const devTalk = (await admin('GET', `/api/comments/request/${dev.id}`)).body.rows.map(c => c.content);
+  assert.ok(devTalk.some(c => /^\[분석\] 분석의뢰 등록 · 1차 샘플 파티클/.test(c)));
+  assert.ok(devTalk.some(c => /^\[분석\] RA-.* 진행 · 결과: 파티클 120.*단계 「1차 샘플」/.test(c)), JSON.stringify(devTalk));
+  assert.ok(devTalk.some(c => /완료 · 결과: 파티클 95\/ft² 합격/.test(c)));
+  assert.equal((await admin('GET', `/api/comments/request/${a1.id}`)).body.rows.filter(c => /^\[분석결과\]/.test(c.content)).length, 2, 'own history too');
+  // 나중에 연결: 단계 「고객 평가」
+  const linked = await admin('POST', `/api/requests/${a2.id}/dev-link`, { dev_request_id: dev.id, dev_step: '고객 평가' });
+  assert.equal(linked.status, 200, JSON.stringify(linked.body)); assert.equal(linked.body.data.dev_step, '고객 평가');
+  assert.equal((await prod('POST', `/api/requests/${a2.id}/dev-link`, { dev_request_id: '' })).status, 403);
+  const row = (await admin('GET', '/api/dev-roadmap?id=' + dev.id)).body.rows[0];
+  assert.deepEqual(row.analyses.map(a => [a.title, a.dev_step, a.status, a.result_note]), [['1차 샘플 파티클', '1차 샘플', 'done', '파티클 95/ft² 합격'], ['경쟁사 비교', '고객 평가', 'waiting', '']]);
+  assert.equal((await admin('GET', '/api/dev-roadmap')).body.rows.find(r => r.id === dev.id).analyses.length, 2);
+  // 끊기
+  await admin('POST', `/api/requests/${a2.id}/dev-link`, { dev_request_id: '' });
+  assert.equal((await admin('GET', '/api/dev-roadmap?id=' + dev.id)).body.rows[0].analyses.length, 1);
+});
+
+test('15.287 analysis data entered directly on a development step: done RA- record linked to the step, history kept, research role only', async () => {
+  const dev = (await admin('POST', '/api/requests', { type: 'development', title: '저분진 장갑', customer: 'B사', due_date: '2027-03-31', target_price: '1', data: { extra: 'x' } })).body;
+  await admin('POST', `/api/requests/${dev.id}/approve`);
+  await admin('PUT', `/api/dev-roadmap/${dev.id}`, { term: 'mid', steps: [{ name: '시제품', start_date: '2026-11-01', end_date: '2026-12-31', status: 'doing' }] });
+  const body = { dev_step: '시제품', title: '시제품 A', category: '시제품분석', items: ['파티클', '인장,인열'], result_note: '파티클 80/ft² 합격', analysis_date: '2026-11-18' };
+  assert.equal((await prod('POST', `/api/dev-roadmap/${dev.id}/analysis-data`, body)).status, 403);
+  assert.equal((await admin('POST', `/api/dev-roadmap/${dev.id}/analysis-data`, { ...body, result_note: '' })).status, 400);
+  const r = await admin('POST', `/api/dev-roadmap/${dev.id}/analysis-data`, body);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.match(r.body.req_no, /^RA-261118-\d{2}$/); assert.equal(r.body.status, 'done'); assert.equal(r.body.result_note, '파티클 80/ft² 합격');
+  assert.equal(r.body.data.dev_step, '시제품'); assert.deepEqual(r.body.data.items, ['파티클', '인장,인열']); assert.equal(r.body.data.token, undefined);
+  const r2 = (await admin('POST', `/api/dev-roadmap/${dev.id}/analysis-data`, { ...body, title: '시제품 B', result_note: '흡수 4.1' })).body;
+  assert.notEqual(r2.req_no, r.body.req_no, 'own number each');
+  const row = (await admin('GET', '/api/dev-roadmap?id=' + dev.id)).body.rows[0];
+  assert.deepEqual(row.analyses.map(a => [a.title, a.dev_step, a.status, a.analysis_date]), [['시제품 A', '시제품', 'done', '2026-11-18'], ['시제품 B', '시제품', 'done', '2026-11-18']]);
+  const talk = (await admin('GET', `/api/comments/request/${dev.id}`)).body.rows.map(c => c.content);
+  assert.ok(talk.some(c => /^\[분석\] 분석데이터 · RA-261118-\d{2} 시제품 A \(시제품분석\) · 단계 「시제품」 · 분석일 2026-11-18 · 결과: 파티클 80/.test(c)), JSON.stringify(talk));
+  assert.equal((await admin('PUT', `/api/attachments/request/${r.body.id}`, { photos: [] })).status === 404, false, 'attachments allowed for research analysis');
 });
