@@ -3614,3 +3614,26 @@ tr.book-memo > td { background: var(--bg); font-style: italic; }
 .dc-send textarea { min-height: 64px; }
 .dc-send > button { align-self: stretch; }
 @media (max-width: 700px) { .dc-msg { max-width: 100%; } .dc-send { grid-template-columns: 1fr; } }
+
+/* 15.279 커팅·융착 투입 원자재: 자재별 표(LOT · 절 번호 · 투입) */
+.semi-inputs { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 8px 10px; }
+.semi-inputs .semi-inputs-body { grid-column: 1 / -1; }
+.semi-inputs.semi-inputs-empty .semi-inputs-body { grid-column: auto; }
+.sli-table { width: 100%; border-collapse: collapse; background: var(--panel, #fff); border: 1px solid var(--line, #dfe3e8); border-radius: 8px; overflow: hidden; font-size: 14px; }
+.sli-table th, .sli-table td { padding: 7px 10px; border-bottom: 1px solid var(--line, #e9ecef); text-align: left; vertical-align: middle; }
+.sli-table thead th { background: var(--ns-panel, #f1f3f5); font-size: 12px; font-weight: 600; color: var(--muted, #666); }
+.sli-table .r { text-align: right; }
+.sli-table .sli-item { font-weight: 700; background: color-mix(in srgb, var(--accent, #2457d6) 5%, var(--panel, #fff)); border-right: 1px solid var(--line, #e9ecef); min-width: 160px; }
+.sli-table .sli-lot { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 600; letter-spacing: .2px; white-space: nowrap; }
+.sli-no { display: inline-block; min-width: 26px; padding: 1px 7px; margin: 1px 4px 1px 0; border-radius: 10px; background: color-mix(in srgb, var(--accent, #2457d6) 12%, var(--panel, #fff)); color: var(--accent, #2457d6); font-weight: 700; font-size: 12px; text-align: center; }
+.sli-table tbody tr:last-child td, .sli-table tbody tr:last-child th { border-bottom: 0; }
+@media (max-width: 700px) { .sli-table .sli-item { min-width: 0; } .sli-table th, .sli-table td { padding: 6px; } }
+
+/* 15.279 디자인 통일: 입력 양식은 모두 같은 카드(흰 바탕·둥근 모서리)에 */
+#main > form.stack.quote-form, #main > form.stack.bill-form, #main > form.stack.rc-form, #main > form.stack.pbill-form {
+  background: var(--panel); border-radius: var(--radius-xl, var(--radius)); padding: 20px 22px; margin: 14px 0; box-shadow: none; border: 1px solid transparent;
+}
+#main > form.stack.quote-form > .actionbar, #main > form.stack.bill-form > .actionbar, #main > form.stack.rc-form > .actionbar { margin-left: -22px; margin-right: -22px; margin-bottom: -20px; border-radius: 0 0 var(--radius-xl, var(--radius)) var(--radius-xl, var(--radius)); }
+#main > .manage-tabs { margin-bottom: 12px; }
+#main > h1 .dept { vertical-align: middle; }
+@media (max-width: 700px) { #main > form.stack.quote-form, #main > form.stack.bill-form, #main > form.stack.rc-form, #main > form.stack.pbill-form { padding: 14px 12px; } #main > form.stack.quote-form > .actionbar, #main > form.stack.bill-form > .actionbar, #main > form.stack.rc-form > .actionbar { margin-left: -12px; margin-right: -12px; margin-bottom: -14px; } }

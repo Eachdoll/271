@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.278';
+const APP_VERSION = '15.279';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -505,7 +505,7 @@ function helpDodge(main, details) {
 }
 function foldHelp(main) {
   for (const p of main.querySelectorAll(':scope > p.muted, :scope > section > p.muted, #receiptContent > p.muted')) {
-    if (p.textContent.trim().length < 80 || p.closest('details')) continue;
+    if (p.textContent.trim().length < (p.parentElement === main ? 20 : 80) || p.closest('details')) continue; // 15.279 화면 바로 아래 짧은 설명도 도움말로(화면마다 같은 모양)
     const details = document.createElement('details'); details.className = 'help';
     details.innerHTML = '<summary title="이 화면 설명">도움말</summary>'; p.replaceWith(details); details.append(p); // 15.180 오른쪽 위 단추
     if (details.parentElement === main) requestAnimationFrame(() => { const h1 = $('h1', main); if (h1 && details.isConnected) { details.style.top = `${h1.offsetTop}px`; helpDodge(main, details); } }); // 제목 줄 높이에(위치 표시와 겹치지 않게)
@@ -689,27 +689,27 @@ function refreshFavNav() {
 // 메뉴 강조·화면 탭·위치 표시는 관리 화면 하나로 묶는다(navRoute).
 const MANAGE = {
   '#/logistics/lots': { title: 'LOT·QR 관리', tabs: [['#/logistics/lots', 'LOT 관리'], ['#/logistics/qr', 'QR 일괄 발행'], ['#/logistics/pallets', '파렛트 묶음'], ['#/logistics/scan', 'QR 스캔']] }, // 15.231
-  '#/sales/bills': { title: '매출전표 관리', tabs: [['#/sales/bills', '전표 목록'], ['#/sales/bills/new', '전표 입력'], ['#/sales/calendar', '매출 달력'], ['#/sales/reps', '담당자별 현황']] },
-  '#/sales/tax': { title: '세금계산서 관리', tabs: [['#/sales/tax', '계산서 목록'], ['#/sales/tax/new', '계산서 만들기']] },
-  '#/sales/quotes': { title: '견적서 관리', tabs: [['#/sales/quotes', '견적서 목록'], ['#/sales/quotes/new', '견적서 작성']] },
-  '#/sales/orders': { title: '수주 관리', tabs: [['#/sales/orders', '수주 목록'], ['#/sales/orders/new', '수주 입력']] },
-  '#/sales/mr': { title: '생산의뢰 관리', tabs: [['#/sales/mr', '생산의뢰 목록'], ['#/sales/mr/new', '생산의뢰 작성']] },
-  '#/sales/pr': { title: '구매의뢰 관리', tabs: [['#/sales/pr', '구매의뢰 목록'], ['#/sales/pr/new', '구매의뢰 작성']] },
-  '#/purchase/po': { title: '발주 관리', tabs: [['#/purchase/po', '발주 목록'], ['#/purchase/po/new', '발주 입력']] },
-  '#/purchase/bills': { title: '매입전표 관리', tabs: [['#/purchase/bills', '전표 목록'], ['#/purchase/bills/new', '전표 입력']] },
+  '#/sales/bills': { title: '매출전표 관리', tabs: [['#/sales/bills/new', '전표 입력'], ['#/sales/bills', '전표 목록'], ['#/sales/calendar', '매출 달력'], ['#/sales/reps', '담당자별 현황']] },
+  '#/sales/tax': { title: '세금계산서 관리', tabs: [['#/sales/tax/new', '계산서 만들기'], ['#/sales/tax', '계산서 목록']] },
+  '#/sales/quotes': { title: '견적서 관리', tabs: [['#/sales/quotes/new', '견적서 작성'], ['#/sales/quotes', '견적서 목록']] },
+  '#/sales/orders': { title: '수주 관리', tabs: [['#/sales/orders/new', '수주 입력'], ['#/sales/orders', '수주 목록']] },
+  '#/sales/mr': { title: '생산의뢰 관리', tabs: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] },
+  '#/sales/pr': { title: '구매의뢰 관리', tabs: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] },
+  '#/purchase/po': { title: '발주 관리', tabs: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
+  '#/purchase/bills': { title: '매입전표 관리', tabs: [['#/purchase/bills/new', '전표 입력'], ['#/purchase/bills', '전표 목록']] },
   '#/sales/book': { title: '매출 거래처별 장부', tabs: [['#/sales/book', '전표별 장부'], ['#/sales/ledger', '품목 줄별 원장']] },
   '#/purchase/book': { title: '매입 거래처별 장부', tabs: [['#/purchase/book', '전표별 장부'], ['#/purchase/ledger', '품목 줄별 원장']] },
   '#/admin/users': { title: '회원 관리', tabs: [['#/admin/users', '회원 정보'], ['#/admin/users/roles', '사용 권한'], ['#/admin/users/menus', '메뉴 보기']] },
   // 15.213 입력·목록 메뉴 통일
-  '#/logistics/receive': { title: '입고 관리', tabs: [['#/logistics/receive', '입고목록'], ['#/logistics/receipt/new', '입고 입력'], ['#/logistics/receipts', '입고증 목록']] },
-  '#/logistics/ship': { title: '출하 관리', tabs: [['#/logistics/ship', '출하 목록'], ['#/logistics/ship/new', '출하 입력']] },
-  '#/purchase/laundry': { title: '불량·폐기 관리', tabs: [['#/purchase/laundry', '불량·폐기 목록'], ['#/purchase/laundry/new', '불량·폐기 입력']] },
-  '#/prod/semi': { title: '반제품 생산 관리', tabs: [['#/prod/semi', '생산일정'], ['#/prod/semi/new', '생산계획 입력']] },
-  '#/prod/semi/cut': { title: '커팅/융착 작업 관리', tabs: [['#/prod/semi/cut', '작업 기록'], ['#/prod/semi/cut/new', '작업 입력']] },
-  '#/prod/semi/wash': { title: '세탁(호기별) 작업 관리', tabs: [['#/prod/semi/wash', '작업 기록'], ['#/prod/semi/wash/new', '작업 입력']] },
-  '#/quality/list': { title: '분석 관리', tabs: [['#/quality/list', '분석리스트'], ['#/quality/request', '분석의뢰']] },
-  '#/quality/voc/list': { title: 'VOC 관리', tabs: [['#/quality/voc/list', 'VOC 처리목록'], ['#/quality/voc/request', 'VOC 접수']] },
-  '#/dev/list': { title: '개발 관리', tabs: [['#/dev/list', '개발리스트'], ['#/dev/request', '개발의뢰']] },
+  '#/logistics/receive': { title: '입고 관리', tabs: [['#/logistics/receipt/new', '입고 입력'], ['#/logistics/receive', '입고목록'], ['#/logistics/receipts', '입고증 목록']] },
+  '#/logistics/ship': { title: '출하 관리', tabs: [['#/logistics/ship/new', '출하 입력'], ['#/logistics/ship', '출하 목록']] },
+  '#/purchase/laundry': { title: '불량·폐기 관리', tabs: [['#/purchase/laundry/new', '불량·폐기 입력'], ['#/purchase/laundry', '불량·폐기 목록']] },
+  '#/prod/semi': { title: '반제품 생산 관리', tabs: [['#/prod/semi/new', '생산계획 입력'], ['#/prod/semi', '생산일정']] },
+  '#/prod/semi/cut': { title: '커팅/융착 작업 관리', tabs: [['#/prod/semi/cut/new', '작업 입력'], ['#/prod/semi/cut', '작업 기록']] },
+  '#/prod/semi/wash': { title: '세탁(호기별) 작업 관리', tabs: [['#/prod/semi/wash/new', '작업 입력'], ['#/prod/semi/wash', '작업 기록']] },
+  '#/quality/list': { title: '분석 관리', tabs: [['#/quality/request', '분석의뢰'], ['#/quality/list', '분석리스트']] },
+  '#/quality/voc/list': { title: 'VOC 관리', tabs: [['#/quality/voc/request', 'VOC 접수'], ['#/quality/voc/list', 'VOC 처리목록']] },
+  '#/dev/list': { title: '개발 관리', tabs: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
 };
 const ROUTE_ALIAS = { '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/calendar': '#/sales/bills', '#/logistics/qr': '#/logistics/lots', '#/logistics/pallets': '#/logistics/lots', '#/logistics/scan': '#/logistics/lots', '#/sales/reps': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users', '#/logistics/receipt/new': '#/logistics/receive', '#/logistics/receipt/other': '#/logistics/receive', '#/logistics/receipts': '#/logistics/receive', '#/logistics/ship/new': '#/logistics/ship', '#/purchase/laundry/new': '#/purchase/laundry', '#/prod/semi/new': '#/prod/semi', '#/prod/semi/cut/new': '#/prod/semi/cut', '#/prod/semi/wash/new': '#/prod/semi/wash', '#/quality/request': '#/quality/list', '#/quality/voc/request': '#/quality/voc/list', '#/dev/request': '#/dev/list' };
 const navRoute = r => ROUTE_ALIAS[String(r || '#/').split('?')[0]] || String(r || '#/').split('?')[0];
@@ -841,6 +841,7 @@ function pageTabs(main, route) {
   // 15.212 탭이 많아 가로로 넘치면 지금 화면 탭이 가운데 보이게
   requestAnimationFrame(() => { const on = bar.querySelector('.pt-tab.on'); if (on && bar.scrollWidth > bar.clientWidth) bar.scrollLeft = Math.max(0, on.offsetLeft - bar.clientWidth / 2 + on.offsetWidth / 2); });
   const code = path.replace(/^#\/?/, '').split('/').filter(Boolean).join('-').toUpperCase() || 'HOME'; // 15.180 화면 코드(문의할 때)
+  if (trail.length && h1 && !h1.querySelector('.dept') && !h1.closest('.modal')) h1.insertAdjacentHTML('beforeend', ` <span class="dept">${esc(trail[0])}</span>`); // 15.279 부서 표시를 모든 화면 제목에
   if (trail.length && h1) h1.insertAdjacentHTML('beforebegin', `<div class="crumbs" aria-label="위치"><a href="#/" aria-label="홈">⌂</a>${trail.map(t => ` <span>›</span> ${esc(t)}`).join('')}${ME?.is_admin ? ` <span class="screen-code" title="화면 코드 — 문의할 때 알려 주세요">[${esc(code)}]</span>` : ''}</div>`); // 15.213 화면 코드는 관리자만
   bar.addEventListener('click', e => {
     const x = e.target.closest('[data-tab-close]'), all = e.target.closest('[data-tab-clear]'); if (!x && !all) return;
