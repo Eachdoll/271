@@ -3,6 +3,49 @@
 // openItemPicker(catalog, { query, title, filter }) → 고른 품목(boms 한 줄) 또는 null(취소)
 const ITEM_PICKER_LIMIT = 200;
 let itemPickerClass = '';
+// 15.270 입력칸 자동 제안: 이름·코드의 「일부」만 쳐도 그 글자가 들어간 항목을 칸 아래에 보여 준다. ↑↓·Enter·클릭으로 고르고 Esc로 닫는다.
+// opts: source() → 항목 배열, match(item, key, raw) → bool, label(item) → HTML, value(item) → 칸에 넣을 글자, onPick(item), max
+function attachSuggest(input, { source, match, label, value, onPick = null, max = 12 } = {}) {
+  if (!input || input.dataset.suggestBound) return; input.dataset.suggestBound = '1';
+  const box = document.createElement('div'); box.className = 'suggest-box'; box.setAttribute('role', 'listbox'); box.hidden = true; document.body.append(box);
+  let hits = [], at = -1, timer = 0;
+  const close = () => { box.hidden = true; hits = []; at = -1; input.removeAttribute('aria-activedescendant'); };
+  const place = () => { const r = input.getBoundingClientRect(); box.style.left = `${Math.max(4, r.left)}px`; box.style.top = `${r.bottom + 2}px`; box.style.minWidth = `${Math.max(r.width, 220)}px`; };
+  const draw = () => { box.innerHTML = hits.map((h, i) => `<div class="suggest-item${i === at ? ' on' : ''}" role="option" data-sg="${i}">${label(h)}</div>`).join('') + (hits.full ? `<div class="suggest-more">${hits.full}개 중 ${hits.length}개 · 더 쳐서 좁히세요</div>` : ''); };
+  const refresh = () => {
+    if (!input.isConnected) { box.remove(); return; }
+    if (input.readOnly || input.disabled || document.activeElement !== input) return close();
+    const raw = input.value.trim(), key = itemPickerKey(raw); if (!key) return close();
+    let list; try { list = (source() || []).filter(x => match(x, key, raw)); } catch { list = []; }
+    if (list.length === 1 && itemPickerKey(value(list[0])) === key) return close(); // 이미 정확히 고른 상태
+    hits = list.slice(0, max); if (list.length > max) hits.full = list.length; at = hits.length ? 0 : -1;
+    if (!hits.length) { box.innerHTML = '<div class="suggest-none">일치하는 항목이 없습니다</div>'; place(); box.hidden = false; return; }
+    draw(); place(); box.hidden = false;
+  };
+  const pick = h => { if (!h) return; input.value = value(h); close(); input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true })); onPick?.(h); };
+  input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(refresh, 60); });
+  input.addEventListener('focus', () => { if (input.value.trim()) refresh(); });
+  input.addEventListener('blur', () => setTimeout(close, 150));
+  input.addEventListener('keydown', e => {
+    if (box.hidden || !hits.length) { if (e.key === 'Escape' && !box.hidden) { close(); e.stopImmediatePropagation(); } return; }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); e.stopImmediatePropagation(); at = (at + (e.key === 'ArrowDown' ? 1 : -1) + hits.length) % hits.length; draw(); box.querySelector('.on')?.scrollIntoView({ block: 'nearest' }); }
+    else if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229 && at >= 0) { e.preventDefault(); e.stopImmediatePropagation(); pick(hits[at]); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); close(); }
+    else if (e.key === 'Tab') close();
+  }, true);
+  box.addEventListener('mousedown', e => { const it = e.target.closest('[data-sg]'); if (it) { e.preventDefault(); pick(hits[Number(it.dataset.sg)]); } });
+  window.addEventListener('scroll', () => { if (!box.hidden) place(); }, true); window.addEventListener('resize', () => { if (!box.hidden) place(); });
+  window.addEventListener('hashchange', close);
+}
+const suggestMark = (text, raw) => { const t = String(text || ''), r = String(raw || '').trim(); if (!r) return esc(t); const i = t.toLowerCase().indexOf(r.toLowerCase()); return i < 0 ? esc(t) : esc(t.slice(0, i)) + '<mark>' + esc(t.slice(i, i + r.length)) + '</mark>' + esc(t.slice(i + r.length)); };
+// 품목(제품코드·품명) 자동 제안 공통
+function itemSuggest(input, catalog, onPick) {
+  let raw = '';
+  attachSuggest(input, { source: () => (typeof catalog === 'function' ? catalog() : catalog), max: 15,
+    match: (b, key, r) => { raw = r; return itemPickerKey(b.product).includes(key) || itemPickerKey(b.product_code).includes(key) || itemPickerKey(b.sst_name || '').includes(key); },
+    label: b => `<b>${suggestMark(b.product, raw)}</b>${b.product_code ? ` <span class="suggest-sub">${suggestMark(b.product_code, raw)}</span>` : ''}${b.item_category ? ` <span class="suggest-sub">${esc(b.item_category)}</span>` : ''}${b.spec ? ` <span class="suggest-sub">${esc(b.spec)}</span>` : ''}`,
+    value: b => b.product, onPick });
+}
 function itemPickerKey(text) { return String(text || '').toLocaleLowerCase().replace(/\s+/g, ''); }
 function itemPickerPath(b) { return [b.cat1, b.cat2, b.cat3].filter(Boolean).join(' › '); }
 // 현재고(15.70): 재고 현황과 같은 계산(기초재고·입고·생산 − 투입·출하 ± 조정)을 오늘 기준으로 한 번 읽어 1분간 쓴다.
@@ -176,6 +219,7 @@ function bindItemPick(row, k, catalog, onPick) {
     if (bom) await onPick(bom); else item.focus();
   };
   $('[data-item-find]', row).onclick = () => open();
+  if (typeof document !== 'undefined' && document.body) itemSuggest(item, catalog, bom => onPick(bom)); // 15.270 일부만 쳐도 제안
   item.addEventListener('keydown', e => {
     if (e.isComposing || e.keyCode === 229) return;
     if (e.key === 'Enter') { e.preventDefault(); if (!item.readOnly) open(); }

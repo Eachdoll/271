@@ -121,6 +121,7 @@ async function installMultiItems(legacy, entity, type = '') {
         sizeGrid(row, bom?.sizes || []);
         fromCatalog(row, entity, bom); // after the size grid, which shows spec/qty again for items without sizes
       };
+      if (typeof itemSuggest === 'function') itemSuggest($('[data-line-key=item]',row), () => boms.filter(b => entity !== 'schedule' || (b.kind === kind && !b.is_temp)), bom => { select.value = String(bom.id); select.onchange(); ($('[data-line-key=qty]',row) || select).focus(); }); // 15.270 품목명·코드 일부로 제안
       // 15.70 품목 찾기 창(분류 탭·세부 분류·검색·표)으로 고른다. 선택칸은 그대로 두어 고른 값을 담는다.
       $('[data-bom-find]',row).onclick = async () => {
         // 15.137 체크해 여러 품목: 첫 품목은 이 줄, 나머지는 새 줄로

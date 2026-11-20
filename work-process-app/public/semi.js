@@ -151,7 +151,7 @@ function semiCodePick(row, model, models, label) {
   row.dataset.semiOne = '1'; label.hidden = true; model.required = false;
   const id = 'semiPick' + Math.random().toString(36).slice(2, 8), text = m => `${m.product_code} · ${m.product}`;
   const box = document.createElement('label'); box.className = 'semi-pick';
-  box.innerHTML = `제품코드 · 품명 *<input type="search" data-semi-pick list="${id}" required autocomplete="off" placeholder="코드나 품명을 입력해 목록에서 고르기"><datalist id="${id}">${models.map(m => `<option value="${esc(text(m))}"></option>`).join('')}</datalist>`;
+  box.innerHTML = `제품코드 · 품명 *<input type="search" data-semi-pick required autocomplete="off" placeholder="코드나 품명 일부를 입력해 고르기">`; void id; // 15.270 datalist 대신 일부 일치 제안
   label.before(box);
   const input = $('[data-semi-pick]', box);
   const find = (v, loose) => { const k = v.trim().toLowerCase(); if (!k) return null; const exact = models.find(m => text(m).toLowerCase() === k || String(m.product_code).toLowerCase() === k || String(m.product).toLowerCase() === k); if (exact || !loose) return exact || null; const hits = models.filter(m => text(m).toLowerCase().includes(k)); return hits.length === 1 ? hits[0] : null; };
@@ -160,6 +160,7 @@ function semiCodePick(row, model, models, label) {
   const orig = model.onchange; model.onchange = (...a) => { orig?.(...a); show(); };
   input.addEventListener('input', () => { const m = find(input.value, false); if (m) choose(m); else { if (model.value) { model.value = ''; orig?.(); } input.setCustomValidity(''); } });
   input.addEventListener('change', () => { if (!input.value.trim()) { choose(null); return; } const m = find(input.value, true); if (m) choose(m); else { const n = models.filter(x => text(x).toLowerCase().includes(input.value.trim().toLowerCase())).length; input.setCustomValidity(n ? `일치하는 품목이 ${n}개입니다. 목록에서 하나를 고르세요.` : '등록된 반제품 코드에 없는 품목입니다. 목록에서 고르세요.'); input.reportValidity(); } });
+  if (typeof attachSuggest === 'function') { let raw = ''; attachSuggest(input, { source: () => models, max: 15, match: (m, key, r) => { raw = r; return itemPickerKey(text(m)).includes(key); }, label: m => `<b>${suggestMark(m.product_code, raw)}</b> <span class="suggest-sub">${suggestMark(m.product, raw)}</span>`, value: m => text(m) }); }
   show(); return input;
 }
 

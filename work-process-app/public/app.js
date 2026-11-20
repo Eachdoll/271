@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.269';
+const APP_VERSION = '15.270';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -2512,6 +2512,7 @@ async function pageBoms(main) {
       const mats = catalog.filter(b => b.item_category !== '제품' && (!bom || b.id !== bom.id));
       form.insertAdjacentHTML('beforeend', `<datalist id="bomMatList">${mats.map(b => `<option value="${esc(b.product)}">${esc([b.product_code, b.item_category, b.spec].filter(Boolean).join(' · '))}</option>`).join('')}</datalist>`);
       const fillMat = (row, b) => { $('[data-material-item]', row).value = b.product; const c = $('[data-material-category]', row); if ([...c.options].some(o => o.value === b.item_category)) c.value = b.item_category; if (b.unit) $('[data-material-unit]', row).value = b.unit; $('[data-material-qty]', row).focus(); };
+      form.addEventListener('focusin', e => { const i = e.target.closest?.('[data-material-item]'); if (i && mats.length) { i.removeAttribute('list'); itemSuggest(i, mats, b => fillMat(i.closest('[data-material-row]'), b)); } }); // 15.270 일부만 쳐도 자재 제안
       const findMat = async row => { if (!mats.length) { toast('제품등록에 원자재·부자재가 아직 없습니다. 자재명을 직접 입력하세요.', 'err'); return; } const b = await openItemPicker(mats, { title: '구성자재 찾기', query: $('[data-material-item]', row).value.trim(), lots: false, emptyText: '찾는 자재가 없습니다. 창을 닫고 자재명을 직접 입력하세요.' }); if (b && !b.items) fillMat(row, b); };
       $('[data-material-add]', form).onclick = () => { rows.insertAdjacentHTML('beforeend', bomMaterialRow()); const row = rows.lastElementChild; if (mats.length) findMat(row).catch(fail); else $('[data-material-item]', row).focus(); };
       rows.onclick = event => { const find = event.target.closest('[data-material-find]'); if (find) { findMat(find.closest('tr')).catch(fail); return; } const button = event.target.closest('[data-material-remove]'); if (button) button.closest('tr').remove(); };

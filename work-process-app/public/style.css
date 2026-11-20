@@ -3530,3 +3530,12 @@ tr.lot-tk-sub > td { background: #fffbe6 !important; box-shadow: inset 3px 0 0 #
 .book-note-grid label { display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
 
 .book-note-grid .book-note-memo { grid-column: span 2; }
+
+/* 15.270 입력칸 자동 제안(일부 일치) */
+.suggest-box { position: fixed; z-index: 2000; max-height: 320px; overflow: auto; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.16); padding: 4px; font-size: 14px; }
+.suggest-box[hidden] { display: none; }
+.suggest-item { padding: 7px 10px; border-radius: 7px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.suggest-item.on, .suggest-item:hover { background: var(--accent-soft, #e8eefc); }
+.suggest-item mark { background: #ffe58a; color: inherit; padding: 0 1px; border-radius: 2px; }
+.suggest-sub { color: var(--muted); font-size: 12.5px; margin-left: 4px; }
+.suggest-more, .suggest-none { padding: 6px 10px; color: var(--muted); font-size: 12.5px; }

@@ -72,6 +72,11 @@ async function bindPartnerPicker(input, hint, { recent = false, onPick, type = '
   try { vendors = directory || await api('GET', '/api/vendors' + (type ? '?type=' + type : '')); } catch { return; } // typing a name still works without the list
   if (!input.isConnected) return;
   input.removeAttribute?.('list'); input.autocomplete = 'off'; // 15.146 브라우저 자동완성 목록은 쓰지 않음
+  if (typeof attachSuggest === 'function') { let raw = ''; // 15.270 일부만 쳐도 그 글자가 들어간 거래처(이름·사업자상호·영문명·코드·담당자)를 칸 아래에
+    attachSuggest(input, { source: () => vendors, max: 12,
+      match: (v, key, r) => { raw = r; return [v.name, v.biz_name, v.name_en, v.code, v.contact_name].some(x => x && partnerKey(x).includes(key)); },
+      label: v => `<b>${suggestMark(v.name, raw)}</b>${v.code ? ` <span class="suggest-sub">${suggestMark(v.code, raw)}</span>` : ''}${v.biz_name && v.biz_name !== v.name ? ` <span class="suggest-sub">${suggestMark(v.biz_name, raw)}</span>` : ''}${v.is_purchase || v.is_sales ? ` <span class="suggest-sub">${[v.is_purchase && '매입', v.is_sales && '매출'].filter(Boolean).join('·')}</span>` : ''}`,
+      value: v => v.name }); }
   // 15.92 거래처코드를 그대로 쳐도(예: C0001) 그 거래처 이름으로 바꾼다. 화면의 change 처리보다 먼저(capture) 바꿔 같은 값으로 불러오게 한다.
   input.addEventListener('change', () => {
     const typed = input.value.trim(); if (!typed || vendors.some(v => partnerKey(v.name) === partnerKey(typed))) return;
