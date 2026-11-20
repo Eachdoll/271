@@ -3907,3 +3907,7 @@ table.ip-table tr.ip-soon > td { background-color: color-mix(in srgb, #f59f00 7%
 table.ip-table tr.ip-over > td { background-color: color-mix(in srgb, #e03131 7%, var(--panel)); }
 .ip-calc { display: flex; align-items: flex-end; }
 #ipTools { display: inline-flex; gap: 8px; align-items: center; }
+
+/* 15.303 인증서 관리(지식재산권 관리와 같은 모양) */
+.ip-tools { display: inline-flex; gap: 8px; align-items: center; }
+table.ct-table .ct-scope { color: var(--text-2, var(--muted)); max-width: 320px; white-space: normal; }

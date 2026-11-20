@@ -734,3 +734,26 @@ test('15.302 intellectual property rights: researchers register, edit and renew;
   assert.equal((await admin('POST', `/api/ip-rights/${tm.id}/renew`, { revision: tm.revision, next_due: '2030-01-01' })).status, 400, 'only registered rights renew');
   assert.equal((await admin('DELETE', `/api/ip-rights/${tm.id}?revision=${tm.revision}`)).status, 200);
 });
+
+test('15.303 certifications: quality registers ISO/GRS certificates, records audits (surveillance, renewal, nonconformity), others read only', async () => {
+  const base = { kind: 'ISO 9001', cert_no: 'FS 600001', scope: '와이퍼 제조', body: 'BSI', first_date: '2020-06-01', issue_date: '2023-06-01', expire_date: '2026-05-31', next_audit: '2025-06-01', audit_kind: '2차 사후심사', status: 'valid' };
+  assert.equal((await admin('POST', '/api/certs', { ...base, kind: 'ISO 0000' })).status, 400);
+  assert.equal((await admin('POST', '/api/certs', { ...base, expire_date: '2023-01-01' })).status, 400, 'expiry after issue');
+  assert.equal((await admin('POST', '/api/certs', { ...base, cert_no: '' })).status, 400, 'valid needs a number');
+  assert.equal((await admin('POST', '/api/certs', { kind: '기타', status: 'prep' })).status, 400, 'other needs a name');
+  assert.equal((await prod('POST', '/api/certs', base)).status, 403);
+  const c = await admin('POST', '/api/certs', { ...base, request_id: rid() }); assert.equal(c.status, 200, JSON.stringify(c.body)); assert.equal(c.body.status_label, '유효');
+  assert.equal((await admin('POST', '/api/certs', { ...base, request_id: rid() })).status, 400, 'duplicate number');
+  const l = await prod('GET', '/api/certs'); assert.equal(l.status, 200); assert.equal(l.body.can_manage, false);
+  // 사후심사 적합 → 다음 심사 넘김
+  const s1 = await admin('POST', `/api/certs/${c.body.id}/audit`, { revision: c.body.revision, done_date: '2025-06-03', result: '적합', next_audit: '2026-03-01', next_kind: '갱신심사' }); assert.equal(s1.status, 200, JSON.stringify(s1.body));
+  assert.equal(s1.body.next_audit, '2026-03-01'); assert.equal(s1.body.audit_kind, '갱신심사'); assert.equal(s1.body.history.at(-1).result, '적합');
+  // 부적합 → 정지, 갱신심사 적합 → 새 유효기간·유효
+  const s2 = await admin('POST', `/api/certs/${c.body.id}/audit`, { revision: s1.body.revision, done_date: '2026-03-02', result: '부적합', next_audit: '2026-04-01', next_kind: '특별심사' }); assert.equal(s2.body.status, 'suspended');
+  assert.equal((await admin('POST', `/api/certs/${c.body.id}/audit`, { revision: s2.body.revision, done_date: '2026-04-02', next_audit: '2026-04-01' })).status, 400, 'next audit after the audit');
+  const s3 = await admin('POST', `/api/certs/${c.body.id}/audit`, { revision: s2.body.revision, done_date: '2026-04-02', result: '적합', issue_date: '2026-06-01', expire_date: '2029-05-31', next_audit: '2027-06-01', next_kind: '1차 사후심사' });
+  assert.equal(s3.status, 200, JSON.stringify(s3.body)); assert.equal(s3.body.status, 'valid'); assert.equal(s3.body.expire_date, '2029-05-31'); assert.deepEqual(s3.body.history.at(-1).expire, ['2026-05-31', '2029-05-31']);
+  const g = (await admin('POST', '/api/certs', { kind: 'GRS', status: 'prep', body: 'Control Union' })).body;
+  assert.equal((await admin('POST', `/api/certs/${g.id}/audit`, { revision: g.revision })).status, 400, 'prep cannot be audited');
+  assert.equal((await admin('PUT', `/api/certs/${g.id}`, { kind: 'GRS', status: 'valid', cert_no: 'CU-GRS-1', issue_date: '2026-01-10', expire_date: '2027-01-09', revision: g.revision })).status, 200);
+});

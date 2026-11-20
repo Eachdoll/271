@@ -506,7 +506,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -3803,6 +3803,65 @@ route('DELETE', '/api/ip-rights/:id', async ({ user, params, query }) => {
   requireIpManager(user); const prior = await mustGet('ip_rights', params.id);
   if (Number(query.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
   await db.prepare('DELETE FROM ip_rights WHERE id=? AND revision=?').run(prior.id, prior.revision); return { ok: true };
+});
+// 15.303 품질 › 인증서 관리: ISO·GRS 등 인증의 유효기간과 다음 심사(사후·갱신) 일정. 보기는 품질 메뉴를 볼 수 있는 사람, 등록·수정·심사 처리·삭제는 품질(담당·책임자)·관리자.
+const CERT_KINDS = ['ISO 9001', 'ISO 14001', 'ISO 45001', 'IATF 16949', 'GRS', 'RCS', 'OEKO-TEX STANDARD 100', 'FSC', 'KC', 'ISO 14644(클린룸)', '기타'];
+const CERT_STATUS = { prep: '준비·신청', valid: '유효', suspended: '정지', expired: '만료', withdrawn: '취소·반납' };
+const CERT_COLS = ['kind', 'cert_no', 'title', 'scope', 'body', 'site', 'first_date', 'issue_date', 'expire_date', 'next_audit', 'audit_kind', 'status', 'owner_name', 'note'];
+function certBody(o0) {
+  const o = o0 && typeof o0 === 'object' ? o0 : {};
+  if (!CERT_KINDS.includes(o.kind)) throw bad('인증 종류를 고르세요.');
+  if (!Object.keys(CERT_STATUS).includes(o.status)) throw bad('상태를 고르세요.');
+  const d = (v, label) => v === '' || v == null ? null : dateStr(v, label);
+  const f = { kind: o.kind, cert_no: str(o.cert_no, 80), title: str(o.title, 200), scope: str(o.scope, 500), body: str(o.body, 100), site: str(o.site, 100),
+    first_date: d(o.first_date, '최초 인증일'), issue_date: d(o.issue_date, '발행일'), expire_date: d(o.expire_date, '유효기간(만료일)'), next_audit: d(o.next_audit, '다음 심사일'), audit_kind: str(o.audit_kind, 30),
+    status: o.status, owner_name: str(o.owner_name, 50), note: str(o.note, 1000) };
+  if (f.kind === '기타' && !f.title) throw bad('기타 인증은 인증명을 넣으세요.');
+  if (f.first_date && f.issue_date && f.issue_date < f.first_date) throw bad('발행일이 최초 인증일보다 빠릅니다.');
+  if (f.issue_date && f.expire_date && f.expire_date <= f.issue_date) throw bad('유효기간(만료일)은 발행일 뒤여야 합니다.');
+  if (f.status === 'valid' && !f.cert_no) throw bad('유효한 인증은 인증번호를 넣으세요.');
+  return f;
+}
+const certRow = r => ({ ...r, history: JSON.parse(r.history || '[]'), status_label: CERT_STATUS[r.status] || r.status });
+const requireCertManager = user => { if (!hasRole(user, 'quality')) throw new HttpError(403, '인증서는 품질 담당·품질책임자·관리자만 등록·수정합니다.'); };
+route('GET', '/api/certs', async ({ user }) => ({ rows: (await db.prepare('SELECT * FROM certifications ORDER BY CASE WHEN next_audit IS NULL THEN 1 ELSE 0 END, next_audit, id DESC LIMIT 1000').all()).map(certRow), can_manage: hasRole(user, 'quality'), today: today() }));
+route('POST', '/api/certs', async ({ user, body }) => {
+  requireCertManager(user); const f = certBody(body), key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM certifications WHERE request_id=?').get(key); if (old) return certRow(old); }
+  if (f.cert_no && await db.prepare('SELECT 1 FROM certifications WHERE kind=? AND cert_no=?').get(f.kind, f.cert_no)) throw bad(`이미 등록된 ${f.kind} 인증번호입니다: ${f.cert_no}`);
+  const r = await db.prepare(`INSERT INTO certifications(${CERT_COLS.join(',')},history,request_id,created_by) VALUES(${CERT_COLS.map(() => '?').join(',')},?,?,?)`).run(...CERT_COLS.map(k => f[k]), JSON.stringify([{ at: now(), by: user.name, what: '등록' }]), key, user.name);
+  return certRow(await mustGet('certifications', r.lastInsertRowid));
+});
+route('PUT', '/api/certs/:id', async ({ user, params, body }) => {
+  requireCertManager(user); const prior = await mustGet('certifications', params.id), f = certBody(body);
+  if (Number(body.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  if (f.cert_no && await db.prepare('SELECT 1 FROM certifications WHERE kind=? AND cert_no=? AND id<>?').get(f.kind, f.cert_no, prior.id)) throw bad(`이미 등록된 ${f.kind} 인증번호입니다: ${f.cert_no}`);
+  const changed = CERT_COLS.filter(k => (prior[k] ?? null) !== (f[k] ?? null)); if (!changed.length) return certRow(prior);
+  const hist = [...JSON.parse(prior.history || '[]'), { at: now(), by: user.name, what: '수정', fields: changed, ...(prior.status !== f.status ? { status: [prior.status, f.status] } : {}) }].slice(-100);
+  const r = await db.prepare(`UPDATE certifications SET ${CERT_COLS.map(k => k + '=?').join(',')},history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`).run(...CERT_COLS.map(k => f[k]), JSON.stringify(hist), user.name, prior.id, prior.revision);
+  if (!r.changes) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  return certRow(await mustGet('certifications', prior.id));
+});
+// 심사 완료 처리: 사후심사는 다음 심사일을 넘기고, 갱신심사는 새 발행일·만료일까지 바꾸며 이력에 남긴다(결과: 적합·조건부·부적합).
+route('POST', '/api/certs/:id/audit', async ({ user, params, body }) => {
+  requireCertManager(user); const prior = await mustGet('certifications', params.id);
+  if (Number(body.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  if (!['valid', 'suspended'].includes(prior.status)) throw bad('유효·정지 상태의 인증만 심사 처리합니다.');
+  const done = dateStr(body.done_date || today(), '심사일'), result = ['적합', '조건부 적합', '부적합'].includes(body.result) ? body.result : '적합';
+  const next = body.next_audit ? dateStr(body.next_audit, '다음 심사일') : null, issue = body.issue_date ? dateStr(body.issue_date, '새 발행일') : prior.issue_date, exp = body.expire_date ? dateStr(body.expire_date, '새 유효기간') : prior.expire_date;
+  if (next && next <= done) throw bad('다음 심사일은 심사일 뒤여야 합니다.');
+  if (issue && exp && exp <= issue) throw bad('유효기간(만료일)은 발행일 뒤여야 합니다.');
+  const status = result === '부적합' ? 'suspended' : prior.status === 'suspended' ? 'valid' : prior.status;
+  const hist = [...JSON.parse(prior.history || '[]'), { at: now(), by: user.name, what: '심사', done, kind: str(body.audit_kind, 30) || prior.audit_kind, result, due: prior.next_audit, next, ...(issue !== prior.issue_date ? { issue: [prior.issue_date, issue] } : {}), ...(exp !== prior.expire_date ? { expire: [prior.expire_date, exp] } : {}), ...(status !== prior.status ? { status: [prior.status, status] } : {}), note: str(body.note, 300) }].slice(-100);
+  const r = await db.prepare("UPDATE certifications SET next_audit=?,audit_kind=?,issue_date=?,expire_date=?,status=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?")
+    .run(next, str(body.next_kind, 30), issue, exp, status, JSON.stringify(hist), user.name, prior.id, prior.revision);
+  if (!r.changes) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  return certRow(await mustGet('certifications', prior.id));
+});
+route('DELETE', '/api/certs/:id', async ({ user, params, query }) => {
+  requireCertManager(user); const prior = await mustGet('certifications', params.id);
+  if (Number(query.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  await db.prepare('DELETE FROM certifications WHERE id=? AND revision=?').run(prior.id, prior.revision); return { ok: true };
 });
 route('GET', '/api/rnd-specs', async ({ user }) => { const { raw, ...lib } = await rndSpecLibrary(); return { ...lib, can_manage: isResearcher(user) }; });
 route('PUT', '/api/rnd-specs', async ({ user, body }) => {

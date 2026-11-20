@@ -833,3 +833,131 @@ async function pageIpRights(main) {
   await load();
 }
 const IP_STATUS_LABEL = { prep: '출원 준비', filed: '출원중', exam: '심사중', registered: '등록완료', rejected: '거절(불허)', abandoned: '포기·취하', expired: '소멸(만료)' };
+
+// 15.303 품질 › 인증서 관리: ISO 9001·14001·45001·IATF 16949·GRS·RCS·OEKO-TEX·FSC·KC 등의 유효기간과 다음 심사(사후·갱신) 일정 관리
+const CERT_INFO = { // 일반적인 주기(참고값 — 인증기관 계약·심사 일정에 따라 고쳐 쓰세요). cycle: 인증서 유효 연수, annual: 그 사이 매년 사후심사
+  'ISO 9001': { cycle: 3, annual: true, area: '품질경영', hint: '인증서 3년 · 1·2년차 사후심사 · 만료 전 갱신심사' },
+  'ISO 14001': { cycle: 3, annual: true, area: '환경경영', hint: '인증서 3년 · 1·2년차 사후심사 · 만료 전 갱신심사' },
+  'ISO 45001': { cycle: 3, annual: true, area: '안전보건경영', hint: '인증서 3년 · 1·2년차 사후심사 · 만료 전 갱신심사' },
+  'IATF 16949': { cycle: 3, annual: true, area: '자동차 품질경영', hint: '인증서 3년 · 매년 사후심사 · 만료 전 갱신심사' },
+  'GRS': { cycle: 1, annual: false, area: '재활용 원료(Global Recycled Standard)', hint: '인증서 1년 · 해마다 갱신심사(만료 전)' },
+  'RCS': { cycle: 1, annual: false, area: '재활용 원료 함량(Recycled Claim Standard)', hint: '인증서 1년 · 해마다 갱신심사' },
+  'OEKO-TEX STANDARD 100': { cycle: 1, annual: false, area: '섬유 유해물질', hint: '인증서 1년 · 해마다 갱신' },
+  'FSC': { cycle: 5, annual: true, area: '산림 인증(CoC)', hint: '인증서 5년 · 매년 사후심사' },
+  'KC': { cycle: 0, annual: false, area: '국내 안전인증', hint: '품목·제도마다 유효기간이 다름 — 직접 넣으세요' },
+  'ISO 14644(클린룸)': { cycle: 1, annual: false, area: '클린룸 청정도 등급', hint: '보통 1년마다 재측정·성적서 갱신' },
+  '기타': { cycle: 0, annual: false, area: '', hint: '' },
+};
+const CERT_STATUS_LABEL = { prep: '준비·신청', valid: '유효', suspended: '정지', expired: '만료', withdrawn: '취소·반납' };
+const CERT_STATUS_CHIP = { prep: 'yellow', valid: 'green', suspended: 'red', expired: '', withdrawn: '' };
+// 다음 심사 제안: 매년 사후심사가 있으면 발행일 기준 오늘 뒤 첫 해(만료 해에는 만료 3개월 전 갱신심사), 없으면 만료 2개월 전 갱신심사
+function certSuggest(kind, issue, today) {
+  const k = CERT_INFO[kind] || {}; if (!k.cycle || !issue) return { expire: '', next: '', nextKind: '' };
+  const expire = new Date(Date.parse(ipAddYears(issue, k.cycle)) - 86400000).toISOString().slice(0, 10), minus = (d, mo) => { const [y, m, dd] = d.split('-').map(Number); const t = new Date(Date.UTC(y, m - 1 - mo, dd)); return t.toISOString().slice(0, 10); };
+  const renew = minus(expire, k.annual ? 3 : 2);
+  if (k.annual) { for (let n = 1; n < k.cycle; n++) { const d = ipAddYears(issue, n); if (d >= today && d < renew) return { expire, next: d, nextKind: `${n}차 사후심사` }; } }
+  return { expire, next: renew, nextKind: '갱신심사' };
+}
+async function pageCerts(main) {
+  main.innerHTML = `<h1>인증서 관리 <span class="dept">품질</span></h1>
+  <p class="muted">회사가 받은 인증(ISO 9001·14001·45001, GRS 등)의 <b>유효기간</b>과 <b>다음 심사</b>(사후심사·갱신심사) 일정을 관리합니다. 다음 심사일이나 만료일이 지나면 빨강, 90일 안이면 노랑. 기간 자동 계산은 일반적인 주기(참고값)이니 인증기관 일정에 맞춰 고치세요.</p>
+  <div class="ip-tiles" id="ctTiles"></div>
+  <form class="toolbar list-filters" data-read-only id="ctFilters">
+    <label class="lf-sel">인증 종류<select name="kind"><option value="">전체</option>${Object.keys(CERT_INFO).map(k => `<option>${esc(k)}</option>`).join('')}</select></label>
+    <label class="lf-sel">상태<select name="status"><option value="">전체</option><option value="live">유효·정지·준비(만료·반납 빼고)</option>${Object.entries(CERT_STATUS_LABEL).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>
+    <label class="lf-sel">기한<select name="due"><option value="">전체</option><option value="soon">90일 안 · 지남</option><option value="over">기한 지남</option></select></label>
+    <label class="list-search">찾기<input type="search" name="q" placeholder="인증번호·범위·인증기관·사업장·담당자"></label>
+    <span class="grow"></span><span id="ctTools" class="ip-tools"></span>
+  </form>
+  <div id="ctList"></div>`;
+  const form = $('#ctFilters', main); let data = { rows: [], can_manage: false, today: todayStr() };
+  const load = async () => { data = await api('GET', '/api/certs'); if (main.isConnected) draw(); };
+  const live = r => ['valid', 'suspended', 'prep'].includes(r.status);
+  const firstDue = r => [r.next_audit, r.expire_date].filter(Boolean).sort()[0] || null; // 심사·만료 중 먼저 오는 것
+  const dueCls = r => { const d = ipDday(firstDue(r), data.today); return d === null || !live(r) ? '' : d < 0 ? 'over' : d <= 90 ? 'soon' : ''; };
+  const filtered = () => { const v = formObj(form), q = (v.q || '').trim().toLowerCase();
+    return data.rows.filter(r => (!v.kind || r.kind === v.kind) && (!v.status || (v.status === 'live' ? live(r) : r.status === v.status)) && (!v.due || (v.due === 'over' ? dueCls(r) === 'over' : !!dueCls(r)))
+      && (!q || [r.cert_no, r.title, r.scope, r.body, r.site, r.owner_name, r.note].join(' ').toLowerCase().includes(q))); };
+  const dd = (d, cls, on = true) => { const n = ipDday(d, data.today); return n === null || !on ? '' : ` <span class="ip-dd ${cls}">${n < 0 ? `D+${-n}` : n === 0 ? 'D-DAY' : `D-${n}`}</span>`; };
+  const draw = () => {
+    const rows = data.rows, over = rows.filter(r => dueCls(r) === 'over').length, soon = rows.filter(r => dueCls(r) === 'soon').length;
+    $('#ctTiles', main).innerHTML = [['전체', rows.length, ''], ['유효', rows.filter(r => r.status === 'valid').length, 'green'], ['준비·신청', rows.filter(r => r.status === 'prep').length, ''], ['90일 안 심사·만료', soon, soon ? 'yellow' : ''], ['기한 지남', over, over ? 'red' : '']]
+      .map(([l, n, c], i) => `<button type="button" class="ip-tile ${c}" data-ct-tile="${i}"><span>${l}</span><b>${n}</b></button>`).join('');
+    $('#ctTools', main).innerHTML = `<button type="button" class="btn" id="ctXlsx">엑셀</button>${data.can_manage ? '<button type="button" class="btn primary" id="ctNew">＋ 인증서 등록</button>' : ''}`;
+    const list = filtered();
+    $('#ctList', main).innerHTML = list.length ? `<div class="table-wrap"><table class="grid ip-table ct-table"><thead><tr><th>인증 종류</th><th>인증번호</th><th>인증 범위 · 인증명</th><th>인증기관</th><th>사업장</th><th>발행일</th><th>유효기간</th><th>다음 심사</th><th>상태</th><th>담당자</th><th></th></tr></thead><tbody>${list.map(r => { const cls = dueCls(r), eDays = ipDday(r.expire_date, data.today), nDays = ipDday(r.next_audit, data.today), ec = live(r) && eDays !== null ? (eDays < 0 ? 'over' : eDays <= 90 ? 'soon' : '') : '', nc = live(r) && nDays !== null ? (nDays < 0 ? 'over' : nDays <= 90 ? 'soon' : '') : '';
+      return `<tr data-ct-row="${r.id}" class="${cls ? 'ip-' + cls : ''}${live(r) ? '' : ' row-off'}"><td class="nowrap"><b>${esc(r.kind)}</b><div class="small muted">${esc(CERT_INFO[r.kind]?.area || '')}</div></td>
+        <td class="nowrap">${r.cert_no ? `<b>${esc(r.cert_no)}</b>` : '<span class="muted">—</span>'}</td>
+        <td data-card-primary>${r.title ? `<b>${esc(r.title)}</b>` : ''}${r.scope ? `<div class="small ct-scope">${esc(r.scope)}</div>` : ''}</td><td>${esc(r.body)}</td><td>${esc(r.site)}</td>
+        <td class="nowrap">${esc(r.issue_date || '')}${r.first_date && r.first_date !== r.issue_date ? `<div class="small muted">최초 ${esc(r.first_date)}</div>` : ''}</td>
+        <td class="nowrap">${r.expire_date ? `~ ${esc(r.expire_date)}${dd(r.expire_date, ec, live(r))}` : '<span class="muted">—</span>'}</td>
+        <td class="nowrap">${r.next_audit ? `${esc(r.next_audit)}${dd(r.next_audit, nc, live(r))}${r.audit_kind ? `<div class="small muted">${esc(r.audit_kind)}</div>` : ''}` : '<span class="muted">—</span>'}</td>
+        <td><span class="chip ${CERT_STATUS_CHIP[r.status] || ''}">${esc(r.status_label)}</span></td><td>${esc(r.owner_name)}</td>
+        <td class="nowrap">${data.can_manage ? `<button type="button" class="btn small" data-ct-edit="${r.id}">수정</button>${['valid', 'suspended'].includes(r.status) ? ` <button type="button" class="btn small primary" data-ct-audit="${r.id}">심사 완료</button>` : ''}` : ''} <button type="button" class="btn small" data-ct-hist="${r.id}">이력</button></td></tr>`; }).join('')}</tbody></table></div>`
+      : `<div class="empty">${data.rows.length ? '조건에 맞는 인증서가 없습니다.' : '아직 등록한 인증서가 없습니다. 「＋ 인증서 등록」으로 ISO 9001·14001, GRS 등을 넣어 두면 심사·갱신 일정을 함께 관리합니다.'}</div>`;
+  };
+  const editor = async (r = null) => {
+    const v = r || { kind: 'ISO 9001', status: 'valid' };
+    const m = modal(`<h3>${r ? '인증서 수정' : '인증서 등록'}</h3><form class="stack" data-ct-form>
+      <fieldset class="vendor-sec"><legend>기본</legend><div class="form-grid">
+        <label>인증 종류 *<select name="kind" required>${Object.keys(CERT_INFO).map(k => `<option${v.kind === k ? ' selected' : ''}>${esc(k)}</option>`).join('')}</select></label>
+        <label>상태 *<select name="status" required>${Object.entries(CERT_STATUS_LABEL).map(([k, l]) => `<option value="${k}"${v.status === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label>인증번호<input name="cert_no" maxlength="80" value="${esc(v.cert_no || '')}" placeholder="예) FS 123456 · CU1234567GRS-2026"></label>
+        <label class="span2">인증명 <span class="hint">(기타는 꼭)</span><input name="title" maxlength="200" value="${esc(v.title || '')}" placeholder="비우면 인증 종류로 표시"></label>
+        <label>인증기관<input name="body" maxlength="100" list="ctBodies" value="${esc(v.body || '')}" placeholder="예) BSI · DNV · SGS · KFQ · Control Union"><datalist id="ctBodies">${['BSI', 'DNV', 'SGS', 'KFQ(한국품질재단)', 'KSA(한국표준협회)', 'KTR', 'Intertek', 'TÜV', 'Control Union', 'OEKO-TEX(Hohenstein)'].map(x => `<option value="${x}">`).join('')}</datalist></label>
+        <label class="span2">인증 범위<input name="scope" maxlength="500" value="${esc(v.scope || '')}" placeholder="예) 클린룸용 와이퍼·장갑의 제조 및 판매"></label>
+        <label>대상 사업장<input name="site" maxlength="100" value="${esc(v.site || '')}" placeholder="예) 본사·안성 공장"></label>
+        <label>담당자<input name="owner_name" maxlength="50" value="${esc(v.owner_name || '')}"></label>
+      </div></fieldset>
+      <fieldset class="vendor-sec"><legend>유효기간 · 심사 <span class="hint" data-ct-hint></span></legend><div class="form-grid">
+        <label>최초 인증일<input type="date" name="first_date" value="${esc(v.first_date || '')}"></label>
+        <label>발행일(현 인증서)<input type="date" name="issue_date" value="${esc(v.issue_date || '')}"></label>
+        <label>유효기간(만료일)<input type="date" name="expire_date" value="${esc(v.expire_date || '')}"></label>
+        <label>다음 심사일<input type="date" name="next_audit" value="${esc(v.next_audit || '')}"></label>
+        <label>심사 종류<input name="audit_kind" maxlength="30" list="ctAudit" value="${esc(v.audit_kind || '')}" placeholder="1차 사후심사 · 갱신심사"><datalist id="ctAudit"><option value="1차 사후심사"><option value="2차 사후심사"><option value="갱신심사"><option value="최초심사"><option value="특별심사"></datalist></label>
+        <div class="ip-calc"><button type="button" class="btn small" data-ct-calc>기간 자동 계산</button></div>
+      </div></fieldset>
+      <label>메모<textarea name="note" rows="2" maxlength="1000">${esc(v.note || '')}</textarea></label>
+      <div class="actions">${r ? '<button type="button" class="btn danger" data-ct-del>삭제</button>' : ''}<span class="grow"></span><button type="button" class="btn" data-no>취소</button><button class="btn primary">저장</button></div></form>`, { wide: true });
+    const f = $('[data-ct-form]', m.el), el = n => f.elements[n];
+    const hint = () => { const h = CERT_INFO[el('kind').value]?.hint; $('[data-ct-hint]', f).textContent = h ? `(${h} · 참고값)` : ''; };
+    const calc = force => { const s = certSuggest(el('kind').value, el('issue_date').value, data.today); if (s.expire && (force || !el('expire_date').value)) el('expire_date').value = s.expire; if (s.next && (force || !el('next_audit').value)) el('next_audit').value = s.next; if (s.nextKind && (force || !el('audit_kind').value)) el('audit_kind').value = s.nextKind; };
+    hint(); el('kind').onchange = () => { hint(); calc(false); }; el('issue_date').onchange = () => { if (!el('first_date').value) el('first_date').value = el('issue_date').value; calc(false); };
+    $('[data-ct-calc]', f).onclick = () => { calc(true); toast('인증 종류·발행일로 유효기간과 다음 심사를 채웠습니다(참고값).'); };
+    $('[data-no]', f).onclick = () => m.close();
+    $('[data-ct-del]', f)?.addEventListener('click', async () => { if (!await confirmBox(`${r.kind} ${r.cert_no || ''}을(를) 목록에서 지울까요? 인증이 끝난 경우에는 지우지 말고 상태를 「만료」·「취소·반납」으로 바꾸면 이력이 남습니다.`)) return; try { await api('DELETE', `/api/certs/${r.id}?revision=${r.revision}`); toast('지웠습니다.'); m.close(); await load(); } catch (e) { fail(e); } });
+    f.onsubmit = async e => { e.preventDefault(); const body = formObj(f), btn = $('button.primary', f); btn.disabled = true;
+      try { if (r) await api('PUT', `/api/certs/${r.id}`, { ...body, revision: r.revision }); else await api('POST', '/api/certs', { ...body, request_id: crypto.randomUUID() }); toast('저장했습니다.'); m.close(); await load(); }
+      catch (error) { fail(error); if (error.status === 409) load().catch(() => {}); } finally { btn.disabled = false; } };
+  };
+  const audit = async r => {
+    const k = CERT_INFO[r.kind] || {}, renewal = /갱신/.test(r.audit_kind || '') || !k.annual;
+    const dayAfter = d => new Date(Date.parse(d || todayStr()) + 86400000).toISOString().slice(0, 10);
+    const newIssue = renewal ? (r.expire_date || todayStr()) : r.issue_date || '';
+    // 갱신: 새 발행일 기준 유효기간·첫 사후심사 / 사후: 지금 예정일 다음의 사후심사(없으면 갱신심사)
+    const sug = renewal ? certSuggest(r.kind, newIssue, newIssue) : { ...certSuggest(r.kind, r.issue_date, dayAfter(r.next_audit)), expire: r.expire_date };
+    const v = await promptBox(`심사 완료 · ${r.kind} ${r.cert_no || ''}`, `<p>예정 <b>${esc(r.next_audit || '—')}</b> ${esc(r.audit_kind || '')}${r.expire_date ? ` · 지금 유효기간 ~ ${esc(r.expire_date)}` : ''}</p>
+      <p class="small muted">${renewal ? '갱신심사: 새 인증서의 발행일·유효기간과 다음 심사를 넣습니다.' : '사후심사: 다음 심사일을 넘깁니다(유효기간은 그대로).'} 제안 날짜는 고칠 수 있습니다. 「부적합」이면 상태가 「정지」가 됩니다.</p>
+      <div class="form-grid"><label>심사일 *<input type="date" name="done_date" required value="${todayStr()}"></label>
+      <label>결과 *<select name="result"><option>적합</option><option>조건부 적합</option><option>부적합</option></select></label><label>심사 종류<input name="audit_kind" maxlength="30" value="${esc(r.audit_kind || '')}"></label>
+      ${renewal ? `<label>새 발행일<input type="date" name="issue_date" value="${esc(newIssue)}"></label><label>새 유효기간(만료일)<input type="date" name="expire_date" value="${esc(sug.expire || '')}"></label>` : ''}
+      <label>다음 심사일<input type="date" name="next_audit" value="${esc(sug.next || '')}"></label><label>다음 심사 종류<input name="next_kind" maxlength="30" value="${esc(sug.nextKind || '')}" list="ctAudit2"><datalist id="ctAudit2"><option value="1차 사후심사"><option value="2차 사후심사"><option value="갱신심사"></datalist></label>
+      <label class="span3">메모<input name="note" maxlength="300" placeholder="예) 부적합 경미 2건 · 시정조치 12월 제출"></label></div>`, { wide: true });
+    if (!v) return; try { await api('POST', `/api/certs/${r.id}/audit`, { ...v, revision: r.revision }); toast('심사 결과를 저장했습니다.'); await load(); } catch (e) { fail(e); }
+  };
+  const history = r => modal(`<h3>이력 · ${esc(r.kind)} ${esc(r.cert_no || '')}</h3>${(r.history || []).length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>일시</th><th>담당</th><th>내용</th></tr></thead><tbody>${[...r.history].reverse().map(h => `<tr><td class="nowrap">${esc(String(h.at || '').slice(0, 16))}</td><td>${esc(h.by || '')}</td><td>${h.what === '심사' ? `<b>심사</b> ${esc(h.kind || '')} · ${esc(h.done || '')} · <span class="chip ${h.result === '부적합' ? 'red' : h.result === '적합' ? 'green' : 'yellow'}">${esc(h.result || '')}</span> · 다음 ${esc(h.next || '없음')}${h.expire ? ` · 유효기간 ${esc(h.expire[0] || '—')} → ${esc(h.expire[1] || '—')}` : ''}${h.status ? ` · 상태 ${esc(CERT_STATUS_LABEL[h.status[0]] || '')} → ${esc(CERT_STATUS_LABEL[h.status[1]] || '')}` : ''}${h.note ? ` · ${esc(h.note)}` : ''}` : h.what === '수정' ? `수정 (${(h.fields || []).length}칸)${h.status ? ` · 상태 ${esc(CERT_STATUS_LABEL[h.status[0]] || '')} → ${esc(CERT_STATUS_LABEL[h.status[1]] || '')}` : ''}` : esc(h.what || '')}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">이력이 없습니다.</p>'}`, { wide: true });
+  main.addEventListener('click', e => {
+    const t = e.target.closest('[data-ct-tile]'); if (t) { const i = Number(t.dataset.ctTile); form.elements.status.value = i === 1 ? 'valid' : i === 2 ? 'prep' : ''; form.elements.due.value = i === 3 ? 'soon' : i === 4 ? 'over' : ''; draw(); return; }
+    if (e.target.closest('#ctNew')) return editor().catch?.(fail);
+    if (e.target.closest('#ctXlsx')) { const list = filtered(); if (!list.length) return toast('내보낼 줄이 없습니다.', 'err');
+      return xlsxDownload(`인증서_${data.today}.xlsx`, { sheet: '인증서', titles: ['인증서 관리', data.today], columns: ['인증 종류', '인증번호', '인증명', '인증 범위', '인증기관', '사업장', '최초 인증일', '발행일', '유효기간', '다음 심사일', '심사 종류', '상태', '담당자', '메모'].map(label => ({ label, type: 'text' })),
+        rows: list.map(r => [r.kind, r.cert_no, r.title, r.scope, r.body, r.site, r.first_date || '', r.issue_date || '', r.expire_date || '', r.next_audit || '', r.audit_kind, r.status_label, r.owner_name, r.note]) }); }
+    const find = a => data.rows.find(x => x.id === Number(e.target.closest(`[${a}]`)?.getAttribute(a)));
+    if (e.target.closest('[data-ct-edit]')) return editor(find('data-ct-edit'));
+    if (e.target.closest('[data-ct-audit]')) return audit(find('data-ct-audit')).catch(fail);
+    if (e.target.closest('[data-ct-hist]')) return history(find('data-ct-hist'));
+  });
+  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-ct-row]'); if (tr && data.can_manage && !e.target.closest('button')) editor(data.rows.find(x => x.id === Number(tr.dataset.ctRow))); });
+  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  await load();
+}
