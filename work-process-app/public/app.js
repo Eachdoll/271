@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.281';
+const APP_VERSION = '15.282';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -2290,22 +2290,35 @@ function statusChip(s) { return `<span class="chip st-${s}">${STATUS[s]}</span>`
 function requestDetail(type, r, reload) {
   const cfg = REQ[type]; const mgr = hasRole(cfg.role); const approver = canApproveRequest(type);
   const mine = r.requester_id === ME.id;
-  const rows = cfg.fields.map((f) => `<tr><th>${esc(f.label)}</th><td>${esc(fieldValue(f, r)) || '<span class="muted">-</span>'}</td></tr>`).join('');
+  // 15.282 의뢰서 창: 요점(핵심 칸·의뢰 항목·의뢰자·결과)만 먼저, 나머지는 「더보기」
+  const KEY_EXTRA = { analysis: ['items'], voc: ['qty', 'lot'] }, isKey = f => f.core || (KEY_EXTRA[type] || []).includes(f.k);
+  const kv = (label, html) => `<div class="rq-kv"><span>${esc(label)}</span><b>${html}</b></div>`;
+  const keyRows = cfg.fields.filter(isKey).map(f => [f, esc(fieldValue(f, r))]).filter(([, v]) => v).map(([f, v]) => kv(f.label, v)).join('');
+  const moreFields = cfg.fields.filter(f => !isKey(f));
+  const rows = moreFields.map((f) => `<tr><th>${esc(f.label)}</th><td>${esc(fieldValue(f, r)) || '<span class="muted">-</span>'}</td></tr>`).join('');
+  const filled = moreFields.filter(f => fieldValue(f, r)).length;
   const m = modal(`
     <div class="print-area">
     <h3>${cfg.documentTitle || cfg.label + '의뢰서'} ${statusChip(r.status)}</h3>${lineInfo(r)}
+    <div class="rq-key">
+      ${kv('접수번호', esc(r.req_no || '(승인 시 발급)'))}${keyRows}
+      ${kv('의뢰자', `${esc(r.requester_name)} <span class="muted small">${esc(r.created_at.slice(0, 10))}</span>`)}
+      ${r.reject_reason ? `<div class="rq-kv full"><span>반려 사유</span><b class="red-text">${esc(r.reject_reason)}</b></div>` : ''}
+      ${r.result_note ? `<div class="rq-kv full"><span>결과/메모</span><b>${esc(r.result_note)}</b></div>` : ''}
+      ${type === 'voc' && r.data?.lot ? `<div class="rq-kv full"><span>LOT 연결</span><b><button type="button" class="link-btn" data-lt-open="${esc(r.data.lot)}">${esc(r.data.lot)} · LOT 연결 조회 →</button></b></div>` : ''}
+    </div>
+    <details class="rq-more"><summary>더보기 · 상세 내용 <span class="small muted">(${filled}개 항목${r.source_type ? ' · 입고 출처' : ''}${r.approver_name ? ' · 접수 기록' : ''})</span></summary>
     <table class="kv">
-      <tr><th>접수번호</th><td>${esc(r.req_no || '(승인 시 발급)')}</td></tr>
       ${r.source_type ? `<tr><th>입고 출처</th><td><a href="${r.source_type === 'purchase_order' ? '#/logistics/receive' : '#/logistics/other'}">${r.source_type === 'purchase_order' ? '발주입고' : '기타입고'} #${esc(r.source_id)}</a>${r.data.purchase_req_no ? ' · 구매의뢰번호 ' + esc(r.data.purchase_req_no) : ''}</td></tr>
       <tr><th>입고일 / 분류</th><td>${esc(r.data.received_date || '')} / ${esc(r.data.item_category || '미분류')}</td></tr>
       <tr><th>입고수량 / COA</th><td>${fmtNum(r.data.received_qty)} ${esc(r.data.unit || '')} / ${r.data.coa_requested ? 'COA 요청' : '요청 없음'}</td></tr>` : ''}
       <tr><th>입력자(의뢰자)</th><td>${esc(r.requester_name)} · ${esc(r.created_at.slice(0, 16))}</td></tr>
       ${r.approver_name ? `<tr><th>${r.status === 'rejected' ? '반려자' : '접수자'}</th><td>${esc(r.approver_name)}${r.approved_at ? ' · ' + esc(r.approved_at.slice(0, 16)) : ''}</td></tr>` : ''}
-      ${r.reject_reason ? `<tr><th>반려 사유</th><td class="red-text">${esc(r.reject_reason)}</td></tr>` : ''}
-      ${rows}${type === 'voc' && r.data?.lot ? `<tr><th>LOT 연결</th><td><button type="button" class="link-btn" data-lt-open="${esc(r.data.lot)}">${esc(r.data.lot)} · LOT 연결 조회 →</button></td></tr>` : ''}
-      ${r.result_note ? `<tr><th>결과/메모</th><td>${esc(r.result_note)}</td></tr>` : ''}
+      ${rows}
     </table>
-    ${['development','sample','sample_goods','voc'].includes(type) || r.source_type ? '<h4>첨부 사진 · 기록</h4><div data-request-photos></div>' : ''}
+    ${r.source_type && !['development','sample','sample_goods','voc'].includes(type) ? '<h4>첨부 사진 · 기록</h4><div data-request-photos></div>' : ''}
+    </details>
+    ${['development','sample','sample_goods','voc'].includes(type) ? '<h4>첨부 사진 · 기록</h4><div data-request-photos></div>' : ''}
     </div>
     <div class="actions wrap">
       <button class="btn" data-a="print">인쇄</button>${commentButton("request", r.id, r.title)}
@@ -2323,7 +2336,7 @@ function requestDetail(type, r, reload) {
     try {
       if (a === 'inspection') { m.close(); await openInspection(r.id, reload); return; }
       if (a === 'photos') { await openAttachments('request', r.id, r.title, { editable: (mine && ['pending','rejected'].includes(r.status)) || mgr }); return; }
-      if (a === 'print') { document.body.classList.add('printing'); window.print(); document.body.classList.remove('printing'); return; }
+      if (a === 'print') { const more = $('.rq-more', m.el), was = more?.open; if (more) more.open = true; document.body.classList.add('printing'); window.print(); document.body.classList.remove('printing'); if (more) more.open = was; return; } // 15.282 인쇄는 상세까지
       if (a === 'approve') { await api('POST', `/api/requests/${r.id}/approve`); toast(`승인했습니다. ${cfg.listTitle || cfg.label + '리스트'}에 등록됨`); }
       if (a === 'reject') { const v = await promptBox('반려 사유', '<label>사유 *<textarea name="reason" required rows="3"></textarea></label>'); if (!v) return; await api('POST', `/api/requests/${r.id}/reject`, v); toast('반려했습니다.'); }
       if (a === 'del') { if (!(await confirmBox('이 의뢰를 삭제할까요?'))) return; await api('DELETE', `/api/requests/${r.id}`); toast('삭제했습니다.'); }
