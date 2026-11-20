@@ -840,10 +840,10 @@ test('15.306 QA system: controlled documents (draft, review, approve, revise, ob
   const r1 = await admin('POST', `/api/qdocs/${d.body.id}/step`, { to: 'draft', revision: d4.revision }); assert.equal(r1.body.rev, 1); assert.equal(r1.body.status, 'draft');
   assert.match((await admin('POST', `/api/qdocs/${d.body.id}/step`, { to: 'review', revision: r1.body.revision })).body.error, /개정 내용/);
   // 열람: 다른 부서는 승인된 것만, 지정 부서만
-  assert.equal((await prod('GET', '/api/qdocs')).body.rows.length, 0, 'drafts hidden from others');
+  { const seen = (await prod('GET', '/api/qdocs')).body.rows; assert.equal(seen.length, 1, 'during a revision others still see the current approved version'); assert.equal(seen[0].current.rev, 0); assert.equal(seen[0].file, null, 'working draft file hidden'); }
   const ext = await admin('POST', '/api/qdocs', { kind: 'std', title: 'KS K 0901 클린룸 와이퍼', issuer: '국가기술표준원', edition: '2024', access_depts: ['연구소'], request_id: rid() });
   assert.equal(ext.body.status, 'approved'); assert.equal(ext.body.doc_no, 'EX-01');
-  assert.equal((await prod('GET', '/api/qdocs')).body.rows.length, 0, 'restricted to 연구소');
+  assert.ok(!(await prod('GET', '/api/qdocs')).body.rows.some(x => x.id === ext.body.id), 'restricted to 연구소');
   assert.equal((await prod('POST', '/api/qdocs', { kind: 'form', title: 'x' })).status, 403);
   assert.equal((await admin('POST', `/api/qdocs/${ext.body.id}/step`, { to: 'obsolete', revision: ext.body.revision })).status, 400, 'reason');
   const ob = await admin('POST', `/api/qdocs/${ext.body.id}/step`, { to: 'obsolete', reason: '2025판으로 대체', revision: ext.body.revision }); assert.equal(ob.body.status, 'obsolete'); assert.ok(ob.body.dispose_date > today);
@@ -869,7 +869,7 @@ test('15.306 QA system: controlled documents (draft, review, approve, revise, ob
   const t = await admin('POST', '/api/trainings', { title: 'QP-01 개정 교육', kind: '문서 개정 교육', plan_date: today, doc_id: d.body.id, change_id: c.body.id, attendees: [{ user_name: '생산' }, { user_name: '관리자' }], request_id: rid() });
   assert.equal(t.status, 200, JSON.stringify(t.body)); assert.equal(t.body.attendees.length, 2); assert.match(t.body.doc_label, /^QP-01 Rev\.1/);
   const ta = await prod('POST', `/api/trainings/${t.body.id}/attend`); assert.equal(ta.body.attendees.find(a => a.user_name === '생산').attended, 1);
-  assert.match((await admin('PUT', `/api/trainings/${t.body.id}`, { status: 'done', revision: t.body.revision })).body.error, /실시일/);
+  assert.match((await admin('PUT', `/api/trainings/${t.body.id}`, { status: 'done', revision: ta.body.revision })).body.error, /실시일/);
   const t1 = await admin('PUT', `/api/trainings/${t.body.id}`, { status: 'done', done_date: today, hours: 1.5, revision: ta.body.revision }); assert.equal(t1.status, 200, JSON.stringify(t1.body)); assert.equal(t1.body.status, 'done');
   assert.match((await admin('PUT', `/api/trainings/${t.body.id}`, { status: 'evaluated', revision: t1.body.revision })).body.error, /결과/);
   const t2 = await admin('PUT', `/api/trainings/${t.body.id}`, { status: 'evaluated', attendees: [{ user_name: '생산', attended: 1, score: 90, result: '이수' }, { user_name: '관리자', attended: 0 }], revision: t1.body.revision });
@@ -984,4 +984,48 @@ test('15.308 audits (findings create CAPA, close only when CAPAs closed), valida
   assert.match((await admin('PUT', `/api/risks/${r.body.id}`, { status: 'closed', revision: r1.body.revision })).body.error, /재평가/);
   const r2 = await admin('PUT', `/api/risks/${r.body.id}`, { status: 'closed', re_likelihood: 2, re_impact: 3, review_date: today, revision: r1.body.revision }); assert.deepEqual([r2.body.status, r2.body.re_score, r2.body.re_grade], ['closed', 6, '하']);
   assert.match((await admin('POST', '/api/risks', { content: 'x', likelihood: 6, impact: 1 })).body.error, /1~5/);
+});
+
+test('15.309 review fixes: losing concurrent writes leave nothing, negative values, document locked in review, audit CAPA void needs approver, approved change locked, bad input is 400 not 500', async () => {
+  const qc = client(); await approvedRegistration(admin, qc, { name: '품질담당', password: 'password', invite: 'lot249-test' });
+  const qu = (await admin('GET', '/api/admin/users')).body.find(x => x.name === '품질담당'); await admin('PUT', `/api/admin/users/${qu.id}`, { roles: ['quality'] });
+  // 교육: 같은 판으로 두 사람이 저장 → 진 쪽 대상자 변경이 남지 않음
+  const t = (await admin('POST', '/api/trainings', { title: '동시 저장', kind: 'OJT', plan_date: today, attendees: [{ user_name: '생산' }], request_id: rid() })).body;
+  const w = await admin('PUT', `/api/trainings/${t.id}`, { attendees: [{ user_name: '생산' }, { user_name: '관리자' }], revision: t.revision });
+  const l = await qc('PUT', `/api/trainings/${t.id}`, { attendees: [{ user_name: '품질담당' }], revision: t.revision });
+  assert.equal(w.status, 200); assert.equal(l.status, 409);
+  assert.deepEqual(sqlite.prepare('SELECT user_name FROM training_attendees WHERE training_id=? ORDER BY user_name').all(t.id).map(x => x.user_name), ['관리자', '생산']);
+  // 설비 이력: 같은 판으로 두 번 → 진 쪽 이력 줄 없음
+  const e = (await admin('POST', '/api/equipment', { name: '동시 설비', request_id: rid() })).body;
+  const e1 = await admin('POST', `/api/equipment/${e.id}/logs`, { kind: 'failure', description: 'A', revision: e.revision });
+  const e2 = await prod('POST', `/api/equipment/${e.id}/logs`, { kind: 'failure', description: 'B', status_after: 'maintenance', revision: e.revision });
+  assert.equal(e1.status, 200); assert.equal(e2.status, 409); assert.equal(sqlite.prepare('SELECT COUNT(*) c FROM equipment_logs WHERE equipment_id=?').get(e.id).c, 1);
+  // 음수: 냉동고 온도 기준·측정값, 신뢰성 치수 변화, KPI
+  const pt = await admin('POST', '/api/pqc/points', { kind: 'env', place: '냉동고', item: '온도', lsl: -25, usl: -15 }); assert.equal(pt.status, 200, JSON.stringify(pt.body));
+  assert.equal((await admin('POST', '/api/pqc/measures', { rows: [{ point_id: pt.body.id, value: -30 }] })).body.out_of_spec, 1);
+  assert.equal((await admin('POST', '/api/reliability', { title: '치수', spec_json: [{ name: '변화율', min: -2, max: 2 }], request_id: rid() })).status, 200);
+  assert.equal((await admin('POST', '/api/reliability', { title: 'R', spec_json: { a: 1 }, points_json: { b: 2 } })).status, 200, 'object is treated as empty, not 500');
+  const g = (await admin('POST', '/api/kpi/goals', { title: '편차', unit: '%', target: -1, request_id: rid() })).body; assert.equal(g.target, -1);
+  assert.match((await admin('PUT', `/api/kpi/goals/${g.id}`, { values: [{ target: 1, actual: 2 }], revision: g.revision })).body.error, /월/);
+  // 문서: 검토 중에는 파일·내용 잠금
+  const pdf = 'data:application/pdf;base64,' + Buffer.from('%PDF-1.4\n%%EOF').toString('base64');
+  let d = (await admin('POST', '/api/qdocs', { kind: 'form', title: '점검표 A', files: [{ data: pdf, name: 'a.pdf' }], request_id: rid() })).body;
+  d = (await admin('POST', `/api/qdocs/${d.id}/step`, { to: 'review', revision: d.revision })).body;
+  const d1 = (await admin('PUT', `/api/qdocs/${d.id}`, { remove_file: 1, title: '바꿈', revision: d.revision })).body;
+  assert.equal(d1.title, '점검표 A'); assert.ok(d1.file?.file, 'file kept while in review');
+  // 심사 지적 CAPA 취소는 품질책임자만
+  const au = (await admin('POST', '/api/audits', { title: '내부', kind: 'internal', plan_date: today, request_id: rid() })).body;
+  const af = (await admin('POST', `/api/audits/${au.id}/findings`, { grade: 'minor', content: '지적', request_id: rid() })).body;
+  const anc = (await admin('GET', `/api/ncs?source_type=audit&source_id=${au.id}`)).body.rows[0];
+  assert.equal((await qc('PUT', `/api/ncs/${anc.id}`, { status: 'void', reason: '없앰', revision: anc.revision })).status, 403);
+  assert.equal(af.history.filter(h => /지적/.test(h.what)).length, 1);
+  // 승인된 변경은 내용·영향평가 잠금
+  let c = (await admin('POST', '/api/changes', { kind: 'method', title: '원래 내용', request_id: rid() })).body;
+  c = (await admin('PUT', `/api/changes/${c.id}`, { status: 'evaluating', revision: c.revision })).body;
+  const imp = Object.fromEntries(['quality', 'customer', 'docs', 'validation', 'training', 'inspection', 'stock'].map(k => [k, { v: 'no' }]));
+  c = (await admin('PUT', `/api/changes/${c.id}`, { status: 'approved', impact_json: imp, revision: c.revision })).body;
+  const c2 = (await admin('PUT', `/api/changes/${c.id}`, { title: '몰래 바꿈', plan_date: today, revision: c.revision })).body;
+  assert.equal(c2.title, '원래 내용'); assert.equal(c2.plan_date, today);
+  // COA 승인: 오래된 판이면 409
+  assert.equal((await admin('POST', '/api/coas/999999/approve', { revision: 1 })).status, 404);
 });

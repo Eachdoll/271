@@ -1315,14 +1315,14 @@ async function qdocNew(pre = {}) {
 }
 async function qdocOpen(id) {
   const list = await api('GET', '/api/qdocs'), d = list.rows.find(x => x.id === id); if (!d) return toast('문서를 찾을 수 없습니다.', 'err');
-  const can = list.can_manage, appr = list.can_approve, locked = d.internal && ['approved', 'obsolete'].includes(d.status) || d.status === 'obsolete', dis = !can || locked ? ' disabled' : '', mdis = !can || d.status === 'obsolete' ? ' disabled' : '';
+  const can = list.can_manage, appr = list.can_approve, locked = d.internal && d.status !== 'draft' || d.status === 'obsolete', dis = !can || locked ? ' disabled' : '', mdis = !can || d.status === 'obsolete' ? ' disabled' : '';
   const flow = ['draft', 'review', 'approved'];
   const m = modal(`<h3>${esc(d.doc_no)} · ${esc(d.title)} <span class="chip ${QDOC_CHIP[d.status]}">${esc(d.status_label)}</span></h3>
     ${d.internal ? qStepper(flow, QDOC_STATUS_LABEL, d.status) : ''}
     <p class="small muted">${esc(d.kind_label)} · ${qdocRev(d)}${d.current ? ` · 현행 ${d.internal ? `Rev.${d.current.rev}` : esc(d.current.edition || '')} (${esc(d.current.effective_date || '')} 시행, 승인 ${esc(d.current.approved_by || '')})` : ' · 아직 승인된 판 없음'}${d.change_id ? ` · 변경 연결 #${d.change_id}` : ''}</p>
     ${d.current?.file ? `<p>현행판 내려받기: ${qFileLink(d.current.file)}</p>` : ''}
     <form class="stack" data-qd-form>
-      <fieldset class="vendor-sec"><legend>문서 ${locked && can && d.status !== 'obsolete' ? '<span class="hint">(승인된 판의 내용·파일은 「개정」으로 바꿉니다. 관리 정보는 고칠 수 있음)</span>' : ''}</legend><div class="form-grid">
+      <fieldset class="vendor-sec"><legend>문서 ${locked && can && d.status === 'review' ? '<span class="hint">(검토 중에는 내용·파일이 잠깁니다. 고치려면 품질책임자가 반려 → 초안)</span>' : locked && can && d.status !== 'obsolete' ? '<span class="hint">(승인된 판의 내용·파일은 「개정」으로 바꿉니다. 관리 정보는 고칠 수 있음)</span>' : ''}</legend><div class="form-grid">
         <label class="span3">제목<input name="title" required maxlength="200" value="${esc(d.title)}"${dis}></label>
         <input type="hidden" name="kind" value="${esc(d.kind)}">
         ${d.internal ? '' : `<label>발행처<input name="issuer" maxlength="100" value="${esc(d.issuer)}"${dis}></label><label>판·연도<input name="edition" maxlength="60" value="${esc(d.edition)}"${dis}></label><label>시행·발행일<input type="date" name="effective_date" value="${esc(d.effective_date || '')}"${dis}></label>`}
@@ -1428,19 +1428,20 @@ async function chgOpen(id) {
   const list = await api('GET', '/api/changes'), c = list.rows.find(x => x.id === id); if (!c) return toast('변경을 찾을 수 없습니다.', 'err');
   const can = list.can_manage, mine = c.requester_name === list.me, end = ['verified', 'rejected', 'void'].includes(c.status), edit = !end && (can || (mine && c.status === 'requested')), dis = edit ? '' : ' disabled';
   const imp = c.impact || {}, f = (n, l, v, a = '') => `<label>${l}<input name="${n}" value="${esc(v ?? '')}"${a}${dis}></label>`;
+  const cdis = ['approved', 'applied'].includes(c.status) ? ' disabled' : dis; /* 15.309 승인 뒤 내용·영향평가 잠금(적용·검증 칸만) */
   const next = { requested: 'evaluating', evaluating: 'approved', approved: 'applied', applied: 'verified' }[c.status];
   const m = modal(`<h3>${esc(c.change_no)} · ${esc(c.title)} <span class="chip ${CHG_CHIP[c.status]}">${esc(c.status_label)}</span></h3>
     ${qStepper(CHG_FLOW, CHG_STATUS_LABEL, c.status)}
     <p class="small muted">${esc(c.source_label)}${c.source_no ? ` · <b>${esc(c.source_no)}</b>` : ''}${c.vendor ? ` · 업체 <b>${esc(c.vendor)}</b>` : ''} · 요청 ${esc(c.requester_name)} ${esc(String(c.created_at).slice(0, 10))}${c.approved_by ? ` · 승인 ${esc(c.approved_by)} ${esc(String(c.approved_at || '').slice(0, 10))}` : ''}</p>
     <form class="stack" data-chg-form>
       <fieldset class="vendor-sec"><legend>변경 내용</legend><div class="form-grid">
-        <label>변경 유형<select name="kind"${dis}>${Object.entries(CHG_KIND_LABEL).map(([k, l]) => `<option value="${k}"${c.kind === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
-        ${f('item', '대상 품목·공정', c.item)}${f('owner_name', '담당', c.owner_name)}
-        <label class="span3">제목<input name="title" required maxlength="200" value="${esc(c.title)}"${dis}></label>
-        <label class="span3">사유<textarea name="reason" rows="2" maxlength="1000"${dis}>${esc(c.reason)}</textarea></label>
-        <label class="span3">변경 전<input name="before_text" maxlength="1000" value="${esc(c.before_text)}"${dis}></label><label class="span3">변경 후<input name="after_text" maxlength="1000" value="${esc(c.after_text)}"${dis}></label>
+        <label>변경 유형<select name="kind"${cdis}>${Object.entries(CHG_KIND_LABEL).map(([k, l]) => `<option value="${k}"${c.kind === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label>대상 품목·공정<input name="item" value="${esc(c.item || '')}"${cdis}></label>${f('owner_name', '담당', c.owner_name)}
+        <label class="span3">제목<input name="title" required maxlength="200" value="${esc(c.title)}"${cdis}></label>
+        <label class="span3">사유<textarea name="reason" rows="2" maxlength="1000"${cdis}>${esc(c.reason)}</textarea></label>
+        <label class="span3">변경 전<input name="before_text" maxlength="1000" value="${esc(c.before_text)}"${cdis}></label><label class="span3">변경 후<input name="after_text" maxlength="1000" value="${esc(c.after_text)}"${cdis}></label>
       </div></fieldset>
-      <fieldset class="vendor-sec"><legend>영향평가 <span class="hint">(모두 「있음/없음」을 골라야 승인)</span></legend><div class="table-wrap"><table class="grid chg-imp" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>항목</th><th>영향</th><th>조치·메모</th></tr></thead><tbody>${Object.entries(CHG_IMPACT_LABEL).map(([k, l]) => { const x = imp[k] || {}, idis = can && !end ? '' : ' disabled'; return `<tr class="${x.v === 'yes' ? 'chg-yes' : ''}"><td class="nowrap">${l}</td><td class="nowrap"><label class="chk"><input type="radio" name="imp_${k}" value="yes"${x.v === 'yes' ? ' checked' : ''}${idis}> 있음</label> <label class="chk"><input type="radio" name="imp_${k}" value="no"${x.v === 'no' ? ' checked' : ''}${idis}> 없음</label></td><td><input name="impn_${k}" maxlength="300" value="${esc(x.note || '')}"${idis}></td></tr>`; }).join('')}</tbody></table></div>
+      <fieldset class="vendor-sec"><legend>영향평가 <span class="hint">(모두 「있음/없음」을 골라야 승인)</span></legend><div class="table-wrap"><table class="grid chg-imp" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>항목</th><th>영향</th><th>조치·메모</th></tr></thead><tbody>${Object.entries(CHG_IMPACT_LABEL).map(([k, l]) => { const x = imp[k] || {}, idis = can && !end && !['approved', 'applied'].includes(c.status) ? '' : ' disabled'; return `<tr class="${x.v === 'yes' ? 'chg-yes' : ''}"><td class="nowrap">${l}</td><td class="nowrap"><label class="chk"><input type="radio" name="imp_${k}" value="yes"${x.v === 'yes' ? ' checked' : ''}${idis}> 있음</label> <label class="chk"><input type="radio" name="imp_${k}" value="no"${x.v === 'no' ? ' checked' : ''}${idis}> 없음</label></td><td><input name="impn_${k}" maxlength="300" value="${esc(x.note || '')}"${idis}></td></tr>`; }).join('')}</tbody></table></div>
         ${can && !end ? `<div class="actions wrap small">${imp.docs?.v === 'yes' ? '<button type="button" class="btn small" data-chg-doc>문서 개정 연결</button><button type="button" class="btn small" data-chg-newdoc>새 문서 제정</button>' : ''}${imp.training?.v === 'yes' ? '<button type="button" class="btn small" data-chg-train>교육 계획 만들기</button>' : ''}${imp.validation?.v === 'yes' ? '<button type="button" class="btn small" data-chg-val>밸리데이션 만들기</button>' : ''}</div>` : ''}
         ${c.docs.length || c.trainings.length ? `<p class="small">연결: ${c.docs.map(x => `<a href="#/quality/docs" data-chg-go-doc="${x.id}">${esc(x.doc_no)} Rev.${x.rev} (${esc(x.status_label)})</a>`).join(' · ')}${c.docs.length && c.trainings.length ? ' · ' : ''}${c.trainings.map(t => `<a href="#/quality/training" data-chg-go-tr="${t.id}">교육 ${esc(t.plan_date)} ${esc(t.title)}</a>`).join(' · ')}</p>` : ''}
       </fieldset>
@@ -1452,7 +1453,7 @@ async function chgOpen(id) {
         ${edit ? '<button class="btn">저장</button>' : ''}${can && next && (next !== 'approved' || list.can_approve) ? `<button type="button" class="btn primary" data-chg-to="${next}">${next === 'approved' ? '승인' : `저장하고 「${CHG_STATUS_LABEL[next]}」로 →`}</button>` : ''}</div>
     </form>`, { wide: true });
   const form = $('[data-chg-form]', m.el);
-  const body = () => { const v = formObj(form), impact = {}; for (const k of Object.keys(CHG_IMPACT_LABEL)) { impact[k] = { v: v['imp_' + k] || '', note: v['impn_' + k] || '' }; delete v['imp_' + k]; delete v['impn_' + k]; } return { ...v, ...(can ? { impact_json: impact } : {}), revision: c.revision }; };
+  const body = () => { const v = formObj(form), impact = {}; for (const k of Object.keys(CHG_IMPACT_LABEL)) { impact[k] = { v: v['imp_' + k] || '', note: v['impn_' + k] || '' }; delete v['imp_' + k]; delete v['impn_' + k]; } return { ...v, ...(can && !['approved', 'applied'].includes(c.status) ? { impact_json: impact } : {}), revision: c.revision }; };
   const save = async (status, extra = {}) => { try { const r = await api('PUT', `/api/changes/${c.id}`, { ...body(), ...(status ? { status } : {}), ...extra }); toast(status ? `「${CHG_STATUS_LABEL[status]}」(으)로 넘겼습니다.` : '저장했습니다.'); m.close(); qReload(); await chgOpen(c.id); return r; } catch (e) { fail(e); } };
   form.onsubmit = e => { e.preventDefault(); save(null); };
   $$('[data-chg-to]', m.el).forEach(b => b.addEventListener('click', async () => { const to = b.dataset.chgTo; if (['void', 'rejected'].includes(to)) { const v = await promptBox(to === 'void' ? '변경 취소' : '변경 반려', `<label>사유 *<input name="reason" required maxlength="300"></label>`); if (v) save(to, v); return; } save(to); }));

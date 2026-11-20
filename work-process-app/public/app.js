@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.308';
+const APP_VERSION = '15.309';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -766,7 +766,16 @@ const PROCESS_FLOWS = [
   { key: 'qreq', name: '품질 분석의뢰', steps: [['#/quality/request', '분석의뢰·접수'], ['#/quality/list', '분석 진행·결과'], ['#/quality/inspections', '검사 이력']] },
   { key: 'qin', name: '수입검사', on: ['#/quality/list', '#/quality/inspections'], steps: [['#/purchase/po', '발주'], ['#/logistics/receive', '입고확인'], ['#/quality/list', '수입검사'], ['#/quality/inspections', '판정·이력'], ['#/purchase/bills', '매입전표']] },
   { key: 'qout', name: '출하검사', on: ['#/quality/list', '#/quality/inspections'], steps: [['#/prod/finished', '생산실적'], ['#/quality/list', '출하검사'], ['#/quality/inspections', '판정·이력'], ['#/logistics/ship-orders', '출하지시'], ['#/logistics/ship', '출하']] },
-  { key: 'voc', name: 'VOC 처리', steps: [['#/quality/voc/request', 'VOC 접수'], ['#/quality/voc/list', 'VOC 처리'], ['#/prod/lot-trace', 'LOT 연결 조회']] },
+  { key: 'voc', name: 'VOC 처리', on: ['#/quality/voc/request', '#/quality/voc/list', '#/prod/lot-trace'], steps: [['#/quality/voc/request', 'VOC 접수'], ['#/quality/voc/list', 'VOC 처리'], ['#/prod/lot-trace', 'LOT 연결 조회'], ['#/quality/capa', 'CAPA(재발 방지)']] },
+  // 15.309 품질 1~4단계 흐름: 부적합은 CAPA 한 곳으로 모여 변경·문서·교육·밸리데이션으로 닫히고, LOT는 출하검사 합격 → COA로 이어진다.
+  { key: 'capa', name: '부적합 개선(CAPA)', steps: [['#/quality/capa', '부적합·CAPA'], ['#/quality/changes', '변경관리'], ['#/quality/docs', '문서 개정'], ['#/quality/training', '개정 교육'], ['#/quality/validation', '재밸리데이션']] },
+  { key: 'coa', name: 'LOT별 COA', on: ['#/quality/coa'], steps: [['#/prod/finished', '생산실적'], ['#/quality/list', '출하검사'], ['#/quality/coa', 'COA 발행·승인'], ['#/logistics/ship', '출하']] },
+  { key: 'supplier', name: '협력업체 품질', on: ['#/quality/suppliers'], steps: [['#/logistics/receive', '입고'], ['#/quality/inspections', '수입검사·공급사 COA'], ['#/quality/suppliers', '협력업체 평가'], ['#/quality/changes', '업체 변경점']] },
+  { key: 'pqc', name: '공정품질', on: ['#/quality/pqc'], steps: [['#/quality/pqc', '공정·환경 측정·SPC'], ['#/quality/capa', '이상발생 → CAPA'], ['#/quality/changes', '공정 변경']] },
+  { key: 'plant', name: '설비·예방보전', on: ['#/prod/equipment', '#/prod/pm'], steps: [['#/prod/equipment', '설비 등록·PM 항목'], ['#/prod/pm', 'PM 일정·수행'], ['#/quality/validation', '설비 적격성(IQ·OQ·PQ)']] },
+  { key: 'method', name: '시험·측정', on: ['#/quality/calibration', '#/quality/methods'], steps: [['#/quality/calibration', '계측기 검교정'], ['#/quality/methods', '시험법·신뢰성'], ['#/quality/validation', '시험법 밸리데이션']] },
+  { key: 'audit', name: '심사·인증', on: ['#/quality/audits', '#/quality/certs'], steps: [['#/quality/audits', '심사 계획·실시'], ['#/quality/capa', '지적 → CAPA'], ['#/quality/certs', '인증 유지']] },
+  { key: 'qm', name: '품질경영(목표 → 점검 → 개선)', on: ['#/quality/kpi', '#/quality/risks'], steps: [['#/quality/kpi', '품질목표·KPI'], ['#/quality/risks', '리스크 관리'], ['#/quality/audits', '내부심사'], ['#/quality/capa', '개선(CAPA)']] },
   { key: 'semi', name: '반제품 · 포장 생산', steps: [['#/prod/semi', '반제품 계획'], ['#/prod/semi/cut', '커팅/융착'], ['#/prod/semi/wash', '세탁'], ['#/prod/finished', '포장(완제품 실적)'], ['#/logistics/ship', '출하']] },
 ];
 const FLOW_KEY = 'wpa:flow', FLOW_FOLD = 'wpa:flow-fold';
@@ -1225,6 +1234,7 @@ function alertsCard(a) {
   const staleLabel = s => s.kind === 'request' ? [`${REQ[s.type]?.label || s.type} 승인`, REQ[s.type]?.approve || REQ[s.type]?.intake || '#/'] : { actual_changes: ['생산실적 수정 승인', '#/prod/finished'], receipt_changes: ['입고 수량 수정 승인', '#/logistics/receive'], semi_changes: ['반제품 기록 수정 승인', '#/prod/semi/cut'] }[s.kind];
   for (const s of a.stale_approvals) { const [label, href] = staleLabel(s); items.push(`<li><a href="${href}"><b>${esc(label)} 대기 3일 초과 ${s.count}건</b></a><div class="small muted">가장 오래된 요청 ${esc(String(s.oldest).slice(0, 10))}</div></li>`); }
   if (a.low_yield.length) items.push(`<li><a href="#/reports"><b>최근 7일 수율 목표 미달 ${a.low_yield.length}곳</b></a><div class="small muted">${a.low_yield.slice(0, 5).map(r => `${esc(r.unit_name)}(${r.process === 'cut' ? '커팅/융착' : '세탁'}) <span class="red-text">${r.yield_rate}%</span> / 목표 ${r.target}%`).join(' · ')}</div></li>`);
+  for (const q of a.quality_alerts || []) items.push(`<li><a href="${q.href}"><b>${esc(q.label)} ${q.count}건</b></a>${q.first ? `<div class="small muted">가장 이른 날짜 ${esc(q.first)}</div>` : ''}</li>`); // 15.309 품질·공무 기한
   if (a.backup && (a.backup.days === null || a.backup.days >= 7)) items.push(`<li><a href="#/admin"><b>${a.backup.days === null ? '전체 백업을 아직 받지 않았습니다' : `마지막 전체 백업이 ${a.backup.days}일 전입니다`}</b></a><div class="small muted">관리자 설정 → 전체 백업 다운로드 (주 1회 이상 권장)</div></li>`);
   if (!items.length) return '';
   return `<section class="card tasks alerts" aria-labelledby="dashAlerts"><h2 id="dashAlerts">확인이 필요한 일 <span class="chip red">${items.length}</span></h2><ul>${items.join('')}</ul></section>`;
@@ -1245,6 +1255,7 @@ function taskTotal(tasks) {
   for (const [type, group] of Object.entries(a.requests)) add(group.count, REQ[type].approve || REQ[type].intake);
   add(a.actual_changes?.count, '#/prod/finished'); add(a.receipt_changes?.count, '#/logistics/receive'); add(a.semi_changes?.count, '#/prod/semi');
   add(a.plans_waiting?.count, '#/prod/finished/plan'); add(a.production_requests?.count, '#/prod/orders'); add(a.purchase_requests?.count, '#/sales/pr'); add(a.purchase_orders_waiting?.count, '#/purchase/po/new');
+  for (const q of a.quality || []) add(q.count, q.href); add(a.training_attend?.count, '#/quality/training'); // 15.309
   return n;
 }
 function taskBadgeCounts(tasks) {
@@ -1261,6 +1272,8 @@ function taskBadgeCounts(tasks) {
   if (a.production_requests?.count) counts['#/prod/orders'] = a.production_requests.count;
   if (a.plans_waiting?.count) counts['#/prod/finished/plan'] = a.plans_waiting.count; // 15.204 확정 대기
   if (a.ship_instructions?.count) counts['#/logistics/ship-orders'] = a.ship_instructions.count;
+  for (const q of a.quality || []) counts[q.href] = (counts[q.href] || 0) + q.count; // 15.309 품질 승인 대기
+  if (a.training_attend?.count) counts['#/quality/training'] = (counts['#/quality/training'] || 0) + a.training_attend.count;
   return counts;
 }
 async function refreshNavBadges() {
@@ -1291,6 +1304,8 @@ function tasksCard(tasks) {
   if (a.production_requests?.count) todo.push(`<li><a href="#/prod/orders"><b>생산의뢰 접수 대기 ${a.production_requests.count}건</b></a><div class="small muted">${a.production_requests.items.map(r => `<button type="button" class="link-btn" data-open-mr="${r.id}">${esc(r.req_no)}</button> ${esc(r.customer)}${r.ship_text || r.ship_date ? ' · 출고 ' + esc(r.ship_text || r.ship_date) : ''}`).join(' / ')}${more(a.production_requests.count, a.production_requests.items.length)}</div></li>`);
   if (a.purchase_requests?.count) todo.push(`<li><a href="#/sales/pr"><b>구매의뢰 결재 차례 ${a.purchase_requests.count}건</b></a><div class="small muted">${a.purchase_requests.items.map(r => `<button type="button" class="link-btn" data-task-pr="${r.id}">${esc(r.doc_no)}</button> ${esc(r.title || r.first_item || '')}${r.item_count > 1 ? ` 외 ${r.item_count - 1}건` : ''} · ${esc(r.author_name)}`).join(' / ')}${more(a.purchase_requests.count, a.purchase_requests.items.length)}</div></li>`);
   if (a.purchase_orders_waiting?.count) todo.push(`<li><a href="#/purchase/po/new"><b>발주 대기 구매의뢰 ${a.purchase_orders_waiting.count}건</b></a><div class="small muted">${a.purchase_orders_waiting.items.map(r => `<button type="button" class="link-btn" data-task-pr="${r.id}">${esc(r.doc_no)}</button> ${esc(r.title || r.first_item || '')} · ${esc(r.author_name)}`).join(' / ')}${more(a.purchase_orders_waiting.count, a.purchase_orders_waiting.items.length)}</div></li>`);
+  for (const q of a.quality || []) todo.push(`<li><a href="${q.href}"><b>${esc(q.label)} ${q.count}건</b></a></li>`); // 15.309 품질 승인·처리 대기
+  if (a.training_attend?.count) todo.push(`<li><a href="#/quality/training"><b>교육 참석 확인 ${a.training_attend.count}건</b></a><div class="small muted">${a.training_attend.items.map(t => `${esc(t.plan_date)} ${esc(t.title)}`).join(' / ')} — 교육·자격관리에서 「참석 확인」을 누르세요.</div></li>`);
   if (a.temp_items?.count) todo.push(`<li><a href="#/admin/bom"><b>임시 제품코드 정리 ${a.temp_items.count}건</b></a><div class="small muted">직접 입력된 품목에 정식 코드를 주거나 기존 품목으로 합치세요.</div></li>`);
   const state = c => `<span class="chip ${c.status === 'rejected' ? 'red' : 'yellow'}">${c.status === 'rejected' ? '반려' : '승인 대기'}</span>`;
   for (const r of m.requests) mine.push(`<li>${state(r)} <a href="${REQ[r.type].intake}">${esc(REQ[r.type].label)} · ${esc(r.title)}</a>${r.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(r.reject_reason)} (${esc(r.approver_name || '')}) · 수정하면 다시 접수됩니다.</div>` : ''}</li>`);
@@ -1298,7 +1313,7 @@ function tasksCard(tasks) {
   for (const c of m.semi_changes || []) mine.push(`<li>${state(c)} <a href="${c.process === 'wash' ? '#/prod/semi/wash' : '#/prod/semi/cut'}">반제품 기록</a> <span class="small">${semiChangeText(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
   for (const r of m.purchase_requests || []) mine.push(`<li>${state(r)} <a href="#/sales/pr">구매의뢰 · ${esc(r.doc_no)} ${esc(r.title || r.first_item || '')}</a>${r.status === 'pending' && r.current_user_name ? ` <span class="small muted">${esc(r.current_user_name)} 결재 차례</span>` : ''}${r.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(r.reject_reason)} (${esc(r.rejected_by || '')}) · 고쳐서 다시 상신하세요.</div>` : ''}</li>`);
   for (const c of m.receipt_changes) mine.push(`<li>${state(c)} <a href="#/logistics/receive">입고 · ${esc(c.item)}</a> <span class="small">${receiptChangeText(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
-  const canApprove = Object.keys(a.requests).length || a.actual_changes || a.receipt_changes || a.semi_changes || a.temp_items || a.purchase_requests || a.production_requests || a.purchase_orders_waiting || a.plans_waiting;
+  const canApprove = Object.keys(a.requests).length || a.actual_changes || a.receipt_changes || a.semi_changes || a.temp_items || a.purchase_requests || a.production_requests || a.purchase_orders_waiting || a.plans_waiting || a.quality || a.training_attend; // 15.309
   return `<section class="card tasks" aria-labelledby="dashTasks"><h2 id="dashTasks">내가 처리할 일</h2><div class="tasks-grid">
     ${canApprove ? `<section><h3>승인할 일 ${todo.length ? `<span class="chip yellow">${todo.length}</span>` : ''}</h3>${todo.length ? `<ul>${todo.join('')}</ul>` : '<p class="small muted">승인 대기 중인 건이 없습니다.</p>'}</section>` : ''}
     <section><h3>내가 올린 요청 ${mine.length ? `<span class="chip">${mine.length}</span>` : ''}</h3>${mine.length ? `<ul>${mine.join('')}</ul>` : '<p class="small muted">대기 중이거나 최근 반려된 요청이 없습니다.</p>'}</section>
@@ -1798,6 +1813,9 @@ async function pageHome(main) {
     ${flow('구매 → 물류 (발주·입고)', ['<b>구매</b> 발주서 발송 후 <a href="#/purchase/po">발주목록</a> 입력', '<b>물류</b> 입고 시 <a href="#/logistics/receive">입고목록 → 발주입고</a>에서 체크', '정상 입고 → <span class="chip green">초록</span>', '수량 다름 → <span class="chip red">빨강</span> (실입고 수량 기록)', '확인 중 → <span class="chip yellow">노랑</span>'])}
     ${flow('품질 (분석)', ['<b>누구나</b> <a href="#/quality/request">분석의뢰</a> 양식 작성', '접수대기 목록에 등록', '<b>품질담당자</b> 승인 → 접수번호 발급', '<a href="#/quality/list">분석리스트</a>에서 대기 → 진행 → 완료', '수입·의뢰·출하·공정검사 구분'])}
     ${flow('품질 (VOC)', ['<b>누구나</b> <a href="#/quality/voc/request">VOC 접수</a> (고객사·제품·수량·LOT·사진)', '<b>품질팀장(품질책임자)</b> 승인', '<a href="#/quality/voc/list">VOC 처리목록</a>에서 대기 → 진행 → 완료', '진행 코멘트에 처리사항 기록'])}
+    ${flow('품질 (부적합 개선·CAPA)', ['검사·분석 불합격, 공정 이상, VOC, 심사 지적 → <a href="#/quality/capa">부적합·CAPA</a> 등록', '<b>품질</b> 원인분석 → 조치(4M 변경이면 <a href="#/quality/changes">변경관리</a>)', '변경 영향에 따라 <a href="#/quality/docs">문서 개정</a> · <a href="#/quality/training">개정 교육</a> · <a href="#/quality/validation">재밸리데이션</a>', '<b>품질책임자</b> 유효성검증 「유효」 확인 후 종결'])}
+    ${flow('품질 (COA·협력업체)', ['출하검사 합격 LOT → <a href="#/quality/coa">COA 발행</a> → <b>품질책임자</b> 승인 → 인쇄·PDF', '입고 → 수입검사·<b>공급사 COA</b> 첨부', '<a href="#/quality/suppliers">협력업체 품질</a>: 연 1회 평가(A~D)·변경점 접수'])}
+    ${flow('공무 (설비·예방보전)', ['<a href="#/prod/equipment">설비 대장</a>에 설비·PM 항목 등록', '<a href="#/prod/pm">PM 일정</a>에서 「수행」(점검표) → 다음 예정일 자동', '고장·수리는 설비 이력에 기록(비가동 시간)'])}
     ${flow('개발', ['<b>누구나</b> <a href="#/dev/request">개발의뢰</a> 작성 (타겟제품·타겟단가)', '접수대기 목록에 등록', '<b>연구소담당자</b> 승인', '<a href="#/dev/list">개발리스트</a>에서 대기 → 진행 → 완료'])}
     ${flow('생산', ['<b>누구나</b> <a href="#/prod/request">샘플의뢰</a> 작성', '<b>생산담당자</b> 승인 → <a href="#/prod/list">샘플리스트</a>', '<a href="#/prod/finished">완제품</a> / <a href="#/prod/semi">반제품</a> 생산일정 일·주·월 입력'])}
     ${flow('구매 (세탁) · 물류 (출하)', ['세탁 입고분 불량 폐기 → <a href="#/purchase/laundry">세탁관리</a>에 사진·수량', '매일 출고 품목 → <a href="#/logistics/ship">출하목록</a> 입력'])}
