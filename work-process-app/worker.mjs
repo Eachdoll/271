@@ -506,7 +506,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -3862,6 +3862,78 @@ route('DELETE', '/api/certs/:id', async ({ user, params, query }) => {
   requireCertManager(user); const prior = await mustGet('certifications', params.id);
   if (Number(query.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
   await db.prepare('DELETE FROM certifications WHERE id=? AND revision=?').run(prior.id, prior.revision); return { ok: true };
+});
+// 15.304 품질 › 검교정 관리(계측기 대장). 다음 교정일 = 교정일 + 주기(개월) − 1일(예: 2026-12-01, 12개월 → 2027-11-30).
+// 보기는 품질 메뉴를 볼 수 있는 사람, 등록·수정·교정 처리·삭제는 품질 담당·품질책임자·관리자.
+const INST_STATUS = { in_use: '사용 중', at_cal: '교정 중', out: '사용중지', spare: '예비', disposed: '폐기' };
+const INST_CAL = { external: '외부 교정(KOLAS 등)', internal: '자체 교정', check: '일상 점검' };
+const INST_RESULT = ['적합', '조정 후 적합', '부적합'];
+const INST_COLS = ['mgmt_no', 'name', 'model', 'maker', 'serial_no', 'spec', 'location', 'location_detail', 'dept', 'owner_name', 'purchase_date', 'cycle_months', 'cal_type', 'cal_agency', 'last_cal', 'next_due', 'cert_no', 'last_result', 'status', 'note'];
+function calNextDue(done, months) { if (!done || !months) return null; const [y, m, d] = done.split('-').map(Number); const t = new Date(Date.UTC(y, m - 1 + months, d)); if (t.getUTCDate() !== d) t.setUTCDate(0); t.setUTCDate(t.getUTCDate() - 1); return t.toISOString().slice(0, 10); }
+function instBody(o0) {
+  const o = o0 && typeof o0 === 'object' ? o0 : {};
+  if (!Object.keys(INST_STATUS).includes(o.status)) throw bad('상태를 고르세요.');
+  if (!Object.keys(INST_CAL).includes(o.cal_type)) throw bad('교정 방식을 고르세요.');
+  const months = Number(o.cycle_months); if (!Number.isInteger(months) || months < 1 || months > 120) throw bad('교정 주기는 1~120개월입니다.');
+  if (o.last_result && !INST_RESULT.includes(o.last_result)) throw bad('결과를 다시 고르세요.');
+  const d = (v, label) => v === '' || v == null ? null : dateStr(v, label);
+  const f = { mgmt_no: reqStr(o.mgmt_no, '관리번호', 50).toUpperCase(), name: reqStr(o.name, '장비명', 100), model: str(o.model, 100), maker: str(o.maker, 100), serial_no: str(o.serial_no, 100), spec: str(o.spec, 200),
+    location: str(o.location, 100), location_detail: str(o.location_detail, 100), dept: str(o.dept, 50), owner_name: str(o.owner_name, 50), purchase_date: d(o.purchase_date, '구입일'), cycle_months: months,
+    cal_type: o.cal_type, cal_agency: str(o.cal_agency, 100), last_cal: d(o.last_cal, '직전 교정일'), next_due: d(o.next_due, '다음 교정일'), cert_no: str(o.cert_no, 80), last_result: o.last_result || '', status: o.status, note: str(o.note, 1000) };
+  if (!f.next_due && f.last_cal) f.next_due = calNextDue(f.last_cal, months);
+  if (f.last_cal && f.next_due && f.next_due <= f.last_cal) throw bad('다음 교정일은 직전 교정일 뒤여야 합니다.');
+  return f;
+}
+const instRow = r => ({ ...r, history: JSON.parse(r.history || '[]'), status_label: INST_STATUS[r.status] || r.status, cal_label: INST_CAL[r.cal_type] || r.cal_type });
+const requireInstManager = user => { if (!hasRole(user, 'quality')) throw new HttpError(403, '계측기·검교정은 품질 담당·품질책임자·관리자만 등록·수정합니다.'); };
+route('GET', '/api/instruments', async ({ user }) => ({ rows: (await db.prepare("SELECT * FROM instruments ORDER BY CASE WHEN status='disposed' THEN 1 ELSE 0 END, CASE WHEN next_due IS NULL THEN 1 ELSE 0 END, next_due, mgmt_no LIMIT 3000").all()).map(instRow), can_manage: hasRole(user, 'quality'), today: today() }));
+route('POST', '/api/instruments', async ({ user, body }) => {
+  requireInstManager(user); const f = instBody(body), key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM instruments WHERE request_id=?').get(key); if (old) return instRow(old); }
+  if (await db.prepare('SELECT 1 FROM instruments WHERE mgmt_no=?').get(f.mgmt_no)) throw bad(`이미 있는 관리번호입니다: ${f.mgmt_no}`);
+  const hist = [{ at: now(), by: user.name, what: '등록' }, ...(f.last_cal ? [{ at: now(), by: user.name, what: '교정', done: f.last_cal, result: f.last_result || '', agency: f.cal_agency, cert: f.cert_no, next: f.next_due, note: '등록 때 입력한 직전 교정' }] : [])];
+  const r = await db.prepare(`INSERT INTO instruments(${INST_COLS.join(',')},history,request_id,created_by) VALUES(${INST_COLS.map(() => '?').join(',')},?,?,?)`).run(...INST_COLS.map(k => f[k]), JSON.stringify(hist), key, user.name);
+  return instRow(await mustGet('instruments', r.lastInsertRowid));
+});
+route('PUT', '/api/instruments/:id', async ({ user, params, body }) => {
+  requireInstManager(user); const prior = await mustGet('instruments', params.id), f = instBody(body);
+  if (Number(body.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  if (await db.prepare('SELECT 1 FROM instruments WHERE mgmt_no=? AND id<>?').get(f.mgmt_no, prior.id)) throw bad(`이미 있는 관리번호입니다: ${f.mgmt_no}`);
+  const changed = INST_COLS.filter(k => (prior[k] ?? null) !== (f[k] ?? null)); if (!changed.length) return instRow(prior);
+  const hist = [...JSON.parse(prior.history || '[]'), { at: now(), by: user.name, what: '수정', fields: changed, ...(prior.status !== f.status ? { status: [prior.status, f.status] } : {}), ...(prior.location !== f.location ? { moved: [prior.location, f.location] } : {}) }].slice(-200);
+  const r = await db.prepare(`UPDATE instruments SET ${INST_COLS.map(k => k + '=?').join(',')},history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`).run(...INST_COLS.map(k => f[k]), JSON.stringify(hist), user.name, prior.id, prior.revision);
+  if (!r.changes) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  return instRow(await mustGet('instruments', prior.id));
+});
+// 교정 처리(한 대 또는 여러 대 한꺼번에): 교정일·결과·교정기관·성적서 번호 → 직전 교정일·다음 교정일(교정일 + 주기 − 1일, 한 대일 때는 직접 지정 가능)·상태 갱신, 이력에 남김.
+// 부적합이면 사용중지(영향 검토 메모), 적합·조정 후 적합이면 교정 중·사용중지였던 장비를 사용 중으로.
+route('POST', '/api/instruments/calibrate', async ({ user, body }) => {
+  requireInstManager(user);
+  const items = Array.isArray(body.items) ? body.items : []; if (!items.length || items.length > 200) throw bad('교정 처리할 계측기를 1~200대 고르세요.');
+  const done = dateStr(body.done_date || today(), '교정일'); if (done > today()) throw bad('아직 지나지 않은 날짜로는 교정 처리할 수 없습니다.');
+  if (!INST_RESULT.includes(body.result)) throw bad('결과를 고르세요.'); const result = body.result;
+  const agency = str(body.agency, 100), cert = str(body.cert_no, 80), note = str(body.note, 300), cost = body.cost === '' || body.cost == null ? null : Number(body.cost);
+  if (cost !== null && (!Number.isFinite(cost) || cost < 0)) throw bad('비용은 0 이상 숫자로 넣으세요.');
+  if (result === '부적합' && !note) throw bad('부적합이면 조치·영향 검토 내용을 메모에 적으세요.');
+  const cmds = [];
+  for (const it of items) {
+    const prior = await mustGet('instruments', Number(it?.id) || 0); if (Number(it.revision) !== prior.revision) throw new HttpError(409, `${prior.mgmt_no}: 다른 사람이 먼저 고쳤습니다. 다시 불러오세요.`);
+    if (prior.status === 'disposed') throw bad(`${prior.mgmt_no}: 폐기된 계측기입니다.`);
+    if (prior.last_cal && done < prior.last_cal) throw bad(`${prior.mgmt_no}: 교정일이 직전 교정일(${prior.last_cal})보다 빠릅니다.`);
+    const next = items.length === 1 && body.next_due ? dateStr(body.next_due, '다음 교정일') : calNextDue(done, prior.cycle_months);
+    if (next <= done) throw bad('다음 교정일은 교정일 뒤여야 합니다.');
+    const status = result === '부적합' ? 'out' : ['at_cal', 'out'].includes(prior.status) ? 'in_use' : prior.status;
+    const hist = [...JSON.parse(prior.history || '[]'), { at: now(), by: user.name, what: '교정', done, result, agency: agency || prior.cal_agency, cert: items.length === 1 ? cert : '', cost: items.length === 1 ? cost : null, prev: prior.last_cal, due: prior.next_due, next, ...(status !== prior.status ? { status: [prior.status, status] } : {}), note }].slice(-200);
+    cmds.push({ sql: "UPDATE instruments SET last_cal=?,next_due=?,last_result=?,cal_agency=?,cert_no=?,status=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?",
+      args: [done, next, result, agency || prior.cal_agency, items.length === 1 ? cert : '', status, JSON.stringify(hist), user.name, prior.id, prior.revision] });
+  }
+  const res = await db.batch(cmds); if (res.some(x => !(x.meta?.changes ?? x.changes))) throw new HttpError(409, '그 사이 다른 사람이 고친 계측기가 있습니다. 다시 불러와 확인하세요.');
+  return { done: cmds.length, rows: (await db.prepare(`SELECT * FROM instruments WHERE id IN (${items.map(() => '?').join(',')})`).all(...items.map(i => Number(i.id)))).map(instRow) };
+});
+route('DELETE', '/api/instruments/:id', async ({ user, params, query }) => {
+  requireInstManager(user); const prior = await mustGet('instruments', params.id);
+  if (Number(query.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  await db.prepare('DELETE FROM instruments WHERE id=? AND revision=?').run(prior.id, prior.revision); return { ok: true };
 });
 route('GET', '/api/rnd-specs', async ({ user }) => { const { raw, ...lib } = await rndSpecLibrary(); return { ...lib, can_manage: isResearcher(user) }; });
 route('PUT', '/api/rnd-specs', async ({ user, body }) => {

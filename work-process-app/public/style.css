@@ -3911,3 +3911,7 @@ table.ip-table tr.ip-over > td { background-color: color-mix(in srgb, #e03131 7%
 /* 15.303 인증서 관리(지식재산권 관리와 같은 모양) */
 .ip-tools { display: inline-flex; gap: 8px; align-items: center; }
 table.ct-table .ct-scope { color: var(--text-2, var(--muted)); max-width: 320px; white-space: normal; }
+
+/* 15.304 검교정 관리 */
+.cal-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 8px; padding: 8px 12px; border: 1px solid var(--accent); border-radius: 8px; background: var(--accent-soft); position: sticky; top: 0; z-index: 5; }
+.cal-bar[hidden] { display: none; }
