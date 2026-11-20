@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.318';
+const APP_VERSION = '15.319';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -185,7 +185,7 @@ function modal(html, { wide = false, onClose = () => {} } = {}) {
   const close = () => { if (!wrap.isConnected) return; wrap.remove(); syncModalInert(); document.removeEventListener('keydown', onKey); window.removeEventListener('hashchange', close); onClose(); const top = $$('.modal-wrap').at(-1); if (top) { if (!top.contains(document.activeElement)) ($('.modal', top)?.focus?.()); } else if (opener?.isConnected) opener.focus?.(); };
   // 15.312 입력 보호: 사람이 글·숫자·날짜·선택을 바꾼 창은 창 밖 누르기·Esc·×로 닫기 전에 한 번 묻는다(체크·검색칸은 빼고). 저장·취소 단추로 닫는 것은 그대로.
   let dirty = false, asking = false;
-  const touch = e => { if (e.isTrusted && e.target.matches?.('input:not([type=checkbox]):not([type=radio]):not([type=search]):not([readonly]), textarea:not([readonly]), select') && e.target.closest('form')) { dirty = true; wrap.dataset.dirty = '1'; } };
+  const touch = e => { if (e.isTrusted && e.target.matches?.('input:not([type=checkbox]):not([type=radio]):not([type=search]):not([readonly]):not([data-no-dirty]), textarea:not([readonly]), select:not([data-no-dirty])') && e.target.closest('form')) { dirty = true; wrap.dataset.dirty = '1'; } };
   wrap.addEventListener('input', touch, true); wrap.addEventListener('change', touch, true);
   const userClose = async () => { if (asking) return; if ((dirty || wrap.dataset.dirty === '1') && wrap.isConnected) { asking = true; const ok = await confirmBox('입력한 내용이 저장되지 않았습니다. 창을 닫을까요?'); asking = false; if (!ok) return; } close(); };
   const onKey = (e) => {

@@ -1233,3 +1233,14 @@ test('15.318 cost calculation reproduces the Excel sheets (nonwoven CF707 200SH,
   assert.deepEqual([bulk.created, bulk.same, bulk.priced, bulk.errors.length], [1, 1, 1, 0]);
 });
 function cr(v) { return Math.round(v * 10000) / 10000; }
+test('15.319 price impact preview works without a reason; bulk rejects rows without price or with an unknown currency', async () => {
+  const mat = (await admin('POST', '/api/cost/materials', { code: 'T319-FILM', name: '필름', unit: 'EA', price: 10, effective_date: '2026-01-01', request_id: rid() })).body;
+  await admin('POST', '/api/cost/items', { item_code: 'T319-A', name: '시험 품목', lines: [{ type: 'mat', material_id: mat.id, name: '필름', qty: '2' }], effective_date: '2026-01-02', request_id: rid() });
+  const dry = await admin('POST', `/api/cost/materials/${mat.id}/prices`, { price: 12, effective_date: '2026-02-01', dry: true });
+  assert.equal(dry.status, 200); assert.equal(dry.body.impact.changed[0].item_code, 'T319-A');
+  assert.equal((await admin('POST', `/api/cost/materials/${mat.id}/prices`, { price: 12, effective_date: '2026-02-01', request_id: rid() })).status, 400, 'saving still needs a reason');
+  const bulk = (await admin('POST', '/api/cost/materials/bulk', { rows: [{ code: 'T319-NOP', name: '단가 없음', unit: 'EA', price: '' }, { code: 'T319-GBP', name: '파운드', currency: 'GBP', price: 3 }, { code: 'T319-OK', name: '정상', currency: 'usd', price: 1, fx: 1400 }] })).body;
+  assert.deepEqual([bulk.created, bulk.errors.length], [1, 2]);
+  assert.match(bulk.errors.join(' '), /단가를 넣으세요/); assert.match(bulk.errors.join(' '), /GBP/);
+  const ok = (await admin('GET', '/api/cost/materials')).body.rows.find(m => m.code === 'T319-OK'); assert.equal(ok.current.currency, 'USD'); assert.equal(ok.current.krw_price, 1400);
+});

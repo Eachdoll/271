@@ -5446,7 +5446,9 @@ async function costMaterialsOut(date) {
   });
 }
 function costPriceBody(o, rates) {
-  const date = dateStr(o.effective_date || today(), '적용 시점'), currency = COST_CUR.includes(o.currency) ? o.currency : 'KRW';
+  const cur0 = String(o.currency ?? '').trim().toUpperCase(), date = dateStr(o.effective_date || today(), '적용 시점'), currency = cur0 || 'KRW';
+  if (!COST_CUR.includes(currency)) throw bad(`통화는 ${COST_CUR.join('·')} 중 하나로 넣으세요(${cur0}).`); /* 15.319 모르는 통화를 원화로 바꿔 넣지 않음 */
+  if (o.price === '' || o.price == null) throw bad('단가를 넣으세요.');
   const n = (v, l, allowNeg = false, def = 0) => { if (v === '' || v == null) return def; const x = Number(String(v).replace(/,/g, '')); if (!Number.isFinite(x) || (!allowNeg && x < 0)) throw bad(`${l}을(를) 숫자로 넣으세요.`); return x; };
   const price = n(o.price, '단가'), surcharge = n(o.surcharge, '할증(서차지)', true), extra = n(o.extra_krw, '부대비(원/단위)', true);
   let fx = currency === 'KRW' ? 1 : n(o.fx, '환율', false, null); if (currency !== 'KRW' && !fx) fx = Number(rates.fx?.[currency]) || 0; if (currency !== 'KRW' && !(fx > 0)) throw bad(`${currency} 환율을 넣거나 공통 기준에 ${currency} 환율을 먼저 넣으세요.`);
@@ -5534,7 +5536,7 @@ route('PUT', '/api/cost/materials/:id', async ({ user, params, body }) => {
 route('POST', '/api/cost/materials/:id/prices', async ({ user, params, body }) => {
   requireCost(user); const m = await mustGet('cost_materials', params.id), key = str(body.request_id, 80) || null;
   if (key && !body.dry) { const old = await db.prepare('SELECT * FROM cost_material_prices WHERE request_id=?').get(key); if (old) return { price: old, impact: { changed: [], unchanged: 0, skipped: [] } }; }
-  const p = costPriceBody(body, await costRatesAt(body.effective_date || today())); if (!p.reason) throw bad('단가가 바뀐 사유를 적으세요(예: 26년 5월 공급가 인상 +4%).');
+  const p = costPriceBody(body, await costRatesAt(body.effective_date || today())); if (!p.reason && !body.dry) throw bad('단가가 바뀐 사유를 적으세요(예: 26년 5월 공급가 인상 +4%).'); /* 15.319 영향 미리 보기는 사유 없이 */
   if (await db.prepare('SELECT 1 FROM cost_material_prices WHERE material_id=? AND effective_date=? AND krw_price=? AND price=?').get(m.id, p.effective_date, p.krw_price, p.price)) throw bad('같은 시점에 같은 단가가 이미 있습니다.');
   if (body.dry) {
     // 미리 보기: 이 단가를 그 시점에 넣었다고 치고 영향 계산

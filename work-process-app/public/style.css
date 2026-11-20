@@ -4239,3 +4239,33 @@ table.grid tr.cr-cur > td { background-color: color-mix(in srgb, var(--accent) 8
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ok-text { color: #69db7c; } :root:not([data-theme="light"]) .ci-kpi .chg dd { color: #ffa94d; } }
 :root[data-theme="dark"] .ok-text { color: #69db7c; }
 :root[data-theme="dark"] .ci-kpi .chg dd { color: #ffa94d; }
+
+/* 15.319 원가 산출 관리 다듬기: 그리드 칸을 좁혀 금액이 잘리지 않게, 금액·단추 칸은 오른쪽에 붙임, 단가 직접/자동 단추, 비중·구성 막대, 처음 시작 3단계 */
+.ci-grid input, .ci-grid select { padding: 4px 6px; }
+.ci-grid td.ci-act, .ci-grid th.ci-act { position: sticky; right: 0; width: 76px; min-width: 76px; }
+.ci-grid td.ci-amt, .ci-grid th.ci-amt { position: sticky; right: 76px; min-width: 96px; box-shadow: -1px 0 0 var(--line); }
+.ci-grid td.ci-act, .ci-grid td.ci-amt { background: var(--panel); z-index: 1; }
+.ci-grid thead th.ci-act, .ci-grid thead th.ci-amt { z-index: 3; }
+.ci-share { font-size: 11px; font-weight: 400; color: var(--muted); }
+.ci-pcell { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+.ci-pcell input { flex: 1 1 auto; min-width: 0; }
+.ci-grid button.ci-own { flex: none; font-size: 11px; line-height: 1.4; padding: 1px 7px; min-height: 0; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--muted); cursor: pointer; }
+.ci-grid button.ci-own:hover, .ci-grid button.ci-own.on { color: var(--accent); border-color: var(--accent); }
+label.ci-chk, form label.ci-chk { display: inline-flex !important; flex-direction: row !important; align-items: center; gap: 6px; font-weight: 400; }
+label.ci-chk input[type=checkbox] { width: auto; min-height: 0; margin: 0; }
+.ci-target { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 4px 0 2px; }
+.ci-target input { width: 72px; min-height: 32px; padding: 4px 8px; text-align: right; }
+.ci-live { font-size: 13px; margin-right: 8px; font-variant-numeric: tabular-nums; }
+.ci-mix { margin: 10px 0 2px; }
+.ci-mix-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--line); margin-bottom: 4px; }
+.ci-mix-bar i { display: block; height: 100%; }
+.ci-base select { width: auto; min-height: 32px; padding: 4px 8px; }
+.ci-cmp tr.ci-cmp-total > * { font-weight: 700; }
+.ci-steps { list-style: none; padding: 0; margin: 0 0 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.ci-steps li > a, .ci-steps li > span { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 10px; background: var(--panel); color: var(--text); text-decoration: none; height: 100%; }
+.ci-steps li > a:hover { border-color: var(--accent); }
+.ci-steps b { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 13px; }
+.ci-steps small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.ci-steps li.done > a, .ci-steps li.done > span { border-style: solid; }
+.ci-steps li.done b { background: #2b8a3e; }
+@media (max-width: 700px) { .ci-steps { grid-template-columns: 1fr; } .ci-grid td.ci-act, .ci-grid th.ci-act, .ci-grid td.ci-amt, .ci-grid th.ci-amt { position: static; box-shadow: none; } }
