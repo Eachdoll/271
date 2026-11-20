@@ -258,6 +258,9 @@ const rndMeasureHtml = () => `<fieldset class="vendor-sec rnd-meas" data-rm><leg
 const rmRange = it => { const a = it.min === '' || it.min == null ? null : Number(it.min), b = it.max === '' || it.max == null ? null : Number(it.max); return { a, b, txt: a !== null && b !== null ? `${fmtNum(a)} ~ ${fmtNum(b)}` : a !== null ? `≥ ${fmtNum(a)}` : b !== null ? `≤ ${fmtNum(b)}` : '규격 없음' }; };
 const rmJudgeVals = (it, vals) => { const { a, b } = rmRange(it), got = vals.filter(v => v !== '' && v != null).map(Number); if (!got.length) return ['', null]; const fail = got.some(v => (a !== null && v < a) || (b !== null && v > b)); const avg = Math.round(got.reduce((t, v) => t + v, 0) / got.length * 1000) / 1000; return [a === null && b === null ? 'info' : fail ? 'fail' : got.length < (Number(it.count) || 1) ? 'wait' : 'pass', avg]; };
 const RM_CHIP = { pass: '<span class="chip green">합격</span>', fail: '<span class="chip red">불합격</span>', wait: '<span class="chip yellow">측정 중</span>', info: '<span class="chip">기록</span>', '': '' };
+// 15.296 엑셀에서 복사한 칸(탭·줄바꿈)을 2차원 배열로. 한 칸만 복사했으면 null(브라우저 기본 붙여넣기).
+const xlGrid = e => { const t = (e.clipboardData || window.clipboardData)?.getData('text') || ''; if (!/[\t\n]/.test(t.replace(/\r?\n$/, ''))) return null; return t.replace(/\r/g, '').replace(/\n$/, '').split('\n').map(l => l.split('\t').map(v => v.trim())); };
+const xlNum = v => { const x = String(v ?? '').replace(/,/g, '').replace(/\s/g, ''); return x === '' ? '' : Number.isFinite(Number(x)) ? x : null; };
 let RM_MODE = (() => { try { return localStorage.getItem('wpa:rm-mode') || 'item'; } catch { return 'item'; } })();
 async function bindRndMeasure(root, init = null) {
   const box = $('[data-rm]', root), specBody = $('[data-rm-spec-rows]', box), grid = $('[data-rm-grid]', box), strip = $('[data-rm-samples]', box);
@@ -285,7 +288,7 @@ async function bindRndMeasure(root, init = null) {
     if (RM_MODE === 'item') grid.innerHTML = `<thead><tr><th class="c insp-item-c">측정 항목 · 규격</th><th class="c insp-samp-c">시료</th>${nums}</tr></thead>${list.map(([it, ii]) => `<tbody class="insp-grp">${st.samples.map((_, s) => `<tr>${!s ? itemTh(it, st.samples.length) : ''}<th class="insp-samp-c" data-rm-lt="${s}">${esc(st.samples[s].lot)}</th>${cells(ii, s)}</tr>`).join('')}</tbody>`).join('')}`;
     else grid.innerHTML = `<thead><tr><th class="c insp-samp-c">시료</th><th class="c insp-item-c">측정 항목 · 규격</th>${nums}</tr></thead>${st.samples.map((_, s) => `<tbody class="insp-grp">${list.map(([it, ii], n) => `<tr>${!n ? sampTh(s, list.length) : ''}<th class="insp-item-c">${esc(it.name)}${it.unit ? ` <span class="small muted">${esc(it.unit)}</span>` : ''} <span class="small muted">${rmRange(it).txt}</span></th>${cells(ii, s)}</tr>`).join('')}</tbody>`).join('')}`;
     $('[data-rm-mode]', box).textContent = RM_MODE === 'item' ? '⇄ 종횡 바꾸기 (시료별로 보기)' : '⇄ 종횡 바꾸기 (항목별로 보기)';
-    $('[data-rm-hint]', box).textContent = RM_MODE === 'item' ? '측정 항목별로 묶어 시료를 줄로 보여 줍니다. Enter·방향키로 다음 칸.' : '시료별로 묶어 측정 항목을 줄로 보여 줍니다. Enter·방향키로 다음 칸.';
+    $('[data-rm-hint]', box).textContent = (RM_MODE === 'item' ? '항목별로 묶어 시료를 줄로 보여 줍니다.' : '시료별로 묶어 측정 항목을 줄로 보여 줍니다.') + ' 엑셀에서 여러 칸을 복사해 첫 칸에 붙여 넣으면 그 모양대로 들어갑니다. Enter로 다음 칸.';
     sampleJudges(); total();
   };
   const sampleJudges = () => st.samples.forEach((_, s) => { const js = named().map(([, ii]) => cellJudge(ii, s)[0]).filter(Boolean); const el = $(`[data-rm-sj="${s}"]`, strip); if (el) el.innerHTML = js.includes('fail') ? RM_CHIP.fail : js.includes('wait') ? RM_CHIP.wait : js.includes('pass') ? RM_CHIP.pass : ''; });
@@ -296,6 +299,38 @@ async function bindRndMeasure(root, init = null) {
     const sp = e.target.closest('[data-rm-i]'); if (sp && e.target.dataset.rs) { const it = st.items[Number(sp.dataset.rmI)]; it[e.target.dataset.rs] = e.target.value; if (e.target.dataset.rs === 'count') st.samples.forEach(fit); drawGrid(); return; }
     const v = e.target.closest('[data-rm-v]'); if (v) { st.samples[Number(v.dataset.s)].vals[Number(v.dataset.ii)][Number(v.dataset.k)] = v.value; refresh(Number(v.dataset.ii), Number(v.dataset.s)); return; }
     const l = e.target.closest('[data-rm-lot]'); if (l) { const s = Number(l.dataset.rmLot); st.samples[s].lot = l.value; $$(`[data-rm-lt="${s}"]`, grid).forEach(x => { x.textContent = l.value; }); }
+  });
+  // 15.296 엑셀 붙여넣기: 측정값 칸에 여러 칸을 붙이면 복사한 모양대로(가로 = #1·#2…, 세로 = 다음 시료/다음 항목, 시료가 모자라면 20개까지 자동 추가),
+  // 규격 표에 붙이면 측정 항목·단위·하한·상한·횟수 순서로(줄이 모자라면 항목 추가).
+  box.addEventListener('paste', e => {
+    const v = e.target.closest('[data-rm-v]'), sp = e.target.closest('[data-rm-i]');
+    if (!v && !(sp && e.target.dataset.rs)) return;
+    const rows = xlGrid(e); if (!rows) return; e.preventDefault();
+    let put = 0, skip = 0;
+    if (v) {
+      const list = named().map(([, ii]) => ii), ii0 = Number(v.dataset.ii), s0 = Number(v.dataset.s), k0 = Number(v.dataset.k), p0 = list.indexOf(ii0);
+      rows.forEach((vals, i) => {
+        let ii = ii0, s = s0; if (RM_MODE === 'item') s = s0 + i; else ii = list[p0 + i];
+        if (ii === undefined) { skip += vals.length; return; }
+        while (s >= st.samples.length) { if (st.samples.length >= 20) { skip += vals.length; return; } const x = { lot: `시료 ${st.samples.length + 1}`, vals: [] }; fit(x); st.samples.push(x); }
+        vals.forEach((raw, j) => { const k = k0 + j, cell = st.samples[s].vals[ii]; const n = xlNum(raw); if (k >= cell.length || n === null) { if (raw !== '') skip++; return; } cell[k] = n; put++; });
+      });
+      drawGrid();
+      const last = rows.length - 1, lastLen = rows[last].length; const lr = RM_MODE === 'item' ? { ii: ii0, s: Math.min(s0 + last, st.samples.length - 1) } : { ii: list[Math.min(p0 + last, list.length - 1)], s: s0 };
+      $(`[data-rm-v][data-ii="${lr.ii}"][data-s="${lr.s}"][data-k="${Math.min(k0 + lastLen - 1, st.samples[lr.s].vals[lr.ii].length - 1)}"]`, grid)?.focus();
+    } else {
+      const KEYS = ['name', 'unit', 'min', 'max', 'count'], c0 = KEYS.indexOf(e.target.dataset.rs), i0 = Number(sp.dataset.rmI);
+      rows.forEach((vals, i) => {
+        const ii = i0 + i; if (ii >= 30) { skip += vals.length; return; }
+        while (ii >= st.items.length) st.items.push({ name: '', unit: '', min: '', max: '', count: 1 });
+        vals.forEach((raw, j) => { const key = KEYS[c0 + j]; if (!key) { if (raw !== '') skip++; return; }
+          if (key === 'name' || key === 'unit') { st.items[ii][key] = raw.slice(0, key === 'name' ? 100 : 30); put++; return; }
+          const n = xlNum(raw); if (n === null) { skip++; return; }
+          if (key === 'count') { const c = Math.round(Number(n) || 1); st.items[ii].count = Math.max(1, Math.min(10, c)); } else st.items[ii][key] = n; put++; });
+      });
+      st.samples.forEach(fit); drawSpec(); drawGrid();
+    }
+    toast(`엑셀에서 ${put}칸을 붙여 넣었습니다.${skip ? ` (${skip}칸은 칸이 없거나 숫자가 아니라 뺐습니다)` : ''}`, skip ? 'err' : undefined);
   });
   box.addEventListener('keydown', e => { const v = e.target.closest('[data-rm-v]'); if (v && e.key === 'Enter') { e.preventDefault(); const all = $$('[data-rm-v]', grid), i = all.indexOf(v); all[i + 1]?.focus(); all[i + 1]?.select?.(); } });
   box.addEventListener('click', e => {
@@ -624,6 +659,14 @@ async function pageRndSpecs(main) {
       <td class="nowrap"><button type="button" class="btn small" data-rs-up="${i}" title="위로" ${i ? '' : 'disabled'}>↑</button> <button type="button" class="btn small" data-rs-x="${i}" title="빼기">×</button></td></tr>`).join(''); };
     drawItems();
     body.addEventListener('input', e => { const tr = e.target.closest('[data-rs-i]'); if (tr && e.target.dataset.k) st.items[Number(tr.dataset.rsI)][e.target.dataset.k] = e.target.value; });
+    body.addEventListener('paste', e => { // 15.296 엑셀에서 항목 표(이름·단위·하한·상한·횟수)를 복사해 붙이기
+      const tr = e.target.closest('[data-rs-i]'); if (!tr || !e.target.dataset.k) return; const rows = xlGrid(e); if (!rows) return; e.preventDefault();
+      const KEYS = ['name', 'unit', 'min', 'max', 'count'], c0 = KEYS.indexOf(e.target.dataset.k), i0 = Number(tr.dataset.rsI); let put = 0, skip = 0;
+      rows.forEach((vals, i) => { const ii = i0 + i; if (ii >= 30) { skip += vals.length; return; } while (ii >= st.items.length) st.items.push({ name: '', unit: '', min: null, max: null, count: 1 });
+        vals.forEach((raw, j) => { const key = KEYS[c0 + j]; if (!key) { if (raw !== '') skip++; return; } if (key === 'name' || key === 'unit') { st.items[ii][key] = raw; put++; return; }
+          const n = xlNum(raw); if (n === null) { skip++; return; } st.items[ii][key] = key === 'count' ? Math.max(1, Math.min(10, Math.round(Number(n) || 1))) : n === '' ? null : n; put++; }); });
+      drawItems(); toast(`엑셀에서 ${put}칸을 붙여 넣었습니다.${skip ? ` (${skip}칸은 뺐습니다)` : ''}`, skip ? 'err' : undefined);
+    });
     f.addEventListener('click', e => {
       if (e.target.closest('[data-rs-add]')) { st.items.push({ name: '', unit: '', min: null, max: null, count: 1 }); drawItems(); body.lastElementChild.querySelector('input').focus(); return; }
       const x = e.target.closest('[data-rs-x]'); if (x) { st.items.splice(Number(x.dataset.rsX), 1); if (!st.items.length) st.items.push({ name: '', unit: '', min: null, max: null, count: 1 }); drawItems(); return; }
