@@ -362,7 +362,7 @@ test('15.117 Sales bill lines: product/goods class fixed at save, uncoded lines 
 test('15.120 Department reports: every section answers for any staff; thresholds admin-only and validated', async () => {
   for (const section of ['common', 'sales', 'purchase', 'production', 'quality', 'dev', 'logistics']) {
     const r = await staff('GET', `/api/reports/dept?section=${section}&from=${today.slice(0, 8)}01&to=${today}&grain=week`);
-    assert.equal(r.status, 200, section); assert.equal(r.body.kpis.length, 4, section);
+    assert.equal(r.status, 200, section); assert.ok(r.body.kpis.length === 4 || (section === 'quality' && r.body.kpis.length === 8), section); // 15.310 품질은 CAPA·공정·변경 카드 4개 더(두 줄)
   }
   assert.equal((await staff('GET', '/api/reports/dept?section=nope')).status, 400);
   assert.equal((await staff('PUT', '/api/report-settings', { ar_overdue_days: 60, old_lot_days: 30, due_grace_days: 1, plan_late_days: 0, dev_long_days: 30 })).status, 403);

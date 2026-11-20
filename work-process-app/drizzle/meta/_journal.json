@@ -610,6 +610,34 @@
       "when": 1799405613000,
       "tag": "0086_qm_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "6",
+      "when": 1799492013000,
+      "tag": "0087_risk_assessment",
+      "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "6",
+      "when": 1799578413000,
+      "tag": "0088_org_chart",
+      "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "6",
+      "when": 1799664813000,
+      "tag": "0089_dev_costs",
+      "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "6",
+      "when": 1799751213000,
+      "tag": "0090_cost_mgmt",
+      "breakpoints": true
     }
   ]
 }

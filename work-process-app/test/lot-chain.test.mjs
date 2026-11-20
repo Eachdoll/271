@@ -840,10 +840,10 @@ test('15.306 QA system: controlled documents (draft, review, approve, revise, ob
   const r1 = await admin('POST', `/api/qdocs/${d.body.id}/step`, { to: 'draft', revision: d4.revision }); assert.equal(r1.body.rev, 1); assert.equal(r1.body.status, 'draft');
   assert.match((await admin('POST', `/api/qdocs/${d.body.id}/step`, { to: 'review', revision: r1.body.revision })).body.error, /개정 내용/);
   // 열람: 다른 부서는 승인된 것만, 지정 부서만
-  assert.equal((await prod('GET', '/api/qdocs')).body.rows.length, 0, 'drafts hidden from others');
+  { const seen = (await prod('GET', '/api/qdocs')).body.rows; assert.equal(seen.length, 1, 'during a revision others still see the current approved version'); assert.equal(seen[0].current.rev, 0); assert.equal(seen[0].file, null, 'working draft file hidden'); }
   const ext = await admin('POST', '/api/qdocs', { kind: 'std', title: 'KS K 0901 클린룸 와이퍼', issuer: '국가기술표준원', edition: '2024', access_depts: ['연구소'], request_id: rid() });
   assert.equal(ext.body.status, 'approved'); assert.equal(ext.body.doc_no, 'EX-01');
-  assert.equal((await prod('GET', '/api/qdocs')).body.rows.length, 0, 'restricted to 연구소');
+  assert.ok(!(await prod('GET', '/api/qdocs')).body.rows.some(x => x.id === ext.body.id), 'restricted to 연구소');
   assert.equal((await prod('POST', '/api/qdocs', { kind: 'form', title: 'x' })).status, 403);
   assert.equal((await admin('POST', `/api/qdocs/${ext.body.id}/step`, { to: 'obsolete', revision: ext.body.revision })).status, 400, 'reason');
   const ob = await admin('POST', `/api/qdocs/${ext.body.id}/step`, { to: 'obsolete', reason: '2025판으로 대체', revision: ext.body.revision }); assert.equal(ob.body.status, 'obsolete'); assert.ok(ob.body.dispose_date > today);
@@ -869,7 +869,7 @@ test('15.306 QA system: controlled documents (draft, review, approve, revise, ob
   const t = await admin('POST', '/api/trainings', { title: 'QP-01 개정 교육', kind: '문서 개정 교육', plan_date: today, doc_id: d.body.id, change_id: c.body.id, attendees: [{ user_name: '생산' }, { user_name: '관리자' }], request_id: rid() });
   assert.equal(t.status, 200, JSON.stringify(t.body)); assert.equal(t.body.attendees.length, 2); assert.match(t.body.doc_label, /^QP-01 Rev\.1/);
   const ta = await prod('POST', `/api/trainings/${t.body.id}/attend`); assert.equal(ta.body.attendees.find(a => a.user_name === '생산').attended, 1);
-  assert.match((await admin('PUT', `/api/trainings/${t.body.id}`, { status: 'done', revision: t.body.revision })).body.error, /실시일/);
+  assert.match((await admin('PUT', `/api/trainings/${t.body.id}`, { status: 'done', revision: ta.body.revision })).body.error, /실시일/);
   const t1 = await admin('PUT', `/api/trainings/${t.body.id}`, { status: 'done', done_date: today, hours: 1.5, revision: ta.body.revision }); assert.equal(t1.status, 200, JSON.stringify(t1.body)); assert.equal(t1.body.status, 'done');
   assert.match((await admin('PUT', `/api/trainings/${t.body.id}`, { status: 'evaluated', revision: t1.body.revision })).body.error, /결과/);
   const t2 = await admin('PUT', `/api/trainings/${t.body.id}`, { status: 'evaluated', attendees: [{ user_name: '생산', attended: 1, score: 90, result: '이수' }, { user_name: '관리자', attended: 0 }], revision: t1.body.revision });
@@ -985,3 +985,251 @@ test('15.308 audits (findings create CAPA, close only when CAPAs closed), valida
   const r2 = await admin('PUT', `/api/risks/${r.body.id}`, { status: 'closed', re_likelihood: 2, re_impact: 3, review_date: today, revision: r1.body.revision }); assert.deepEqual([r2.body.status, r2.body.re_score, r2.body.re_grade], ['closed', 6, '하']);
   assert.match((await admin('POST', '/api/risks', { content: 'x', likelihood: 6, impact: 1 })).body.error, /1~5/);
 });
+
+test('15.309 review fixes: losing concurrent writes leave nothing, negative values, document locked in review, audit CAPA void needs approver, approved change locked, bad input is 400 not 500', async () => {
+  const qc = client(); await approvedRegistration(admin, qc, { name: '품질담당', password: 'password', invite: 'lot249-test' });
+  const qu = (await admin('GET', '/api/admin/users')).body.find(x => x.name === '품질담당'); await admin('PUT', `/api/admin/users/${qu.id}`, { roles: ['quality'] });
+  // 교육: 같은 판으로 두 사람이 저장 → 진 쪽 대상자 변경이 남지 않음
+  const t = (await admin('POST', '/api/trainings', { title: '동시 저장', kind: 'OJT', plan_date: today, attendees: [{ user_name: '생산' }], request_id: rid() })).body;
+  const w = await admin('PUT', `/api/trainings/${t.id}`, { attendees: [{ user_name: '생산' }, { user_name: '관리자' }], revision: t.revision });
+  const l = await qc('PUT', `/api/trainings/${t.id}`, { attendees: [{ user_name: '품질담당' }], revision: t.revision });
+  assert.equal(w.status, 200); assert.equal(l.status, 409);
+  assert.deepEqual(sqlite.prepare('SELECT user_name FROM training_attendees WHERE training_id=? ORDER BY user_name').all(t.id).map(x => x.user_name), ['관리자', '생산']);
+  // 설비 이력: 같은 판으로 두 번 → 진 쪽 이력 줄 없음
+  const e = (await admin('POST', '/api/equipment', { name: '동시 설비', request_id: rid() })).body;
+  const e1 = await admin('POST', `/api/equipment/${e.id}/logs`, { kind: 'failure', description: 'A', revision: e.revision });
+  const e2 = await prod('POST', `/api/equipment/${e.id}/logs`, { kind: 'failure', description: 'B', status_after: 'maintenance', revision: e.revision });
+  assert.equal(e1.status, 200); assert.equal(e2.status, 409); assert.equal(sqlite.prepare('SELECT COUNT(*) c FROM equipment_logs WHERE equipment_id=?').get(e.id).c, 1);
+  // 음수: 냉동고 온도 기준·측정값, 신뢰성 치수 변화, KPI
+  const pt = await admin('POST', '/api/pqc/points', { kind: 'env', place: '냉동고', item: '온도', lsl: -25, usl: -15 }); assert.equal(pt.status, 200, JSON.stringify(pt.body));
+  assert.equal((await admin('POST', '/api/pqc/measures', { rows: [{ point_id: pt.body.id, value: -30 }] })).body.out_of_spec, 1);
+  assert.equal((await admin('POST', '/api/reliability', { title: '치수', spec_json: [{ name: '변화율', min: -2, max: 2 }], request_id: rid() })).status, 200);
+  assert.equal((await admin('POST', '/api/reliability', { title: 'R', spec_json: { a: 1 }, points_json: { b: 2 } })).status, 200, 'object is treated as empty, not 500');
+  const g = (await admin('POST', '/api/kpi/goals', { title: '편차', unit: '%', target: -1, request_id: rid() })).body; assert.equal(g.target, -1);
+  assert.match((await admin('PUT', `/api/kpi/goals/${g.id}`, { values: [{ target: 1, actual: 2 }], revision: g.revision })).body.error, /월/);
+  // 문서: 검토 중에는 파일·내용 잠금
+  const pdf = 'data:application/pdf;base64,' + Buffer.from('%PDF-1.4\n%%EOF').toString('base64');
+  let d = (await admin('POST', '/api/qdocs', { kind: 'form', title: '점검표 A', files: [{ data: pdf, name: 'a.pdf' }], request_id: rid() })).body;
+  d = (await admin('POST', `/api/qdocs/${d.id}/step`, { to: 'review', revision: d.revision })).body;
+  const d1 = (await admin('PUT', `/api/qdocs/${d.id}`, { remove_file: 1, title: '바꿈', revision: d.revision })).body;
+  assert.equal(d1.title, '점검표 A'); assert.ok(d1.file?.file, 'file kept while in review');
+  // 심사 지적 CAPA 취소는 품질책임자만
+  const au = (await admin('POST', '/api/audits', { title: '내부', kind: 'internal', plan_date: today, request_id: rid() })).body;
+  const af = (await admin('POST', `/api/audits/${au.id}/findings`, { grade: 'minor', content: '지적', request_id: rid() })).body;
+  const anc = (await admin('GET', `/api/ncs?source_type=audit&source_id=${au.id}`)).body.rows[0];
+  assert.equal((await qc('PUT', `/api/ncs/${anc.id}`, { status: 'void', reason: '없앰', revision: anc.revision })).status, 403);
+  assert.equal(af.history.filter(h => /지적/.test(h.what)).length, 1);
+  // 승인된 변경은 내용·영향평가 잠금
+  let c = (await admin('POST', '/api/changes', { kind: 'method', title: '원래 내용', request_id: rid() })).body;
+  c = (await admin('PUT', `/api/changes/${c.id}`, { status: 'evaluating', revision: c.revision })).body;
+  const imp = Object.fromEntries(['quality', 'customer', 'docs', 'validation', 'training', 'inspection', 'stock'].map(k => [k, { v: 'no' }]));
+  c = (await admin('PUT', `/api/changes/${c.id}`, { status: 'approved', impact_json: imp, revision: c.revision })).body;
+  const c2 = (await admin('PUT', `/api/changes/${c.id}`, { title: '몰래 바꿈', plan_date: today, revision: c.revision })).body;
+  assert.equal(c2.title, '원래 내용'); assert.equal(c2.plan_date, today);
+  // COA 승인: 오래된 판이면 409
+  assert.equal((await admin('POST', '/api/coas/999999/approve', { revision: 1 })).status, 404);
+});
+
+test('15.310 per-user display prefs for dashboard/report are validated and kept; dashboard has quality/plant numbers; quality dept report adds CAPA/process stats', async () => {
+  const p1 = await admin('PUT', '/api/me/prefs', { dash: { hidden: ['pipeline', 'ov:requests'], order: ['alerts', 'tasks', 'overview'] } });
+  assert.equal(p1.status, 200, JSON.stringify(p1.body)); assert.deepEqual(p1.body.dash, { hidden: ['pipeline', 'ov:requests'], order: ['alerts', 'tasks', 'overview'] });
+  assert.deepEqual((await admin('GET', '/api/me')).body.user.ui.dash.hidden, ['pipeline', 'ov:requests']);
+  const p2 = await admin('PUT', '/api/me/prefs', { report: { hidden: ['common:kpi:매출액(공급가액)', 'dept:quality:table:거래처별 불합격률', 'detail:semi'], period: 'month', dept: 'quality', unit: 'BOX' } });
+  assert.equal(p2.status, 200, JSON.stringify(p2.body)); assert.equal(p2.body.report.period, 'month'); assert.equal(p2.body.report.dept, 'quality'); assert.equal(p2.body.report.unit, 'BOX'); assert.equal(p2.body.report.hidden.length, 3);
+  assert.equal((await admin('PUT', '/api/me/prefs', { report: { period: 'yesterday' } })).status, 400);
+  assert.equal((await admin('PUT', '/api/me/prefs', { report: { dept: 'nope' } })).status, 400);
+  assert.equal((await admin('PUT', '/api/me/prefs', { dash: { hidden: 'x' } })).status, 400);
+  const p3 = await admin('PUT', '/api/me/prefs', { report: { period: '', hidden: [] } }); assert.equal(p3.body.report.period, undefined); assert.equal(p3.body.report.hidden, undefined); assert.equal(p3.body.report.dept, 'quality', 'other keys kept');
+  const p4 = await admin('PUT', '/api/me/prefs', { dash: null }); assert.equal(p4.body.dash, undefined); assert.ok(p4.body.report, 'report kept');
+  const p5 = await admin('PUT', '/api/me/prefs', { dash: { hidden: ['ov:sales', '<script>'] } }); assert.deepEqual(p5.body.dash.hidden, ['ov:sales'], 'bad names dropped');
+  const d = (await admin('GET', '/api/dashboard')).body; assert.ok(d.quality, 'quality block'); assert.ok(d.quality.capaOpen >= 1); assert.equal(typeof d.quality.pmOverdue, 'number'); assert.equal(typeof d.quality.iqcFail, 'number'); assert.equal(typeof d.quality.kpiMissed, 'number');
+  const q = (await admin('GET', `/api/reports/dept?section=quality&from=${today.slice(0, 4)}-01-01&to=${today}&grain=month`)).body;
+  assert.ok(q.kpis.some(k => k.label === 'CAPA 등록' && k.value >= 1), JSON.stringify(q.kpis.map(k => k.label))); assert.ok(q.kpis.some(k => k.label === 'CAPA 기한 준수율')); assert.ok(q.kpis.some(k => k.label === '공정 기준 이탈' && k.value >= 1));
+  assert.ok(q.charts.some(c => c.title === '부적합(CAPA) 등록 · 종결')); assert.ok(q.tables.some(t => t.title === '부적합 출처별(CAPA)' && t.rows.length >= 1)); assert.ok(q.tables.some(t => t.title === '공정 기준 이탈 항목' && t.rows.length >= 1));
+  await admin('PUT', '/api/me/prefs', { report: null, dash: null });
+});
+
+test('15.312 find API: record numbers and titles across quality tables, restricted documents hidden, short query empty', async () => {
+  const n = (await admin('POST', '/api/ncs', { title: '찾기용 부적합 XQ7', request_id: rid() })).body;
+  const d = (await admin('POST', '/api/qdocs', { kind: 'form', title: '찾기용 양식 XQ7', access_depts: ['연구소'], request_id: rid() })).body;
+  const r = (await admin('GET', '/api/find?q=' + encodeURIComponent(n.nc_no))).body.rows; assert.ok(r.some(x => x.type === 'nc' && x.id === n.id && x.href === '#/quality/capa'), JSON.stringify(r));
+  const t = (await admin('GET', '/api/find?q=XQ7')).body.rows; assert.ok(t.some(x => x.type === 'nc') && t.some(x => x.type === 'doc'));
+  assert.ok(!(await prod('GET', '/api/find?q=XQ7')).body.rows.some(x => x.type === 'doc'), 'draft/restricted doc hidden from others');
+  assert.deepEqual((await admin('GET', '/api/find?q=X')).body.rows, []);
+  assert.equal((await admin('GET', '/api/find?q=' + encodeURIComponent("%' OR 1=1 --"))).status, 200);
+  void d;
+});
+
+test('15.313 risk assessment: FMEA AP table, KOSHA 3x3 action rule, review/approve by approver only, locked after approval, action result with residual risk, revise, HAZOP to CAPA, equipment reliability', async () => {
+  const ap = async (s, o, d) => (await prod('POST', '/api/risk-assess', { method: 'fmea', title: 'AP', rows: [{ mode: 'x', s, o, d }], request_id: rid() })).body.rows[0].grade;
+  for (const [s, o, d, g] of [[9, 4, 1, 'M'], [9, 4, 2, 'H'], [10, 1, 10, 'L'], [9, 2, 6, 'M'], [8, 6, 1, 'M'], [7, 4, 7, 'H'], [7, 2, 5, 'M'], [5, 8, 5, 'H'], [5, 6, 1, 'L'], [5, 4, 7, 'M'], [2, 8, 5, 'M'], [3, 9, 4, 'L'], [1, 10, 10, 'L']]) assert.equal(await ap(s, o, d), g, `S${s} O${o} D${d}`);
+  // KOSHA 3×3: 가능성×중대성 6 이상 높음 · 3~4 보통 · 2 이하 낮음 → 보통·높음은 감소대책·담당·기한 없이는 검토 요청 불가
+  let k = (await prod('POST', '/api/risk-assess', { method: 'kosha', title: '세탁 공정 위험성평가', kind: 'initial', scale: 3, process: '세탁', assess_date: today, rows: [{ task: '세탁기 투입', cat: 'machine', hazard: '회전 드럼에 손 끼임', f: 2, s: 3 }, { task: '세제 보충', cat: 'chemical', hazard: '세제 피부 접촉', f: 1, s: 2 }], request_id: rid() })).body;
+  assert.deepEqual(k.rows.map(r => [r.score, r.grade]), [[6, 'H'], [2, 'L']]); assert.match(k.ra_no, /^RA-\d{4}-01$/);
+  assert.equal((await prod('POST', '/api/risk-assess', { method: 'kosha', title: 'x', scale: 3, rows: [{ hazard: 'y', f: 4, s: 1 }] })).status, 400, '3x3 scale bounds');
+  let r = await prod('POST', `/api/risk-assess/${k.id}/step`, { to: 'review', revision: k.revision }); assert.equal(r.status, 400); assert.match(r.body.error, /1번 줄.*감소대책/);
+  k = (await prod('PUT', `/api/risk-assess/${k.id}`, { revision: k.revision, rows: k.rows.map((x, i) => i ? x : { ...x, action: '인터록 도어·투입 전 정지', owner: '생산', due: '2020-01-01' }) })).body;
+  k = (await prod('POST', `/api/risk-assess/${k.id}/step`, { to: 'review', revision: k.revision })).body; assert.equal(k.status, 'review');
+  assert.equal((await prod('PUT', `/api/risk-assess/${k.id}`, { revision: k.revision, title: '바꿈' })).status, 400, 'locked in review');
+  assert.equal((await prod('POST', `/api/risk-assess/${k.id}/step`, { to: 'approved', revision: k.revision })).status, 403, 'production staff cannot approve');
+  assert.ok((await admin('GET', '/api/my-tasks')).body.approvals.quality.some(x => x.key === 'risk_assess'));
+  k = (await admin('POST', `/api/risk-assess/${k.id}/step`, { to: 'approved', revision: k.revision })).body; assert.equal(k.status, 'approved'); assert.equal(k.next_review, `${Number(today.slice(0, 4)) + 1}${today.slice(4)}`.replace('-02-29', '-02-28'));
+  assert.equal((await prod('PUT', `/api/risk-assess/${k.id}`, { revision: k.revision, title: '바꿈' })).status, 400, 'locked after approval');
+  assert.equal(k.counts.over, 1); assert.ok((await prod('GET', '/api/alerts')).body.quality_alerts.some(a => /개선 조치 기한 지남/.test(a.label)));
+  // 조치 결과: 재평가 없이 완료 불가 → 재평가(1×3=3 보통) 넣으면 완료, 잔여 위험 집계
+  const key = k.rows[0].key;
+  assert.equal((await prod('PUT', `/api/risk-assess/${k.id}/rows/${key}`, { revision: k.revision, done: today })).status, 400);
+  k = (await prod('PUT', `/api/risk-assess/${k.id}/rows/${key}`, { revision: k.revision, done: today, f2: 1, s2: 1, result: '도어 인터록 설치' })).body;
+  assert.deepEqual([k.rows[0].done, k.rows[0].grade2, k.rows[0].done_by, k.rows[0].result, k.counts.over, k.counts.residual], [today, 'L', '생산', '도어 인터록 설치', 0, 0]);
+  assert.equal((await prod('DELETE', `/api/risk-assess/${k.id}?revision=${k.revision}`)).status, 400, 'approved cannot be deleted');
+  assert.equal((await prod('POST', `/api/risk-assess/${k.id}/step`, { to: 'draft', revision: k.revision })).status, 400, 'revise needs note');
+  k = (await prod('POST', `/api/risk-assess/${k.id}/step`, { to: 'draft', revision: k.revision, rev_note: '설비 교체' })).body; assert.deepEqual([k.status, k.rev, k.rows[0].done], ['draft', 1, today]);
+  // HAZOP: 이탈 = 변수 + 가이드워드, 5×5(15 이상 높음), 줄 → CAPA(출처 위험성평가), 두 번은 안 됨, KOSHA 줄은 CAPA 안 됨
+  let h = (await prod('POST', '/api/risk-assess', { method: 'hazop', title: '세탁수 순환', process: '세탁', assess_date: today, rows: [{ node: '순환 펌프', param: '유량', guide: '없음(No)', cause: '펌프 정지', cons: '세탁 불량', safeguard: '유량계', s: 4, l: 4, action: '저유량 경보', owner: '공무', due: today }], request_id: rid() })).body;
+  assert.deepEqual([h.rows[0].dev, h.rows[0].score, h.rows[0].grade], ['유량 없음(No)', 16, 'H']); assert.match(h.ra_no, /^HZ-/);
+  const n = (await prod('POST', `/api/risk-assess/${h.id}/rows/${h.rows[0].key}/nc`, { revision: h.revision })).body; assert.match(n.nc_no, /^NC-/); assert.equal(n.rows[0].nc_no, n.nc_no);
+  const nc = (await admin('GET', '/api/ncs')).body.rows.find(x => x.id === n.nc_id); assert.deepEqual([nc.source_type, nc.source_no, nc.grade, nc.corrective], ['risk', h.ra_no, 'major', '저유량 경보']);
+  assert.equal((await prod('POST', `/api/risk-assess/${h.id}/rows/${h.rows[0].key}/nc`, { revision: n.revision })).status, 400);
+  assert.equal((await prod('POST', `/api/risk-assess/${k.id}/rows/${key}/nc`, { revision: k.revision })).status, 400);
+  assert.equal((await prod('DELETE', `/api/risk-assess/${h.id}?revision=${n.revision}`)).status, 400, 'row sent to CAPA blocks delete');
+  assert.ok((await admin('GET', '/api/find?q=' + h.ra_no)).body.rows.some(x => x.type === 'ra' && x.id === h.id));
+  // 설비 신뢰도: 10일 × 24h = 240h, 고장 2건(비가동 4h+수리 2h) → MTBF 117h, MTTR 3h, 가용도 97.5%
+  const from = new Date(Date.parse(today) - 9 * 86400000).toISOString().slice(0, 10);
+  let e = (await prod('POST', '/api/equipment', { name: '신뢰도 세탁기', install_date: from, request_id: rid() })).body;
+  for (const [kind, dt] of [['failure', 4], ['failure', null], ['repair', 2]]) { const lg = await prod('POST', `/api/equipment/${e.id}/logs`, { kind, log_date: today, description: '고장', downtime_hours: dt, revision: e.revision, request_id: rid() }); assert.equal(lg.status, 200, JSON.stringify(lg.body)); e = (await prod('GET', `/api/equipment/${e.id}/logs`)).body.equipment; }
+  const rel = (await prod('GET', `/api/equipment-reliability?from=${from}&to=${today}&hours=24&mission=10`)).body, er = rel.rows.find(x => x.id === e.id);
+  assert.deepEqual([er.planned, er.fails, er.down, er.mtbf, er.mttr, er.availability, er.reliability], [240, 2, 6, 117, 3, 97.5, Math.round(Math.exp(-10 / 117) * 10000) / 100]);
+  assert.equal((await prod('GET', '/api/equipment-reliability?hours=30')).status, 400);
+});
+
+test('15.314 org chart (CEO, department head and duties) and designated officers (deputy, external, training cycle, alerts, dismissal keeps record)', async () => {
+  const users = (await admin('GET', '/api/admin/users')).body, pu = users.find(x => x.name === '생산'), au = users.find(x => x.name === '관리자');
+  const top = (await admin('POST', '/api/admin/org/departments', { name: '경영지원부' })).body, sub = (await admin('POST', '/api/admin/org/departments', { name: '안전환경팀', parent_id: top.id })).body;
+  assert.equal((await prod('PUT', `/api/admin/org-chart/departments/${sub.id}`, { head_user_id: pu.id })).status, 403);
+  assert.equal((await admin('PUT', `/api/admin/org-chart/departments/${sub.id}`, { head_user_id: pu.id, duties: '사업장 안전·환경 관리\n소방' })).status, 200);
+  assert.equal((await admin('PUT', '/api/admin/org-chart', { ceo_user_id: au.id, ceo_title: '대표이사', company: '테스트상사' })).status, 200);
+  let ch = (await prod('GET', '/api/org/chart')).body; const d = ch.departments.find(x => x.id === sub.id);
+  assert.deepEqual([ch.company, ch.ceo.name, ch.ceo_title, d.parent_id, d.head.name, d.duties, ch.can_manage], ['테스트상사', '관리자', '대표이사', top.id, '생산', '사업장 안전·환경 관리\n소방', false]);
+  // 지정: 관리자만, 정·부 같으면 안 됨, 외부 대행은 이름만, 교육 주기로 다음 기한 자동
+  assert.equal((await prod('POST', '/api/admin/org-duties', { title: '소방안전관리자', user_id: pu.id })).status, 403);
+  assert.equal((await admin('POST', '/api/admin/org-duties', { title: '소방안전관리자', user_id: pu.id, deputy_user_id: pu.id })).status, 400);
+  assert.equal((await admin('POST', '/api/admin/org-duties', { title: '소방안전관리자' })).status, 400, 'person required');
+  let f = (await admin('POST', '/api/admin/org-duties', { duty_key: 'fire_mgr', title: '소방안전관리자', category: 'fire', user_id: pu.id, deputy_user_id: au.id, scope: '전사', appointed_date: '2024-10-01', legal_basis: '화재의 예방 및 안전관리에 관한 법률 제24조', training_cycle: 24, last_training: '2024-10-01', tasks: '소방계획서 작성\n소방훈련', request_id: rid() })).body;
+  assert.deepEqual([f.person_name, f.deputy_name, f.next_training, f.train, f.user.name], ['생산', '관리자', '2026-10-01', today > '2026-10-01' ? 'over' : today >= '2026-09-01' ? 'soon' : 'ok', '생산']);
+  const ext = (await admin('POST', '/api/admin/org-duties', { title: '전기안전관리자', category: 'elec', person_name: '(주)전기안전대행 홍길동', training_cycle: 36, appointed_date: '2026-01-05', request_id: rid() })).body;
+  assert.deepEqual([ext.user_id, ext.person_name, ext.next_training], [null, '(주)전기안전대행 홍길동', '2029-01-05']);
+  if (f.train !== 'ok') { assert.ok((await prod('GET', '/api/alerts')).body.quality_alerts.some(a => /내 지정 업무 법정교육/.test(a.label))); assert.ok((await admin('GET', '/api/alerts')).body.quality_alerts.some(a => /지정 담당자 법정교육/.test(a.label))); }
+  // 교육 이수 → 다음 기한 다시 계산
+  f = (await admin('PUT', `/api/admin/org-duties/${f.id}`, { revision: f.revision, last_training: today, next_training: '' })).body; assert.equal(f.train, 'ok'); assert.match(f.history.at(-1).what, /교육 이수/);
+  assert.equal((await admin('PUT', `/api/admin/org-duties/${f.id}`, { revision: f.revision - 1, note: 'x' })).status, 409);
+  ch = (await prod('GET', '/api/org/chart')).body; assert.equal(ch.duties.length, 2);
+  // 해임: 지우지 않고 종료(선임 이력 보존), 일반 사용자 목록에서는 사라짐
+  assert.equal((await admin('DELETE', `/api/admin/org-duties/${f.id}?revision=${f.revision}`)).status, 400);
+  f = (await admin('PUT', `/api/admin/org-duties/${f.id}`, { revision: f.revision, active: false })).body; assert.deepEqual([f.active, f.end_date], [false, today]); assert.match(f.history.at(-1).what, /해임·종료/);
+  assert.equal((await prod('GET', '/api/org/duties')).body.rows.length, 1); assert.equal((await admin('GET', '/api/org/duties')).body.rows.length, 2);
+  assert.equal((await admin('DELETE', `/api/admin/org-duties/${f.id}?revision=${f.revision}`)).status, 200);
+});
+
+test('15.315 review fixes: find keeps underscore, %/_ alone empty; reliability when always down; revise clears re-review date; done only via result route, not in review', async () => {
+  const lotNc = (await admin('POST', '/api/ncs', { title: 'LOT 261121_NX808_P1 부적합', request_id: rid() })).body;
+  assert.ok((await admin('GET', '/api/find?q=' + encodeURIComponent('261121_NX808'))).body.rows.some(x => x.id === lotNc.id));
+  assert.ok(!(await admin('GET', '/api/find?q=' + encodeURIComponent('261121NX808'))).body.rows.some(x => x.id === lotNc.id), '_ is literal, not dropped');
+  for (const q of ['__', '%%', '%_ ']) assert.deepEqual((await admin('GET', '/api/find?q=' + encodeURIComponent(q))).body.rows, []);
+  // 기간 내내 멈춘 설비: MTBF 0 → 고장률 계산 불가(null), 신뢰도 0%
+  const from = new Date(Date.parse(today) - 1 * 86400000).toISOString().slice(0, 10);
+  let e = (await prod('POST', '/api/equipment', { name: '항상 고장 설비', install_date: from, request_id: rid() })).body;
+  await prod('POST', `/api/equipment/${e.id}/logs`, { kind: 'failure', log_date: today, description: '고장', downtime_hours: 999, revision: e.revision, request_id: rid() });
+  const er = (await prod('GET', `/api/equipment-reliability?from=${from}&to=${today}&hours=24`)).body.rows.find(x => x.id === e.id);
+  assert.deepEqual([er.planned, er.down, er.mtbf, er.lambda, er.reliability, er.availability], [48, 48, 0, null, 0, 0]);
+  // 조치 완료는 「조치 결과」로만 · 검토 요청 중에는 안 됨 · 개정하면 재평가 예정일 비움
+  let k = (await prod('POST', '/api/risk-assess', { method: 'kosha', title: '15.315', scale: 3, assess_date: today, rows: [{ hazard: '끼임', f: 3, s: 3, action: '덮개', owner: '생산', due: today }], request_id: rid() })).body;
+  k = (await prod('PUT', `/api/risk-assess/${k.id}`, { revision: k.revision, rows: k.rows.map(r => ({ ...r, done: today, f2: 1, s2: 1 })) })).body;
+  assert.deepEqual([k.rows[0].done, k.rows[0].f2], [null, null], 'worksheet PUT cannot mark done');
+  k = (await prod('POST', `/api/risk-assess/${k.id}/step`, { to: 'review', revision: k.revision })).body;
+  const r1 = await prod('PUT', `/api/risk-assess/${k.id}/rows/${k.rows[0].key}`, { revision: k.revision, done: today, f2: 1, s2: 1 }); assert.equal(r1.status, 400); assert.match(r1.body.error, /검토 요청 중/);
+  k = (await admin('POST', `/api/risk-assess/${k.id}/step`, { to: 'approved', revision: k.revision })).body; assert.ok(k.next_review);
+  const bad = await prod('PUT', `/api/risk-assess/${k.id}/rows/${k.rows[0].key}`, { revision: k.revision, done: today, f2: 9, s2: 1 }); assert.match(bad.body.error, /^1번 줄/);
+  k = (await prod('POST', `/api/risk-assess/${k.id}/step`, { to: 'draft', revision: k.revision, rev_note: '설비 교체' })).body; assert.equal(k.next_review, null);
+});
+
+test('15.316 development cost sheets: auto amounts (qty x price x fx), direct/SGA/total/unit cost/margin/suggested price, dev list matching, researcher-only, confirm lock', async () => {
+  const dev = (await admin('POST', '/api/requests', { type: 'development', title: '저분진 와이퍼 원가', customer: '삼성SDI', due_date: '2027-03-31', target_price: '150', data: { extra: 'x' } })).body;
+  assert.equal((await prod('GET', '/api/dev-costs')).status, 403);
+  assert.equal((await admin('POST', '/api/dev-costs', { dev_request_id: 999999, lines: [] })).status, 400);
+  let c = (await admin('POST', '/api/dev-costs', { dev_request_id: dev.id, product: '9인치 와이퍼', base_qty: 1000, unit: 'EA', sga_rate: 10, profit_rate: 20, target_price: 150, request_id: rid(), lines: [
+    { date: '2026-11-01', cat: 'material', item: '폴리에스터 원단', qty: 50, unit: 'kg', unit_price: 12, currency: 'USD', fx: 1400 },
+    { date: '2026-11-03', cat: 'incidental', item: '항공 운송비', qty: 1, unit_price: 80000 },
+    { date: '2026-11-05', cat: 'test', item: '파티클 시험', qty: 2, unit_price: 50000 },
+    { cat: 'sga', item: '영업 출장비', qty: 1, unit_price: 20000 },
+  ] })).body;
+  assert.deepEqual([c.title, c.customer, c.dev.req_no === dev.req_no, /^DC-\d{4}-01$/.test(c.cost_no)], ['저분진 와이퍼 원가', '삼성SDI', true, true]);
+  assert.deepEqual(c.lines.map(l => l.amount), [840000, 80000, 100000, 20000]);
+  // 직접비 1,020,000 · 판관비 = 20,000 + 102,000 · 총원가 1,142,000 · 단위원가 1,142 → 목표가 150은 적자, 권장가 = 1142/(1-0.2) = 1427.5 → 1428
+  assert.deepEqual([c.calc.direct, c.calc.sga_auto, c.calc.sga, c.calc.total, c.calc.unit_cost, c.calc.margin, c.calc.margin_rate, c.calc.suggest, c.calc.first_date, c.calc.last_date], [1020000, 102000, 122000, 1142000, 1142, -992, -661.3, 1428, '2026-11-01', '2026-11-05']);
+  assert.equal(c.calc.by.material, 840000);
+  assert.equal((await admin('PUT', `/api/dev-costs/${c.id}`, { revision: c.revision, lines: [{ cat: 'material', item: '', qty: 1 }] })).status, 400, 'item required');
+  assert.equal((await admin('PUT', `/api/dev-costs/${c.id}`, { revision: c.revision, sga_rate: 100 })).status, 400);
+  c = (await admin('PUT', `/api/dev-costs/${c.id}`, { revision: c.revision, target_price: 2000 })).body; assert.deepEqual([c.calc.margin, c.calc.margin_rate], [858, 42.9]);
+  const list = (await admin('GET', '/api/dev-costs')).body, d = list.dev_requests.find(x => x.id === dev.id); assert.deepEqual([d.cost_count, d.cost_total], [1, 1142000]);
+  c = (await admin('POST', `/api/dev-costs/${c.id}/step`, { to: 'confirmed', revision: c.revision })).body; assert.equal(c.status, 'confirmed');
+  assert.equal((await admin('PUT', `/api/dev-costs/${c.id}`, { revision: c.revision, note: 'x' })).status, 400, 'locked');
+  assert.equal((await admin('POST', `/api/dev-costs/${c.id}/step`, { to: 'draft', revision: c.revision })).status, 400, 'reason');
+  c = (await admin('POST', `/api/dev-costs/${c.id}/step`, { to: 'draft', revision: c.revision, reason: '단가 변경' })).body; assert.equal(c.status, 'draft');
+  assert.equal((await admin('DELETE', `/api/dev-costs/${c.id}?revision=${c.revision}`)).status, 400, 'once confirmed cannot delete');
+  assert.ok((await admin('GET', '/api/find?q=' + c.cost_no)).body.rows.some(x => x.type === 'devcost'));
+  assert.ok(!(await prod('GET', '/api/find?q=' + c.cost_no)).body.rows.some(x => x.type === 'devcost'), 'non-researcher cannot find');
+});
+
+test('15.318 cost calculation reproduces the Excel sheets (nonwoven CF707 200SH, poly NX-808 25sh), point-in-time prices/rates, revisions on change, recalc, purchase-only', async () => {
+  assert.equal((await prod('GET', '/api/cost/items')).status, 403);
+  // 공통 기준: 1 WH 13,853.3979원 · 제조경비 10% · 판관비 12% · 불량률 0
+  assert.equal((await admin('POST', '/api/cost/rates', { effective_date: '2026-01-01', labor_rate: 13853.3979, mfg_rate: 10, sga_rate: 12, defect_rate: 0, fx: { USD: 1400 }, request_id: rid() })).status, 200);
+  // 백데이터: SONTARA 8864 = ($0.3632 + 0) × 1400 + 슬리팅·로스·운송 75.7891 = 584.2691원/SQM
+  let mat = (await admin('POST', '/api/cost/materials', { code: 'SONTARA-8864', name: 'SONTARA 8864', category: '원단', supplier: '듀폰', unit: 'SQM', currency: 'USD', price: 0.3632, extra_krw: 75.7891, incoterms: 'CPT BUSAN', effective_date: '2026-01-01', request_id: rid() })).body;
+  assert.equal(mat.current.krw_price, 584.2691);
+  const lines = [
+    { type: 'mat', material_id: mat.id, name: '원단', qty: '0.14*0.114*200', loss: 1 },
+    { type: 'mat', name: '개별 포장지', price: '245000/1500*0.32' }, { type: 'mat', name: '대봉투', price: '187/50' }, { type: 'mat', name: 'BOX', price: '=2050/50' },
+    { type: 'labor', name: '절단', qty: '200', capa: '9000*4' }, { type: 'labor', name: '1차포장', qty: '1', capa: '750/4' },
+  ];
+  let it = (await admin('POST', '/api/cost/items', { item_code: 'CF707-200', name: 'CF707 (5.5"*4.5") (200SH)', unit: 'PK', pieces: 200, sale_price: 2650, customer: '크린컨테크', lines, effective_date: '2026-01-02', request_id: rid() })).body;
+  const t = it.totals;
+  assert.deepEqual([t.material, t.labor, t.direct, t.mfg, t.sga, t.total, t.piece_cost, t.margin, t.margin_rate], [1980.64, 150.85, 2131.49, 213.15, 255.78, 2600.42, 13.0021, 49.58, 1.87]);
+  assert.equal(it.rev, 0);
+  assert.equal((await admin('POST', '/api/cost/items', { item_code: 'X', name: 'x', lines: [{ type: 'mat', name: 'a', price: '1/0' }] })).status, 400);
+  assert.equal((await admin('POST', '/api/cost/items', { item_code: 'X', name: 'x', lines: [{ type: 'mat', name: 'a', price: 'alert(1)' }] })).status, 400);
+  // 폴리 NX-808(25sh): 판관비 = (직접비+제조경비)×12%, 불량률 0.5% 가산(품목 덮어쓰기) → 엑셀 인상원가 80.0514
+  const nx = (await admin('POST', '/api/cost/items', { item_code: 'NX-808-25', name: 'NX-808 (25sh)', kind: 'product', sga_base: 'mfg', overrides: { defect_rate: 0.5 }, sale_price: 102, lines: [
+    { type: 'mat', name: '원단', price: '1370', qty: '1/36', loss: 5 }, { type: 'mat', name: '속포장지', price: '(3.09-2.79)/3.09' }, { type: 'mat', name: '박스내 포장지', price: '80/1000' }, { type: 'mat', name: 'BOX', price: '965/1000' },
+    { type: 'labor', name: '재단', qty: '1', capa: '2200' }, { type: 'labor', name: '정렬/포장', qty: '1', capa: '800' }], effective_date: '2026-01-02', request_id: rid() })).body;
+  assert.equal(nx.totals.total, 80.05); assert.equal(nx.totals.defect, 0.32);
+  // 머리 정보만 바뀌면 리비전 없음 · 원가 바뀌면 사유 필수 · 시점은 마지막 리비전 이후
+  it = (await admin('PUT', `/api/cost/items/${it.id}`, { revision: it.revision, customer: '크린컨테크 외' })).body; assert.equal(it.rev, 0);
+  const l2 = it.lines.map(l => l.name === 'BOX' ? { ...l, price: '2200/50' } : l);
+  assert.equal((await admin('PUT', `/api/cost/items/${it.id}`, { revision: it.revision, lines: l2 })).status, 400, 'reason required');
+  assert.equal((await admin('PUT', `/api/cost/items/${it.id}`, { revision: it.revision, lines: l2, reason: 'BOX 단가', effective_date: '2025-12-31' })).status, 400, 'date before last rev');
+  it = (await admin('PUT', `/api/cost/items/${it.id}`, { revision: it.revision, lines: l2, reason: 'BOX 단가 2,050 → 2,200', effective_date: '2026-03-01' })).body;
+  assert.deepEqual([it.rev, it.rev_date, it.totals.total, it.prev_total, it.change_pct], [1, '2026-03-01', 2604.08, 2600.42, 0.14]);
+  // 단가 변경(5월 +4%): 미리 보기 → 저장 + 영향 품목 재산출 → Rev.2(원인: 단가 변경)
+  const dry = (await admin('POST', `/api/cost/materials/${mat.id}/prices`, { currency: 'USD', price: 0.3777, extra_krw: 75.7891, effective_date: '2026-05-01', reason: '5월 +4%', dry: true })).body;
+  assert.equal(dry.impact.changed.length, 1); assert.equal(dry.impact.changed[0].id, it.id);
+  const pr = (await admin('POST', `/api/cost/materials/${mat.id}/prices`, { currency: 'USD', price: 0.3777, extra_krw: 75.7891, effective_date: '2026-05-01', reason: '5월 +4%', recalc: true, request_id: rid() })).body;
+  assert.equal(pr.impact.changed[0].rev, 2);
+  const revs = (await admin('GET', `/api/cost/items/${it.id}/revs`)).body.rows;
+  assert.deepEqual(revs.map(r => [r.rev, r.effective_date, r.cause]), [[0, '2026-01-02', 'create'], [1, '2026-03-01', 'manual'], [2, '2026-05-01', 'material']]);
+  assert.equal(revs[2].lines[0].unit_price, cr(0.3777 * 1400 + 75.7891));
+  assert.equal(revs[0].lines[0].unit_price, 584.2691, 'old revision keeps the price of its time');
+  // 시점별 단가: 3월 기준 재계산은 옛 단가, 백데이터 목록은 지금(오늘) 단가
+  const mats = (await admin('GET', '/api/cost/materials')).body.rows.find(m => m.id === mat.id); assert.equal(mats.price_count, 2); assert.deepEqual(mats.used_by.map(u => u.id), [it.id]);
+  // 공통 기준 변경(인건비 인상) → 재산출: 공통 기준을 쓰는 품목만, 시점 이후 리비전
+  await admin('POST', '/api/cost/rates', { effective_date: '2026-07-01', labor_rate: 14500, mfg_rate: 10, sga_rate: 12, defect_rate: 0, fx: { USD: 1400 }, reason: '하반기 인건비', request_id: rid() });
+  const rc = (await admin('POST', '/api/cost/items/recalc', { rates: true, effective_date: '2026-07-01', reason: '하반기 인건비 반영' })).body;
+  assert.ok(rc.changed.some(x => x.id === it.id && x.rev === 3) && rc.changed.some(x => x.id === nx.id));
+  assert.equal((await admin('POST', '/api/cost/items/recalc', { rates: true, effective_date: '2026-07-01', reason: '다시' })).body.changed.length, 0, 'no change → no revision');
+  assert.ok((await admin('GET', '/api/find?q=CF707-200')).body.rows.some(x => x.type === 'costitem'));
+  assert.ok(!(await prod('GET', '/api/find?q=CF707-200')).body.rows.some(x => x.type === 'costitem'));
+  // 엑셀 붙여넣기 백데이터: 새 코드는 등록, 같은 코드·다른 단가는 새 시점 단가, 같으면 건너뜀
+  const bulk = (await admin('POST', '/api/cost/materials/bulk', { rows: [{ code: 'BOX-50', name: 'BOX', unit: 'EA', price: 2050, effective_date: '2026-01-01' }, { code: 'SONTARA-8864', name: 'SONTARA 8864', currency: 'USD', price: 0.3777, extra_krw: 75.7891, effective_date: '2026-05-01' }, { code: 'SONTARA-8864', name: 'x', currency: 'USD', price: 0.39, extra_krw: 75.7891, effective_date: '2026-09-01' }] })).body;
+  assert.deepEqual([bulk.created, bulk.same, bulk.priced, bulk.errors.length], [1, 1, 1, 0]);
+});
+function cr(v) { return Math.round(v * 10000) / 10000; }

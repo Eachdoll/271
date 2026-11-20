@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.308';
+const APP_VERSION = '15.318';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -183,9 +183,14 @@ function modal(html, { wide = false, onClose = () => {} } = {}) {
   wrap.innerHTML = `<div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true"><button class="modal-x" aria-label="닫기">×</button>${html}</div>`;
   const opener = document.activeElement;
   const close = () => { if (!wrap.isConnected) return; wrap.remove(); syncModalInert(); document.removeEventListener('keydown', onKey); window.removeEventListener('hashchange', close); onClose(); const top = $$('.modal-wrap').at(-1); if (top) { if (!top.contains(document.activeElement)) ($('.modal', top)?.focus?.()); } else if (opener?.isConnected) opener.focus?.(); };
+  // 15.312 입력 보호: 사람이 글·숫자·날짜·선택을 바꾼 창은 창 밖 누르기·Esc·×로 닫기 전에 한 번 묻는다(체크·검색칸은 빼고). 저장·취소 단추로 닫는 것은 그대로.
+  let dirty = false, asking = false;
+  const touch = e => { if (e.isTrusted && e.target.matches?.('input:not([type=checkbox]):not([type=radio]):not([type=search]):not([readonly]), textarea:not([readonly]), select') && e.target.closest('form')) { dirty = true; wrap.dataset.dirty = '1'; } };
+  wrap.addEventListener('input', touch, true); wrap.addEventListener('change', touch, true);
+  const userClose = async () => { if (asking) return; if ((dirty || wrap.dataset.dirty === '1') && wrap.isConnected) { asking = true; const ok = await confirmBox('입력한 내용이 저장되지 않았습니다. 창을 닫을까요?'); asking = false; if (!ok) return; } close(); };
   const onKey = (e) => {
     if (wrap !== $$('.modal-wrap').at(-1)) return; // only the top dialog reacts
-    if (e.key === 'Escape') close();
+    if (e.key === 'Escape') userClose();
     // Keyboard users stay inside the dialog: Tab from the last control goes back to the first (15.35).
     if (e.key === 'Tab') {
       const items = $$('button:not([disabled]),[href],input:not([type=hidden]):not([disabled]),select:not([disabled]),textarea:not([disabled]),summary,[tabindex]:not([tabindex="-1"])', wrap).filter(el => el.offsetParent !== null || el === document.activeElement);
@@ -195,8 +200,8 @@ function modal(html, { wide = false, onClose = () => {} } = {}) {
       else if (!e.shiftKey && (document.activeElement === last || !wrap.contains(document.activeElement))) { e.preventDefault(); first.focus(); }
     }
   };
-  wrap.addEventListener('mousedown', (e) => { if (e.target === wrap) close(); });
-  $('.modal-x', wrap).onclick = close;
+  wrap.addEventListener('mousedown', (e) => { if (e.target === wrap) userClose(); });
+  $('.modal-x', wrap).onclick = userClose;
   document.addEventListener('keydown', onKey);
   window.addEventListener('hashchange', close); // 15.299 다른 화면으로 가면(메뉴·뒤로 가기) 열린 창을 닫음 — 예전 창이 새 화면 위에 남던 문제
   document.body.appendChild(wrap); syncModalInert();
@@ -366,10 +371,11 @@ async function saveNewAttachments(entity, row, draft, form) {
 // ───────────── 레이아웃 / 라우팅 ─────────────
 // 메뉴: 업무 → 하위 메뉴 → 화면. 입력과 목록(조회·검색)은 서로 다른 화면입니다(VIEW_SPLIT).
 const NAV = [
-  { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
+  { group: '홈', items: [['#/', '대시보드'], ['#/reports', '리포트 · 통계']] }, // 15.310 업무 흐름 안내는 각 화면 제목 아래로
   { group: '영업', items: [{ sub: '견적', items: [['#/sales/quotes', '견적서 관리']] }, { sub: '수주', items: [['#/sales/orders', '수주 관리']] }, { sub: '매출전표', items: [['#/sales/bills', '매출전표 관리'], ['#/sales/calendar', '매출 달력'], ['#/sales/reps', '영업담당자별 현황'], ['#/sales/returns', '반입(반품) 관리'], ['#/sales/delivery-status', '납품현황'], ['#/sales/closing', '매출 마감']] }, { sub: '생산의뢰', items: [['#/sales/mr', '생산의뢰 관리']] }, { sub: '구매의뢰', items: [['#/sales/pr', '구매의뢰 관리']] }, { sub: '샘플의뢰', items: [['#/sales/sample/product', '제품 샘플의뢰'], ['#/sales/sample/goods', '상품 샘플의뢰']] }] },
   { group: '구매', items: [
     { sub: '발주', items: [['#/purchase/po', '발주 관리'], ['#/purchase/stock', '구매 재고현황']] }, // 15.262
+    { sub: '원가', items: [['#/purchase/cost', '원가 산출 관리']] }, // 15.318 품목별 원가·백데이터·공통 기준·리비전
     { sub: '매입전표', items: [['#/purchase/bills', '매입전표 관리'], ['#/purchase/calendar', '매입 달력'], ['#/purchase/returns', '반출(반품) 관리'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/closing', '매입 마감']] },
     { sub: '샘플(상품)', items: [['#/purchase/sample/list', '상품 샘플리스트']] },
     { sub: '세탁', items: [['#/purchase/laundry', '불량·폐기 관리'], ['#/purchase/laundry-reports', '세탁 검수·성적서']] },
@@ -386,7 +392,7 @@ const NAV = [
     { sub: '품질보증(QA)', items: [['#/quality/docs', '문서관리'], ['#/quality/changes', '변경관리'], ['#/quality/training', '교육·자격관리'], ['#/quality/audits', '심사 관리'], ['#/quality/certs', '인증서 관리'], ['#/quality/suppliers', '협력업체 품질'], ['#/quality/validation', '밸리데이션'], ['#/quality/capa', '부적합·CAPA'], ['#/quality/voc/list', 'VOC 관리'], ['#/quality/calibration', '검교정 관리']] }, // 15.306 2단계 A1·A2·A3·A5
     { sub: '품질관리(QC)', items: [['#/quality/inspections', '수입·출하 검사 이력'], ['#/quality/list', '분석 관리'], ['#/quality/coa', 'COA 발행'], ['#/quality/pqc', '공정품질(PQC)'], ['#/quality/methods', '시험법·신뢰성']] }, // 15.307 C1·C3
   ] },
-  { group: '연구소', items: [['#/dev/list', '개발 관리'], ['#/dev/schedule', '스케줄 관리'], ['#/dev/analysis', '연구 분석 관리'], ['#/dev/specs', '검사규격 항목설정'], ['#/dev/ip', '지식재산권 관리']] }, // 15.302 지식재산권 // 15.276 · 15.285 · 15.295 메뉴 이름 개발 → 연구소, 연구소 검사규격
+  { group: '연구소', items: [['#/dev/list', '개발 관리'], ['#/dev/schedule', '스케줄 관리'], ['#/dev/cost', '개발원가 관리'], ['#/dev/analysis', '연구 분석 관리'], ['#/dev/specs', '검사규격 항목설정'], ['#/dev/ip', '지식재산권 관리']] }, // 15.302 지식재산권 // 15.276 · 15.285 · 15.295 메뉴 이름 개발 → 연구소, 연구소 검사규격
   { group: '생산', items: [
     { sub: '샘플(제품)', items: [['#/prod/list', '제품 샘플리스트']] },
     ['#/prod/orders', '생산의뢰 접수'],
@@ -394,6 +400,7 @@ const NAV = [
     { sub: '반제품 생산', items: [['#/prod/semi', '반제품 생산 관리'], ['#/prod/semi/cut', '커팅/융착 작업 관리'], ['#/prod/semi/wash', '세탁(호기별) 작업 관리']] },
     ['#/prod/lot-trace', 'LOT 연결 조회'], // 15.249 완제품 ↔ 봉투(반제품) ↔ 원자재 LOT
     { sub: '공무', items: [['#/prod/equipment', '설비 대장·이력'], ['#/prod/pm', '예방보전(PM) 일정']] }, // 15.307 생산설비·예방보전
+    { sub: '위험성평가', items: [['#/prod/risk', '위험성평가(KOSHA·FMEA·HAZOP)'], ['#/prod/risk/actions', '개선 조치 추적'], ['#/prod/reliability', '설비 신뢰도(MTBF·MTTR)']] }, // 15.313
   ] },
   { group: '물류', items: [
     { sub: '입고', items: [['#/logistics/receipt/new', '입고 입력'], ['#/logistics/receive', '입고목록'], ['#/logistics/receipts', '입고증 목록']] }, // 15.290 출하처럼 입고도 메뉴에서 나눠 고름(관리 탭 없앰)
@@ -433,8 +440,11 @@ const canSeeMenu = key => !key || !ME || !Array.isArray(ME.menus) || ME.menus.in
 // 메뉴 보기만 켜고 권한이 없어 들어가면 빈 화면·「권한 없음」 오류만 보이던 문제.
 const ROUTE_ROLE = [
   [['#/sales/quotes', '#/sales/orders', '#/sales/bills', '#/sales/calendar', '#/sales/reps', '#/sales/returns', '#/sales/delivery-status', '#/sales/closing', '#/sales/tax', '#/sales/tax-check', '#/sales/book', '#/sales/ledger', '#/sales/aging'], ['sales']],
-  [['#/purchase/stock', '#/purchase/bills', '#/purchase/calendar', '#/purchase/returns', '#/purchase/receipt-status', '#/purchase/closing', '#/purchase/tax', '#/purchase/tax-check', '#/purchase/book', '#/purchase/ledger', '#/purchase/aging'], ['purchase']],
+  [['#/purchase/stock', '#/purchase/cost', '#/purchase/bills', '#/purchase/calendar', '#/purchase/returns', '#/purchase/receipt-status', '#/purchase/closing', '#/purchase/tax', '#/purchase/tax-check', '#/purchase/book', '#/purchase/ledger', '#/purchase/aging'], ['purchase']],
   [['#/purchase/payments', '#/purchase/disbursements', '#/purchase/notes'], ['sales', 'purchase']],
+  [['#/admin/org/chart', '#/admin/org/duties'], null],
+  [['#/dev/cost'], ['dev']], // 15.316 개발원가는 연구소(개발·개발책임자)만 // 15.314 조직도·지정 담당자는 누구나 보기(고치기는 관리자)
+  [['#/admin/org'], ['관리자']], // 부서·직급 탭은 관리자만(일반 사용자 탭 줄에서 숨김)
 ];
 function routeRoles(route) {
   const path = String(route || '#/').split('?')[0];
@@ -579,6 +589,10 @@ const PAGES = {
   '#/purchase/po': main => managedPage(main, '#/purchase/po', pagePO), // 15.178 발주 관리
   '#/purchase/po/new': main => managedPage(main, '#/purchase/po/new', pagePO),
   '#/purchase/laundry': pageLaundry,
+  '#/purchase/cost': main => managedPage(main, '#/purchase/cost', pageCostItems), // 15.318 원가 산출 관리
+  '#/purchase/cost/materials': main => managedPage(main, '#/purchase/cost/materials', pageCostMaterials),
+  '#/purchase/cost/rates': main => managedPage(main, '#/purchase/cost/rates', pageCostRates),
+  '#/purchase/cost/trend': main => managedPage(main, '#/purchase/cost/trend', pageCostTrend),
   '#/purchase/laundry/new': pageLaundry,
   '#/purchase/laundry-reports': pageLaundryReports,
   '#/quality/inspections': pageInspections,
@@ -602,6 +616,7 @@ const PAGES = {
   '#/dev/analysis/request': main => pageRndData(main), // 15.288 분석데이터 입력(연구원)
   '#/dev/specs': main => pageRndSpecs(main), // 15.295 연구소 검사규격 항목설정
   '#/dev/ip': main => pageIpRights(main), // 15.302 지식재산권 관리
+  '#/dev/cost': main => pageDevCost(main), // 15.316 개발원가 관리
   '#/dev/schedule': main => pageDevRoadmap(main), // 15.276 개발 스케줄 관리(로드맵)
   '#/prod/request': () => { location.replace('#/sales/sample/product'); }, // 15.183 영업으로 옮김(예전 즐겨찾기)
   '#/sales/sample/product': () => pageIntake('sample'), // 15.183 제품 샘플의뢰(영업)
@@ -670,6 +685,9 @@ const PAGES = {
   '#/prod/lot-trace': main => pageLotTrace(main), // 15.249
   '#/prod/equipment': main => pageEquipment(main), // 15.307 공무
   '#/prod/pm': main => pagePm(main), // 15.307 공무
+  '#/prod/risk': main => pageRiskAssess(main), // 15.313 위험성평가
+  '#/prod/risk/actions': main => pageRiskActions(main),
+  '#/prod/reliability': main => pageReliability(main),
   '#/quality/pqc': main => pagePqc(main), // 15.307 C1
   '#/quality/methods': main => pageMethods(main), // 15.307 C3
   '#/quality/audits': main => pageAudits(main), // 15.308 A4
@@ -689,7 +707,9 @@ const PAGES = {
   '#/admin/users': main => managedPage(main, '#/admin/users', m => pageMembers(m, 'info')), // 15.175 회원 관리 · 회원 정보
   '#/admin/users/roles': main => managedPage(main, '#/admin/users/roles', m => pageMembers(m, 'roles')), // 사용 권한
   '#/admin/users/menus': main => managedPage(main, '#/admin/users/menus', m => pageMembers(m, 'menus')), // 메뉴 보기
-  '#/admin/org': pageOrg,
+  '#/admin/org': main => managedPage(main, '#/admin/org', pageOrg),
+  '#/admin/org/chart': main => managedPage(main, '#/admin/org/chart', pageOrgChart), // 15.314 조직도
+  '#/admin/org/duties': main => managedPage(main, '#/admin/org/duties', pageOrgDuties), // 15.314 지정 담당자
   '#/admin/approval': main => pageApprovalRules(main), // 15.185 결재선 기본값
   '#/admin/bom': pageBoms,
   '#/logistics/warehouses': main => pageWarehouses(main), // 15.230 관리 › 창고 관리
@@ -731,9 +751,11 @@ const MANAGE = {
   '#/sales/mr': { title: '생산의뢰 관리', tabs: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] },
   '#/sales/pr': { title: '구매의뢰 관리', tabs: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] },
   '#/purchase/po': { title: '발주 관리', tabs: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
+  '#/purchase/cost': { title: '원가 산출 관리', tabs: [['#/purchase/cost', '품목별 원가'], ['#/purchase/cost/materials', '원가 백데이터'], ['#/purchase/cost/rates', '공통 기준'], ['#/purchase/cost/trend', '원가 추이']] }, // 15.318
   '#/purchase/bills': { title: '매입전표 관리', tabs: [['#/purchase/bills/new', '전표 입력'], ['#/purchase/bills', '전표 목록']] },
   '#/sales/book': { title: '매출 거래처별 장부', tabs: [['#/sales/book', '전표별 장부'], ['#/sales/ledger', '품목 줄별 원장']] },
   '#/purchase/book': { title: '매입 거래처별 장부', tabs: [['#/purchase/book', '전표별 장부'], ['#/purchase/ledger', '품목 줄별 원장']] },
+  '#/admin/org': { title: '조직 구성', tabs: [['#/admin/org/chart', '조직도'], ['#/admin/org', '부서·직급'], ['#/admin/org/duties', '지정 담당자']] }, // 15.314
   '#/admin/users': { title: '회원 관리', tabs: [['#/admin/users', '회원 정보'], ['#/admin/users/roles', '사용 권한'], ['#/admin/users/menus', '메뉴 보기']] },
   // 15.213 입력·목록 메뉴 통일
   '#/logistics/ship': { title: '출하 관리', tabs: [['#/logistics/ship/new', '출하 입력'], ['#/logistics/ship', '출하 목록']] },
@@ -746,11 +768,12 @@ const MANAGE = {
   '#/dev/list': { title: '개발 관리', tabs: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
   '#/dev/analysis': { title: '연구 분석 관리', tabs: [['#/dev/analysis/request', '분석데이터 입력'], ['#/dev/analysis', '분석리스트']] }, // 15.285 · 15.288
 };
-const ROUTE_ALIAS = { '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/calendar': '#/sales/bills', '#/logistics/qr': '#/logistics/lots', '#/logistics/pallets': '#/logistics/lots', '#/logistics/scan': '#/logistics/lots', '#/sales/reps': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users', '#/logistics/receipt/other': '#/logistics/receipt/new', '#/logistics/ship/new': '#/logistics/ship', '#/purchase/laundry/new': '#/purchase/laundry', '#/prod/semi/new': '#/prod/semi', '#/prod/semi/cut/new': '#/prod/semi/cut', '#/prod/semi/wash/new': '#/prod/semi/wash', '#/quality/request': '#/quality/list', '#/quality/voc/request': '#/quality/voc/list', '#/dev/request': '#/dev/list', '#/dev/analysis/request': '#/dev/analysis' };
+const ROUTE_ALIAS = { '#/purchase/cost/materials': '#/purchase/cost', '#/purchase/cost/rates': '#/purchase/cost', '#/purchase/cost/trend': '#/purchase/cost', '#/admin/org/chart': '#/admin/org', '#/admin/org/duties': '#/admin/org', '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/calendar': '#/sales/bills', '#/logistics/qr': '#/logistics/lots', '#/logistics/pallets': '#/logistics/lots', '#/logistics/scan': '#/logistics/lots', '#/sales/reps': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users', '#/logistics/receipt/other': '#/logistics/receipt/new', '#/logistics/ship/new': '#/logistics/ship', '#/purchase/laundry/new': '#/purchase/laundry', '#/prod/semi/new': '#/prod/semi', '#/prod/semi/cut/new': '#/prod/semi/cut', '#/prod/semi/wash/new': '#/prod/semi/wash', '#/quality/request': '#/quality/list', '#/quality/voc/request': '#/quality/voc/list', '#/dev/request': '#/dev/list', '#/dev/analysis/request': '#/dev/analysis' };
 const navRoute = r => ROUTE_ALIAS[String(r || '#/').split('?')[0]] || String(r || '#/').split('?')[0];
 const TAB_ON = { '#/logistics/receipt/other': '#/logistics/receipt/new' }; // 15.234 기타입고도 「입고 입력」 탭에 불
 function managedTabs(main, route) {
   route = TAB_ON[route] || route;
+  if (!canSeeRoute(route)) return; // 15.314 권한 없는 화면 안내 제목(「사용 권한이 없습니다」)을 탭 제목으로 덮지 않음
   const m = MANAGE[navRoute(route)], h1 = $('h1', main); if (!m || !h1 || $('.manage-tabs', main)) return;
   const t = [...h1.childNodes].find(n => n.nodeType === 3 && n.nodeValue.trim());
   if (t) t.nodeValue = /수정|고치기/.test(t.nodeValue) ? `${m.title} · ${t.nodeValue.trim()} ` : m.title + ' '; else h1.prepend(m.title + ' '); // 15.178 고치는 중 표시 유지
@@ -761,13 +784,29 @@ function managedTabs(main, route) {
 // 지금 화면 단계만 색, 나머지는 회색(누르면 그 화면으로). 두 흐름에 걸친 화면은 위 칩으로 흐름을 바꿔 봄(이 기기에 기억).
 const PROCESS_FLOWS = [
   { key: 'order', name: '주문 · 출하 · 매출', steps: [['#/sales/quotes', '견적'], ['#/sales/orders', '수주'], ['#/sales/mr', '생산의뢰'], ['#/prod/orders', '생산의뢰 접수'], ['#/prod/finished/plan', '생산계획'], ['#/prod/finished', '생산실적'], ['#/logistics/ship-orders', '출하지시'], ['#/logistics/ship', '출하'], ['#/sales/bills', '매출전표'], ['#/sales/tax', '세금계산서'], ['#/purchase/payments', '입금확인']] },
+  { key: 'cost', name: '원가 산출', on: ['#/purchase/cost', '#/purchase/cost/materials', '#/purchase/cost/rates', '#/purchase/cost/trend'], steps: [['#/purchase/cost/rates', '공통 기준(인건비·경비율)'], ['#/purchase/cost/materials', '원가 백데이터(단가 시점)'], ['#/purchase/cost', '품목별 원가·리비전'], ['#/purchase/cost/trend', '원가 추이·마진']] }, // 15.318
   { key: 'buy', name: '구매 · 입고 · 매입', steps: [['#/sales/orders', '수주'], ['#/sales/pr', '구매의뢰'], ['#/purchase/po', '발주'], ['#/logistics/receive', '입고확인'], ['#/quality/inspections', '수입검사'], ['#/purchase/bills', '매입전표'], ['#/purchase/tax', '매입 세금계산서'], ['#/purchase/disbursements', '지급확인']] },
   // 15.287 품질: 분석의뢰 · 수입검사 · 출하검사 · VOC (분석 관리 목록의 검사구분 칩을 누르면 그 흐름으로)
   { key: 'qreq', name: '품질 분석의뢰', steps: [['#/quality/request', '분석의뢰·접수'], ['#/quality/list', '분석 진행·결과'], ['#/quality/inspections', '검사 이력']] },
   { key: 'qin', name: '수입검사', on: ['#/quality/list', '#/quality/inspections'], steps: [['#/purchase/po', '발주'], ['#/logistics/receive', '입고확인'], ['#/quality/list', '수입검사'], ['#/quality/inspections', '판정·이력'], ['#/purchase/bills', '매입전표']] },
   { key: 'qout', name: '출하검사', on: ['#/quality/list', '#/quality/inspections'], steps: [['#/prod/finished', '생산실적'], ['#/quality/list', '출하검사'], ['#/quality/inspections', '판정·이력'], ['#/logistics/ship-orders', '출하지시'], ['#/logistics/ship', '출하']] },
-  { key: 'voc', name: 'VOC 처리', steps: [['#/quality/voc/request', 'VOC 접수'], ['#/quality/voc/list', 'VOC 처리'], ['#/prod/lot-trace', 'LOT 연결 조회']] },
+  { key: 'voc', name: 'VOC 처리', on: ['#/quality/voc/request', '#/quality/voc/list', '#/prod/lot-trace'], steps: [['#/quality/voc/request', 'VOC 접수'], ['#/quality/voc/list', 'VOC 처리'], ['#/prod/lot-trace', 'LOT 연결 조회'], ['#/quality/capa', 'CAPA(재발 방지)']] },
+  // 15.309 품질 1~4단계 흐름: 부적합은 CAPA 한 곳으로 모여 변경·문서·교육·밸리데이션으로 닫히고, LOT는 출하검사 합격 → COA로 이어진다.
+  { key: 'capa', name: '부적합 개선(CAPA)', steps: [['#/quality/capa', '부적합·CAPA'], ['#/quality/changes', '변경관리'], ['#/quality/docs', '문서 개정'], ['#/quality/training', '개정 교육'], ['#/quality/validation', '재밸리데이션']] },
+  { key: 'coa', name: 'LOT별 COA', on: ['#/quality/coa'], steps: [['#/prod/finished', '생산실적'], ['#/quality/list', '출하검사'], ['#/quality/coa', 'COA 발행·승인'], ['#/logistics/ship', '출하']] },
+  { key: 'supplier', name: '협력업체 품질', on: ['#/quality/suppliers'], steps: [['#/logistics/receive', '입고'], ['#/quality/inspections', '수입검사·공급사 COA'], ['#/quality/suppliers', '협력업체 평가'], ['#/quality/changes', '업체 변경점']] },
+  { key: 'pqc', name: '공정품질', on: ['#/quality/pqc'], steps: [['#/quality/pqc', '공정·환경 측정·SPC'], ['#/quality/capa', '이상발생 → CAPA'], ['#/quality/changes', '공정 변경']] },
+  { key: 'plant', name: '설비·예방보전', on: ['#/prod/equipment', '#/prod/pm'], steps: [['#/prod/equipment', '설비 등록·PM 항목'], ['#/prod/pm', 'PM 일정·수행'], ['#/prod/reliability', '신뢰도(MTBF·MTTR)'], ['#/quality/validation', '설비 적격성(IQ·OQ·PQ)']] }, // 15.316 신뢰도 단계
+  // 15.316 위험성평가는 안전(KOSHA)과 설비·공정(FMEA·HAZOP) 두 흐름으로 나눔(같은 화면에서 위 칩으로 바꿔 봄). 안전은 지정 담당자(15.314)에서 시작해 교육으로 닫힌다.
+  { key: 'safety', name: '안전보건 위험성평가', on: ['#/prod/risk', '#/prod/risk/actions', '#/admin/org/duties'], steps: [['#/admin/org/duties', '안전보건 담당 지정'], ['#/prod/risk', '위험성평가 작성·승인'], ['#/prod/risk/actions', '감소대책·재평가'], ['#/quality/training', '근로자 교육·공유']] },
+  { key: 'risk', name: '설비·공정 FMEA', on: ['#/prod/reliability', '#/prod/risk', '#/prod/risk/actions'], steps: [['#/prod/equipment', '설비 고장 이력'], ['#/prod/reliability', '설비 신뢰도'], ['#/prod/risk', 'FMEA·HAZOP 작성·승인'], ['#/prod/risk/actions', '권고 조치'], ['#/quality/capa', 'CAPA'], ['#/quality/changes', '변경관리']] }, // 15.313
+  { key: 'method', name: '시험·측정', on: ['#/quality/calibration', '#/quality/methods'], steps: [['#/quality/calibration', '계측기 검교정'], ['#/quality/methods', '시험법·신뢰성'], ['#/quality/validation', '시험법 밸리데이션']] },
+  { key: 'audit', name: '심사·인증', on: ['#/quality/audits', '#/quality/certs'], steps: [['#/quality/audits', '심사 계획·실시'], ['#/quality/capa', '지적 → CAPA'], ['#/quality/certs', '인증 유지']] },
+  { key: 'qm', name: '품질경영(목표 → 점검 → 개선)', on: ['#/quality/kpi', '#/quality/risks'], steps: [['#/quality/kpi', '품질목표·KPI'], ['#/quality/risks', '리스크 관리'], ['#/quality/audits', '내부심사'], ['#/quality/capa', '개선(CAPA)']] },
   { key: 'semi', name: '반제품 · 포장 생산', steps: [['#/prod/semi', '반제품 계획'], ['#/prod/semi/cut', '커팅/융착'], ['#/prod/semi/wash', '세탁'], ['#/prod/finished', '포장(완제품 실적)'], ['#/logistics/ship', '출하']] },
+  // 15.316 연구소: 개발의뢰부터 일정·분석·개발원가·지식재산까지, 조직: 부서 → 조직도 → 지정 담당자 → 사용 권한
+  { key: 'dev', name: '개발 · 원가', on: ['#/dev/request', '#/dev/list', '#/dev/schedule', '#/dev/analysis', '#/dev/cost', '#/dev/ip'], steps: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발 진행'], ['#/dev/schedule', '일정 관리'], ['#/dev/analysis', '시험·분석'], ['#/dev/cost', '개발원가'], ['#/dev/ip', '지식재산권']] },
+  { key: 'org', name: '조직 · 담당', on: ['#/admin/org', '#/admin/org/chart'], steps: [['#/admin/org', '부서·직급'], ['#/admin/org/chart', '조직도'], ['#/admin/org/duties', '지정 담당자'], ['#/admin/users/roles', '사용 권한']] },
 ];
 const FLOW_KEY = 'wpa:flow', FLOW_FOLD = 'wpa:flow-fold';
 const flowStore = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } return null; };
@@ -798,11 +837,16 @@ function bindNavFind() {
     const path = [a.closest('.nav-group')?.querySelector('.nav-title')?.textContent.trim(), a.closest('.nav-sub')?.querySelector('summary')?.textContent.trim()].filter(Boolean);
     return { href: a.getAttribute('href'), label: [...a.childNodes].filter(n => !(n.classList && n.classList.contains('nav-star'))).map(n => n.textContent).join('').trim(), path };
   }).filter((x, i, arr) => arr.findIndex(y => y.href === x.href) === i);
-  let hits = [], at = 0;
+  let hits = [], at = 0, findTimer = 0;
   const go = h => { input.value = ''; list.hidden = true; document.body.classList.remove('nav-open'); location.hash = h; };
+  const goHit = x => { if (!x.open) return go(x.href); input.value = ''; list.hidden = true; document.body.classList.remove('nav-open'); openFound(x); }; // 15.312 기록이면 그 화면을 열고 그 건을 바로 연다
+  const paint = () => { const menu = hits.filter(x => !x.open), rec = hits.filter(x => x.open), row = (x, i) => `<a href="${esc(x.href)}" class="${i === at ? 'on' : ''}" data-i="${i}"><b>${esc(x.label)}</b><span>${esc(x.path.join(' › '))}</span></a>`;
+    list.innerHTML = (menu.map(row).join('') + (rec.length ? `<div class="nf-sec">기록</div>${rec.map((x, j) => row(x, menu.length + j)).join('')}` : '')) || '<div class="small muted nf-none">맞는 메뉴·기록이 없습니다.</div>'; };
   const show = () => {
     const q = input.value.replace(/\s+/g, '').toLowerCase(); if (!q) { list.hidden = true; return; }
     hits = all().filter(x => (x.path.join('') + x.label).replace(/\s+/g, '').toLowerCase().includes(q)).slice(0, 12); at = 0;
+    clearTimeout(findTimer); const raw = input.value; if (raw.trim().length >= 2) findTimer = setTimeout(async () => { const rec = await findRecords(raw); if (input.value !== raw) return; hits = [...hits.filter(x => !x.open), ...rec]; paint(); list.hidden = false; }, 250);
+    if (!hits.length && raw.trim().length >= 2) { list.innerHTML = '<div class="small muted nf-none">찾는 중…</div>'; list.hidden = false; return; }
     list.innerHTML = hits.length ? hits.map((x, i) => `<a href="${esc(x.href)}" class="${i === at ? 'on' : ''}" data-i="${i}"><b>${esc(x.label)}</b><span>${esc(x.path.join(' › '))}</span></a>`).join('') : '<div class="small muted">찾는 메뉴가 없습니다.</div>';
     list.hidden = false;
   };
@@ -811,9 +855,9 @@ function bindNavFind() {
     if (e.key === 'Escape') { input.value = ''; list.hidden = true; return; }
     if (!hits.length || list.hidden) return;
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); at = (at + (e.key === 'ArrowDown' ? 1 : hits.length - 1)) % hits.length; $$('a', list).forEach((a, i) => a.classList.toggle('on', i === at)); }
-    if (e.key === 'Enter') { e.preventDefault(); go(hits[at].href); }
+    if (e.key === 'Enter') { e.preventDefault(); goHit(hits[at]); }
   });
-  list.addEventListener('click', e => { const a = e.target.closest('a[href]'); if (a) { e.preventDefault(); go(a.getAttribute('href')); } });
+  list.addEventListener('click', e => { const a = e.target.closest('a[href]'); if (a) { e.preventDefault(); const h = hits[Number(a.dataset.i)]; if (h) goHit(h); else go(a.getAttribute('href')); } });
   if (!bindNavFind.once) { bindNavFind.once = true; // 문서 이벤트는 한 번만(화면마다 메뉴를 다시 그려도 쌓이지 않게). 누른 단추 글자가 바뀌어 떨어져도 경로로 판단.
     document.addEventListener('click', e => { const path = e.composedPath(); if (!path.some(n => n.classList?.contains('nav-search'))) $$('.nav-find-list').forEach(l => { l.hidden = true; }); if (!path.some(n => n.classList?.contains('prefs-menu'))) $$('.prefs-menu[open]').forEach(d => { d.open = false; }); }); }
   // 화면 설정: 언어·화면 모드·메뉴 위치·밀도 단추를 「⚙ 화면 설정」 안으로 모은다(theme.js·i18n.js가 머리줄에 넣는 단추를 옮김)
@@ -852,7 +896,7 @@ function shell() {
     <div class="who"><details class="prefs-menu"><summary class="btn small" title="언어·화면 모드·메뉴 위치·화면 밀도">⚙ 화면 설정</summary><div class="prefs-pop"></div></details><a href="#/me" title="내 정보">${esc(ME.name)}${ME.is_admin ? ' <span class="tag">관리자</span>' : ''}${roles ? ` <span class="tag soft">${esc(roles)}</span>` : ''}</a>
       <button class="btn small" id="logout">로그아웃</button></div>
   </header>
-  <div class="layout"><nav class="side"><div class="nav-search" role="search"><input type="search" id="navFind" placeholder="메뉴 찾기" aria-label="메뉴 찾기" autocomplete="off"><div class="nav-find-list" hidden></div></div>${nav}<div class="side-account"><a href="#/me">내 정보</a><button type="button" class="btn small" id="logoutSide">로그아웃</button></div></nav><main id="main"></main></div>
+  <div class="layout"><nav class="side"><div class="nav-search" role="search"><input type="search" id="navFind" placeholder="메뉴·번호 찾기" aria-label="메뉴·번호 찾기(NC-·COA-·CHG-·LOT 등)" autocomplete="off"><div class="nav-find-list" hidden></div></div>${nav}<div class="side-account"><a href="#/me">내 정보</a><button type="button" class="btn small" id="logoutSide">로그아웃</button></div></nav><main id="main"></main></div>
   <nav class="tabbar" aria-label="빠른 이동">
     <a href="#/" class="${cur === '#/' ? 'active' : ''}"><svg class="tab-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg><span>홈</span></a>
     <a href="#/tasks" class="${cur === '#/tasks' ? 'active' : ''}"><svg class="tab-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/></svg><span>할 일</span><b class="tab-badge" data-task-badge hidden></b></a>
@@ -932,14 +976,17 @@ async function render() {
   document.body.classList.remove('operator-mode');
   shell();
   refreshNavBadges();
+  const seq = render.seq = (render.seq || 0) + 1; // 15.317 빠르게 메뉴를 옮기면 앞 화면의 늦게 끝난 그리기가 새 화면에 탭·경로(HOME 등)를 덮어쓰던 것: 앞 그리기는 페이지 뒤 단계를 건너뜀
   const page = canSeeRoute(route) ? PAGES[location.hash || '#/'] || pageHome : pageNoMenu;
-  try { await page($('#main')); if (page === pageHome || page === pageTasks) applyMenuAccess($('#main')); if (page !== pageNoMenu) favoriteTools($('#main'), route); applyView($('#main'), route); foldHelp($('#main')); erpEntryBar($('#main'), route); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  try { await page($('#main')); if (seq !== render.seq) return; if (page === pageHome || page === pageTasks) applyMenuAccess($('#main')); if (page !== pageNoMenu) favoriteTools($('#main'), route); applyView($('#main'), route); foldHelp($('#main')); erpEntryBar($('#main'), route); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  if (seq !== render.seq) return;
   try { autoRememberLists($('#main')); } catch { /* 15.281 조회 조건 기억은 편의 기능 */ }
   try { managedTabs($('#main'), route.split('?')[0]); } catch { /* 15.213 */ }
   try { processGuide($('#main'), route.split('?')[0]); } catch { /* 15.280 업무 흐름 안내는 편의 기능 */ }
   try { pageTabs($('#main'), route); } catch { /* 탭은 편의 기능 */ }
   uxAfterRender(route);
 }
+render.seq = 0;
 // 15.169 저장 안 한 입력 지키기: 입력 화면(#main의 저장 폼, 조회 조건·읽기 전용·팝업 제외)에 값을 넣고 저장하지 않은 채
 // 다른 메뉴·탭·주소로 가면 물어본다(「취소」면 주소를 되돌려 화면·입력 그대로). 자동 보관(초안)이 붙은 폼은 이미 보관되므로 묻지 않는다.
 // 저장(submit)하면 표시를 지우고, 새로 고침·창 닫기에는 브라우저 경고.
@@ -1176,7 +1223,7 @@ async function pageFavorites(main) {
 }
 function pageNoMenu(main) {
   const label = (MENU_GROUP_LABELS.find(([key]) => key === routeMenu(location.hash)) || [, ''])[1];
-  if (!canUseRoute(location.hash)) { const need = { sales: '영업', purchase: '구매' }; main.innerHTML = `<h1>사용 권한이 없습니다</h1><div class="card"><p>이 화면은 <b>${esc(routeRoles(location.hash).map(r => need[r] || r).join(' 또는 '))}</b> 사용 권한이 있어야 쓸 수 있습니다. 필요하면 관리자에게 「회원 관리 › 사용 권한」에서 권한을 요청하세요.</p><div class="actions" style="justify-content:flex-start"><a class="btn primary" href="#/">홈으로</a></div></div>`; return; } // 15.179
+  if (!canUseRoute(location.hash)) { const need = { sales: '영업', purchase: '구매', dev: '연구소(개발)' }; main.innerHTML = `<h1>사용 권한이 없습니다</h1><div class="card"><p>이 화면은 <b>${esc(routeRoles(location.hash).map(r => need[r] || r).join(' 또는 '))}</b> 사용 권한이 있어야 쓸 수 있습니다. 필요하면 관리자에게 「회원 관리 › 사용 권한」에서 권한을 요청하세요.</p><div class="actions" style="justify-content:flex-start"><a class="btn primary" href="#/">홈으로</a></div></div>`; return; } // 15.179
   main.innerHTML = `<h1>열람 권한이 없습니다</h1><div class="card"><p>${esc(label)} 메뉴는 열람 권한이 없습니다. 필요하면 관리자에게 메뉴 권한을 요청하세요.</p><div class="actions" style="justify-content:flex-start"><a class="btn primary" href="#/">대시보드로</a></div></div>`;
 }
 // 메뉴 열람 설정 입력(부서 기본·사용자 직접 지정에서 같이 쓴다).
@@ -1225,6 +1272,7 @@ function alertsCard(a) {
   const staleLabel = s => s.kind === 'request' ? [`${REQ[s.type]?.label || s.type} 승인`, REQ[s.type]?.approve || REQ[s.type]?.intake || '#/'] : { actual_changes: ['생산실적 수정 승인', '#/prod/finished'], receipt_changes: ['입고 수량 수정 승인', '#/logistics/receive'], semi_changes: ['반제품 기록 수정 승인', '#/prod/semi/cut'] }[s.kind];
   for (const s of a.stale_approvals) { const [label, href] = staleLabel(s); items.push(`<li><a href="${href}"><b>${esc(label)} 대기 3일 초과 ${s.count}건</b></a><div class="small muted">가장 오래된 요청 ${esc(String(s.oldest).slice(0, 10))}</div></li>`); }
   if (a.low_yield.length) items.push(`<li><a href="#/reports"><b>최근 7일 수율 목표 미달 ${a.low_yield.length}곳</b></a><div class="small muted">${a.low_yield.slice(0, 5).map(r => `${esc(r.unit_name)}(${r.process === 'cut' ? '커팅/융착' : '세탁'}) <span class="red-text">${r.yield_rate}%</span> / 목표 ${r.target}%`).join(' · ')}</div></li>`);
+  for (const q of a.quality_alerts || []) items.push(`<li><a href="${q.href}"><b>${esc(q.label)} ${q.count}건</b></a>${q.first ? `<div class="small muted">가장 이른 날짜 ${esc(q.first)}</div>` : ''}</li>`); // 15.309 품질·공무 기한
   if (a.backup && (a.backup.days === null || a.backup.days >= 7)) items.push(`<li><a href="#/admin"><b>${a.backup.days === null ? '전체 백업을 아직 받지 않았습니다' : `마지막 전체 백업이 ${a.backup.days}일 전입니다`}</b></a><div class="small muted">관리자 설정 → 전체 백업 다운로드 (주 1회 이상 권장)</div></li>`);
   if (!items.length) return '';
   return `<section class="card tasks alerts" aria-labelledby="dashAlerts"><h2 id="dashAlerts">확인이 필요한 일 <span class="chip red">${items.length}</span></h2><ul>${items.join('')}</ul></section>`;
@@ -1245,6 +1293,7 @@ function taskTotal(tasks) {
   for (const [type, group] of Object.entries(a.requests)) add(group.count, REQ[type].approve || REQ[type].intake);
   add(a.actual_changes?.count, '#/prod/finished'); add(a.receipt_changes?.count, '#/logistics/receive'); add(a.semi_changes?.count, '#/prod/semi');
   add(a.plans_waiting?.count, '#/prod/finished/plan'); add(a.production_requests?.count, '#/prod/orders'); add(a.purchase_requests?.count, '#/sales/pr'); add(a.purchase_orders_waiting?.count, '#/purchase/po/new');
+  for (const q of a.quality || []) add(q.count, q.href); add(a.training_attend?.count, '#/quality/training'); // 15.309
   return n;
 }
 function taskBadgeCounts(tasks) {
@@ -1261,6 +1310,8 @@ function taskBadgeCounts(tasks) {
   if (a.production_requests?.count) counts['#/prod/orders'] = a.production_requests.count;
   if (a.plans_waiting?.count) counts['#/prod/finished/plan'] = a.plans_waiting.count; // 15.204 확정 대기
   if (a.ship_instructions?.count) counts['#/logistics/ship-orders'] = a.ship_instructions.count;
+  for (const q of a.quality || []) counts[q.href] = (counts[q.href] || 0) + q.count; // 15.309 품질 승인 대기
+  if (a.training_attend?.count) counts['#/quality/training'] = (counts['#/quality/training'] || 0) + a.training_attend.count;
   return counts;
 }
 async function refreshNavBadges() {
@@ -1283,7 +1334,7 @@ async function refreshNavBadges() {
 function tasksCard(tasks) {
   const a = tasks.approvals, m = tasks.mine; const todo = [], mine = [];
   const more = (count, shown) => count > shown ? ` <span class="small muted">외 ${count - shown}건</span>` : '';
-  for (const [type, group] of Object.entries(a.requests)) if (group.count) todo.push(`<li><a href="${REQ[type].approve || REQ[type].intake}"><b>${esc(REQ[type].label)} 승인 대기 ${group.count}건</b></a><div class="small muted">${group.items.map(r => `${esc(r.title)} · ${esc(r.requester_name)}`).join(' / ')}${more(group.count, group.items.length)}</div></li>`);
+  for (const [type, group] of Object.entries(a.requests)) if (group.count) todo.push(`<li><a href="${REQ[type].approve || REQ[type].intake}"><b>${esc(REQ[type].label)} 승인 대기 ${group.count}건</b></a>${group.count > 1 ? ` <button type="button" class="btn small" data-bulk="request" data-bulk-type="${esc(type)}">한꺼번에 승인</button>` : ''}<div class="small muted">${group.items.map(r => `${esc(r.title)} · ${esc(r.requester_name)}`).join(' / ')}${more(group.count, group.items.length)}</div></li>`);
   if (a.actual_changes?.count) todo.push(`<li><a href="${a.actual_changes.finished ? '#/prod/finished' : '#/prod/semi'}"><b>생산실적 수정·취소 승인 대기 ${a.actual_changes.count}건</b></a><div class="small muted">${a.actual_changes.items.map(c => `${esc(c.product)} ${changeSummary(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.actual_changes.count, a.actual_changes.items.length)}</div></li>`);
   if (a.receipt_changes?.count) todo.push(`<li><a href="#/logistics/receive"><b>입고 수량 수정·취소 승인 대기 ${a.receipt_changes.count}건</b></a><div class="small muted">${a.receipt_changes.items.map(c => `${esc(c.item)} ${receiptChangeText(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.receipt_changes.count, a.receipt_changes.items.length)}</div></li>`);
   if (a.semi_changes?.count) todo.push(`<li><a href="${a.semi_changes.cut ? '#/prod/semi/cut' : '#/prod/semi/wash'}"><b>반제품 기록 수정·삭제 승인 대기 ${a.semi_changes.count}건</b></a><div class="small muted">${a.semi_changes.items.map(c => `${semiChangeText(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.semi_changes.count, a.semi_changes.items.length)}</div></li>`);
@@ -1291,6 +1342,8 @@ function tasksCard(tasks) {
   if (a.production_requests?.count) todo.push(`<li><a href="#/prod/orders"><b>생산의뢰 접수 대기 ${a.production_requests.count}건</b></a><div class="small muted">${a.production_requests.items.map(r => `<button type="button" class="link-btn" data-open-mr="${r.id}">${esc(r.req_no)}</button> ${esc(r.customer)}${r.ship_text || r.ship_date ? ' · 출고 ' + esc(r.ship_text || r.ship_date) : ''}`).join(' / ')}${more(a.production_requests.count, a.production_requests.items.length)}</div></li>`);
   if (a.purchase_requests?.count) todo.push(`<li><a href="#/sales/pr"><b>구매의뢰 결재 차례 ${a.purchase_requests.count}건</b></a><div class="small muted">${a.purchase_requests.items.map(r => `<button type="button" class="link-btn" data-task-pr="${r.id}">${esc(r.doc_no)}</button> ${esc(r.title || r.first_item || '')}${r.item_count > 1 ? ` 외 ${r.item_count - 1}건` : ''} · ${esc(r.author_name)}`).join(' / ')}${more(a.purchase_requests.count, a.purchase_requests.items.length)}</div></li>`);
   if (a.purchase_orders_waiting?.count) todo.push(`<li><a href="#/purchase/po/new"><b>발주 대기 구매의뢰 ${a.purchase_orders_waiting.count}건</b></a><div class="small muted">${a.purchase_orders_waiting.items.map(r => `<button type="button" class="link-btn" data-task-pr="${r.id}">${esc(r.doc_no)}</button> ${esc(r.title || r.first_item || '')} · ${esc(r.author_name)}`).join(' / ')}${more(a.purchase_orders_waiting.count, a.purchase_orders_waiting.items.length)}</div></li>`);
+  for (const q of a.quality || []) todo.push(`<li><a href="${q.href}"><b>${esc(q.label)} ${q.count}건</b></a>${['coa', 'docs'].includes(q.key) && q.count > 1 ? ` <button type="button" class="btn small" data-bulk="${q.key}">한꺼번에 승인</button>` : ''}</li>`); // 15.309 품질 승인·처리 대기 · 15.312 일괄 승인
+  if (a.training_attend?.count) todo.push(`<li><a href="#/quality/training"><b>교육 참석 확인 ${a.training_attend.count}건</b></a><div class="small muted">${a.training_attend.items.map(t => `${esc(t.plan_date)} ${esc(t.title)}`).join(' / ')} — 교육·자격관리에서 「참석 확인」을 누르세요.</div></li>`);
   if (a.temp_items?.count) todo.push(`<li><a href="#/admin/bom"><b>임시 제품코드 정리 ${a.temp_items.count}건</b></a><div class="small muted">직접 입력된 품목에 정식 코드를 주거나 기존 품목으로 합치세요.</div></li>`);
   const state = c => `<span class="chip ${c.status === 'rejected' ? 'red' : 'yellow'}">${c.status === 'rejected' ? '반려' : '승인 대기'}</span>`;
   for (const r of m.requests) mine.push(`<li>${state(r)} <a href="${REQ[r.type].intake}">${esc(REQ[r.type].label)} · ${esc(r.title)}</a>${r.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(r.reject_reason)} (${esc(r.approver_name || '')}) · 수정하면 다시 접수됩니다.</div>` : ''}</li>`);
@@ -1298,8 +1351,8 @@ function tasksCard(tasks) {
   for (const c of m.semi_changes || []) mine.push(`<li>${state(c)} <a href="${c.process === 'wash' ? '#/prod/semi/wash' : '#/prod/semi/cut'}">반제품 기록</a> <span class="small">${semiChangeText(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
   for (const r of m.purchase_requests || []) mine.push(`<li>${state(r)} <a href="#/sales/pr">구매의뢰 · ${esc(r.doc_no)} ${esc(r.title || r.first_item || '')}</a>${r.status === 'pending' && r.current_user_name ? ` <span class="small muted">${esc(r.current_user_name)} 결재 차례</span>` : ''}${r.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(r.reject_reason)} (${esc(r.rejected_by || '')}) · 고쳐서 다시 상신하세요.</div>` : ''}</li>`);
   for (const c of m.receipt_changes) mine.push(`<li>${state(c)} <a href="#/logistics/receive">입고 · ${esc(c.item)}</a> <span class="small">${receiptChangeText(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
-  const canApprove = Object.keys(a.requests).length || a.actual_changes || a.receipt_changes || a.semi_changes || a.temp_items || a.purchase_requests || a.production_requests || a.purchase_orders_waiting || a.plans_waiting;
-  return `<section class="card tasks" aria-labelledby="dashTasks"><h2 id="dashTasks">내가 처리할 일</h2><div class="tasks-grid">
+  const canApprove = Object.keys(a.requests).length || a.actual_changes || a.receipt_changes || a.semi_changes || a.temp_items || a.purchase_requests || a.production_requests || a.purchase_orders_waiting || a.plans_waiting || a.quality || a.training_attend; // 15.309
+  return `<section class="card tasks" aria-labelledby="dashTasks"><h2 id="dashTasks">내가 처리할 일 ${typeof Notification !== 'undefined' ? `<button type="button" class="btn small notify-btn" data-notify title="새 승인 대기·기한 알림을 컴퓨터·휴대폰 알림으로(앱이 열려 있는 동안)">${notifyOn() ? '🔔 알림 켜짐' : '🔕 알림 받기'}</button>` : ''}</h2><div class="tasks-grid">
     ${canApprove ? `<section><h3>승인할 일 ${todo.length ? `<span class="chip yellow">${todo.length}</span>` : ''}</h3>${todo.length ? `<ul>${todo.join('')}</ul>` : '<p class="small muted">승인 대기 중인 건이 없습니다.</p>'}</section>` : ''}
     <section><h3>내가 올린 요청 ${mine.length ? `<span class="chip">${mine.length}</span>` : ''}</h3>${mine.length ? `<ul>${mine.join('')}</ul>` : '<p class="small muted">대기 중이거나 최근 반려된 요청이 없습니다.</p>'}</section>
   </div></section>`;
@@ -1552,6 +1605,21 @@ function autoGridSpec(table) {
   const roles = heads.map((h, i) => i === a ? ['a', ''] : i === b ? ['b', ''] : kind[i] ? [kind[i], ''] : ['c', h && !/^no$/i.test(h) ? short(h) : '']);
   return { roles };
 }
+// 15.311 칸 정렬 통일: 화면마다 손으로 정하던 정렬을 내용으로 정한다. 숫자(단위·%·원 포함) 열은 오른쪽, 날짜 열과 상태·구분 칩만 있는 열은 가운데,
+// 머리글은 그 열 내용과 같은 정렬. 이미 r/c를 정한 칸·입력 칸이 있는 열·번호(No) 열·달력은 건드리지 않는다.
+const AUTO_NUM = /^[-+]?(₩\s?)?[\d,]+(\.\d+)?\s*(%|원|건|개|kg|g|ea|EA|BOX|box|h|시간|일|매|켤레|yd|m|롤|벌|회|명|점|장|줄|만원)?$/;
+const AUTO_DATE = /^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}(:\d{2})?)?$|^\d{4}-\d{2}$|^\d{2}-\d{2}$/;
+function autoAlignColumn(table, head, th, cells) {
+  if (!th || !cells.length || table.hasAttribute('data-no-autoalign') || table.matches('.sc-cal, .erp-grid, .taxf-items') || /^(no\.?|번호|순번)$/i.test(head)) return;
+  if (th.classList.contains('r') || th.classList.contains('c') || cells.some(td => td.querySelector('input, select, textarea, button:not(.link-btn), .btn'))) return;
+  const filled = cells.filter(td => { const t = td.textContent.replace(/\s+/g, ' ').trim(); return t && t !== '—' && t !== '-'; }); if (filled.length < 1) return;
+  const text = td => td.textContent.replace(/\s+/g, ' ').trim();
+  const chipOnly = td => td.children.length === 1 && td.firstElementChild.matches('.chip, .badge, .tag') && text(td) === td.firstElementChild.textContent.replace(/\s+/g, ' ').trim();
+  const share = test => filled.filter(test).length / filled.length;
+  const cls = share(td => AUTO_NUM.test(text(td))) >= 0.8 ? 'r' : share(td => AUTO_DATE.test(text(td))) >= 0.8 || share(chipOnly) >= 0.8 ? 'c' : '';
+  if (!cls) return;
+  for (const c of [th, ...cells]) if (c && !c.classList.contains('r') && !c.classList.contains('c')) c.classList.add(cls);
+}
 function labelGridTables() {
   $$('table.grid:not([data-labeled])').forEach(table => {
     table.dataset.labeled = 'true';
@@ -1570,6 +1638,7 @@ function labelGridTables() {
       if (ITEM_HEADS.has(head)) ths[i]?.classList.add('item-col'); // 15.177
       if (head.replace(/\s/g, '').length >= 5 && table.closest('.modal')) ths[i]?.classList.add('th-long'); // 15.183 팝업: 긴 머리글만 두 줄 허용
       if (CENTER_HEADS.test(head) && !cells.some(td => td.querySelector('input, select, button:not(.link-btn)'))) [ths[i], ...cells].forEach(c => c && !c.classList.contains('r') && c.classList.add('c')); // 15.180
+      autoAlignColumn(table, head, ths[i], cells); // 15.311 숫자는 오른쪽 · 날짜·상태 칩은 가운데(머리글도 같이)
     });
     gridLayout(table); // 15.173 열 너비·순서(빈 열 숨긴 뒤)
     if (rows.length > 15 && !table.closest('.modal-wrap')) { const tw = table.closest('.table-wrap'); if (tw) { tw.classList.add('tw-fill'); twRestore(tw); } } // 15.180 긴 목록: 머리글 고정 · 15.299 다시 그려도 보던 자리
@@ -1738,74 +1807,124 @@ function labelSegGroups() {
 function scrollTabsIntoView() { if (!matchMedia('(max-width: 700px)').matches) return; $$('#main .seg.class-tabs, #main .tax-side, #main .receipt-tabs').forEach(bar => { const on = bar.querySelector('.on, [aria-current], [aria-pressed="true"]'); if (!on || bar.scrollWidth <= bar.clientWidth || bar.dataset.tabX === on.textContent) return; bar.dataset.tabX = on.textContent; bar.scrollLeft = Math.max(0, on.offsetLeft - bar.clientWidth / 2 + on.offsetWidth / 2); }); }
 new MutationObserver(() => { labelGridTables(); labelSegGroups(); pairDateRanges(); filterTools(); scrollTabsIntoView(); }).observe(document.body, { childList: true, subtree: true });
 
+// ── 15.310 사람별 화면 구성(대시보드·리포트): 숨길 위젯·순서를 내 설정(서버)에 저장해 다른 기기에서도 같게 ──
+const uiPref = key => (ME && ME.ui && ME.ui[key] && typeof ME.ui[key] === 'object') ? ME.ui[key] : {};
+async function saveUiPref(key, value) { ME.ui = await api('PUT', '/api/me/prefs', { [key]: value }); return ME.ui; }
+// order(저장한 순서)대로 먼저, 없는 것은 기본 순서대로 뒤에. hidden에 든 것은 뺀다(fixed는 항상).
+function applyWidgetPref(items, pref) {
+  const hidden = new Set(pref.hidden || []), order = pref.order || [];
+  const sorted = [...order.map(k => items.find(i => i.key === k)).filter(Boolean), ...items.filter(i => !order.includes(i.key))];
+  return sorted.filter(i => i.fixed || !hidden.has(i.key));
+}
+// 표시 설정 창: 체크(보이기)·▲▼(순서)·기본값. items: [{key,label,hint,fixed,parent}] — parent가 있으면 그 항목 아래 들여쓰기, 순서는 형제끼리만 바뀜.
+function widgetSetup({ title, intro = '', items, pref, extra = '', onSave }) {
+  const hidden = new Set(pref.hidden || []), order = pref.order || [];
+  const sortSib = list => [...order.map(k => list.find(i => i.key === k)).filter(Boolean), ...list.filter(i => !order.includes(i.key))];
+  const roots = sortSib(items.filter(i => !i.parent)), rowsOf = parent => sortSib(items.filter(i => i.parent === parent));
+  const row = i => `<li class="ws-row${i.parent ? ' ws-sub' : ''}" data-ws="${esc(i.key)}"><label class="chk"><input type="checkbox" data-ws-on${i.fixed ? ' checked disabled' : hidden.has(i.key) ? '' : ' checked'}> <b>${esc(i.label)}</b>${i.hint ? ` <span class="small muted">${esc(i.hint)}</span>` : ''}</label><span class="grow"></span><span class="ws-move"><button type="button" class="btn small" data-ws-up title="위로" aria-label="${esc(i.label)} 위로">▲</button><button type="button" class="btn small" data-ws-down title="아래로" aria-label="${esc(i.label)} 아래로">▼</button></span></li>`;
+  const m = modal(`<h3>${esc(title)}</h3>${intro ? `<p class="small muted">${intro}</p>` : ''}<form class="stack" data-ws-form>
+    <ul class="ws-list">${roots.map(r => row(r) + rowsOf(r.key).map(row).join('')).join('')}</ul>${extra}
+    <div class="actions"><button type="button" class="btn" data-ws-reset>기본값으로</button><span class="grow"></span><button type="button" class="btn" data-no>취소</button><button class="btn primary">저장</button></div></form>`, { wide: true });
+  const form = $('[data-ws-form]', m.el), list = $('.ws-list', form);
+  const siblings = li => { const key = li.dataset.ws, item = items.find(i => i.key === key); return $$('.ws-row', list).filter(x => (items.find(i => i.key === x.dataset.ws)?.parent || '') === (item?.parent || '')); };
+  const block = li => [li, ...(items.some(i => i.parent === li.dataset.ws) ? $$('.ws-row', list).filter(x => items.find(i => i.key === x.dataset.ws)?.parent === li.dataset.ws) : [])];
+  list.addEventListener('click', e => {
+    const up = e.target.closest('[data-ws-up]'), down = e.target.closest('[data-ws-down]'); if (!up && !down) return;
+    const li = e.target.closest('.ws-row'), sib = siblings(li), i = sib.indexOf(li), target = sib[i + (up ? -1 : 1)]; if (!target) return;
+    const mine = block(li), theirs = block(target);
+    if (up) theirs[0].before(...mine); else theirs.at(-1).after(...mine);
+    li.querySelector(up ? '[data-ws-up]' : '[data-ws-down]').focus();
+  });
+  $('[data-no]', form).onclick = () => m.close();
+  $('[data-ws-reset]', form).onclick = async () => { if (!await confirmBox('표시 설정을 기본값으로 되돌릴까요?')) return; try { await onSave(null, formObj(form)); toast('기본값으로 되돌렸습니다.'); m.close(); } catch (e) { fail(e); } };
+  form.onsubmit = async e => { e.preventDefault(); const rows = $$('.ws-row', list); const next = { hidden: rows.filter(r => !$('[data-ws-on]', r).checked && !items.find(i => i.key === r.dataset.ws)?.fixed).map(r => r.dataset.ws), order: rows.map(r => r.dataset.ws) };
+    try { await onSave(next, formObj(form)); toast('표시 설정을 저장했습니다.'); m.close(); } catch (err) { fail(err); } };
+  return m;
+}
+
 async function pageHome(main) {
   const [d, tasks, alerts] = await Promise.all([api('GET', '/api/dashboard'), api('GET', '/api/my-tasks'), api('GET', '/api/alerts').catch(() => null)]);
-  const r = d.requests;
-  const flow = (title, steps) => `<div class="flow"><h3>${title}</h3><ol>${steps.map((s) => `<li>${s}</li>`).join('')}</ol></div>`;
+  const r = d.requests, pref = uiPref('dash');
   // 15.36 대시보드 화면 구성: 같은 숫자·링크를 업무 묶음별로 나눠 보여 준다(값과 조건은 그대로).
   // tone: '' 보통, 'red' 문제, 'yellow' 확인 필요. 0건은 흐리게 보여 눈이 문제 숫자에 먼저 가게 한다.
-  const kpi = (href, value, label, tone = '', note = '') => `<a class="kpi ${tone} ${Number(value) === 0 ? 'is-zero' : ''}" href="${href}"><b>${value}</b><span>${label}</span>${note}</a>`;
-  const group = (title, tiles) => { const body = tiles.filter(Boolean).join(''); return body ? `<section class="kpi-group" aria-label="${title}"><h3>${title}</h3><div class="kpis">${body}</div></section>` : ''; };
   const num = v => Number(v) === 0 ? '<span class="zero">0</span>' : v;
   // 15.215 Overview: 부서 카드(위 색 띠) 안에 「이름 ··· 숫자」 줄. 0건은 흐리게, 처리할 것이 있는 줄만 색. 영업은 금액(담당자만) + 수주·출하 대기·계산서.
-  const sa = d.sales;
+  const sa = d.sales, q = d.quality;
   const row = (href, value, label, tone = '', note = '') => `<a class="dm-row ${tone} ${Number(String(value).replace(/,/g, '')) === 0 ? 'is-zero' : ''}" href="${href}"><span class="dm-l">${label}${note ? ` <em>${note}</em>` : ''}</span><b class="dm-v">${value}</b></a>`;
   const card = (dept, en, ko, href, rows) => { const body = rows.filter(Boolean).join(''); return body ? `<section class="dm-card" data-dept="${dept}" aria-label="${ko}"><h3><a href="${href}"><span class="dm-en">${en}</span><span class="dm-ko">${ko}</span></a></h3>${body}</section>` : ''; };
-  main.innerHTML = `
-  <div class="dash-head"><h1>대시보드</h1><p class="dash-date"><time datetime="${d.today}">${d.today} (${dow(d.today)})</time></p></div>
-  <div class="dash-top">${tasksCard(tasks)}${alertsCard(alerts)}</div>
-  ${d.stock === null ? '<p class="small red-text" role="status">재고 경고를 조회하지 못했습니다. 재고 현황을 확인하거나 잠시 후 새로고침해주세요.</p>' : ''}
-  <section class="dash-section" aria-labelledby="dashNow"><h2 id="dashNow">Overview <span class="dash-sub">부서별 지금 처리할 것</span></h2>
-  <div class="dash-overview">
-    ${card('sales', 'Sales', '영업', '#/sales/orders', [
+  // 15.310 Overview 카드와 구역을 위젯으로: 「표시 설정」에서 숨기거나 순서를 바꾼다(사람별, 다른 기기에서도 같게). 업무 흐름 안내는 화면마다 제목 아래 줄로 옮겨 대시보드에서는 뺐다.
+  const cards = [
+    { key: 'ov:sales', label: '영업', html: card('sales', 'Sales', '영업', '#/sales/orders', [
       sa && sa.canMoney ? `<a class="dm-hero" href="#/sales/bills"><span>이번 달 매출 <small>(확정 전표 ${fmtNum(sa.billsMonth)}장)</small></span><b>₩ ${won(sa.salesMonth)}</b><small>이번 달 입금 ₩ ${won(sa.paidMonth)}</small></a>` : '',
       sa ? row('#/sales/orders', sa.ordersOpen, '진행 중 수주', '', sa.ordersToday ? `오늘 ${sa.ordersToday}건` : '') : '',
       sa ? row('#/logistics/ship-orders', sa.shipPending, '출하 대기 지시', 'yellow', sa.shipHeld ? `보류 ${sa.shipHeld}` : '') : '',
       sa ? row('#/sales/bills', sa.untaxed, '세금계산서 안 담은 전표', 'yellow') : '',
       sa && !sa.canMoney ? row('#/sales/bills', sa.billsMonth, '이번 달 확정 전표') : '',
-    ])}
-    ${card('logistics', 'Purchasing · Logistics', '구매·물류', '#/logistics/receive', [
+    ]) },
+    { key: 'ov:logistics', label: '구매·물류', html: card('logistics', 'Purchasing · Logistics', '구매·물류', '#/logistics/receive', [
       row('#/logistics/receive', d.po.none, '미입고 발주', '', d.po.overdue ? `<span class="red-text">납기경과 ${d.po.overdue}</span>` : ''),
       row('#/logistics/receive', d.po.checking, '입고 확인중', 'yellow'),
       row('#/logistics/receive', d.po.mismatch, '수량상이', 'red'),
       d.po.partial ? row('#/logistics/receive', d.po.partial, '부분 입고 (남음)', 'yellow') : '',
       d.receiptChangesPending ? row('#/logistics/receive', d.receiptChangesPending, '입고 수량 수정 승인대기', 'yellow') : '',
       row('#/logistics/ship', d.shipmentsToday, '오늘 출하'),
-    ])}
-    ${card('production', 'Inventory · Production', '재고·생산', '#/logistics/stock', [
+    ]) },
+    { key: 'ov:production', label: '재고·생산', html: card('production', 'Inventory · Production', '재고·생산', '#/logistics/stock', [
       row('#/prod/finished/plan', d.schedulesToday, '오늘 생산 계획'),
       d.stock ? row('#/logistics/stock', d.stock.low, '안전재고 미달 품목', 'yellow') : '',
       d.stock ? row('#/logistics/stock', d.stock.negative, '재고 음수 품목 (기록 확인)', 'red') : '',
       d.actualChangesPending ? row('#/prod/finished', d.actualChangesPending, '생산실적 수정 승인대기', 'yellow') : '',
       row('#/purchase/laundry', fmtNum(d.laundryMonth), '이번 달 세탁 폐기'),
-    ])}
-    ${card('quality', 'Requests', '의뢰 접수 대기', '#/quality/list', [
+    ]) },
+    { key: 'ov:quality', label: '품질(QA·QC)', html: q ? card('quality', 'Quality', '품질', '#/quality/capa', [
+      row('#/quality/capa', q.capaOpen, '진행 중 부적합·CAPA', q.capaOverdue ? 'red' : '', q.capaOverdue ? `<span class="red-text">기한 지남 ${q.capaOverdue}</span>` : q.capaVerify ? `종결 대기 ${q.capaVerify}` : ''),
+      row('#/quality/coa', q.coaDraft, 'COA 승인 대기', 'yellow', q.coaMonth ? `이번 달 발행 ${q.coaMonth}` : ''),
+      row('#/quality/inspections', q.iqcFail, '이번 달 수입검사 불합격', 'red', `판정 ${q.iqc}건`),
+      row('#/quality/inspections', q.oqcFail, '이번 달 출하검사 불합격', 'red', `판정 ${q.oqc}건`),
+      row('#/quality/changes', q.changesOpen, '진행 중 변경', 'yellow'),
+      row('#/quality/docs', q.docsReview, '검토 대기 문서', 'yellow'),
+      q.auditsCorrecting ? row('#/quality/audits', q.auditsCorrecting, '심사 시정 중', 'yellow') : '',
+      row('#/quality/calibration', q.calDue, '교정 30일 안·지남', 'yellow'),
+      q.kpiMissed ? row('#/quality/kpi', q.kpiMissed, '올해 품질목표 미충족', 'red') : '',
+    ]) : '' },
+    { key: 'ov:plant', label: '공무·설비', html: q ? card('plant', 'Plant · Maintenance', '공무·설비', '#/prod/pm', [
+      row('#/prod/pm', q.pmOverdue, '예방보전(PM) 지남', 'red'),
+      row('#/prod/pm', q.pmSoon, 'PM 7일 안', 'yellow'),
+      row('#/prod/equipment', q.eqMaintenance, '정비 중 설비', 'yellow'),
+      row('#/prod/equipment', q.eqFailMonth, '이번 달 고장'),
+      row('#/quality/pqc', q.pqcOutMonth, '이번 달 공정 기준 이탈', 'red'),
+    ]) : '' },
+    { key: 'ov:requests', label: '의뢰 접수 대기', html: card('requests', 'Requests', '의뢰 접수 대기', '#/quality/list', [
       row('#/quality/request', r.analysis.pending, '분석 접수대기', 'yellow'),
       row('#/quality/voc/request', r.voc.pending, 'VOC 승인대기', 'yellow'),
       row('#/dev/request', r.development.pending, '개발 접수대기', 'yellow'),
       row('#/prod/list', r.sample.pending, '샘플 접수대기', 'yellow'),
-    ])}
-  </div></section>
-  <section class="dash-section" aria-labelledby="dashProgress"><h2 id="dashProgress">Request Pipeline <span class="dash-sub">의뢰 종류별 진행</span></h2>
+    ]) },
+  ];
+  const favs = ((ME.ui && ME.ui.favorites) || []).filter(f => canSeeRoute(f.href)), recent = readRecent().filter(x => canSeeRoute(x.href) && !favs.some(f => f.href === x.href)).slice(0, 8);
+  const widgets = [
+    { key: 'tasks', label: '내가 처리할 일', html: tasksCard(tasks) },
+    { key: 'alerts', label: '확인이 필요한 일', html: alertsCard(alerts) },
+    { key: 'overview', label: 'Overview(부서별 지금 처리할 것)', html: `<section class="dash-section" aria-labelledby="dashNow"><h2 id="dashNow">Overview <span class="dash-sub">부서별 지금 처리할 것</span></h2><div class="dash-overview">${applyWidgetPref(cards, pref).map(c => c.html).join('')}</div></section>` },
+    { key: 'pipeline', label: 'Request Pipeline(의뢰 종류별 진행)', html: `<section class="dash-section" aria-labelledby="dashProgress"><h2 id="dashProgress">Request Pipeline <span class="dash-sub">의뢰 종류별 진행</span></h2>
   <div class="table-wrap"><table class="grid keep-table progress-table">
     <caption class="sr-only">의뢰 종류별 진행 현황 (건수)</caption>
     <thead><tr><th scope="col">구분</th><th scope="col">접수대기</th><th scope="col">대기</th><th scope="col">진행</th><th scope="col">완료</th></tr></thead>
     <tbody>${['analysis', 'rnd_analysis', 'development', 'sample', 'sample_goods', 'voc'].filter(t => r[t]).map((t) => `<tr><th scope="row"><a href="${REQ[t].list}">${REQ[t].label}의뢰</a></th><td>${num(r[t].pending)}</td><td>${num(r[t].waiting)}</td><td>${num(r[t].progress)}</td><td>${num(r[t].done)}</td></tr>`).join('')}</tbody>
-  </table></div></section>
-  <section class="dash-section" aria-labelledby="dashFlows">
-  <details class="dash-flows" data-flows><summary><h2 id="dashFlows">업무 흐름</h2><span class="small muted">부서별 처리 순서 안내</span></summary>
-  <div class="flows">
-    ${flow('구매 → 물류 (발주·입고)', ['<b>구매</b> 발주서 발송 후 <a href="#/purchase/po">발주목록</a> 입력', '<b>물류</b> 입고 시 <a href="#/logistics/receive">입고목록 → 발주입고</a>에서 체크', '정상 입고 → <span class="chip green">초록</span>', '수량 다름 → <span class="chip red">빨강</span> (실입고 수량 기록)', '확인 중 → <span class="chip yellow">노랑</span>'])}
-    ${flow('품질 (분석)', ['<b>누구나</b> <a href="#/quality/request">분석의뢰</a> 양식 작성', '접수대기 목록에 등록', '<b>품질담당자</b> 승인 → 접수번호 발급', '<a href="#/quality/list">분석리스트</a>에서 대기 → 진행 → 완료', '수입·의뢰·출하·공정검사 구분'])}
-    ${flow('품질 (VOC)', ['<b>누구나</b> <a href="#/quality/voc/request">VOC 접수</a> (고객사·제품·수량·LOT·사진)', '<b>품질팀장(품질책임자)</b> 승인', '<a href="#/quality/voc/list">VOC 처리목록</a>에서 대기 → 진행 → 완료', '진행 코멘트에 처리사항 기록'])}
-    ${flow('개발', ['<b>누구나</b> <a href="#/dev/request">개발의뢰</a> 작성 (타겟제품·타겟단가)', '접수대기 목록에 등록', '<b>연구소담당자</b> 승인', '<a href="#/dev/list">개발리스트</a>에서 대기 → 진행 → 완료'])}
-    ${flow('생산', ['<b>누구나</b> <a href="#/prod/request">샘플의뢰</a> 작성', '<b>생산담당자</b> 승인 → <a href="#/prod/list">샘플리스트</a>', '<a href="#/prod/finished">완제품</a> / <a href="#/prod/semi">반제품</a> 생산일정 일·주·월 입력'])}
-    ${flow('구매 (세탁) · 물류 (출하)', ['세탁 입고분 불량 폐기 → <a href="#/purchase/laundry">세탁관리</a>에 사진·수량', '매일 출고 품목 → <a href="#/logistics/ship">출하목록</a> 입력'])}
-  </div></details></section>
-  <p class="muted small dash-note">※ 샘플 및 개발제품의 출고(or 제출)는 제조/품질본부장 승인 후 출고 가능</p>`;
-  // 업무 흐름 안내는 넓은 화면에서는 펼치고, 휴대폰에서는 접어 둔다(내용은 그대로, 눌러서 열기).
-  const flows = $('[data-flows]', main); if (flows && !matchMedia('(max-width: 700px)').matches) flows.open = true;
-  // 15.62: 휴대폰에서는 할 일·알림을 먼저 보도록 「현황 한눈에」「진행 현황」을 접어 둔다(눌러서 열기).
+  </table></div></section>` },
+    { key: 'mymenu', label: '마이메뉴 · 최근 연 화면', html: `<section class="dash-section" aria-labelledby="dashMenu"><h2 id="dashMenu">My Menu <span class="dash-sub">마이메뉴 · 최근 연 화면</span></h2><div class="dash-links">${favs.map(f => `<a class="dash-link fav" href="${esc(f.href)}">★ ${esc(f.label)}</a>`).join('')}${recent.map(x => `<a class="dash-link" href="${esc(x.href)}">${esc(x.label)}</a>`).join('')}${favs.length || recent.length ? '' : '<p class="small muted">화면 제목 옆 ☆를 누르면 여기와 메뉴 맨 위 「마이메뉴」에 고정됩니다.</p>'}</div></section>` },
+    { key: 'note', label: '안내 문구(샘플·개발제품 출고)', html: '<p class="muted small dash-note">※ 샘플 및 개발제품의 출고(or 제출)는 제조/품질본부장 승인 후 출고 가능</p>' },
+  ];
+  const shown = applyWidgetPref(widgets, pref), top = shown.filter(w => ['tasks', 'alerts'].includes(w.key)), rest = shown.filter(w => !['tasks', 'alerts'].includes(w.key));
+  main.innerHTML = `
+  <div class="dash-head"><h1>대시보드</h1><p class="dash-date"><time datetime="${d.today}">${d.today} (${dow(d.today)})</time></p><span class="grow"></span><button type="button" class="btn small" id="dashSetup" title="보일 위젯·순서(사람별)">⚙ 표시 설정</button></div>
+  ${top.length ? `<div class="dash-top">${top.map(w => w.html).join('')}</div>` : ''}
+  ${d.stock === null ? '<p class="small red-text" role="status">재고 경고를 조회하지 못했습니다. 재고 현황을 확인하거나 잠시 후 새로고침해주세요.</p>' : ''}
+  ${rest.map(w => w.html).join('')}`;
+  $('#dashSetup', main).onclick = () => widgetSetup({ title: '대시보드 표시 설정', intro: '보일 위젯을 체크하고 ▲▼로 순서를 바꾸세요. 내 계정에 저장되어 다른 기기에서도 같게 보입니다. 메뉴 권한이 없는 부서 카드는 체크해도 보이지 않습니다.',
+    items: [...widgets.map(w => ({ key: w.key, label: w.label })), ...cards.map(c => ({ key: c.key, label: c.label, parent: 'overview' }))], pref,
+    onSave: async next => { await saveUiPref('dash', next); await pageHome(main); applyMenuAccess(main); } });
+  // 15.62: 휴대폰에서는 할 일·알림을 먼저 보도록 「진행 현황」을 접어 둔다(눌러서 열기).
   if (matchMedia('(max-width: 700px)').matches) for (const id of ['dashProgress']) { // 15.215 Overview는 휴대폰에서도 펼쳐 둠
     const section = $(`[aria-labelledby="${id}"]`, main), heading = section && $('#' + id, section); if (!section || !heading) continue;
     const fold = document.createElement('details'); fold.className = 'dash-fold';
@@ -3110,10 +3229,12 @@ async function pageMe(main) {
   main.innerHTML = `<h1>내 정보</h1>
   <div class="card"><p><b>${esc(ME.name)}</b> ${ME.is_admin ? '<span class="tag">관리자</span>' : ''}</p><p class="muted small">담당: ${ME.roles.map((r) => ROLE_LABEL[r]).join(', ') || '없음 (승인 권한이 필요하면 관리자에게 요청)'}</p></div>
   <div class="card"><h3>부서 · 직급</h3><p><b>${esc(ME.department || '부서 미지정')}</b> · ${esc(ME.position || '직급 미지정')}</p><p class="small muted">구매의뢰서의 의뢰부서·요청자 직급으로 자동 표시됩니다. 바꾸려면 관리자에게 요청하세요(관리 › 조직 구성).</p></div>
+  <div class="card" id="meDuties"><h3>지정 담당 업무</h3><p class="small muted">불러오는 중…</p></div>
   <form class="card stack" id="pwForm"><h3>비밀번호 변경</h3>
     <label>현재 비밀번호<input type="password" name="current" required autocomplete="current-password"></label>
     <label>새 비밀번호<input type="password" name="password" required minlength="4" autocomplete="new-password"></label>
     <div class="actions"><button class="btn primary">변경</button></div></form>`;
+  meDutiesCard($('#meDuties')); // 15.314
   $('#pwForm').onsubmit = async (e) => { e.preventDefault(); try { await api('PUT', '/api/me/password', formObj(e.target)); e.target.reset(); toast('비밀번호를 변경했습니다.'); } catch (err) { fail(err); } };
 }
 

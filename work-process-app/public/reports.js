@@ -64,9 +64,28 @@ function exportReport(report) {
   const link = document.createElement('a'); link.href = url; link.download = `서울세미텍-리포트-${report.range.from}-${report.range.to}.csv`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
+// 15.310 리포트 기본 기간(사람별 설정): 14d=최근(집계 단위에 맞춰 14일·12주·12개월), week=이번 주, month=이번 달, year=올해, 12m=최근 12개월
+const REPORT_PERIOD_LABEL = { '14d': '최근(집계 단위에 맞춰 14일 · 12주 · 12개월)', week: '이번 주', month: '이번 달', year: '올해', '12m': '최근 12개월' };
+function reportPresetRange(period, grain) {
+  const today = reportRange('day')[1];
+  if (period === 'week') return [mondayOf(today), today];
+  if (period === 'month') return [monthStart(today), today];
+  if (period === 'year') return [today.slice(0, 4) + '-01-01', today];
+  if (period === '12m') return reportRange('month');
+  return reportRange(grain || 'day');
+}
+const REPORT_BLOCKS = [['common', '공통 요약'], ['dept', '부서별 리포트'], ['detail', '수량 상세(입고·생산·출하·분석)']];
+const REPORT_DETAIL = [['detail:kpis', '요약 카드(분석·입고·생산·출하)'], ['detail:chart:analysis', '차트 · 분석 등록·현재 완료'], ['detail:chart:incoming', '차트 · 입고수량 추이'], ['detail:chart:production', '차트 · 생산계획·실제 생산량'], ['detail:chart:shipping', '차트 · 출하수량 추이'],
+  ['detail:status', '분석 현재 상태'], ['detail:units', '단위·품목별 합계'], ['detail:top:incoming', '입고수량 상위 10개 품목'], ['detail:top:production', '생산계획 상위 10개 품목'], ['detail:periods', '기간별 상세 수치'], ['detail:semi', '반제품 수율(커팅/융착 · 세탁)'], ['detail:definitions', '집계 기준']];
+const deptSetupItems = (pre, d, parent, hint = '') => [
+  ...d.kpis.map(k => ({ key: `${pre}kpi:${k.label}`, label: `요약 · ${k.label}`, hint, parent })),
+  ...d.charts.map(c => ({ key: `${pre}chart:${c.title}`, label: `차트 · ${c.title}`, hint, parent })),
+  ...d.tables.map(t => ({ key: `${pre}table:${t.title}`, label: `표 · ${t.title}`, hint, parent })),
+];
+
 async function pageReports(main) {
-  const [from, to] = reportRange('day'); let current = null, requestId = 0, selectedUnit = '';
-  main.innerHTML = `<div class="report-heading"><div><h1>리포트 · 통계</h1><p class="muted">분석 처리 현황과 입고·생산·출하 데이터를 기간별로 확인합니다.</p></div><div class="actions"><button class="btn" id="reportCsv" disabled>전체 단위 CSV</button><button class="btn" id="reportPrint" disabled>인쇄 · PDF</button></div></div>
+  const rp = uiPref('report'); const [from, to] = reportRange('day'); let current = null, requestId = 0, selectedUnit = '';
+  main.innerHTML = `<div class="report-heading"><div><h1>리포트 · 통계</h1><p class="muted">공통·부서별 통계와 입고·생산·출하·분석 수량을 기간별로 봅니다. 「표시 설정」에서 보일 구역·항목과 기본 기간을 정할 수 있습니다(내 계정에 저장).</p></div><div class="actions"><button type="button" class="btn" id="reportSetup" title="보일 구역·항목·기본 조건(사람별)">⚙ 표시 설정</button><button class="btn" id="reportCsv" disabled>전체 단위 CSV</button><button class="btn" id="reportPrint" disabled>인쇄 · PDF</button></div></div>
     <form class="card report-filters" id="reportForm" data-read-only="true"><div class="form-grid">
     <label>집계 단위<select name="grain" id="reportGrain"><option value="day">일간</option><option value="week">주간 (월요일 시작)</option><option value="month">월간</option></select></label>
     <label>시작일<input name="from" type="date" required value="${from}"></label><label>종료일<input name="to" type="date" required value="${to}"></label>
@@ -74,10 +93,17 @@ async function pageReports(main) {
     <label>품목·거래처 검색<input name="q" type="search" maxlength="200" placeholder="품목명 또는 거래처"></label>
     <label>생산일정 기준<select name="plan_period"><option value="day">일간 생산일정</option><option value="week">주간 생산일정</option><option value="month">월간 생산일정</option></select></label></div>
     <div class="actions wrap"><button type="submit" class="btn primary">리포트 조회</button><button type="button" class="btn" data-report-range="week">이번 주</button><button type="button" class="btn" data-report-range="month">이번 달</button><button type="button" class="btn" data-report-range="year">올해</button><span class="muted small">최대 3년 · 한국 시간 기준</span></div></form>
-    <div class="report-meta"><p id="reportStamp" class="small muted" role="status"></p><label class="inline">수량 차트 단위 <select id="reportUnit" aria-label="수량 차트 단위" disabled></select></label></div>
-    <div id="reportContent" aria-live="polite"></div>`;
+    <div id="reportBlocks">
+      <section class="dept-sec" id="deptCommon" data-block="common"><div class="dept-head"><h2>공통</h2><span class="small muted" data-dept-range></span><button type="button" class="btn small" data-dept-xlsx="common">엑셀</button><button type="button" class="btn small" id="deptSettings">기준값${ME.is_admin ? ' 설정' : ''}</button></div><div data-dept-body><p class="muted">불러오는 중…</p></div></section>
+      <section class="dept-sec" id="deptMine" data-block="dept"><div class="dept-head"><h2>부서별</h2><div class="seg" id="deptTabs" role="tablist">${DEPT_TABS.map(([k, l]) => `<button type="button" role="tab" data-dept="${k}">${l}${k === myDept() ? ' <span class="sub-count">내 부서</span>' : ''}</button>`).join('')}</div><button type="button" class="btn small" data-dept-xlsx="mine">엑셀</button></div><div data-dept-body><p class="muted">불러오는 중…</p></div></section>
+      <section class="dept-sec" id="reportDetail" data-block="detail"><div class="dept-head"><h2>수량 상세</h2><span class="small muted">입고·생산·출하·분석</span></div><div class="report-meta"><p id="reportStamp" class="small muted" role="status"></p><label class="inline">수량 차트 단위 <select id="reportUnit" aria-label="수량 차트 단위" disabled></select></label></div><div id="reportContent" aria-live="polite"></div></section>
+    </div>`;
+  // 15.310 구역(공통·부서별·수량 상세)은 표시 설정의 순서대로, 숨긴 구역은 빼고(불러오지도 않음)
+  const blocksEl = $('#reportBlocks', main), shownBlocks = applyWidgetPref(REPORT_BLOCKS.map(([key, label]) => ({ key, label })), rp).map(b => b.key), hide = new Set(rp.hidden || []);
+  for (const key of shownBlocks) blocksEl.append($(`[data-block="${key}"]`, blocksEl));
+  $$('[data-block]', blocksEl).forEach(sec => { sec.hidden = !shownBlocks.includes(sec.dataset.block); });
   const form = $('#reportForm', main), content = $('#reportContent', main), unitSelect = $('#reportUnit', main);
-  const loadDept = mountDeptReports(main, form); // 15.120 공통 + 부서별
+  const dept = mountDeptReports(main, form, { shown: shownBlocks, hide }); // 15.120 공통 + 부서별
   const draw = () => {
     const report = current; if (!report) return;
     const unit = selectedUnit, grain = report.range.grain;
@@ -95,24 +121,33 @@ async function pageReports(main) {
       const top = rows.filter(row => row.unit === unit).sort((a, b) => b[key] - a[key]).slice(0, 10);
       return top.length ? `<table class="grid"><thead><tr><th>품목</th><th>분류</th><th class="r">수량</th></tr></thead><tbody>${top.map(row => `<tr><td>${esc(row.item)}</td><td>${esc(row.item_category)}</td><td class="r">${reportNumber(row[key])}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">해당 단위의 데이터가 없습니다.</p>';
     };
-    content.innerHTML = `<div class="report-kpis">
+    // 15.310 수량 상세의 블록도 표시 설정대로(숨김·순서). 차트·표 블록은 이어지는 것끼리 2열 격자로.
+    const parts = {
+      'detail:kpis': `<div class="report-kpis">
       ${card('분석 등록', reportNumber(report.analysis.total) + '건', `현재 완료 ${reportNumber(report.analysis.statuses.done)}건 · 완료율 ${reportNumber(report.analysis.completion_rate)}%`)}
       ${card('입고수량 · 선택 단위', reportNumber(incomingTotal), `${esc(unit || '데이터 없음')} · 전체 입고 ${report.receipts.count}건 / 이상 ${report.receipts.abnormal_count}건`)}
       ${card('실제 생산량 · 선택 단위', reportNumber(productionTotal.actual_qty), `${esc(unit || '데이터 없음')} · 계획수량 ${reportNumber(productionTotal.planned_qty)} / 전체 일정 ${report.production.plans}건`)}
-      ${card('출하수량 · 선택 단위', reportNumber(shippingTotal), `${esc(unit || '데이터 없음')} · 전체 출하 ${report.shipments.count}건`)}</div>
-      <div class="report-chart-grid"><section class="card"><h3>분석 등록 · 현재 완료</h3>${reportChart('분석 등록 및 현재 완료 건수', report.analysis.series, [{ key: 'total', label: '등록' }, { key: 'done', label: '현재 완료' }], grain)}<p class="small muted">${esc(report.definitions.analysis)}</p></section>
-      <section class="card"><h3>입고수량 추이 <span class="tag">${esc(unit || '단위 선택')}</span></h3>${reportChart('발주입고와 기타입고 수량', incoming, [{ key: 'purchase', label: '발주입고' }, { key: 'other', label: '기타입고' }], grain)}</section>
-      <section class="card"><h3>생산계획 · 실제 생산량 <span class="tag">${esc(unit || '단위 선택')}</span></h3>${reportChart('생산계획 및 실제 생산량', production, [{ key: 'planned_qty', label: '계획' }, { key: 'actual_qty', label: '실제 생산' }, { key: 'completed_qty', label: '완료 체크' }], grain)}</section>
-      <section class="card"><h3>출하수량 추이 <span class="tag">${esc(unit || '단위 선택')}</span></h3>${reportChart('출하수량', shipping, [{ key: 'qty', label: '출하' }], grain)}</section></div>
-      <div class="report-chart-grid"><section class="card"><h3>분석 현재 상태</h3><div class="report-statuses">${Object.entries(report.analysis.statuses).map(([status, count]) => `<div><span>${esc(STATUS[status])}</span><div class="report-status-track"><i style="width:${report.analysis.total ? count / report.analysis.total * 100 : 0}%"></i></div><b>${reportNumber(count)}건</b></div>`).join('')}</div></section>
-      <section class="card"><h3>단위·품목별 합계</h3><div class="table-wrap"><table class="grid"><thead><tr><th>단위 / 미지정 품목</th><th class="r">입고</th><th class="r">생산계획</th><th class="r">완료 체크</th><th class="r">실제 생산</th><th class="r">계획 차이</th><th class="r">달성률</th><th class="r">출하</th></tr></thead><tbody>${report.units.map(value => { const r = report.receipts.by_unit.find(row => row.unit === value) || {}; const p = report.production.by_unit.find(row => row.unit === value) || {}; const s = report.shipments.by_unit.find(row => row.unit === value) || {}; return `<tr><td>${esc(value)}</td><td class="r">${reportNumber(r.qty)}</td><td class="r">${reportNumber(p.planned_qty)}</td><td class="r">${reportNumber(p.completed_qty)}</td><td class="r">${reportNumber(p.actual_qty)}</td><td class="r">${reportNumber(p.variance_qty)}</td><td class="r">${p.achievement_rate ?? '—'}%</td><td class="r">${reportNumber(s.qty)}</td></tr>`; }).join('') || '<tr><td colspan="8">수량 데이터가 없습니다.</td></tr>'}</tbody></table></div></section>
-      <section class="card"><h3>입고수량 상위 10개 품목</h3><p class="small muted">${esc(unit || '단위 선택')}</p><div class="table-wrap">${ranking(report.receipts.items, 'qty')}</div></section><section class="card"><h3>생산계획 상위 10개 품목</h3><p class="small muted">${esc(unit || '단위 선택')}</p><div class="table-wrap">${ranking(report.production.items, 'planned_qty')}</div></section></div>
-      <details class="card"><summary>기간별 상세 수치</summary><div class="table-wrap"><table class="grid"><thead><tr><th>기간 시작</th><th class="r">분석등록</th><th class="r">현재완료</th><th class="r">발주입고</th><th class="r">기타입고</th><th class="r">생산계획</th><th class="r">완료 체크</th><th class="r">실제 생산</th><th class="r">출하</th></tr></thead><tbody>${report.buckets.map((bucket, i) => `<tr><td>${esc(bucket)}</td><td class="r">${reportNumber(report.analysis.series[i].total)}</td><td class="r">${reportNumber(report.analysis.series[i].done)}</td><td class="r">${reportNumber(incoming[i].purchase)}</td><td class="r">${reportNumber(incoming[i].other)}</td><td class="r">${reportNumber(production[i].planned_qty)}</td><td class="r">${reportNumber(production[i].completed_qty)}</td><td class="r">${reportNumber(production[i].actual_qty)}</td><td class="r">${reportNumber(shipping[i].qty)}</td></tr>`).join('')}</tbody></table></div><p class="small muted">수량 열: ${esc(unit || '데이터 없음')}</p></details>
-      ${semiReportSection(report)}
-      <details class="card report-definitions"><summary>집계 기준</summary>${Object.values(report.definitions).map(text => `<p class="small muted">${esc(text)}</p>`).join('')}</details>`;
+      ${card('출하수량 · 선택 단위', reportNumber(shippingTotal), `${esc(unit || '데이터 없음')} · 전체 출하 ${report.shipments.count}건`)}</div>`,
+      'detail:chart:analysis': { grid: `<section class="card"><h3>분석 등록 · 현재 완료</h3>${reportChart('분석 등록 및 현재 완료 건수', report.analysis.series, [{ key: 'total', label: '등록' }, { key: 'done', label: '현재 완료' }], grain)}<p class="small muted">${esc(report.definitions.analysis)}</p></section>` },
+      'detail:chart:incoming': { grid: `<section class="card"><h3>입고수량 추이 <span class="tag">${esc(unit || '단위 선택')}</span></h3>${reportChart('발주입고와 기타입고 수량', incoming, [{ key: 'purchase', label: '발주입고' }, { key: 'other', label: '기타입고' }], grain)}</section>` },
+      'detail:chart:production': { grid: `<section class="card"><h3>생산계획 · 실제 생산량 <span class="tag">${esc(unit || '단위 선택')}</span></h3>${reportChart('생산계획 및 실제 생산량', production, [{ key: 'planned_qty', label: '계획' }, { key: 'actual_qty', label: '실제 생산' }, { key: 'completed_qty', label: '완료 체크' }], grain)}</section>` },
+      'detail:chart:shipping': { grid: `<section class="card"><h3>출하수량 추이 <span class="tag">${esc(unit || '단위 선택')}</span></h3>${reportChart('출하수량', shipping, [{ key: 'qty', label: '출하' }], grain)}</section>` },
+      'detail:status': { grid: `<section class="card"><h3>분석 현재 상태</h3><div class="report-statuses">${Object.entries(report.analysis.statuses).map(([status, count]) => `<div><span>${esc(STATUS[status])}</span><div class="report-status-track"><i style="width:${report.analysis.total ? count / report.analysis.total * 100 : 0}%"></i></div><b>${reportNumber(count)}건</b></div>`).join('')}</div></section>` },
+      'detail:units': { grid: `<section class="card"><h3>단위·품목별 합계</h3><div class="table-wrap"><table class="grid"><thead><tr><th>단위 / 미지정 품목</th><th class="r">입고</th><th class="r">생산계획</th><th class="r">완료 체크</th><th class="r">실제 생산</th><th class="r">계획 차이</th><th class="r">달성률</th><th class="r">출하</th></tr></thead><tbody>${report.units.map(value => { const r = report.receipts.by_unit.find(row => row.unit === value) || {}; const p = report.production.by_unit.find(row => row.unit === value) || {}; const s = report.shipments.by_unit.find(row => row.unit === value) || {}; return `<tr><td>${esc(value)}</td><td class="r">${reportNumber(r.qty)}</td><td class="r">${reportNumber(p.planned_qty)}</td><td class="r">${reportNumber(p.completed_qty)}</td><td class="r">${reportNumber(p.actual_qty)}</td><td class="r">${reportNumber(p.variance_qty)}</td><td class="r">${p.achievement_rate ?? '—'}%</td><td class="r">${reportNumber(s.qty)}</td></tr>`; }).join('') || '<tr><td colspan="8">수량 데이터가 없습니다.</td></tr>'}</tbody></table></div></section>` },
+      'detail:top:incoming': { grid: `<section class="card"><h3>입고수량 상위 10개 품목</h3><p class="small muted">${esc(unit || '단위 선택')}</p><div class="table-wrap">${ranking(report.receipts.items, 'qty')}</div></section>` },
+      'detail:top:production': { grid: `<section class="card"><h3>생산계획 상위 10개 품목</h3><p class="small muted">${esc(unit || '단위 선택')}</p><div class="table-wrap">${ranking(report.production.items, 'planned_qty')}</div></section>` },
+      'detail:periods': `<details class="card"><summary>기간별 상세 수치</summary><div class="table-wrap"><table class="grid"><thead><tr><th>기간 시작</th><th class="r">분석등록</th><th class="r">현재완료</th><th class="r">발주입고</th><th class="r">기타입고</th><th class="r">생산계획</th><th class="r">완료 체크</th><th class="r">실제 생산</th><th class="r">출하</th></tr></thead><tbody>${report.buckets.map((bucket, i) => `<tr><td>${esc(bucket)}</td><td class="r">${reportNumber(report.analysis.series[i].total)}</td><td class="r">${reportNumber(report.analysis.series[i].done)}</td><td class="r">${reportNumber(incoming[i].purchase)}</td><td class="r">${reportNumber(incoming[i].other)}</td><td class="r">${reportNumber(production[i].planned_qty)}</td><td class="r">${reportNumber(production[i].completed_qty)}</td><td class="r">${reportNumber(production[i].actual_qty)}</td><td class="r">${reportNumber(shipping[i].qty)}</td></tr>`).join('')}</tbody></table></div><p class="small muted">수량 열: ${esc(unit || '데이터 없음')}</p></details>`,
+      'detail:semi': semiReportSection(report),
+      'detail:definitions': `<details class="card report-definitions"><summary>집계 기준</summary>${Object.values(report.definitions).map(text => `<p class="small muted">${esc(text)}</p>`).join('')}</details>`,
+    };
+    let html = '', grid = []; const flush = () => { if (grid.length) { html += `<div class="report-chart-grid">${grid.join('')}</div>`; grid = []; } };
+    for (const { key } of applyWidgetPref(REPORT_DETAIL.map(([key, label]) => ({ key, label })), rp)) { const part = parts[key]; if (!part) continue; if (typeof part === 'object') grid.push(part.grid); else { flush(); html += part; } }
+    flush();
+    content.innerHTML = html || '<p class="muted small">표시 설정에서 수량 상세 항목을 모두 숨겼습니다.</p>';
   };
   const load = async () => {
-    loadDept().catch(fail);
+    dept.load().catch(fail);
+    if (!shownBlocks.includes('detail')) return;
     const id = ++requestId; const values = formObj(form);
     const button = $('button[type=submit]', form); button.disabled = true;
     $('#reportStamp', main).textContent = '리포트를 집계하고 있습니다…';
@@ -121,7 +156,7 @@ async function pageReports(main) {
       const report = await api('GET', '/api/reports?' + new URLSearchParams(values));
       if (id !== requestId || !main.isConnected) return;
       current = report;
-      if (!report.units.includes(selectedUnit)) selectedUnit = report.units.includes('EA') ? 'EA' : report.units[0] || '';
+      if (!report.units.includes(selectedUnit)) selectedUnit = rp.unit && report.units.includes(rp.unit) ? rp.unit : report.units.includes('EA') ? 'EA' : report.units[0] || ''; // 15.310 기본 단위(설정)
       unitSelect.innerHTML = report.units.length ? report.units.map(unit => `<option value="${esc(unit)}">${esc(unit)}</option>`).join('') : '<option value="">수량 데이터 없음</option>';
       unitSelect.value = selectedUnit; unitSelect.disabled = !report.units.length;
       $('#reportStamp', main).textContent = `${report.range.from} ~ ${report.range.to} · ${report.range.timezone} · 조회자 ${ME.name} · 집계 ${report.generated_at}`;
@@ -130,14 +165,31 @@ async function pageReports(main) {
     finally { if (id === requestId) button.disabled = false; }
   };
   rememberList(form);
+  // 15.310 이 탭에서 고른 기간이 없으면 기본 기간(설정) + 집계 단위에 맞춰 시작·종료일을 잡는다
+  if (!uxRead(uxKey('filters', (location.hash || '#/') + ':' + form.id))) { const [a, b] = reportPresetRange(rp.period || '14d', form.elements.grain.value); form.elements.from.value = a; form.elements.to.value = b; }
   form.onsubmit = event => { event.preventDefault(); load(); };
-  $('#reportGrain', main).onchange = () => { const [start, end] = reportRange(form.elements.grain.value); form.elements.from.value = start; form.elements.to.value = end; load(); };
+  $('#reportGrain', main).onchange = () => { const [start, end] = reportPresetRange(rp.period || '14d', form.elements.grain.value); form.elements.from.value = start; form.elements.to.value = end; load(); };
   unitSelect.onchange = () => { selectedUnit = unitSelect.value; draw(); };
   $$('[data-report-range]', main).forEach(button => button.onclick = () => {
     const today = reportRange('day')[1]; form.elements.from.value = button.dataset.reportRange === 'week' ? mondayOf(today) : button.dataset.reportRange === 'year' ? today.slice(0, 4) + '-01-01' : monthStart(today); form.elements.to.value = today; load();
   });
   $('#reportCsv', main).onclick = () => { if (current) exportReport(current); };
   $('#reportPrint', main).onclick = () => { document.body.classList.add('printing-report'); try { window.print(); } finally { document.body.classList.remove('printing-report'); } };
+  $('#reportSetup', main).onclick = () => {
+    const items = [];
+    for (const [key, label] of REPORT_BLOCKS) {
+      items.push({ key, label });
+      if (key === 'common' && dept.data.common) items.push(...deptSetupItems('common:', dept.data.common, 'common'));
+      if (key === 'dept' && dept.data.mine) items.push(...deptSetupItems(`dept:${dept.current()}:`, dept.data.mine, 'dept', `(${DEPT_TABS.find(([k]) => k === dept.current())?.[1] || ''} 탭)`));
+      if (key === 'detail') items.push(...REPORT_DETAIL.map(([k, l]) => ({ key: k, label: l, parent: 'detail' })));
+    }
+    widgetSetup({ title: '리포트 표시 설정', intro: '보일 구역·항목을 체크하고 ▲▼로 순서를 바꾸세요. 부서별 항목은 지금 고른 부서 탭 기준이며 부서마다 따로 저장됩니다. 내 계정에 저장되어 다른 기기에서도 같게 보입니다.', items, pref: rp,
+      extra: `<fieldset class="vendor-sec"><legend>기본 조건</legend><div class="ws-defaults">
+        <label>기본 기간<select name="period">${Object.entries(REPORT_PERIOD_LABEL).map(([k, l]) => `<option value="${k}"${(rp.period || '14d') === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label>부서별 기본 탭<select name="dept"><option value="">내 부서(마지막에 본 탭)</option>${DEPT_TABS.map(([k, l]) => `<option value="${k}"${rp.dept === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label>수량 차트 기본 단위<input name="unit" maxlength="20" value="${esc(rp.unit || '')}" placeholder="예) EA · BOX (비우면 EA)"></label></div></fieldset>`,
+      onSave: async (next, vals) => { await saveUiPref('report', next ? { ...next, period: vals.period === '14d' ? '' : vals.period, dept: vals.dept || '', unit: (vals.unit || '').trim() } : null); await pageReports(main); } });
+  };
   await load();
 }
 
@@ -153,11 +205,13 @@ function deptValue(v, type, unit = '') {
   return `${reportNumber(Math.round(Number(v) * 1000) / 1000)}${unit ? ' ' + esc(unit) : ''}`;
 }
 function deptCell(v, type) { if (v == null || v === '') return '<td class="muted">—</td>'; if (!type || type === 'text') return `<td>${esc(v)}</td>`; if (type === 'won') return `<td class="r">${reportNumber(Math.trunc(v))}</td>`; if (type === 'pct') return `<td class="r">${reportNumber(v)}%</td>`; return `<td class="r">${reportNumber(Math.round(Number(v) * 1000) / 1000)}</td>`; }
-function deptHtml(d) {
-  const kpis = `<div class="report-kpis">${d.kpis.map(k => `<a class="card report-kpi dept-kpi ${k.tone ? 'tone-' + k.tone : ''}" href="${k.href || '#/reports'}"><span class="muted">${esc(k.label)}</span><strong>${deptValue(k.value, k.type, k.unit)}</strong><span class="small muted">${esc(k.detail || '')}</span></a>`).join('')}</div>`;
-  const charts = d.charts.length ? `<div class="report-chart-grid">${d.charts.map(c => `<section class="card"><h3>${esc(c.title)}${c.type === 'won' ? ' <span class="tag">원</span>' : c.type === 'pct' ? ' <span class="tag">%</span>' : ''}</h3>${reportChart(c.title, c.rows, c.series, d.grain)}</section>`).join('')}</div>` : '';
-  const tables = d.tables.map(tb => `<section class="card"><h3>${esc(tb.title)}${tb.href ? ` <a class="small" href="${tb.href}">자세히 →</a>` : ''}</h3>${tb.rows.length ? `<div class="table-wrap"><table class="grid" data-keep-cols><thead><tr>${tb.columns.map(c => `<th${c.type && c.type !== 'text' ? ' class="r"' : ''}>${esc(c.label)}</th>`).join('')}</tr></thead><tbody>${tb.rows.map((r, i) => `<tr${tb.links?.[i] ? ` data-dept-link="${esc(tb.links[i])}" class="dept-link"` : ''}>${r.map((v, j) => deptCell(v, tb.columns[j]?.type)).join('')}</tr>`).join('')}</tbody></table></div>` : `<p class="muted small">${esc(tb.empty || '기간 안에 자료가 없습니다.')}</p>`}</section>`).join('');
-  return kpis + charts + `<div class="report-chart-grid dept-tables">${tables}</div>`;
+function deptHtml(d, hide = new Set(), pre = '') {
+  // 15.310 표시 설정에서 숨긴 항목(요약 카드·차트·표)은 뺀다. 이름은 `${구역}:kpi|chart|table:${제목}`.
+  const kp = d.kpis.filter(k => !hide.has(`${pre}kpi:${k.label}`)), ch = d.charts.filter(c => !hide.has(`${pre}chart:${c.title}`)), tbs = d.tables.filter(t => !hide.has(`${pre}table:${t.title}`));
+  const kpis = kp.length ? `<div class="report-kpis">${kp.map(k => `<a class="card report-kpi dept-kpi ${k.tone ? 'tone-' + k.tone : ''}" href="${k.href || '#/reports'}"><span class="muted">${esc(k.label)}</span><strong>${deptValue(k.value, k.type, k.unit)}</strong><span class="small muted">${esc(k.detail || '')}</span></a>`).join('')}</div>` : '';
+  const charts = ch.length ? `<div class="report-chart-grid">${ch.map(c => `<section class="card"><h3>${esc(c.title)}${c.type === 'won' ? ' <span class="tag">원</span>' : c.type === 'pct' ? ' <span class="tag">%</span>' : ''}</h3>${reportChart(c.title, c.rows, c.series, d.grain)}</section>`).join('')}</div>` : '';
+  const tables = tbs.map(tb => `<section class="card"><h3>${esc(tb.title)}${tb.href ? ` <a class="small" href="${tb.href}">자세히 →</a>` : ''}</h3>${tb.rows.length ? `<div class="table-wrap"><table class="grid" data-keep-cols><thead><tr>${tb.columns.map(c => `<th${c.type && c.type !== 'text' ? ' class="r"' : ''}>${esc(c.label)}</th>`).join('')}</tr></thead><tbody>${tb.rows.map((r, i) => `<tr${tb.links?.[i] ? ` data-dept-link="${esc(tb.links[i])}" class="dept-link"` : ''}>${r.map((v, j) => deptCell(v, tb.columns[j]?.type)).join('')}</tr>`).join('')}</tbody></table></div>` : `<p class="muted small">${esc(tb.empty || '기간 안에 자료가 없습니다.')}</p>`}</section>`).join('');
+  return (kpis + charts + (tables ? `<div class="report-chart-grid dept-tables">${tables}</div>` : '')) || '<p class="muted small">표시 설정에서 이 구역의 항목을 모두 숨겼습니다.</p>';
 }
 function deptXlsx(d, label) {
   const rows = [['구분', '항목', '값', '설명'], ...d.kpis.map(k => ['요약', k.label, k.type === 'text' ? k.value : k.value ?? '', k.detail || ''])];
@@ -173,29 +227,27 @@ async function reportSettingsWindow(after) {
   $('[data-close]', m.el).onclick = m.close;
   $('form', m.el).onsubmit = async e => { e.preventDefault(); try { await api('PUT', '/api/report-settings', formObj(e.target)); toast('기준값을 저장했습니다.'); m.close(); await after?.(); } catch (error) { fail(error); } };
 }
-function mountDeptReports(main, form) {
-  let dept = myDept(); try { dept = localStorage.getItem('wpa:report-dept') || dept; } catch { /* 편의 기능 */ }
+function mountDeptReports(main, form, { shown = ['common', 'dept', 'detail'], hide = new Set() } = {}) {
+  // 15.310 부서 탭: 표시 설정의 기본 탭 > 이 브라우저에서 마지막에 본 탭 > 내 부서
+  const rp = uiPref('report'); let dept = myDept(); try { dept = localStorage.getItem('wpa:report-dept') || dept; } catch { /* 편의 기능 */ }
+  if (rp.dept) dept = rp.dept;
   if (!DEPT_TABS.some(([k]) => k === dept)) dept = myDept();
-  const box = document.createElement('div'); box.id = 'deptReports';
-  box.innerHTML = `<section class="dept-sec" id="deptCommon"><div class="dept-head"><h2>공통</h2><span class="small muted" data-dept-range></span><button type="button" class="btn small" data-dept-xlsx="common">엑셀</button><button type="button" class="btn small" id="deptSettings">기준값${ME.is_admin ? ' 설정' : ''}</button></div><div data-dept-body><p class="muted">불러오는 중…</p></div></section>
-    <section class="dept-sec" id="deptMine"><div class="dept-head"><h2>부서별</h2><div class="seg" id="deptTabs" role="tablist">${DEPT_TABS.map(([k, l]) => `<button type="button" role="tab" data-dept="${k}">${l}${k === myDept() ? ' <span class="sub-count">내 부서</span>' : ''}</button>`).join('')}</div><button type="button" class="btn small" data-dept-xlsx="mine">엑셀</button></div><div data-dept-body><p class="muted">불러오는 중…</p></div></section>
-    <h2 class="dept-detail-title">수량 상세 <span class="small muted">입고·생산·출하·분석(기존 리포트)</span></h2>`;
-  form.after(box);
+  const box = $('#reportBlocks', main);
   const data = {}; let version = 0;
   const params = section => new URLSearchParams({ section, from: form.elements.from.value, to: form.elements.to.value, grain: form.elements.grain.value });
-  const draw = (sel, d) => { const body = $(`${sel} [data-dept-body]`, box); body.innerHTML = deptHtml(d); $$('[data-dept-link]', body).forEach(tr => tr.onclick = () => { location.hash = tr.dataset.deptLink; }); };
+  const draw = (sel, d, pre) => { const body = $(`${sel} [data-dept-body]`, box); if (!body) return; body.innerHTML = deptHtml(d, hide, pre); $$('[data-dept-link]', body).forEach(tr => tr.onclick = () => { location.hash = tr.dataset.deptLink; }); };
   const markTabs = () => $$('#deptTabs [data-dept]', box).forEach(b => { const on = b.dataset.dept === dept; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
-  const loadMine = async mine => { const d = await api('GET', '/api/reports/dept?' + params(dept)); if (mine !== version || !box.isConnected) return; data.mine = d; draw('#deptMine', d); };
+  const loadMine = async mine => { if (!shown.includes('dept')) return; const d = await api('GET', '/api/reports/dept?' + params(dept)); if (mine !== version || !box.isConnected) return; data.mine = d; draw('#deptMine', d, `dept:${dept}:`); };
   const load = async () => {
     const mine = ++version; markTabs();
-    const [c] = await Promise.all([api('GET', '/api/reports/dept?' + params('common')), loadMine(mine)]);
-    if (mine !== version || !box.isConnected) return; data.common = c; draw('#deptCommon', c);
-    $('[data-dept-range]', box).textContent = `${c.from} ~ ${c.to}`;
+    const [c] = await Promise.all([shown.includes('common') ? api('GET', '/api/reports/dept?' + params('common')) : null, loadMine(mine)]);
+    if (mine !== version || !box.isConnected) return;
+    if (c) { data.common = c; draw('#deptCommon', c, 'common:'); $('[data-dept-range]', box).textContent = `${c.from} ~ ${c.to}`; }
   };
   $$('#deptTabs [data-dept]', box).forEach(b => b.onclick = () => { dept = b.dataset.dept; try { localStorage.setItem('wpa:report-dept', dept); } catch { /* 편의 기능 */ } markTabs(); $('#deptMine [data-dept-body]', box).innerHTML = '<p class="muted">불러오는 중…</p>'; loadMine(version).catch(fail); });
   $$('[data-dept-xlsx]', box).forEach(b => b.onclick = () => { const d = data[b.dataset.deptXlsx]; if (d) deptXlsx(d, b.dataset.deptXlsx === 'common' ? '공통' : DEPT_TABS.find(([k]) => k === dept)[1]); });
   $('#deptSettings', box).onclick = () => reportSettingsWindow(load).catch(fail);
-  return load;
+  return { load, data, current: () => dept };
 }
 
 // ── 15.276 개발 스케줄 관리: 개발리스트 제품을 단기·중장기·장기로 나눠 공정표(단계)·현재 진행·다음 예정·완료예정일을 로드맵으로 ──
@@ -1167,7 +1219,7 @@ async function pageCoa(main) {
     const rows = data.rows;
     $('#coaTiles', main).innerHTML = [['전체', rows.length, ''], ['승인 대기', rows.filter(r => r.status === 'draft').length, rows.some(r => r.status === 'draft') ? 'yellow' : ''], ['발행', rows.filter(r => r.status === 'approved').length, 'green'], ['무효', rows.filter(r => r.status === 'void').length, '']].map(([l, n, c], i) => `<button type="button" class="ip-tile ${c}" data-coa-tile="${i}"><span>${l}</span><b>${n}</b></button>`).join('');
     $('#coaTools', main).innerHTML = data.can_manage ? '<button type="button" class="btn primary" id="coaNewBtn">＋ LOT로 COA 작성</button>' : '';
-    $('#coaList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>발행번호</th><th>LOT</th><th>품목</th><th>고객사</th><th>제조일</th><th>유효기간</th><th>근거</th><th>상태</th><th>승인</th><th></th></tr></thead><tbody>${rows.map(r => `<tr data-coa-row="${r.id}"${r.status === 'void' ? ' class="row-off"' : ''}><td class="nowrap" data-card-primary><b>${esc(r.coa_no)}</b>${r.rev ? ` <span class="chip">Rev.${r.rev}</span>` : ''}</td><td class="nowrap">${esc(r.lot)}</td><td>${esc(r.item)}${r.product_code ? `<div class="small muted">${esc(r.product_code)}</div>` : ''}</td><td>${esc(r.customer)}</td><td class="nowrap">${esc(r.mfg_date || '')}</td><td class="nowrap">${esc(r.exp_date || '')}</td><td class="small">${esc(r.source_no)}</td><td><span class="chip ${COA_STATUS_CHIP[r.status] || ''}">${esc(COA_STATUS_LABEL[r.status] || r.status)}</span></td><td class="small">${esc(r.approved_by || '')}${r.approved_at ? `<div class="muted">${esc(String(r.approved_at).slice(0, 10))}</div>` : ''}</td><td><button type="button" class="btn small" data-coa-open="${r.id}">열기</button></td></tr>`).join('')}</tbody></table></div>`
+    $('#coaList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>발행번호</th><th>LOT</th><th>품목</th><th>고객사</th><th>제조일</th><th>유효기간</th><th>근거</th><th>상태</th><th>승인</th><th></th></tr></thead><tbody>${rows.map(r => `<tr data-coa-row="${r.id}"${r.status === 'void' ? ' class="row-off"' : ''}><td class="nowrap" data-card-primary><b>${esc(r.coa_no)}</b>${r.rev ? ` <span class="chip">Rev.${r.rev}</span>` : ''}</td><td class="nowrap">${esc(r.lot)}</td><td>${esc(r.item)}${r.product_code ? `<div class="small muted">${esc(r.product_code)}</div>` : ''}</td><td>${esc(r.customer)}</td><td class="nowrap">${esc(r.mfg_date || '')}</td><td class="nowrap">${esc(r.exp_date || '')}</td><td class="small">${esc(r.source_no)}</td><td><span class="chip ${COA_STATUS_CHIP[r.status] || ''}">${esc(COA_STATUS_LABEL[r.status] || r.status)}</span></td><td class="small">${esc(r.approved_by || '')}${r.approved_at ? `<div class="muted">${esc(String(r.approved_at).slice(0, 10))}</div>` : ''}</td><td><button type="button" class="btn small" data-coa-open="${r.id}">열기</button></td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">COA가 없습니다. 「＋ LOT로 COA 작성」에 출하검사 합격 LOT를 넣으면 측정값으로 성적서를 만듭니다.</div>';
   };
   main.addEventListener('click', e => {
@@ -1175,7 +1227,6 @@ async function pageCoa(main) {
     if (e.target.closest('#coaNewBtn')) return coaNew().catch(fail);
     const o = e.target.closest('[data-coa-open]') || (e.type === 'click' && null); if (o) coaOpen(Number(o.dataset.coaOpen), load).catch(fail);
   });
-  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-coa-row]'); if (tr) coaOpen(Number(tr.dataset.coaRow), load).catch(fail); });
   form.addEventListener('change', () => load().catch(fail)); let tm = null; form.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(() => load().catch(fail), 250); }); form.onsubmit = e => e.preventDefault();
   await load();
 }
@@ -1184,7 +1235,7 @@ async function pageCoa(main) {
 const NC_STATUS_LABEL = { open: '등록', analysis: '원인분석', action: '조치', verify: '유효성검증', closed: '종결', void: '취소' };
 const NC_STATUS_CHIP = { open: 'yellow', analysis: 'yellow', action: 'yellow', verify: 'yellow', closed: 'green', void: '' };
 const NC_FLOW = ['open', 'analysis', 'action', 'verify', 'closed'];
-const NC_SOURCE_LABEL = { iqc: '수입검사', oqc: '출하검사', analysis: '분석', process: '공정 이상', voc: '고객 불만(VOC)', audit: '심사 지적', other: '기타' };
+const NC_SOURCE_LABEL = { iqc: '수입검사', oqc: '출하검사', analysis: '분석', process: '공정 이상', voc: '고객 불만(VOC)', audit: '심사 지적', risk: '위험성평가', other: '기타' };
 const NC_GRADE_LABEL = { critical: '치명', major: '중대', minor: '경미' };
 async function ncNew(pre = {}) {
   const due = (() => { const d = new Date(Date.parse(todayStr()) + 30 * 86400000); return d.toISOString().slice(0, 10); })();
@@ -1224,7 +1275,7 @@ async function ncOpen(id) {
         <label class="span3">근본 원인<input data-cause="root" maxlength="300" value="${esc(c.root || '')}"${dis}></label></div></fieldset>
       <fieldset class="vendor-sec"><legend>조치</legend><div class="form-grid">${ta('correction', '시정(이번 건 처리: 재작업·폐기·특채 등)', n.correction)}${ta('corrective', '시정조치(재발 방지)', n.corrective)}${ta('preventive', '예방조치(다른 품목·공정에도)', n.preventive)}${f('action_date', '조치 완료일', n.action_date, " type='date'")}</div></fieldset>
       <fieldset class="vendor-sec"><legend>유효성검증</legend><div class="form-grid">${f('verify_date', '검증일', n.verify_date, " type='date'")}<label>결과<select name="verify_result"${dis}><option value="">—</option><option${n.verify_result === '유효' ? ' selected' : ''}>유효</option><option${n.verify_result === '효과 없음' ? ' selected' : ''}>효과 없음</option></select></label>${ta('verify_note', '검증 내용(재발 여부·확인 데이터)', n.verify_note, 'span3')}</div></fieldset>
-      <div class="actions"><button type="button" class="btn" data-nc-hist>이력</button>${can && !closed ? '<button type="button" class="btn danger" data-nc-void>취소</button><span class="grow"></span><button class="btn">저장</button>' : ''}${can && !closed && next && next !== 'closed' ? `<button type="button" class="btn primary" data-nc-next="${next}">저장하고 「${NC_STATUS_LABEL[next]}」로 →</button>` : ''}${list.can_close && n.status === 'verify' ? '<button type="button" class="btn primary" data-nc-next="closed">종결</button>' : ''}${list.can_close && closed ? '<button type="button" class="btn" data-nc-reopen>다시 열기</button>' : ''}${can && ['action', 'verify', 'closed'].includes(n.status) ? '<button type="button" class="btn" data-nc-chg title="조치가 4M(사람·설비·자재·방법) 변경이면 변경관리로">변경 요청 만들기</button>' : ''}</div>
+      <div class="actions"><button type="button" class="btn" data-nc-hist>이력</button><button type="button" class="btn" data-nc-8d>8D 보고서</button>${can && !closed ? '<button type="button" class="btn danger" data-nc-void>취소</button><span class="grow"></span><button class="btn">저장</button>' : ''}${can && !closed && next && next !== 'closed' ? `<button type="button" class="btn primary" data-nc-next="${next}">저장하고 「${NC_STATUS_LABEL[next]}」로 →</button>` : ''}${list.can_close && n.status === 'verify' ? '<button type="button" class="btn primary" data-nc-next="closed">종결</button>' : ''}${list.can_close && closed ? '<button type="button" class="btn" data-nc-reopen>다시 열기</button>' : ''}${can && ['action', 'verify', 'closed'].includes(n.status) ? '<button type="button" class="btn" data-nc-chg title="조치가 4M(사람·설비·자재·방법) 변경이면 변경관리로">변경 요청 만들기</button>' : ''}</div>
     </form>`, { wide: true });
   const form = $('[data-nc-form]', m.el);
   const body = () => { const v = formObj(form); v.cause_json = Object.fromEntries($$('[data-cause]', form).map(i => [i.dataset.cause, i.value.trim()]).filter(([, x]) => x)); return { ...v, revision: n.revision }; };
@@ -1234,6 +1285,7 @@ async function ncOpen(id) {
   $('[data-nc-void]', m.el)?.addEventListener('click', async () => { const v = await promptBox('부적합 취소', '<label>취소 사유 *<input name="reason" required maxlength="300" placeholder="예) 측정 오류로 확인 — 실제 부적합 아님"></label>'); if (v) save('void', v); });
   $('[data-nc-reopen]', m.el)?.addEventListener('click', async () => { const v = await promptBox('다시 열기', '<label>사유 *<input name="reason" required maxlength="300"></label>'); if (v) save('verify', v); });
   $('[data-nc-chg]', m.el)?.addEventListener('click', () => { m.close(); chgNew({ source_type: 'capa', source_id: n.id, source_no: n.nc_no, title: n.corrective || n.title, item: n.item, kind: 'method' }).catch(fail); }); // 15.306 CAPA → 변경관리
+  $('[data-nc-8d]', m.el).onclick = () => nc8D(n).catch(fail); // 15.312
   $('[data-nc-hist]', m.el).onclick = () => modal(`<h3>이력 · ${esc(n.nc_no)}</h3><div class="table-wrap"><table class="grid"><thead><tr><th>일시</th><th>담당</th><th>내용</th></tr></thead><tbody>${[...n.history].reverse().map(h => `<tr><td class="nowrap">${esc(String(h.at || '').slice(0, 16))}</td><td>${esc(h.by || '')}</td><td>${esc(h.what || '')}${h.status ? ` · ${esc(NC_STATUS_LABEL[h.status[0]] || '')} → ${esc(NC_STATUS_LABEL[h.status[1]] || '')}` : ''}${(h.fields || []).length ? ` · ${h.fields.length}칸` : ''}${h.reason ? ` · ${esc(h.reason)}` : ''}${h.source ? ` · 출처 ${esc(h.source)}` : ''}</td></tr>`).join('')}</tbody></table></div>`, { wide: true });
 }
 async function pageNcs(main) {
@@ -1260,7 +1312,6 @@ async function pageNcs(main) {
     if (e.target.closest('#ncNewBtn')) return ncNew().catch(fail);
     const o = e.target.closest('[data-nc-open]'); if (o) ncOpen(Number(o.dataset.ncOpen)).catch(fail);
   });
-  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-nc-row]'); if (tr) ncOpen(Number(tr.dataset.ncRow)).catch(fail); });
   form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }
@@ -1315,14 +1366,14 @@ async function qdocNew(pre = {}) {
 }
 async function qdocOpen(id) {
   const list = await api('GET', '/api/qdocs'), d = list.rows.find(x => x.id === id); if (!d) return toast('문서를 찾을 수 없습니다.', 'err');
-  const can = list.can_manage, appr = list.can_approve, locked = d.internal && ['approved', 'obsolete'].includes(d.status) || d.status === 'obsolete', dis = !can || locked ? ' disabled' : '', mdis = !can || d.status === 'obsolete' ? ' disabled' : '';
+  const can = list.can_manage, appr = list.can_approve, locked = d.internal && d.status !== 'draft' || d.status === 'obsolete', dis = !can || locked ? ' disabled' : '', mdis = !can || d.status === 'obsolete' ? ' disabled' : '';
   const flow = ['draft', 'review', 'approved'];
   const m = modal(`<h3>${esc(d.doc_no)} · ${esc(d.title)} <span class="chip ${QDOC_CHIP[d.status]}">${esc(d.status_label)}</span></h3>
     ${d.internal ? qStepper(flow, QDOC_STATUS_LABEL, d.status) : ''}
     <p class="small muted">${esc(d.kind_label)} · ${qdocRev(d)}${d.current ? ` · 현행 ${d.internal ? `Rev.${d.current.rev}` : esc(d.current.edition || '')} (${esc(d.current.effective_date || '')} 시행, 승인 ${esc(d.current.approved_by || '')})` : ' · 아직 승인된 판 없음'}${d.change_id ? ` · 변경 연결 #${d.change_id}` : ''}</p>
     ${d.current?.file ? `<p>현행판 내려받기: ${qFileLink(d.current.file)}</p>` : ''}
     <form class="stack" data-qd-form>
-      <fieldset class="vendor-sec"><legend>문서 ${locked && can && d.status !== 'obsolete' ? '<span class="hint">(승인된 판의 내용·파일은 「개정」으로 바꿉니다. 관리 정보는 고칠 수 있음)</span>' : ''}</legend><div class="form-grid">
+      <fieldset class="vendor-sec"><legend>문서 ${locked && can && d.status === 'review' ? '<span class="hint">(검토 중에는 내용·파일이 잠깁니다. 고치려면 품질책임자가 반려 → 초안)</span>' : locked && can && d.status !== 'obsolete' ? '<span class="hint">(승인된 판의 내용·파일은 「개정」으로 바꿉니다. 관리 정보는 고칠 수 있음)</span>' : ''}</legend><div class="form-grid">
         <label class="span3">제목<input name="title" required maxlength="200" value="${esc(d.title)}"${dis}></label>
         <input type="hidden" name="kind" value="${esc(d.kind)}">
         ${d.internal ? '' : `<label>발행처<input name="issuer" maxlength="100" value="${esc(d.issuer)}"${dis}></label><label>판·연도<input name="edition" maxlength="60" value="${esc(d.edition)}"${dis}></label><label>시행·발행일<input type="date" name="effective_date" value="${esc(d.effective_date || '')}"${dis}></label>`}
@@ -1402,7 +1453,6 @@ async function pageQDocs(main) {
     if (e.target.closest('#qdExt')) return qdocNew({ scope: 'external', kind: 'std' }).catch(fail);
     const o = e.target.closest('[data-qd-open]'); if (o) qdocOpen(Number(o.dataset.qdOpen)).catch(fail);
   });
-  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-qd-row]'); if (tr && !e.target.closest('a,button')) qdocOpen(Number(tr.dataset.qdRow)).catch(fail); });
   form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }
@@ -1428,19 +1478,20 @@ async function chgOpen(id) {
   const list = await api('GET', '/api/changes'), c = list.rows.find(x => x.id === id); if (!c) return toast('변경을 찾을 수 없습니다.', 'err');
   const can = list.can_manage, mine = c.requester_name === list.me, end = ['verified', 'rejected', 'void'].includes(c.status), edit = !end && (can || (mine && c.status === 'requested')), dis = edit ? '' : ' disabled';
   const imp = c.impact || {}, f = (n, l, v, a = '') => `<label>${l}<input name="${n}" value="${esc(v ?? '')}"${a}${dis}></label>`;
+  const cdis = ['approved', 'applied'].includes(c.status) ? ' disabled' : dis; /* 15.309 승인 뒤 내용·영향평가 잠금(적용·검증 칸만) */
   const next = { requested: 'evaluating', evaluating: 'approved', approved: 'applied', applied: 'verified' }[c.status];
   const m = modal(`<h3>${esc(c.change_no)} · ${esc(c.title)} <span class="chip ${CHG_CHIP[c.status]}">${esc(c.status_label)}</span></h3>
     ${qStepper(CHG_FLOW, CHG_STATUS_LABEL, c.status)}
     <p class="small muted">${esc(c.source_label)}${c.source_no ? ` · <b>${esc(c.source_no)}</b>` : ''}${c.vendor ? ` · 업체 <b>${esc(c.vendor)}</b>` : ''} · 요청 ${esc(c.requester_name)} ${esc(String(c.created_at).slice(0, 10))}${c.approved_by ? ` · 승인 ${esc(c.approved_by)} ${esc(String(c.approved_at || '').slice(0, 10))}` : ''}</p>
     <form class="stack" data-chg-form>
       <fieldset class="vendor-sec"><legend>변경 내용</legend><div class="form-grid">
-        <label>변경 유형<select name="kind"${dis}>${Object.entries(CHG_KIND_LABEL).map(([k, l]) => `<option value="${k}"${c.kind === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
-        ${f('item', '대상 품목·공정', c.item)}${f('owner_name', '담당', c.owner_name)}
-        <label class="span3">제목<input name="title" required maxlength="200" value="${esc(c.title)}"${dis}></label>
-        <label class="span3">사유<textarea name="reason" rows="2" maxlength="1000"${dis}>${esc(c.reason)}</textarea></label>
-        <label class="span3">변경 전<input name="before_text" maxlength="1000" value="${esc(c.before_text)}"${dis}></label><label class="span3">변경 후<input name="after_text" maxlength="1000" value="${esc(c.after_text)}"${dis}></label>
+        <label>변경 유형<select name="kind"${cdis}>${Object.entries(CHG_KIND_LABEL).map(([k, l]) => `<option value="${k}"${c.kind === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label>대상 품목·공정<input name="item" value="${esc(c.item || '')}"${cdis}></label>${f('owner_name', '담당', c.owner_name)}
+        <label class="span3">제목<input name="title" required maxlength="200" value="${esc(c.title)}"${cdis}></label>
+        <label class="span3">사유<textarea name="reason" rows="2" maxlength="1000"${cdis}>${esc(c.reason)}</textarea></label>
+        <label class="span3">변경 전<input name="before_text" maxlength="1000" value="${esc(c.before_text)}"${cdis}></label><label class="span3">변경 후<input name="after_text" maxlength="1000" value="${esc(c.after_text)}"${cdis}></label>
       </div></fieldset>
-      <fieldset class="vendor-sec"><legend>영향평가 <span class="hint">(모두 「있음/없음」을 골라야 승인)</span></legend><div class="table-wrap"><table class="grid chg-imp" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>항목</th><th>영향</th><th>조치·메모</th></tr></thead><tbody>${Object.entries(CHG_IMPACT_LABEL).map(([k, l]) => { const x = imp[k] || {}, idis = can && !end ? '' : ' disabled'; return `<tr class="${x.v === 'yes' ? 'chg-yes' : ''}"><td class="nowrap">${l}</td><td class="nowrap"><label class="chk"><input type="radio" name="imp_${k}" value="yes"${x.v === 'yes' ? ' checked' : ''}${idis}> 있음</label> <label class="chk"><input type="radio" name="imp_${k}" value="no"${x.v === 'no' ? ' checked' : ''}${idis}> 없음</label></td><td><input name="impn_${k}" maxlength="300" value="${esc(x.note || '')}"${idis}></td></tr>`; }).join('')}</tbody></table></div>
+      <fieldset class="vendor-sec"><legend>영향평가 <span class="hint">(모두 「있음/없음」을 골라야 승인)</span></legend><div class="table-wrap"><table class="grid chg-imp" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>항목</th><th>영향</th><th>조치·메모</th></tr></thead><tbody>${Object.entries(CHG_IMPACT_LABEL).map(([k, l]) => { const x = imp[k] || {}, idis = can && !end && !['approved', 'applied'].includes(c.status) ? '' : ' disabled'; return `<tr class="${x.v === 'yes' ? 'chg-yes' : ''}"><td class="nowrap">${l}</td><td class="nowrap"><label class="chk"><input type="radio" name="imp_${k}" value="yes"${x.v === 'yes' ? ' checked' : ''}${idis}> 있음</label> <label class="chk"><input type="radio" name="imp_${k}" value="no"${x.v === 'no' ? ' checked' : ''}${idis}> 없음</label></td><td><input name="impn_${k}" maxlength="300" value="${esc(x.note || '')}"${idis}></td></tr>`; }).join('')}</tbody></table></div>
         ${can && !end ? `<div class="actions wrap small">${imp.docs?.v === 'yes' ? '<button type="button" class="btn small" data-chg-doc>문서 개정 연결</button><button type="button" class="btn small" data-chg-newdoc>새 문서 제정</button>' : ''}${imp.training?.v === 'yes' ? '<button type="button" class="btn small" data-chg-train>교육 계획 만들기</button>' : ''}${imp.validation?.v === 'yes' ? '<button type="button" class="btn small" data-chg-val>밸리데이션 만들기</button>' : ''}</div>` : ''}
         ${c.docs.length || c.trainings.length ? `<p class="small">연결: ${c.docs.map(x => `<a href="#/quality/docs" data-chg-go-doc="${x.id}">${esc(x.doc_no)} Rev.${x.rev} (${esc(x.status_label)})</a>`).join(' · ')}${c.docs.length && c.trainings.length ? ' · ' : ''}${c.trainings.map(t => `<a href="#/quality/training" data-chg-go-tr="${t.id}">교육 ${esc(t.plan_date)} ${esc(t.title)}</a>`).join(' · ')}</p>` : ''}
       </fieldset>
@@ -1452,7 +1503,7 @@ async function chgOpen(id) {
         ${edit ? '<button class="btn">저장</button>' : ''}${can && next && (next !== 'approved' || list.can_approve) ? `<button type="button" class="btn primary" data-chg-to="${next}">${next === 'approved' ? '승인' : `저장하고 「${CHG_STATUS_LABEL[next]}」로 →`}</button>` : ''}</div>
     </form>`, { wide: true });
   const form = $('[data-chg-form]', m.el);
-  const body = () => { const v = formObj(form), impact = {}; for (const k of Object.keys(CHG_IMPACT_LABEL)) { impact[k] = { v: v['imp_' + k] || '', note: v['impn_' + k] || '' }; delete v['imp_' + k]; delete v['impn_' + k]; } return { ...v, ...(can ? { impact_json: impact } : {}), revision: c.revision }; };
+  const body = () => { const v = formObj(form), impact = {}; for (const k of Object.keys(CHG_IMPACT_LABEL)) { impact[k] = { v: v['imp_' + k] || '', note: v['impn_' + k] || '' }; delete v['imp_' + k]; delete v['impn_' + k]; } return { ...v, ...(can && !['approved', 'applied'].includes(c.status) ? { impact_json: impact } : {}), revision: c.revision }; };
   const save = async (status, extra = {}) => { try { const r = await api('PUT', `/api/changes/${c.id}`, { ...body(), ...(status ? { status } : {}), ...extra }); toast(status ? `「${CHG_STATUS_LABEL[status]}」(으)로 넘겼습니다.` : '저장했습니다.'); m.close(); qReload(); await chgOpen(c.id); return r; } catch (e) { fail(e); } };
   form.onsubmit = e => { e.preventDefault(); save(null); };
   $$('[data-chg-to]', m.el).forEach(b => b.addEventListener('click', async () => { const to = b.dataset.chgTo; if (['void', 'rejected'].includes(to)) { const v = await promptBox(to === 'void' ? '변경 취소' : '변경 반려', `<label>사유 *<input name="reason" required maxlength="300"></label>`); if (v) save(to, v); return; } save(to); }));
@@ -1493,7 +1544,6 @@ async function pageChanges(main) {
     if (e.target.closest('#chgNewBtn')) return chgNew().catch(fail);
     const o = e.target.closest('[data-chg-open]'); if (o) chgOpen(Number(o.dataset.chgOpen)).catch(fail);
   });
-  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-chg-row]'); if (tr) chgOpen(Number(tr.dataset.chgRow)).catch(fail); });
   form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }
@@ -1545,7 +1595,7 @@ async function trOpen(id) {
       <fieldset class="vendor-sec"><legend>대상자 · 참석 · 평가 <span class="hint">(${t.attendees.filter(a => a.attended).length}/${t.attendees.length}명 참석)</span></legend>
         <div class="table-wrap"><table class="grid tr-att" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>이름</th><th>부서</th><th>참석</th><th>본인 확인</th><th>점수</th><th>결과</th><th>메모</th>${can ? '<th></th>' : ''}</tr></thead><tbody>${t.attendees.map(a => `<tr data-att="${esc(a.user_name)}"><td class="nowrap"><b>${esc(a.user_name)}</b></td><td>${esc(a.dept)}</td><td><input type="checkbox" data-a-att${a.attended ? ' checked' : ''}${dis}></td><td class="small nowrap">${esc(String(a.confirmed_at || '').slice(0, 16))}</td><td><input type="number" min="0" max="100" step="any" data-a-score value="${a.score ?? ''}" class="tr-score"${dis}></td><td><select data-a-result${dis}>${['', '이수', '미이수', '재교육'].map(x => `<option value="${x}"${a.result === x ? ' selected' : ''}>${x || '—'}</option>`).join('')}</select></td><td><input data-a-note maxlength="300" value="${esc(a.note)}"${dis}></td>${can ? '<td><button type="button" class="btn small danger" data-a-del>×</button></td>' : ''}</tr>`).join('') || `<tr><td colspan="8" class="muted">대상자가 없습니다.</td></tr>`}</tbody></table></div>
         ${can ? '<div class="actions"><button type="button" class="btn small" data-tr-add>＋ 대상자 추가</button><button type="button" class="btn small" data-tr-allok>참석자 모두 「이수」</button></div>' : ''}</fieldset>
-      <div class="actions"><button type="button" class="btn" data-tr-hist>이력</button>${can && t.status !== 'evaluated' ? '<button type="button" class="btn danger" data-tr-void>취소</button>' : ''}<span class="grow"></span>${can ? '<button class="btn">저장</button>' : ''}${can && next ? `<button type="button" class="btn primary" data-tr-next="${next}">저장하고 「${TR_STATUS_LABEL[next]}」로 →</button>` : ''}</div>
+      <div class="actions"><button type="button" class="btn" data-tr-hist>이력</button><button type="button" class="btn" data-tr-rpt>결과 보고서</button>${can && t.status !== 'evaluated' ? '<button type="button" class="btn danger" data-tr-void>취소</button>' : ''}<span class="grow"></span>${can ? '<button class="btn">저장</button>' : ''}${can && next ? `<button type="button" class="btn primary" data-tr-next="${next}">저장하고 「${TR_STATUS_LABEL[next]}」로 →</button>` : ''}</div>
     </form>`, { wide: true });
   const form = $('[data-tr-form]', m.el);
   const atts = () => $$('[data-att]', form).map(tr => ({ user_name: tr.dataset.att, attended: $('[data-a-att]', tr).checked ? 1 : 0, score: $('[data-a-score]', tr).value, result: $('[data-a-result]', tr).value, note: $('[data-a-note]', tr).value }));
@@ -1554,6 +1604,7 @@ async function trOpen(id) {
   $('[data-tr-next]', m.el)?.addEventListener('click', e => { if (e.currentTarget.dataset.trNext === 'done' && !form.elements.done_date.value) form.elements.done_date.value = todayStr(); save(e.currentTarget.dataset.trNext); });
   $('[data-tr-void]', m.el)?.addEventListener('click', async () => { const v = await promptBox('교육 취소', '<label>사유 *<input name="reason" required maxlength="300"></label>'); if (v) save('void', v); });
   $('[data-tr-hist]', m.el).onclick = () => qHistory(t.title, t.history, TR_STATUS_LABEL);
+  $('[data-tr-rpt]', m.el).onclick = () => trReport(t).catch(fail); // 15.312
   $('[data-tr-allok]', m.el)?.addEventListener('click', () => $$('[data-att]', form).forEach(tr => { if ($('[data-a-att]', tr).checked && !$('[data-a-result]', tr).value) $('[data-a-result]', tr).value = '이수'; }));
   form.addEventListener('click', e => { const d = e.target.closest('[data-a-del]'); if (d) d.closest('tr').remove(); });
   $('[data-tr-attend]', m.el)?.addEventListener('click', async () => { try { await api('POST', `/api/trainings/${t.id}/attend`); toast('참석을 확인했습니다.'); m.close(); qReload(); } catch (e) { fail(e); } });
@@ -1625,7 +1676,6 @@ async function pageTraining(main) {
     const qe = e.target.closest('[data-ql-edit]'); if (qe) return qualEdit(ql.rows.find(r => r.id === Number(qe.dataset.qlEdit))).catch(fail);
     const qd = e.target.closest('[data-ql-del]'); if (qd) { const r = ql.rows.find(x => x.id === Number(qd.dataset.qlDel)); if (!await confirmBox(`${r.user_name} · ${r.kind} 자격을 지울까요?`)) return; try { await api('DELETE', `/api/qualifications/${r.id}?revision=${r.revision}`); toast('지웠습니다.'); load(); } catch (err) { fail(err); } }
   });
-  main.addEventListener('dblclick', e => { const r = e.target.closest('[data-tr-row]'); if (r && !e.target.closest('button')) trOpen(Number(r.dataset.trRow)).catch(fail); });
   form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }
@@ -1693,7 +1743,6 @@ async function pageSuppliers(main) {
     const ev = e.target.closest('[data-sup-eval]'); if (ev) return supEval(data.rows.find(r => r.vendor === ev.dataset.supEval), data.year).catch(fail);
     const t = e.target.closest('[data-q-tile]'); if (t) { form.elements.show.value = ['active', 'active', 'active', 'coa', 'noeval', 'low'][Number(t.dataset.qTile)]; draw(); }
   });
-  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-sup-row]'); if (tr && !e.target.closest('button')) supOpen(tr.dataset.supRow, data.year).catch(fail); });
   form.elements.year.addEventListener('change', () => load().catch(fail)); form.addEventListener('input', e => { if (e.target.name !== 'year') draw(); }); form.elements.show.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }
@@ -1780,7 +1829,6 @@ async function pageEquipment(main) {
     if (e.target.closest('#eqNewBtn')) return eqEdit().catch(fail);
     const o = e.target.closest('[data-eq-open]'); if (o) eqOpen(Number(o.dataset.eqOpen)).catch(fail);
   });
-  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-eq-row]'); if (tr && !e.target.closest('button')) eqOpen(Number(tr.dataset.eqRow)).catch(fail); });
   form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }
@@ -2027,7 +2075,6 @@ async function pageMethods(main) {
     const th = e.target.closest('[data-tm-hist]'); if (th) { const t = tm.rows.find(x => x.id === Number(th.dataset.tmHist)); return qHistory(`${t.method_no} ${t.name}`, t.history); }
     const ro = e.target.closest('[data-rel-open]'); if (ro) relOpen(Number(ro.dataset.relOpen)).catch(fail);
   });
-  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-rel-row]'); if (tr && !e.target.closest('button')) relOpen(Number(tr.dataset.relRow)).catch(fail); });
   form.addEventListener('input', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }
@@ -2057,7 +2104,7 @@ async function audOpen(id = null, pre = {}) {
       ${a ? `<fieldset class="vendor-sec"><legend>지적사항 <span class="hint">(중대·경미는 CAPA가 자동으로 만들어지고, CAPA를 종결하면 닫힙니다)</span></legend>${a.findings.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>등급</th><th>조항</th><th>지적 내용</th><th>부서</th><th>시정 기한</th><th>CAPA</th><th></th></tr></thead><tbody>${a.findings.map(f => `<tr class="${f.closed ? 'row-off' : f.due_date && f.due_date < list.today ? 'ip-over' : ''}"><td class="nowrap"><span class="chip ${f.grade === 'major' ? 'red' : f.grade === 'minor' ? 'yellow' : ''}">${esc(f.grade_label)}</span></td><td>${esc(f.clause)}</td><td>${esc(f.content)}</td><td>${esc(f.dept)}</td><td class="nowrap">${esc(f.due_date || '')}${f.closed ? '' : qDd(f.due_date, list.today, true, 7)}</td><td class="nowrap">${f.nc_id ? `<a href="#/quality/capa" data-aud-nc="${f.nc_id}">${esc(f.nc_no)}</a> <span class="chip ${NC_STATUS_CHIP[f.nc_status] || ''}">${esc(f.nc_status_label)}</span>` : ''}</td><td>${f.grade === 'obs' && can && !end ? `<label class="chk"><input type="checkbox" data-obs="${f.id}"${f.obs_done ? ' checked' : ''}> 확인</label>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted small">지적사항이 없습니다.</p>'}${can && !end ? '<button type="button" class="btn small" data-fnd-add>＋ 지적사항</button>' : ''}</fieldset>` : ''}
       <fieldset class="vendor-sec"><legend>결과 요약 · 보고서</legend><label>요약<textarea name="summary" rows="2" maxlength="2000"${dis}>${esc(v0.summary || '')}</textarea></label>
         ${v0.files.length ? `<div class="scoa-files">${v0.files.map(f => `<label class="chk">${can && !end ? `<input type="checkbox" name="keep_files" value="${esc(f.file)}" checked> ` : ''}${qFileLink(f)}</label>`).join('')}</div>` : ''}${can && !end ? '<label>보고서·대응보고서 파일 추가 (PDF·사진)<input type="file" multiple data-q-file accept="application/pdf,image/jpeg,image/png,image/webp"></label>' : ''}</fieldset>
-      <div class="actions">${a ? '<button type="button" class="btn" data-aud-hist>이력</button>' : ''}${a && can && !end && !a.findings.length ? '<button type="button" class="btn danger" data-aud-to="void">취소</button>' : ''}${a && a.cert_id ? '<a class="btn" href="#/quality/certs">인증서 관리</a>' : ''}<span class="grow"></span>${can && !end ? '<button class="btn">저장</button>' : ''}${a && can && a.status === 'planned' ? '<button type="button" class="btn primary" data-aud-to="done">저장하고 실시 완료</button>' : ''}${a && can && ['done', 'correcting'].includes(a.status) ? '<button type="button" class="btn primary" data-aud-to="closed">종결</button>' : ''}${a && list.can_manage && end && hasRole('quality_approver') && a.status === 'closed' ? '<button type="button" class="btn" data-aud-to="planned">다시 열기</button>' : ''}</div>
+      <div class="actions">${a ? '<button type="button" class="btn" data-aud-hist>이력</button><button type="button" class="btn" data-aud-rpt>심사 보고서</button>' : ''}${a && can && !end && !a.findings.length ? '<button type="button" class="btn danger" data-aud-to="void">취소</button>' : ''}${a && a.cert_id ? '<a class="btn" href="#/quality/certs">인증서 관리</a>' : ''}<span class="grow"></span>${can && !end ? '<button class="btn">저장</button>' : ''}${a && can && a.status === 'planned' ? '<button type="button" class="btn primary" data-aud-to="done">저장하고 실시 완료</button>' : ''}${a && can && ['done', 'correcting'].includes(a.status) ? '<button type="button" class="btn primary" data-aud-to="closed">종결</button>' : ''}${a && list.can_manage && end && hasRole('quality_approver') && a.status === 'closed' ? '<button type="button" class="btn" data-aud-to="planned">다시 열기</button>' : ''}</div>
     </form>`, { wide: true });
   const form = $('[data-aud-form]', m.el), tb = $('.aud-cl tbody', form);
   const certVis = () => { $('[data-aud-cert]', form).hidden = form.elements.kind.value !== 'cert'; }; certVis(); form.elements.kind.addEventListener('change', certVis);
@@ -2070,6 +2117,7 @@ async function audOpen(id = null, pre = {}) {
   form.onsubmit = e => { e.preventDefault(); save(null); };
   $$('[data-aud-to]', m.el).forEach(b => b.addEventListener('click', async () => { const to = b.dataset.audTo; if (to === 'void') { const v = await promptBox('심사 취소', '<label>사유 *<input name="reason" required maxlength="300"></label>'); if (v) save(to, v); return; } save(to); }));
   $('[data-aud-hist]', m.el)?.addEventListener('click', () => qHistory(a.audit_no, a.history, AUD_STATUS_LABEL));
+  $('[data-aud-rpt]', m.el)?.addEventListener('click', () => audReport(a).catch(fail)); // 15.312
   $('[data-fnd-add]', m.el)?.addEventListener('click', async () => {
     const v = await promptBox('지적사항 등록', `<p class="small muted">중대·경미 지적은 부적합·CAPA(출처: 심사 지적)가 자동으로 만들어집니다. 시정 기한 기본값은 중대 30일, 경미 60일입니다.</p><div class="form-grid"><label>등급 *<select name="grade">${Object.entries(FND_GRADE_LABEL).map(([k, l]) => `<option value="${k}"${k === 'minor' ? ' selected' : ''}>${l}</option>`).join('')}</select></label><label>조항<input name="clause" maxlength="100" placeholder="예) ISO 9001 7.5.3"></label><label>부서<input name="dept" maxlength="50"></label><label class="span3">지적 내용 *<textarea name="content" required rows="2" maxlength="1000"></textarea></label><label>시정 기한<input type="date" name="due_date"></label><label>CAPA 담당<input name="owner_name" maxlength="50"></label></div>`, { wide: true,
       submit: async vals => api('POST', `/api/audits/${a.id}/findings`, { ...vals, request_id: crypto.randomUUID() }) });
@@ -2099,7 +2147,6 @@ async function pageAudits(main) {
     if (e.target.closest('#audNewBtn')) return audOpen().catch(fail);
     const o = e.target.closest('[data-aud-open]'); if (o) audOpen(Number(o.dataset.audOpen)).catch(fail);
   });
-  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-aud-row]'); if (tr && !e.target.closest('button')) audOpen(Number(tr.dataset.audRow)).catch(fail); });
   form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }
@@ -2167,7 +2214,6 @@ async function pageValidations(main) {
     if (e.target.closest('#valNewBtn')) return valOpen().catch(fail);
     const o = e.target.closest('[data-val-open]'); if (o) valOpen(Number(o.dataset.valOpen)).catch(fail);
   });
-  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-val-row]'); if (tr && !e.target.closest('button')) valOpen(Number(tr.dataset.valRow)).catch(fail); });
   form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }
@@ -2234,7 +2280,6 @@ async function pageKpi(main) {
     if (e.target.closest('#kpiAuto')) { const defaults = { iqc_fail_rate: 2, oqc_fail_rate: 0.5, voc_count: 1, capa_ontime: 90 }; try { for (const k of Object.keys(data.metrics).filter(k => !data.rows.some(g => g.metric === k))) await api('POST', '/api/kpi/goals', { year: form.elements.year.value, title: data.metrics[k].label, metric: k, target: defaults[k], status: 'progress', request_id: crypto.randomUUID() }); toast('자동 지표를 넣었습니다. 목표값은 「열기」에서 고치세요.'); load(); } catch (err) { fail(err); } return; }
     const o = e.target.closest('[data-goal-open]'); if (o) goalOpen(Number(o.dataset.goalOpen), Number(form.elements.year.value)).catch(fail);
   });
-  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-goal-row]'); if (tr && !e.target.closest('button')) goalOpen(Number(tr.dataset.goalRow), Number(form.elements.year.value)).catch(fail); });
   form.addEventListener('change', () => load().catch(fail)); form.onsubmit = e => e.preventDefault();
   await load();
 }
@@ -2296,7 +2341,1005 @@ async function pageRisks(main) {
     if (e.target.closest('#riskNew')) return riskOpen().catch(fail);
     const o = e.target.closest('[data-risk-open]'); if (o) riskOpen(data.rows.find(r => r.id === Number(o.dataset.riskOpen))).catch(fail);
   });
-  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-risk-row]'); if (tr && !e.target.closest('button')) riskOpen(data.rows.find(r => r.id === Number(tr.dataset.riskRow))).catch(fail); });
+  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  await load();
+}
+
+// ── 15.312 사용 편의 ──
+// (1) 목록 공통 도구: 오른쪽 도구 묶음(.ip-tools)이 있는 조회 줄에 「N건」·조건 초기화(↻)·엑셀을 한 번 붙인다(기존 목록 화면과 같은 사용법).
+function tableToXlsx(table, name) {
+  const ths = [...(table.tHead?.rows[0]?.cells || [])], keep = ths.map((th, i) => [i, th.textContent.replace(/[▾▴▼▲☆]/g, '').replace(/\s+/g, ' ').trim()]).filter(([, l]) => l);
+  const raw = [...(table.tBodies[0]?.rows || [])].filter(tr => !tr.hidden && tr.cells.length === ths.length).map(tr => keep.map(([i]) => tr.cells[i].textContent.replace(/\s+/g, ' ').trim()));
+  // 15.315 열 전체가 숫자일 때만 숫자로(LOT 007123·「1,2」 같은 글자는 그대로). 앞자리 0은 글자로 본다.
+  const isNum = t => /^-?(\d{1,3}(,\d{3})+|\d+)(\.\d+)?$/.test(t) && !/^-?0\d/.test(t);
+  const types = keep.map((_, j) => raw.length && raw.some(r => r[j] !== '') && raw.every(r => r[j] === '' || isNum(r[j])) ? 'number' : 'text');
+  const rows = raw.map(r => r.map((t, j) => types[j] === 'number' && t !== '' ? Number(t.replace(/,/g, '')) : t));
+  xlsxDownload(`${name}_${todayStr()}.xlsx`, { sheet: name.slice(0, 30), titles: [name, `${todayStr()} · ${rows.length}건`], columns: keep.map(([, label], j) => ({ label, type: types[j] })), rows });
+}
+function listAutoTools(form) {
+  if (form.dataset.autoTools) return; const list = form.nextElementSibling; if (!list) return;
+  form.dataset.autoTools = '1';
+  const tools = form.querySelector(':scope > .ip-tools'), bar = document.createElement('span'); bar.className = 'lf-auto';
+  bar.innerHTML = '<span class="small muted" data-auto-count role="status"></span><button type="button" class="btn icon-reset" data-auto-reset title="조건 초기화" aria-label="조건 초기화">↻</button><button type="button" class="btn" data-auto-xlsx title="지금 보이는 목록을 엑셀로">엑셀</button>';
+  tools.before(bar);
+  const table = () => list.querySelector('table');
+  const update = () => {
+    const t = table(), n = t ? [...(t.tBodies[0]?.rows || [])].filter(tr => !tr.hidden && !tr.querySelector('td[colspan]')).length : 0;
+    $('[data-auto-count]', bar).textContent = `${n}건`;
+    const own = [...tools.querySelectorAll('.btn')].some(b => b.textContent.trim() === '엑셀'); $('[data-auto-xlsx]', bar).hidden = own || !n;
+  };
+  new MutationObserver(update).observe(list, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  new MutationObserver(update).observe(tools, { childList: true });
+  $('[data-auto-reset]', bar).onclick = () => { form.reset(); form.querySelectorAll('select').forEach(s => s.dispatchEvent(new Event('change', { bubbles: true }))); form.dispatchEvent(new Event('input', { bubbles: true })); };
+  $('[data-auto-xlsx]', bar).onclick = () => { const t = table(); if (t) tableToXlsx(t, screenTitle(document.querySelector('#main')) || '목록'); };
+  update();
+}
+if (typeof document !== "undefined" && typeof MutationObserver !== "undefined") new MutationObserver(() => { for (const f of document.querySelectorAll('#main form.list-filters:not([data-auto-tools])')) if (f.querySelector(':scope > .ip-tools')) listAutoTools(f); }).observe(document.body, { childList: true, subtree: true });
+
+// (2) 목록 줄 한 번 누르면 열기: 줄 안의 「열기」·「카드」 단추와 같은 동작(단추·링크·입력칸을 누른 것은 그대로).
+if (typeof document !== "undefined") document.addEventListener('click', e => {
+  const tr = e.target.closest?.('#main table.ip-table > tbody > tr'); if (!tr || e.target.closest('a, button, input, select, textarea, label, summary, .chip-btn')) return;
+  if (getSelection && String(getSelection()).length) return; // 글자를 끌어 고르는 중이면 열지 않음
+  const b = [...tr.querySelectorAll('button')].find(x => /^(열기|카드)$/.test(x.textContent.trim())); if (b) b.click();
+});
+
+// (3) 기록 찾기: 메뉴 찾기 칸에 번호·제목을 치면 그 기록을 바로 연다.
+const FIND_OPEN = {
+  devcost: id => costOpen(id), // 15.316
+  costitem: id => costItemOpen(id), // 15.318
+  ra: id => raOpen(id), // 15.313
+  nc: id => ncOpen(id), coa: id => coaOpen(id), change: id => chgOpen(id), doc: id => qdocOpen(id), audit: id => audOpen(id), validation: id => valOpen(id), reliability: id => relOpen(id), equipment: id => eqOpen(id),
+  risk: async id => { const r = (await api('GET', '/api/risks')).rows.find(x => x.id === id); if (r) riskOpen(r); },
+  method: async id => { const t = (await api('GET', '/api/test-methods')).rows.find(x => x.id === id); if (t && hasRole('quality')) tmEdit(t); },
+  request: async (id, hit) => { const rows = await api('GET', '/api/requests?type=' + encodeURIComponent(hit.rtype)); const r = rows.find(x => x.id === id); if (r) requestDetail(hit.rtype, r, () => {}); },
+  lot: (_, hit) => { const f = document.querySelector('#ltForm'); if (f) { f.elements.lot.value = hit.no; f.requestSubmit(); } },
+};
+const REQ_STATE = { pending: '접수대기', waiting: '대기', progress: '진행', done: '완료', rejected: '반려' };
+async function findRecords(q) {
+  q = q.trim(); if (q.length < 2) return [];
+  let rows = []; try { rows = (await api('GET', '/api/find?q=' + encodeURIComponent(q))).rows; } catch { return []; }
+  const hits = rows.map(r => { const href = r.type === 'request' ? (REQ[r.rtype]?.list || '') : r.href; return href && canSeeRoute(href) ? { href, label: `${r.no || ''} ${r.label || ''}`.trim(), path: [r.sub + (r.state ? ` · ${REQ_STATE[r.state] || r.state}` : '')], open: { type: r.type, id: r.id }, rtype: r.rtype, no: r.no } : null; }).filter(Boolean);
+  if (/\d/.test(q) && q.length >= 4 && canSeeRoute('#/prod/lot-trace')) hits.push({ href: '#/prod/lot-trace', label: `LOT 「${q}」 연결 조회`, path: ['LOT 연결 조회'], open: { type: 'lot' }, no: q });
+  return hits;
+}
+async function openFound(hit) {
+  const run = () => FIND_OPEN[hit.open.type]?.(hit.open.id, hit);
+  if ((location.hash || '#/').split('?')[0] === hit.href) return run();
+  location.hash = hit.href;
+  for (let i = 0; i < 40; i++) { await new Promise(r => setTimeout(r, 100)); const h = document.querySelector('#main h1'); if (h && (location.hash || '#/').split('?')[0] === hit.href && !document.querySelector('#main .loading')) break; }
+  await new Promise(r => setTimeout(r, 250)); try { await run(); } catch (e) { fail(e); }
+}
+
+// (4) 한꺼번에 승인(내가 처리할 일): COA 승인 · 문서 승인·배포 · 의뢰 접수 승인. 고른 건을 차례로 승인하고 결과를 보여 준다.
+async function bulkApprove(kind, rtype = '') {
+  let items = [], label = '';
+  if (kind === 'coa') { label = 'COA 승인'; items = (await api('GET', '/api/coas')).rows.filter(c => c.status === 'draft').map(c => ({ id: c.id, rev: c.revision, text: `${c.coa_no} · ${c.item} · LOT ${c.lot}`, sub: `작성 ${c.created_by}` })); }
+  else if (kind === 'docs') { label = '문서 승인·배포'; items = (await api('GET', '/api/qdocs')).rows.filter(d => d.status === 'review').map(d => ({ id: d.id, rev: d.revision, text: `${d.doc_no} Rev.${d.rev} ${d.title}`, sub: d.summary || '' })); }
+  else { label = `${REQ[rtype]?.label || ''} 의뢰 승인`; items = (await api('GET', '/api/requests?type=' + encodeURIComponent(rtype))).filter(r => r.status === 'pending').map(r => ({ id: r.id, text: `${r.title}${r.customer ? ' · ' + r.customer : ''}`, sub: `의뢰 ${r.requester_name || ''} ${String(r.created_at || '').slice(0, 10)}` })); }
+  if (!items.length) return toast('승인할 건이 없습니다.');
+  const m = modal(`<h3>한꺼번에 ${esc(label)} <span class="chip yellow">${items.length}건</span></h3><p class="small muted">승인할 건을 고르세요. 내용을 봐야 하는 건은 체크를 풀고 화면에서 하나씩 여세요.</p>
+    <form class="stack" data-bulk-form><div class="table-wrap"><table class="grid keep-table" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th><input type="checkbox" data-bulk-all checked aria-label="모두"></th><th>건</th><th>정보</th></tr></thead><tbody>${items.map((x, i) => `<tr><td><input type="checkbox" name="pick" value="${i}" checked></td><td><b>${esc(x.text)}</b></td><td class="small muted">${esc(x.sub)}</td></tr>`).join('')}</tbody></table></div>
+    <div class="actions"><span class="small muted" data-bulk-msg role="status"></span><span class="grow"></span><button type="button" class="btn" data-no>취소</button><button class="btn primary">고른 건 승인</button></div></form>`, { wide: true });
+  const form = $('[data-bulk-form]', m.el);
+  $('[data-bulk-all]', form).onchange = e => $$('[name=pick]', form).forEach(c => { c.checked = e.target.checked; });
+  $('[data-no]', form).onclick = () => m.close();
+  form.onsubmit = async e => {
+    e.preventDefault(); const picked = $$('[name=pick]:checked', form).map(c => items[Number(c.value)]); if (!picked.length) return toast('고른 건이 없습니다.', 'err');
+    form.inert = true; let ok = 0; const bad = [], train = [];
+    for (const [i, x] of picked.entries()) {
+      $('[data-bulk-msg]', form).textContent = `${i + 1}/${picked.length} 승인 중…`;
+      try { if (kind === 'coa') await api('POST', `/api/coas/${x.id}/approve`, { revision: x.rev }); else if (kind === 'docs') { const r = await api('POST', `/api/qdocs/${x.id}/step`, { to: 'approved', revision: x.rev }); if (r.training_suggest) train.push(r); } else await api('POST', `/api/requests/${x.id}/approve`); ok++; }
+      catch (err) { bad.push(`${x.text}: ${err.message}`); }
+    }
+    m.close(); toast(bad.length ? `${ok}건 승인, ${bad.length}건 실패 — ${bad[0]}` : `${ok}건을 승인했습니다.`, bad.length ? 'err' : 'ok');
+    if (location.hash === '#/' || location.hash === '' || location.hash === '#/tasks') render(); refreshNavBadges();
+    // 15.315 하나씩 승인할 때처럼 「교육 필요」 문서는 개정 교육 계획을 권함
+    for (const r of train) { if (!await confirmBox(`${r.doc_no} Rev.${r.rev} 교육이 필요한 문서입니다. 교육 계획을 지금 만들까요?${train.length > 1 ? ` (${train.indexOf(r) + 1}/${train.length})` : ''}`)) continue; await trNew({ doc_id: r.id, kind: '문서 개정 교육', title: `${r.doc_no} ${r.title} Rev.${r.rev} 개정 교육`, change_id: r.change_id }); break; }
+  };
+}
+
+// (5) 기한 알림(브라우저 알림): 켜 두면 앱이 열려 있는 동안 10분마다 확인해, 새로 생긴 승인 대기·기한 알림을 컴퓨터·휴대폰 알림으로 띄운다.
+const NOTIFY_KEY = () => `wpa:notify:${ME?.id || 0}`, NOTIFY_SEEN = () => `wpa:notify-seen:${ME?.id || 0}`;
+const notifyOn = () => { try { return typeof Notification !== 'undefined' && Notification.permission === 'granted' && localStorage.getItem(NOTIFY_KEY()) === '1'; } catch { return false; } };
+async function notifyToggle() {
+  if (typeof Notification === 'undefined') return toast('이 브라우저는 알림을 지원하지 않습니다.', 'err');
+  if (notifyOn()) { try { localStorage.setItem(NOTIFY_KEY(), '0'); } catch {} toast('알림을 껐습니다.'); return render(); }
+  const p = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+  if (p !== 'granted') return toast('브라우저에서 알림을 허용해야 받을 수 있습니다(주소창 왼쪽 자물쇠 → 알림 허용).', 'err');
+  try { localStorage.setItem(NOTIFY_KEY(), '1'); localStorage.removeItem(NOTIFY_SEEN()); } catch {}
+  toast('알림을 켰습니다. 앱이 열려 있는 동안 새 승인 대기·기한 알림을 알려 드립니다.'); notifyCheck(true); render();
+}
+async function notifyCheck(first = false) {
+  if (!ME || !notifyOn()) return;
+  try {
+    const [tasks, alerts] = await Promise.all([api('GET', '/api/my-tasks'), api('GET', '/api/alerts')]);
+    const now = {}; // 15.315 항목 이름별 건수: 새로 생기거나 늘었을 때만 알림(줄어든 것은 알리지 않음)
+    for (const [type, g] of Object.entries(tasks.approvals.requests || {})) if (g.count) now[`${REQ[type]?.label || type} 승인 대기`] = g.count;
+    for (const q of tasks.approvals.quality || []) now[q.label] = q.count;
+    if (tasks.approvals.training_attend?.count) now['교육 참석 확인'] = tasks.approvals.training_attend.count;
+    for (const q of alerts.quality_alerts || []) now[q.label] = q.count;
+    if (alerts.overdue_po_count) now['납기 지난 미입고 발주'] = alerts.overdue_po_count;
+    let seen = {}; try { seen = JSON.parse(localStorage.getItem(NOTIFY_SEEN()) || '{}'); if (Array.isArray(seen)) seen = {}; } catch {}
+    const lines = Object.entries(now).map(([l, c]) => `${l} ${c}건`), fresh = Object.entries(now).filter(([l, c]) => c > (seen[l] || 0)).map(([l, c]) => `${l} ${c}건`); try { localStorage.setItem(NOTIFY_SEEN(), JSON.stringify(now)); } catch {}
+    if (!fresh.length || (first && !lines.length)) return;
+    const n = new Notification('서울세미텍 · 확인할 일', { body: fresh.slice(0, 6).join('\n') + (fresh.length > 6 ? `\n외 ${fresh.length - 6}건` : ''), tag: 'wpa-tasks' });
+    n.onclick = () => { window.focus(); location.hash = '#/'; n.close(); };
+  } catch { /* 알림은 편의 기능 */ }
+}
+if (typeof setInterval !== "undefined") setInterval(() => notifyCheck(), 10 * 60 * 1000);
+if (typeof setTimeout !== "undefined") setTimeout(() => notifyCheck(), 8000);
+
+// (6) 보고서 출력: 8D 보고서(CAPA) · 교육 결과 보고서 · 심사 보고서. 창 안 양식을 그대로 인쇄·PDF로.
+async function rptCompany() { try { return (await api('GET', '/api/coas')).company || {}; } catch { return {}; } }
+function rptWindow(title, body, co = {}) {
+  const m = modal(`<div class="rpt-sheet"><div class="rpt-top"><b>${esc(co.biz_name || '')}</b><span class="small">${esc(todayStr())} 출력 · ${esc(ME?.name || '')}</span></div><h2 class="rpt-title">${esc(title)}</h2>${body}</div>
+    <div class="actions no-print"><span class="grow"></span><button type="button" class="btn" data-no>닫기</button><button type="button" class="btn primary" data-rpt-print>인쇄 · PDF</button></div>`, { wide: true });
+  m.el.classList.add('rpt-modal');
+  $('[data-no]', m.el).onclick = () => m.close();
+  $('[data-rpt-print]', m.el).onclick = () => { document.body.classList.add('printing'); window.print(); document.body.classList.remove('printing'); };
+  return m;
+}
+const rptRow = (pairs) => `<table class="rpt-head">${pairs.map(row => `<tr>${row.map(([k, v]) => `<th>${esc(k)}</th><td>${v == null || v === '' ? '<span class="muted">—</span>' : esc(v)}</td>`).join('')}</tr>`).join('')}</table>`;
+const rptBlock = (t, html) => `<section class="rpt-block"><h3>${esc(t)}</h3>${html}</section>`;
+const rptText = v => v ? `<p class="rpt-text">${esc(v)}</p>` : '<p class="muted">—</p>';
+async function nc8D(n) {
+  const c = n.cause || {}, co = await rptCompany();
+  const whys = ['why1', 'why2', 'why3', 'why4', 'why5'].filter(k => c[k]).map((k, i) => `<li>Why ${i + 1}: ${esc(c[k])}</li>`).join('');
+  const m4 = [['man', '사람'], ['machine', '설비'], ['material', '자재'], ['method', '방법'], ['env', '환경']].filter(([k]) => c[k]).map(([k, l]) => `<li>${l}: ${esc(c[k])}</li>`).join('');
+  rptWindow('8D 보고서', rptRow([[['번호', n.nc_no], ['단계', n.status_label]], [['출처', `${n.source_label}${n.source_no ? ' ' + n.source_no : ''}`], ['유형·등급', `${n.kind} · ${n.grade_label}`]], [['품목', n.item], ['LOT · 수량', `${n.lot || '—'} · ${n.qty ?? '—'}`]], [['발생일', n.found_date], ['조치 기한', n.due_date]]])
+    + rptBlock('D1 팀 구성', rptText(`담당 ${n.owner_name || '—'} · 등록 ${n.created_by}`))
+    + rptBlock('D2 문제 기술', rptText(`${n.title}${n.detail ? '\n' + n.detail : ''}`))
+    + rptBlock('D3 임시 조치(격리·선별)', rptText(n.containment))
+    + rptBlock('D4 근본 원인', (whys || m4 || c.root) ? `${whys ? `<ul>${whys}</ul>` : ''}${m4 ? `<ul>${m4}</ul>` : ''}${c.root ? `<p><b>근본 원인</b> ${esc(c.root)}</p>` : ''}` : '<p class="muted">—</p>')
+    + rptBlock('D5 영구 시정조치', rptText(n.corrective))
+    + rptBlock('D6 실행 · 시정', rptText(`${n.correction || ''}${n.action_date ? `\n조치 완료일 ${n.action_date}` : ''}`))
+    + rptBlock('D7 재발 방지(예방조치)', rptText(n.preventive))
+    + rptBlock('D8 유효성 확인 · 종결', rptText(`${n.verify_result ? `검증 ${n.verify_result}` : '검증 전'}${n.verify_date ? ` (${n.verify_date})` : ''}${n.verify_note ? '\n' + n.verify_note : ''}${n.closed_by ? `\n종결 ${n.closed_by} ${String(n.closed_at || '').slice(0, 10)}` : ''}`))
+    + '<div class="rpt-sign"><span>작성</span><span>검토</span><span>승인</span></div>', co);
+}
+async function trReport(t) {
+  const co = await rptCompany(), att = t.attendees || [];
+  rptWindow('교육 결과 보고서', rptRow([[['교육명', t.title], ['유형', t.kind]], [['예정일', t.plan_date], ['실시일', t.done_date]], [['시간(h)', t.hours], ['장소', t.place]], [['강사', t.instructor], ['평가 방법', t.eval_method]], [['관련 문서', t.doc_label], ['상태', t.status_label]]])
+    + rptBlock('교육 내용', rptText(t.content))
+    + rptBlock(`참석자 (${att.filter(a => a.attended).length}/${att.length}명)`, `<table class="rpt-list"><thead><tr><th>No</th><th>이름</th><th>부서</th><th>참석</th><th>점수</th><th>결과</th><th>서명</th></tr></thead><tbody>${att.map((a, i) => `<tr><td class="c">${i + 1}</td><td>${esc(a.user_name)}</td><td>${esc(a.dept)}</td><td class="c">${a.attended ? '○' : '×'}</td><td class="r">${a.score ?? ''}</td><td class="c">${esc(a.result)}</td><td class="rpt-signcell"></td></tr>`).join('') || '<tr><td colspan="7" class="muted">대상자가 없습니다.</td></tr>'}</tbody></table>`)
+    + '<div class="rpt-sign"><span>작성</span><span>검토</span><span>승인</span></div>', co);
+}
+async function audReport(a) {
+  const co = await rptCompany(), cl = a.checklist || [], f = a.findings || [];
+  rptWindow('심사 보고서', rptRow([[['번호', a.audit_no], ['유형', a.kind_label]], [['심사명', a.title], ['대상', a.target]], [['예정일', a.plan_date], ['실시일', a.done_date]], [['심사원', a.auditors], ['단계', a.status_label]], [['범위', a.scope], ['인증서', a.cert_label]]])
+    + rptBlock(`체크리스트 (${cl.length}문항 · 부적합 ${cl.filter(x => x.result === '부적합').length})`, cl.length ? `<table class="rpt-list"><thead><tr><th>No</th><th>질문·확인 사항</th><th>결과</th><th>메모·증거</th></tr></thead><tbody>${cl.map((x, i) => `<tr><td class="c">${i + 1}</td><td>${esc(x.q)}</td><td class="c">${esc(x.result || '—')}</td><td>${esc(x.note)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">—</p>')
+    + rptBlock(`지적사항 (${f.length}건)`, f.length ? `<table class="rpt-list"><thead><tr><th>등급</th><th>조항</th><th>지적 내용</th><th>시정 기한</th><th>CAPA</th><th>상태</th></tr></thead><tbody>${f.map(x => `<tr><td>${esc(x.grade_label)}</td><td>${esc(x.clause)}</td><td>${esc(x.content)}</td><td class="c">${esc(x.due_date || '')}</td><td>${esc(x.nc_no || '')}</td><td class="c">${x.closed ? '닫힘' : esc(x.nc_status_label || '열림')}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">지적사항이 없습니다.</p>')
+    + rptBlock('결과 요약', rptText(a.summary))
+    + '<div class="rpt-sign"><span>심사원</span><span>피심사 부서</span><span>품질책임자</span></div>', co);
+}
+
+if (typeof document !== "undefined") document.addEventListener('click', e => {
+  const b = e.target.closest?.('button[data-bulk]'); if (b) { e.preventDefault(); bulkApprove(b.dataset.bulk, b.dataset.bulkType || '').catch(fail); return; }
+  if (e.target.closest?.('[data-notify]')) { e.preventDefault(); notifyToggle().catch(fail); }
+});
+
+// ── 15.313 생산 › 위험성평가: 작업 위험성평가(KOSHA) · 공정 FMEA(AIAG-VDA AP) · HAZOP · 개선 조치 추적 · 설비 신뢰도(MTBF·MTTR) ──
+const RA_METHOD_LABEL = { kosha: '작업 위험성평가', fmea: '공정 FMEA', hazop: 'HAZOP' };
+const RA_STATUS_LABEL = { draft: '작성', review: '검토 요청', approved: '승인', obsolete: '폐지' };
+const RA_STATUS_CHIP = { draft: '', review: 'yellow', approved: 'green', obsolete: 'gray' };
+const RA_KIND_LABEL = { initial: '최초평가', regular: '정기평가', adhoc: '수시평가', continuous: '상시평가' };
+const RA_HAZARD_LABEL = { machine: '기계적 요인', electric: '전기적 요인', chemical: '화학(물질)적 요인', bio: '생물학적 요인', work: '작업특성 요인', env: '작업환경 요인', other: '기타' };
+const RA_SCALE_LABEL = { 3: '빈도·강도 3×3', 5: '빈도·강도 5×5', 1: '3단계 판단(상·중·하)' };
+const RA_GRADE_LABEL = { H: '높음', M: '보통', L: '낮음' }, RA_GRADE_CHIP = { H: 'red', M: 'yellow', L: 'green' }, RA_LVL_LABEL = { H: '상', M: '중', L: '하' };
+const HZ_PARAM = ['유량', '압력', '온도', '레벨', '조성·농도', '반응', '시간', '순서·절차', '속도·회전', '전력', '기타'];
+const HZ_GUIDE = ['없음(No)', '많음(More)', '적음(Less)', '반대(Reverse)', '일부(Part of)', '추가(As well as)', '다른(Other than)', '이른·늦은(Early/Late)', '앞·뒤(Before/After)'];
+// 분류별 흔한 유해·위험요인(입력 칸 추천 목록). 「사업장 위험성평가에 관한 지침」 유해·위험요인 분류를 따름.
+const RA_HAZARD_EX = {
+  machine: ['회전체·롤러·벨트에 끼임', '날·절단기에 베임', '움직이는 설비에 부딪힘', '물체 낙하에 맞음', '지게차·운반구 충돌'],
+  electric: ['충전부 접촉 감전', '누전·접지 불량 감전', '정전기 방전 화재', '과부하 배선 화재'],
+  chemical: ['세제·약품 피부·눈 접촉', '유해가스·증기 흡입', '인화성 물질 화재·폭발', '물질 누출·비산'],
+  bio: ['세균·곰팡이 노출', '혈액·체액 오염물 접촉'],
+  work: ['중량물 취급 요통(근골격계)', '반복 동작·부적절한 자세', '야간·장시간 작업 피로', '미끄러짐·넘어짐', '높은 곳에서 떨어짐'],
+  env: ['소음 노출(85dB 이상)', '고온·고열 작업', '조명 부족', '밀폐공간 산소 결핍', '바닥 젖음·통로 장애물'],
+  other: [],
+};
+function raFmeaAP(s, o, d) {
+  if (!s || !o || !d) return null;
+  if (s >= 9) { if (o >= 6) return 'H'; if (o >= 4) return d >= 2 ? 'H' : 'M'; if (o >= 2) return d >= 7 ? 'H' : d >= 5 ? 'M' : 'L'; return 'L'; }
+  if (s >= 7) { if (o >= 8) return 'H'; if (o >= 6) return d >= 2 ? 'H' : 'M'; if (o >= 4) return d >= 7 ? 'H' : 'M'; if (o >= 2) return d >= 5 ? 'M' : 'L'; return 'L'; }
+  if (s >= 4) { if (o >= 8) return d >= 5 ? 'H' : 'M'; if (o >= 6) return d >= 2 ? 'M' : 'L'; if (o >= 4) return d >= 7 ? 'M' : 'L'; return 'L'; }
+  if (s >= 2) return o >= 8 && d >= 5 ? 'M' : 'L';
+  return 'L';
+}
+function raScoreC(method, scale, r, after = false) {
+  const k = after ? '2' : '', n = v => Number(v) || 0;
+  if (method === 'fmea') { const s = n(r['s' + k]), o = n(r['o' + k]), d = n(r['d' + k]); return s && o && d ? { score: s * o * d, grade: raFmeaAP(s, o, d) } : { score: null, grade: null }; }
+  if (method === 'kosha' && scale === 1) return { score: null, grade: r['lvl' + k] || null };
+  const a = n(method === 'hazop' ? r['l' + k] : r['f' + k]), b = n(r['s' + k]); if (!a || !b) return { score: null, grade: null };
+  const s = a * b; return { score: s, grade: method === 'kosha' && scale === 3 ? (s >= 6 ? 'H' : s >= 3 ? 'M' : 'L') : (s >= 15 ? 'H' : s >= 8 ? 'M' : 'L') };
+}
+const raNeedsActionC = (method, g) => method === 'fmea' ? g === 'H' : g === 'H' || g === 'M';
+const raMax = (method, scale) => method === 'fmea' ? 10 : method === 'hazop' ? 5 : scale === 5 ? 5 : 3;
+const raChip = (method, b) => b?.grade ? `<span class="chip ${RA_GRADE_CHIP[b.grade]}" title="${method === 'fmea' ? `AP(조치 우선순위) ${RA_GRADE_LABEL[b.grade]}${b.score ? ` · RPN ${b.score}` : ''}` : `위험성 ${RA_GRADE_LABEL[b.grade]}`}">${method === 'fmea' ? 'AP ' + b.grade : RA_GRADE_LABEL[b.grade]}${b.score && method !== 'fmea' ? ' ' + b.score : ''}</span>${method === 'fmea' && b.score ? `<div class="small muted">RPN ${b.score}</div>` : ''}` : '<span class="muted">—</span>';
+// 워크시트 열: k(값 키) · l(제목) · t(text 한 줄 · area 여러 줄 · rate 등급 · sel 고르기 · date · calc 계산) · w(최소 너비)
+function raCols(method, scale) {
+  const tail = [{ k: 'action', l: method === 'hazop' ? '권고사항(감소대책)' : method === 'fmea' ? '권고 조치' : '감소대책', t: 'area', w: 180 }, { k: 'owner', l: '담당', t: 'text', w: 70 }, { k: 'due', l: '기한', t: 'date', w: 130 }];
+  if (method === 'fmea') return [{ k: 'step', l: '공정 단계', t: 'text', w: 100 }, { k: 'func', l: '기능·요구사항', t: 'area', w: 140 }, { k: 'mode', l: '고장 모드 *', t: 'area', w: 140, req: 1 }, { k: 'effect', l: '고장 영향', t: 'area', w: 140 }, { k: 's', l: 'S', t: 'rate', tip: '심각도(1~10)' }, { k: 'cls', l: '특별특성', t: 'sel', opts: [['', '—'], ['CC', 'CC'], ['SC', 'SC']], w: 64 },
+    { k: 'cause', l: '고장 원인', t: 'area', w: 140 }, { k: 'prevent', l: '예방 관리', t: 'area', w: 130 }, { k: 'o', l: 'O', t: 'rate', tip: '발생도(1~10)' }, { k: 'detect', l: '검출 관리', t: 'area', w: 130 }, { k: 'd', l: 'D', t: 'rate', tip: '검출도(1~10)' }, { k: '_calc', l: 'AP · RPN', t: 'calc' }, ...tail];
+  if (method === 'hazop') return [{ k: 'node', l: '노드', t: 'text', w: 100 }, { k: 'param', l: '변수', t: 'list', opts: HZ_PARAM, w: 90 }, { k: 'guide', l: '가이드워드', t: 'sel', opts: [['', '—'], ...HZ_GUIDE.map(g => [g, g])], w: 140 }, { k: 'dev', l: '이탈 *', t: 'text', w: 120, ph: '변수 + 가이드워드' },
+    { k: 'cause', l: '원인', t: 'area', w: 140 }, { k: 'cons', l: '결과(영향)', t: 'area', w: 140 }, { k: 'safeguard', l: '현재 안전장치', t: 'area', w: 130 }, { k: 's', l: '심각도', t: 'rate', tip: '1~5' }, { k: 'l', l: '가능성', t: 'rate', tip: '1~5' }, { k: '_calc', l: '위험도', t: 'calc' }, ...tail];
+  return [{ k: 'task', l: '세부 작업·공정', t: 'text', w: 110 }, { k: 'cat', l: '분류', t: 'sel', opts: Object.entries(RA_HAZARD_LABEL), w: 130 }, { k: 'hazard', l: '유해·위험요인(상황 → 결과) *', t: 'text', w: 220, max: 500, req: 1 }, { k: 'basis', l: '관련 근거', t: 'text', w: 90, ph: '법령·기준' }, { k: 'current', l: '현재 안전보건조치', t: 'area', w: 150 },
+    ...(scale === 1 ? [{ k: 'lvl', l: '위험성 수준', t: 'sel', opts: [['', '—'], ['H', '상'], ['M', '중'], ['L', '하']], w: 72 }] : [{ k: 'f', l: '가능성(빈도)', t: 'rate', tip: `1~${scale}` }, { k: 's', l: '중대성(강도)', t: 'rate', tip: `1~${scale}` }]), { k: '_calc', l: '위험성', t: 'calc' }, ...tail];
+}
+const raAfterKeys = (method, scale) => method === 'fmea' ? [['s2', 'S'], ['o2', 'O'], ['d2', 'D']] : method === 'hazop' ? [['s2', '심각도'], ['l2', '가능성']] : scale === 1 ? [['lvl2', '위험성 수준']] : [['f2', '가능성(빈도)'], ['s2', '중대성(강도)']];
+const raRowLabel = (method, r) => method === 'fmea' ? r.mode : method === 'hazop' ? r.dev : r.hazard;
+function raCell(c, r, i, method, scale, edit) {
+  const v = r[c.k] ?? '';
+  if (c.t === 'calc') return `<td class="c" data-ra-calc="${i}">${raChip(method, raScoreC(method, scale, r))}</td>`;
+  if (!edit) {
+    if (c.t === 'sel') return `<td class="c nowrap">${esc((c.opts.find(o => o[0] === v) || ['', v])[1] || '')}</td>`;
+    if (c.t === 'rate') return `<td class="c">${esc(v)}</td>`;
+    return `<td class="${c.t === 'date' ? 'c nowrap' : ''}">${esc(v)}</td>`;
+  }
+  const at = `data-i="${i}" data-k="${c.k}" aria-label="${esc(c.l.replace(' *', ''))} ${i + 1}번 줄"`, st = c.w ? ` style="min-width:${c.w}px"` : '';
+  if (c.t === 'rate') return `<td class="c"><select ${at} class="ra-rate"><option value=""></option>${Array.from({ length: raMax(method, scale) }, (_, n) => `<option${Number(v) === n + 1 ? ' selected' : ''}>${n + 1}</option>`).join('')}</select></td>`;
+  if (c.t === 'sel') return `<td><select ${at}${st}>${c.opts.map(([k, l]) => `<option value="${esc(k)}"${v === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></td>`;
+  if (c.t === 'area') return `<td><textarea ${at} rows="2" maxlength="1000"${st}>${esc(v)}</textarea></td>`;
+  if (c.t === 'list') return `<td><input ${at} list="raParam" value="${esc(v)}" maxlength="30"${st}></td>`;
+  if (c.t === 'date') return `<td><input type="date" ${at} value="${esc(v)}"${st}></td>`;
+  return `<td><input ${at} value="${esc(v)}" maxlength="${c.max || 200}"${c.ph ? ` placeholder="${esc(c.ph)}"` : ''}${c.k === 'hazard' ? ' list="raHazEx"' : ''}${st}></td>`;
+}
+// 평가 기준(척도 설명). KOSHA 3×3·5×5·3단계 판단, AIAG-VDA S·O·D와 AP 의미, HAZOP 가이드워드.
+function raCriteria(method, scale) {
+  const tbl = (head, rows) => `<div class="table-wrap"><table class="grid" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map((c, i) => `<td${i ? '' : ' class="c nowrap"'}>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  let html = '';
+  if (method === 'kosha') html = scale === 1 ? `<p>2023년 개정 지침의 <b>위험성 수준 3단계 판단법</b>: 유해·위험요인마다 바로 <b>상·중·하</b>를 정합니다.</p>${tbl(['수준', '판단', '할 일'], [['상', '중대 재해로 이어질 수 있고 자주 노출됨', '즉시 감소대책(작업 중지 검토)'], ['중', '부상 가능성이 있음', '감소대책을 세워 기한 안에 실행'], ['하', '허용 가능한 위험', '현 상태 유지·교육']])}`
+    : scale === 3 ? `${tbl(['점수', '가능성(빈도)', '중대성(강도)'], [['3', '상: 자주 일어남(일상 노출)', '대: 사망·영구 장해·휴업 1개월 이상'], ['2', '중: 가끔 일어남', '중: 휴업이 필요한 부상·질병'], ['1', '하: 거의 일어나지 않음', '소: 응급처치 정도(휴업 없음)']])}<p>위험성 = 가능성 × 중대성 → <span class="chip red">6~9 높음</span> 즉시 개선 · <span class="chip yellow">3~4 보통</span> 개선 계획 · <span class="chip green">1~2 낮음</span> 허용(현 상태 유지)</p>`
+    : `${tbl(['점수', '가능성(빈도)', '중대성(강도)'], [['5', '매우 높음: 일상적으로 일어남', '사망·다수 부상'], ['4', '높음: 자주 일어남', '영구 장해·휴업 1개월 이상'], ['3', '보통: 가끔 일어남', '휴업이 필요한 부상'], ['2', '낮음: 드물게 일어남', '응급처치 정도'], ['1', '매우 낮음: 거의 없음', '영향 거의 없음']])}<p>위험성 = 가능성 × 중대성 → <span class="chip red">15~25 높음</span> · <span class="chip yellow">8~12 보통</span> · <span class="chip green">1~6 낮음(허용)</span></p>`;
+  else if (method === 'fmea') html = `${tbl(['점수', '심각도 S(고장 영향)', '발생도 O(원인 발생)', '검출도 D(현 검출 관리)'], [['10~9', '작업자·사용자 안전, 법규 위반', '예방 관리 없음 · 매우 자주', '검출 수단 없음·검사 안 함'], ['8~7', '제품 기능 상실·전량 폐기, 기능 저하·선별', '높음(예방 관리 효과 낮음)', '사람의 육안·샘플 검사'], ['6~5', '일부 기능 상실·부분 재작업', '보통', '계측기·자동 검출(사후)'], ['4~3', '외관·편의 영향·일부 재작업', '낮음(검증된 예방 관리)', '공정 중 자동 검출·불량 유출 차단'], ['2~1', '경미하거나 영향 없음', '매우 낮음 · 설계로 발생 불가', '원인 단계 자동 검출·실수 방지(포카요케)']])}
+    <p><b>AP(조치 우선순위, AIAG-VDA 2019)</b>는 S → O → D 순으로 무게를 둔 표로 정합니다. <span class="chip red">H</span> 조치(또는 현 관리로 충분한 근거) 필수 · <span class="chip yellow">M</span> 조치 권장 · <span class="chip green">L</span> 선택. RPN(S×O×D)은 참고로만 보여 줍니다. 등급 기준은 회사 기준서·고객 요구에 맞춰 쓰세요.</p>`;
+  else html = `${tbl(['가이드워드', '뜻', '예'], [['없음(No)', '설계 의도가 전혀 없음', '유량 없음'], ['많음 · 적음', '양이 늘거나 줆', '압력 높음·온도 낮음'], ['반대(Reverse)', '반대로 일어남', '역류'], ['일부 · 추가', '일부만 / 다른 것이 더해짐', '성분 일부 누락·이물 혼입'], ['다른(Other than)', '전혀 다른 일이 일어남', '다른 약품 투입'], ['이른·늦은 · 앞·뒤', '시간·순서가 어긋남', '헹굼 전에 탈수']])}
+    <p>노드(배관·설비 구간)마다 <b>변수 × 가이드워드 = 이탈</b>을 만들고 원인·결과·현재 안전장치를 적은 뒤, 심각도 × 가능성(1~5)으로 위험도를 봅니다. <span class="chip red">15~25 높음</span> · <span class="chip yellow">8~12 보통</span> → 권고사항·담당·기한을 정합니다.</p>`;
+  const cm = modal(`<h3>평가 기준 · ${esc(RA_METHOD_LABEL[method])}${method === 'kosha' ? ` (${esc(RA_SCALE_LABEL[scale])})` : ''}</h3>${html}<div class="actions"><span class="grow"></span><button type="button" class="btn" data-x>닫기</button></div>`, { wide: true });
+  cm.el.querySelector('[data-x]').onclick = () => cm.close();
+}
+async function raList() { return api('GET', '/api/risk-assess'); }
+async function raOpen(id = null, pre = {}) {
+  const list = await raList(), a = id ? list.rows.find(x => x.id === id) : null; if (id && !a) return toast('평가서를 찾을 수 없습니다.', 'err');
+  const method = a?.method || pre.method || 'kosha', can = list.can_manage, appr = list.can_approve, st = a?.status || 'draft', edit = can && st === 'draft';
+  const v0 = a || { method, kind: 'regular', scale: 3, assess_date: todayStr(), rows: [], ...pre };
+  let scale = method === 'kosha' ? Number(v0.scale) || 3 : method === 'fmea' ? 10 : 5;
+  const rows = (v0.rows || []).map(r => ({ ...r }));
+  if (!rows.length && edit) rows.push({ cat: 'machine' });
+  const dis = edit ? '' : ' disabled', flow = ['draft', 'review', 'approved'];
+  const m = modal(`<h3>${a ? `${esc(a.ra_no)}${a.rev ? ` Rev.${a.rev}` : ''} · ${esc(a.title)} <span class="chip ${RA_STATUS_CHIP[st]}">${esc(RA_STATUS_LABEL[st])}</span>` : `새 ${esc(RA_METHOD_LABEL[method])}`}</h3>
+    ${a && st !== 'obsolete' ? qStepper(flow, RA_STATUS_LABEL, st) : ''}
+    ${a?.rev_note && st !== 'approved' ? `<p class="small muted">개정 사유: ${esc(a.rev_note)}</p>` : ''}
+    <form class="stack" data-ra-form><div class="form-grid">
+      <label class="span2">평가명 *<input name="title" required maxlength="200" value="${esc(v0.title || '')}" placeholder="${method === 'fmea' ? '예) 세탁 공정 PFMEA' : method === 'hazop' ? '예) 세탁수 순환 계통 HAZOP' : '예) 2026 세탁·포장 공정 정기 위험성평가'}"${dis}></label>
+      ${method === 'kosha' ? `<label>평가 종류<select name="kind"${dis}>${Object.entries(RA_KIND_LABEL).map(([k, l]) => `<option value="${k}"${v0.kind === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label>위험성 결정 방법<select name="scale"${dis}>${[3, 5, 1].map(k => `<option value="${k}"${scale === k ? ' selected' : ''}>${RA_SCALE_LABEL[k]}</option>`).join('')}</select></label>` : ''}
+      <label>공정·작업<input name="process" maxlength="200" value="${esc(v0.process || '')}"${dis}></label>
+      ${method !== 'kosha' ? `<label>품목·제품<input name="item" maxlength="200" value="${esc(v0.item || '')}"${dis}></label>` : ''}
+      <label>설비<select name="equipment_id"${dis}><option value="">—</option>${list.equipment.map(e => `<option value="${e.id}"${e.id === Number(v0.equipment_id) ? ' selected' : ''}>${esc(e.equip_no)} ${esc(e.name)}</option>`).join('')}</select></label>
+      <label>평가일 *<input type="date" name="assess_date" required value="${esc(v0.assess_date || '')}" max="${todayStr()}"${dis}></label>
+      <label>재평가 예정일<input type="date" name="next_review" value="${esc(v0.next_review || '')}"${dis}><span class="hint">비우면 승인 때 평가일 + 1년</span></label>
+      <label class="span2">참여자${method === 'kosha' ? '(관리감독자·근로자 참여)' : '(팀)'}<input name="team" maxlength="300" value="${esc(v0.team || '')}" placeholder="예) 생산팀장, 세탁 작업자 2명, 공무 담당"${dis}></label>
+      <label class="span3">범위<input name="scope" maxlength="1000" value="${esc(v0.scope || '')}"${dis}></label></div>
+      <fieldset class="vendor-sec"><legend>워크시트 <span class="hint">${method === 'fmea' ? '심각도·발생도·검출도(1~10)로 AP를 정합니다. AP H는 권고 조치·담당·기한이 있어야 승인됩니다.' : '위험성이 「보통」·「높음」인 줄은 감소대책·담당·기한이 있어야 검토 요청·승인됩니다.'}</span></legend>
+        <div class="ra-sum" data-ra-sum></div>
+        <div class="table-wrap ra-wrap"><table class="grid ra-ws" data-no-sort data-no-filter data-keep-cols data-no-reorder data-no-autoalign><thead></thead><tbody></tbody></table></div>
+        <datalist id="raParam">${HZ_PARAM.map(p => `<option value="${esc(p)}">`).join('')}</datalist><datalist id="raHazEx"></datalist>
+        <div class="actions">${edit ? `<button type="button" class="btn small" data-ra-add>＋ 줄</button>${method === 'hazop' ? '<button type="button" class="btn small" data-ra-guides>가이드워드로 줄 만들기</button>' : ''}` : ''}<button type="button" class="btn small" data-ra-crit>평가 기준</button></div>
+      </fieldset>
+      <fieldset class="vendor-sec"><legend>결과 요약 · 공유</legend><label>요약(근로자에게 알릴 내용 포함)<textarea name="summary" rows="2" maxlength="2000"${dis}>${esc(v0.summary || '')}</textarea></label></fieldset>
+      <div class="actions">${a ? '<button type="button" class="btn" data-ra-hist>이력</button><button type="button" class="btn" data-ra-print>평가표 인쇄</button><button type="button" class="btn" data-ra-xlsx>엑셀</button>' : ''}${a && can && st === 'draft' && !a.rev && !a.approved_at ? '<button type="button" class="btn danger" data-ra-del>삭제</button>' : ''}${a && appr && (st === 'approved' || a.rev > 0) && st !== 'obsolete' ? '<button type="button" class="btn danger" data-ra-to="obsolete">폐지</button>' : ''}
+        <span class="grow"></span>
+        ${a && st === 'review' && appr ? '<button type="button" class="btn" data-ra-to="reject">반려</button><button type="button" class="btn primary" data-ra-to="approved">승인</button>' : ''}${a && st === 'review' && !appr && a.created_by === ME?.name ? '<button type="button" class="btn" data-ra-to="withdraw">검토 요청 취소</button>' : ''}
+        ${a && st === 'approved' && can ? '<button type="button" class="btn" data-ra-to="revise">개정</button>' : ''}${edit ? `<button class="btn">저장</button><button type="button" class="btn primary" data-ra-to="review">저장하고 검토 요청</button>` : ''}</div>
+    </form>`, { wide: true });
+  m.el.classList.add('ra-modal');
+  const form = $('[data-ra-form]', m.el), table = $('.ra-ws', form), touched = () => { if (m.el.parentElement) m.el.parentElement.dataset.dirty = '1'; }; // 줄 추가·삭제도 저장 안 한 변경
+  const extra = !edit && a ? `<th>조치 상태</th><th>조치 후</th>${can && st !== 'obsolete' ? '<th></th>' : ''}` : '';
+  const sum = () => {
+    const b = rows.map(r => raScoreC(method, scale, r)), c = g => b.filter(x => x.grade === g).length;
+    const need = rows.filter((r, i) => raNeedsActionC(method, b[i].grade) && !(r.action && r.owner && r.due)).length;
+    $('[data-ra-sum]', form).innerHTML = `<span class="chip red">${method === 'fmea' ? 'AP H' : '높음'} ${c('H')}</span> <span class="chip yellow">${method === 'fmea' ? 'AP M' : '보통'} ${c('M')}</span> <span class="chip green">${method === 'fmea' ? 'AP L' : '낮음'} ${c('L')}</span> <span class="small muted">줄 ${rows.length}개${b.some(x => !x.grade) ? ` · 점수 안 넣음 ${b.filter(x => !x.grade).length}` : ''}${need ? ` · <b class="err-text">감소대책·담당·기한 필요 ${need}</b>` : ''}</span>`;
+  };
+  const draw = () => {
+    const cols = raCols(method, scale);
+    $('thead', table).innerHTML = `<tr><th class="c">No</th>${cols.map(c => `<th${c.tip ? ` title="${esc(c.tip)}"` : ''}>${esc(c.l)}</th>`).join('')}${extra}${edit ? '<th></th>' : ''}</tr>`;
+    $('tbody', table).innerHTML = rows.map((r, i) => {
+      const a2 = raScoreC(method, scale, r, true), over = r.action && !r.done && r.due && r.due < list.today;
+      const stc = !edit && a ? `<td class="nowrap">${!r.action ? '<span class="muted">—</span>' : r.done ? `<span class="chip green">완료</span><div class="small muted">${esc(r.done)}${r.done_by ? ' · ' + esc(r.done_by) : ''}</div>` : `<span class="chip ${over ? 'red' : 'yellow'}">${over ? '기한 지남' : '진행'}</span>`}${r.nc_no ? `<div><a href="#/quality/capa" data-ra-nc="${r.nc_id}">${esc(r.nc_no)}</a></div>` : ''}</td><td class="c">${r.done ? raChip(method, a2) : '<span class="muted">—</span>'}</td>
+        ${can && st !== 'obsolete' ? `<td class="nowrap">${r.action && st !== 'review' ? `<button type="button" class="btn small" data-ra-result="${i}">조치 결과</button>` : ''}${method !== 'kosha' && !r.nc_id ? ` <button type="button" class="btn small" data-ra-capa="${i}" title="이 줄을 부적합·CAPA로 등록">CAPA</button>` : ''}</td>` : ''}` : '';
+      return `<tr class="${over ? 'ip-over' : ''}"><td class="c">${i + 1}</td>${cols.map(c => raCell(c, r, i, method, scale, edit)).join('')}${stc}${edit ? `<td class="nowrap"><button type="button" class="btn small" data-ra-dup="${i}" title="줄 복사">⧉</button> <button type="button" class="btn small" data-ra-rm="${i}" aria-label="${i + 1}번 줄 삭제">×</button></td>` : ''}</tr>`;
+    }).join('') || `<tr><td colspan="${cols.length + 2}" class="empty">줄이 없습니다.</td></tr>`;
+    sum();
+  };
+  draw();
+  table.addEventListener('focusin', e => { const t = e.target.closest('[data-k="hazard"]'); if (!t) return; const cat = rows[Number(t.dataset.i)]?.cat || 'other'; $('#raHazEx', form).innerHTML = (RA_HAZARD_EX[cat] || []).map(x => `<option value="${esc(x)}">`).join(''); });
+  const onEdit = e => {
+    const t = e.target.closest('[data-k]'); if (!t) return; const i = Number(t.dataset.i), k = t.dataset.k, r = rows[i]; if (!r) return;
+    r[k] = t.value; if (method === 'hazop' && (k === 'param' || k === 'guide')) { const dev = $(`[data-i="${i}"][data-k="dev"]`, table); const auto = [r.param, r.guide].filter(Boolean).join(' '); if (dev && (!dev.value || dev.dataset.auto === '1')) { dev.value = auto; dev.dataset.auto = '1'; r.dev = auto; } }
+    if (k === 'dev') t.dataset.auto = '';
+    const cell = $(`[data-ra-calc="${i}"]`, table); if (cell) cell.innerHTML = raChip(method, raScoreC(method, scale, r)); sum();
+  };
+  table.addEventListener('input', onEdit); table.addEventListener('change', onEdit);
+  form.elements.scale?.addEventListener('change', () => { scale = Number(form.elements.scale.value); const mx = raMax(method, scale); rows.forEach(r => ['f', 's', 'f2', 's2'].forEach(k => { if (Number(r[k]) > mx) r[k] = ''; })); draw(); });
+  form.addEventListener('click', async e => {
+    if (e.target.closest('[data-ra-add]')) { touched(); rows.push(method === 'kosha' ? { cat: rows.at(-1)?.cat || 'machine', task: rows.at(-1)?.task || '' } : method === 'fmea' ? { step: rows.at(-1)?.step || '' } : { node: rows.at(-1)?.node || '' }); draw(); $(`[data-i="${rows.length - 1}"]`, table)?.focus(); return; }
+    const d = e.target.closest('[data-ra-dup]'); if (d) { const i = Number(d.dataset.raDup), { key, done, done_by, nc_id, nc_no, result, ...rest } = rows[i]; void key; void done; void done_by; void nc_id; void nc_no; void result; rows.splice(i + 1, 0, { ...rest }); touched(); draw(); return; }
+    const rm = e.target.closest('[data-ra-rm]'); if (rm) { const i = Number(rm.dataset.raRm); if (rows[i].nc_id) return toast('CAPA로 넘긴 줄은 지울 수 없습니다.', 'err'); rows.splice(i, 1); touched(); draw(); return; }
+    if (e.target.closest('[data-ra-guides]')) {
+      const v = await promptBox('가이드워드로 줄 만들기', `<p class="small muted">한 노드·변수에 대해 고른 가이드워드마다 줄을 만들고 이탈을 채웁니다. 뜻이 없는 조합은 만든 뒤 지우세요.</p><div class="form-grid"><label>노드 *<input name="node" required maxlength="100" value="${esc(rows.at(-1)?.node || '')}"></label><label>변수 *<input name="param" required list="raParam" maxlength="30"></label></div><div class="chk-list">${HZ_GUIDE.map((g, n) => `<label class="chk"><input type="checkbox" name="g" value="${esc(g)}"${n < 3 ? ' checked' : ''}> ${esc(g)}</label>`).join('')}</div>`);
+      if (!v) return; const picked = v.g || []; if (!picked.length) return toast('가이드워드를 하나 이상 고르세요.', 'err');
+      for (let n = rows.length - 1; n >= 0; n--) if (!rows[n].dev && !rows[n].cause && !rows[n].param) rows.splice(n, 1);
+      picked.forEach(g => rows.push({ node: v.node, param: v.param, guide: g, dev: `${v.param} ${g}` })); touched(); draw(); return;
+    }
+    if (e.target.closest('[data-ra-crit]')) return raCriteria(method, scale);
+    const res = e.target.closest('[data-ra-result]'); if (res) return raResult(a, Number(res.dataset.raResult), () => { m.close(); qReload(); raOpen(a.id).catch(fail); }).catch(fail);
+    const cp = e.target.closest('[data-ra-capa]'); if (cp) {
+      const i = Number(cp.dataset.raCapa); if (!await confirmBox(`${i + 1}번 줄 「${raRowLabel(method, rows[i])}」을(를) 부적합·CAPA로 등록할까요? 권고 조치가 시정조치로, 담당·기한이 그대로 넘어갑니다.`)) return;
+      try { const r = await api('POST', `/api/risk-assess/${a.id}/rows/${rows[i].key}/nc`, { revision: a.revision }); toast(`${r.nc_no} CAPA를 만들었습니다.`); m.close(); qReload(); await raOpen(a.id); } catch (err) { fail(err); } return;
+    }
+    const nc = e.target.closest('[data-ra-nc]'); if (nc) { e.preventDefault(); m.close(); location.hash = '#/quality/capa'; setTimeout(() => ncOpen(Number(nc.dataset.raNc)).catch(fail), 600); }
+  });
+  const body = () => ({ ...formObj(form), method, rows: rows.map(r => Object.fromEntries(Object.entries(r).filter(([k]) => !['score', 'grade', 'score2', 'grade2', 'need', 'open', 'over'].includes(k)))) });
+  const saveRaw = async () => a ? api('PUT', `/api/risk-assess/${a.id}`, { ...body(), revision: a.revision }) : api('POST', '/api/risk-assess', { ...body(), request_id: crypto.randomUUID() });
+  const step = async (r, to, extra = {}) => api('POST', `/api/risk-assess/${r.id}/step`, { to, revision: r.revision, ...extra });
+  const reopen = async (r, msg) => { toast(msg); m.close(); qReload(); await raOpen(r.id); };
+  form.onsubmit = async e => { e.preventDefault(); try { reopen(await saveRaw(), '저장했습니다.'); } catch (err) { fail(err); } };
+  $$('[data-ra-to]', m.el).forEach(b => b.addEventListener('click', async () => {
+    const to = b.dataset.raTo;
+    try {
+      if (to === 'review') { const r = await saveRaw(); try { return reopen(await step(r, 'review'), '검토를 요청했습니다. 생산·품질 책임자가 승인합니다.'); } catch (err) { m.close(); qReload(); await raOpen(r.id); return fail(err); } } // 저장은 됐으니 저장된 평가서로 다시 열고 막힌 사유를 보여 줌(새 평가서가 두 번 만들어지지 않게)
+      if (to === 'approved') return reopen(await step(a, 'approved'), '승인했습니다. 근로자에게 결과를 알리고, 감소대책은 「개선 조치 추적」에서 챙기세요.');
+      if (to === 'withdraw') return reopen(await step(a, 'draft'), '검토 요청을 취소했습니다.');
+      const p = { reject: ['반려', 'reason', '반려 사유'], revise: ['개정', 'rev_note', '개정 사유(무엇이 바뀌었는지: 설비·공정·물질 변경, 재해 발생 등)'], obsolete: ['폐지', 'reason', '폐지 사유'] }[to];
+      const v = await promptBox(p[0], `<label>${esc(p[2])} *<input name="${p[1]}" required maxlength="300"></label>`); if (!v) return;
+      reopen(await step(a, to === 'reject' ? 'draft' : to === 'revise' ? 'draft' : 'obsolete', v), to === 'revise' ? `Rev.${a.rev + 1} 개정을 시작했습니다.` : `${p[0]}했습니다.`);
+    } catch (err) { fail(err); }
+  }));
+  $('[data-ra-del]', m.el)?.addEventListener('click', async () => { if (!await confirmBox('이 평가서를 지울까요?')) return; try { await api('DELETE', `/api/risk-assess/${a.id}?revision=${a.revision}`); toast('지웠습니다.'); m.close(); qReload(); } catch (err) { fail(err); } });
+  $('[data-ra-hist]', m.el)?.addEventListener('click', () => qHistory(a.ra_no, a.history, RA_STATUS_LABEL));
+  $('[data-ra-print]', m.el)?.addEventListener('click', () => raPrint(a).catch(fail));
+  $('[data-ra-xlsx]', m.el)?.addEventListener('click', () => raXlsx(a));
+}
+async function raResult(a, i, done) {
+  const r = a.rows[i], keys = raAfterKeys(a.method, a.scale), mx = raMax(a.method, a.scale);
+  const sel = (k, l) => a.scale === 1 && a.method === 'kosha' ? `<label>${l} *<select name="${k}" required><option value=""></option>${['H', 'M', 'L'].map(g => `<option value="${g}"${r[k] === g ? ' selected' : ''}>${RA_LVL_LABEL[g]}</option>`).join('')}</select></label>` : `<label>${l} *<select name="${k}" required><option value=""></option>${Array.from({ length: mx }, (_, n) => `<option${Number(r[k]) === n + 1 ? ' selected' : ''}>${n + 1}</option>`).join('')}</select></label>`;
+  const v = await promptBox(`조치 결과 · ${i + 1}번 줄`, `<p class="small"><b>${esc(raRowLabel(a.method, r))}</b></p><p class="small muted">감소대책: ${esc(r.action)} · 담당 ${esc(r.owner || '—')} · 기한 ${esc(r.due || '—')}</p>
+    <div class="form-grid"><label>완료일 *<input type="date" name="done" required value="${esc(r.done || todayStr())}" max="${todayStr()}"></label>${keys.map(([k, l]) => sel(k, '조치 후 ' + l)).join('')}<label class="span3">조치 내용·증빙<input name="result" maxlength="500" value="${esc(r.result || '')}" placeholder="예) 도어 인터록 설치, 사진 첨부는 비고"></label></div>
+    <p class="small muted">조치 후 재평가(잔여 위험)가 「${a.method === 'fmea' ? 'AP H' : '보통·높음'}」이면 추가 대책이 필요합니다.</p>${r.done ? '<label class="chk"><input type="checkbox" name="undo" value="1"> 완료 취소(다시 진행으로)</label>' : ''}`,
+    { submit: vals => api('PUT', `/api/risk-assess/${a.id}/rows/${r.key}`, { revision: a.revision, ...(vals.undo ? { done: '' } : vals) }) });
+  if (v) { const x = v.rows[i]; toast(x.done ? `조치 완료 · 잔여 위험 ${RA_GRADE_LABEL[x.grade2] || '—'}` : '완료를 취소했습니다.', x.done && raNeedsActionC(a.method, x.grade2) ? 'err' : 'ok'); done(); }
+}
+function raXlsx(a) {
+  const cols = raCols(a.method, a.scale).filter(c => c.t !== 'calc'), after = raAfterKeys(a.method, a.scale);
+  const val = (c, r) => c.t === 'sel' ? (c.opts.find(o => o[0] === (r[c.k] ?? ''))?.[1] || '') : c.t === 'rate' ? (r[c.k] ? Number(r[c.k]) : '') : r[c.k] || '';
+  const columns = [{ label: 'No', type: 'number' }, ...cols.map(c => ({ label: c.l.replace(' *', ''), type: c.t === 'rate' ? 'number' : c.t === 'date' ? 'date' : 'text' })), { label: a.method === 'fmea' ? 'AP' : '위험성', type: 'text' }, { label: a.method === 'fmea' ? 'RPN' : '점수', type: 'number' }, ...after.map(([, l]) => ({ label: '조치 후 ' + l, type: a.scale === 1 ? 'text' : 'number' })), { label: '조치 후 등급', type: 'text' }, { label: '완료일', type: 'date' }, { label: '조치 내용', type: 'text' }, { label: 'CAPA', type: 'text' }];
+  const rows = a.rows.map((r, i) => [i + 1, ...cols.map(c => val(c, r)), r.grade ? (a.method === 'fmea' ? r.grade : RA_GRADE_LABEL[r.grade]) : '', r.score ?? '', ...after.map(([k]) => a.scale === 1 ? RA_LVL_LABEL[r[k]] || '' : r[k] ? Number(r[k]) : ''), r.grade2 ? (a.method === 'fmea' ? r.grade2 : RA_GRADE_LABEL[r.grade2]) : '', r.done || '', r.result || '', r.nc_no || '']);
+  xlsxDownload(`${a.ra_no}_${a.title}.xlsx`, { sheet: a.ra_no, titles: [`${RA_METHOD_LABEL[a.method]} ${a.ra_no}${a.rev ? ' Rev.' + a.rev : ''} · ${a.title}`, `${a.process || ''} · 평가일 ${a.assess_date || '-'} · ${RA_STATUS_LABEL[a.status]}${a.approved_by ? ' · 승인 ' + a.approved_by : ''}`], columns, rows });
+}
+async function raPrint(a) {
+  const co = await rptCompany(), cols = raCols(a.method, a.scale), after = raAfterKeys(a.method, a.scale);
+  const head = rptRow([[['번호', `${a.ra_no}${a.rev ? ' Rev.' + a.rev : ''}`], ['방법', `${RA_METHOD_LABEL[a.method]}${a.method === 'kosha' ? ' · ' + RA_KIND_LABEL[a.kind] + ' · ' + RA_SCALE_LABEL[a.scale] : ''}`]], [['평가명', a.title], ['공정·작업', a.process]], [['설비', a.equipment ? `${a.equipment.equip_no} ${a.equipment.name}` : ''], ['품목', a.item]], [['평가일', a.assess_date], ['재평가 예정', a.next_review]], [['참여자', a.team], ['상태', `${RA_STATUS_LABEL[a.status]}${a.approved_by ? ` · 승인 ${a.approved_by} ${String(a.approved_at || '').slice(0, 10)}` : ''}`]]]);
+  const cell = (c, r) => c.t === 'calc' ? (r.grade ? `${a.method === 'fmea' ? 'AP ' + r.grade : RA_GRADE_LABEL[r.grade]}${r.score ? ` (${r.score})` : ''}` : '') : c.t === 'sel' ? (c.opts.find(o => o[0] === (r[c.k] ?? ''))?.[1] || '') : r[c.k] ?? '';
+  const ws = `<table class="rpt-list ra-print"><thead><tr><th>No</th>${cols.map(c => `<th>${esc(c.l.replace(' *', ''))}</th>`).join('')}<th>조치 후</th><th>완료일</th></tr></thead><tbody>${a.rows.map((r, i) => `<tr><td class="c">${i + 1}</td>${cols.map(c => `<td${['rate', 'calc', 'date', 'sel'].includes(c.t) ? ' class="c"' : ''}>${esc(cell(c, r))}</td>`).join('')}<td class="c">${r.done ? esc(`${after.map(([k]) => a.scale === 1 ? RA_LVL_LABEL[r[k]] || '' : r[k]).join('·')} ${r.grade2 ? (a.method === 'fmea' ? 'AP ' + r.grade2 : RA_GRADE_LABEL[r.grade2]) : ''}`) : ''}</td><td class="c">${esc(r.done || '')}</td></tr>`).join('')}</tbody></table>`;
+  const m = rptWindow(`${RA_METHOD_LABEL[a.method]} 평가표`, head + rptBlock(`워크시트 (${a.rows.length}줄 · ${a.method === 'fmea' ? 'AP H' : '높음'} ${a.counts.H} · ${a.method === 'fmea' ? 'AP M' : '보통'} ${a.counts.M} · ${a.method === 'fmea' ? 'AP L' : '낮음'} ${a.counts.L})`, ws) + rptBlock('결과 요약 · 공유', rptText(a.summary))
+    + '<div class="rpt-sign"><span>작성</span><span>검토</span><span>승인</span></div>', co);
+  m.el.querySelector('.rpt-sheet')?.classList.add('rpt-land'); m.el.classList.add('rpt-wide');
+}
+async function pageRiskAssess(main) {
+  main.innerHTML = `<h1>위험성평가 <span class="dept">생산</span></h1>
+  <p class="muted"><b>작업 위험성평가</b>(산업안전, 「사업장 위험성평가에 관한 지침」: 유해·위험요인 파악 → 위험성 결정 → 감소대책 → 공유) · <b>공정 FMEA</b>(품질, AIAG-VDA: 고장 모드·영향·원인 → S·O·D → AP) · <b>HAZOP</b>(설비·배관, 변수 × 가이드워드 → 이탈)을 한 곳에서 작성 → 검토 요청 → 책임자 승인합니다. 감소대책은 「개선 조치 추적」에서 완료·재평가하고, 설비·공정이 바뀌거나 재해가 나면 「개정」합니다.</p>
+  <div class="ip-tiles" id="raTiles"></div>
+  <form class="toolbar list-filters" data-read-only id="raFilters"><label class="lf-sel">방법<select name="method"><option value="">전체</option>${Object.entries(RA_METHOD_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">상태<select name="st"><option value="live">폐지 빼고</option><option value="">전체</option>${Object.entries(RA_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="list-search">찾기<input type="search" name="q" placeholder="번호·평가명·공정·설비·품목"></label><span class="grow"></span><span id="raTools" class="ip-tools"></span></form>
+  <div id="raListBox"></div>`;
+  const form = $('#raFilters', main); let data = { rows: [], today: todayStr() };
+  const load = async () => { data = await raList(); if (main.isConnected) draw(); };
+  main.qReload = () => load().catch(fail);
+  const draw = () => {
+    const v = formObj(form), q = (v.q || '').trim().toLowerCase(), all = data.rows, live = all.filter(r => r.status !== 'obsolete');
+    qTiles('raTiles', [['작성·검토 중', live.filter(r => r.status !== 'approved').length, live.some(r => r.status === 'review') ? 'yellow' : ''], ['승인', live.filter(r => r.status === 'approved').length, 'green'], ['남은 높음 위험', live.reduce((n, r) => n + r.rows.filter(x => x.grade === 'H' && !(x.done && x.grade2 && x.grade2 !== 'H')).length, 0), live.some(r => r.rows.some(x => x.grade === 'H' && !x.done)) ? 'red' : ''], ['개선 조치 진행', live.reduce((n, r) => n + r.counts.open, 0)], ['조치 기한 지남', live.reduce((n, r) => n + r.counts.over, 0), live.some(r => r.counts.over) ? 'red' : ''], ['재평가 예정 지남', live.filter(r => r.review_over).length, live.some(r => r.review_over) ? 'red' : '']]);
+    $('#raTools', main).innerHTML = (data.can_manage ? Object.entries(RA_METHOD_LABEL).map(([k, l]) => `<button type="button" class="btn${k === 'kosha' ? ' primary' : ''}" data-ra-new="${k}">＋ ${l}</button>`).join('') : '') + '<a class="btn" href="#/prod/risk/actions">개선 조치 추적</a>';
+    const rows = all.filter(r => (!v.method || r.method === v.method) && (v.st === 'live' ? r.status !== 'obsolete' : !v.st || r.status === v.st) && (!q || [r.ra_no, r.title, r.process, r.item, r.team, r.equipment?.equip_no, r.equipment?.name].join(' ').toLowerCase().includes(q)));
+    const g = r => `${r.counts.H ? `<span class="chip red">${r.method === 'fmea' ? 'H' : '높음'} ${r.counts.H}</span> ` : ''}${r.counts.M ? `<span class="chip yellow">${r.method === 'fmea' ? 'M' : '보통'} ${r.counts.M}</span> ` : ''}${r.counts.L ? `<span class="chip green">${r.method === 'fmea' ? 'L' : '낮음'} ${r.counts.L}</span>` : ''}` || '<span class="muted">—</span>';
+    $('#raListBox', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>번호</th><th>방법</th><th>평가명 · 공정</th><th>설비 · 품목</th><th>평가일</th><th>위험 분포</th><th>개선 조치</th><th>재평가 예정</th><th>상태</th><th></th></tr></thead><tbody>${rows.map(r => `<tr data-ra-row="${r.id}" class="${r.status === 'obsolete' ? 'row-off' : r.counts.over || r.review_over ? 'ip-over' : ''}"><td class="nowrap" data-card-primary><b>${esc(r.ra_no)}</b>${r.rev ? `<div class="small muted">Rev.${r.rev}</div>` : ''}</td><td class="nowrap">${esc(r.method_label)}${r.method === 'kosha' ? `<div class="small muted">${esc(r.kind_label)}</div>` : ''}</td><td><b>${esc(r.title)}</b>${r.process ? `<div class="small muted">${esc(r.process)}</div>` : ''}</td><td>${r.equipment ? esc(`${r.equipment.equip_no} ${r.equipment.name}`) : ''}${r.item ? `<div class="small muted">${esc(r.item)}</div>` : ''}</td><td class="nowrap">${esc(r.assess_date || '')}</td><td class="nowrap">${g(r)}</td><td class="nowrap">${r.counts.open || r.counts.done ? `${r.counts.open ? `진행 ${r.counts.open}` : ''}${r.counts.over ? ` <span class="chip red">지남 ${r.counts.over}</span>` : ''}${r.counts.done ? `<div class="small muted">완료 ${r.counts.done}</div>` : ''}` : '<span class="muted">—</span>'}</td><td class="nowrap">${esc(r.next_review || '')}${r.review_over ? ' <span class="chip red">지남</span>' : ''}</td><td class="nowrap"><span class="chip ${RA_STATUS_CHIP[r.status]}">${esc(r.status_label)}</span></td><td><button type="button" class="btn small" data-ra-open="${r.id}">열기</button></td></tr>`).join('')}</tbody></table></div>`
+      : `<div class="empty">${all.length ? '조건에 맞는 평가서가 없습니다.' : '등록된 위험성평가가 없습니다. 오른쪽 위 「＋ 작업 위험성평가」로 공정·작업별 유해·위험요인부터 찾아 넣으세요.'}</div>`;
+  };
+  main.addEventListener('click', e => {
+    const n = e.target.closest('[data-ra-new]'); if (n) return raOpen(null, { method: n.dataset.raNew }).catch(fail);
+    const o = e.target.closest('[data-ra-open]'); if (o) raOpen(Number(o.dataset.raOpen)).catch(fail);
+  });
+  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  await load();
+}
+async function pageRiskActions(main) {
+  main.innerHTML = `<h1>개선 조치 추적 <span class="dept">생산</span></h1>
+  <p class="muted">위험성평가·FMEA·HAZOP 워크시트의 감소대책(권고 조치)을 모아 봅니다. 줄을 눌러 완료일과 <b>조치 후 재평가(잔여 위험)</b>를 넣으면 완료됩니다. 잔여 위험이 여전히 보통·높음(FMEA는 AP H)이면 평가서를 「개정」해 추가 대책을 세우세요.</p>
+  <div class="ip-tiles" id="raaTiles"></div>
+  <form class="toolbar list-filters" data-read-only id="raaFilters"><label class="lf-sel">상태<select name="st"><option value="open">진행 중</option><option value="over">기한 지남</option><option value="done">완료</option><option value="">전체</option></select></label><label class="lf-sel">방법<select name="method"><option value="">전체</option>${Object.entries(RA_METHOD_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="list-search">찾기<input type="search" name="q" placeholder="평가서·위험요인·대책·담당"></label><span class="grow"></span><span id="raaTools" class="ip-tools"><a class="btn" href="#/prod/risk">위험성평가 목록</a></span></form>
+  <div id="raaList"></div>`;
+  const form = $('#raaFilters', main); let data = { rows: [], today: todayStr() }, items = [];
+  const load = async () => { data = await raList(); items = data.rows.filter(a => a.status !== 'obsolete').flatMap(a => a.rows.map((r, i) => ({ a, r, i })).filter(x => x.r.action)); if (main.isConnected) draw(); };
+  main.qReload = () => load().catch(fail);
+  const draw = () => {
+    const v = formObj(form), q = (v.q || '').trim().toLowerCase();
+    qTiles('raaTiles', [['진행 중', items.filter(x => !x.r.done).length], ['기한 지남', items.filter(x => x.r.over).length, items.some(x => x.r.over) ? 'red' : ''], ['7일 안 기한', items.filter(x => !x.r.done && x.r.due && x.r.due >= data.today && x.r.due <= addDaysC(data.today, 7)).length, 'yellow'], ['완료', items.filter(x => x.r.done).length, 'green'], ['완료 후에도 남은 위험', items.filter(x => x.r.done && raNeedsActionC(x.a.method, x.r.grade2)).length, items.some(x => x.r.done && raNeedsActionC(x.a.method, x.r.grade2)) ? 'red' : '']]);
+    const rows = items.filter(x => (v.st === 'open' ? !x.r.done : v.st === 'over' ? x.r.over : v.st === 'done' ? !!x.r.done : true) && (!v.method || x.a.method === v.method) && (!q || [x.a.ra_no, x.a.title, raRowLabel(x.a.method, x.r), x.r.action, x.r.owner].join(' ').toLowerCase().includes(q)))
+      .sort((p, n) => (p.r.done ? 1 : 0) - (n.r.done ? 1 : 0) || String(p.r.due || '9999').localeCompare(String(n.r.due || '9999')));
+    $('#raaList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>평가서</th><th>위험요인 · 고장 모드 · 이탈</th><th>현재 위험</th><th>감소대책</th><th>담당</th><th>기한</th><th>상태</th><th>조치 후</th><th></th></tr></thead><tbody>${rows.map(({ a, r, i }) => `<tr class="${r.over ? 'ip-over' : r.done ? 'row-off' : ''}"><td class="nowrap" data-card-primary><b>${esc(a.ra_no)}</b><div class="small muted">${esc(a.method_label)} · ${i + 1}번 줄</div></td><td>${esc(raRowLabel(a.method, r))}${a.process ? `<div class="small muted">${esc(a.process)}</div>` : ''}</td><td class="c">${raChip(a.method, { grade: r.grade, score: r.score })}</td><td>${esc(r.action)}${r.nc_no ? `<div class="small muted">CAPA ${esc(r.nc_no)}</div>` : ''}</td><td class="nowrap">${esc(r.owner || '')}</td><td class="nowrap">${esc(r.due || '')}</td><td class="nowrap">${r.done ? `<span class="chip green">완료</span><div class="small muted">${esc(r.done)}</div>` : `<span class="chip ${r.over ? 'red' : 'yellow'}">${r.over ? '기한 지남' : '진행'}</span>`}</td><td class="c">${r.done ? raChip(a.method, { grade: r.grade2, score: r.score2 }) : '<span class="muted">—</span>'}</td><td class="nowrap">${data.can_manage ? `<button type="button" class="btn small" data-raa="${a.id}:${i}">열기</button>` : ''} <button type="button" class="btn small" data-raa-doc="${a.id}">평가서</button></td></tr>`).join('')}</tbody></table></div>`
+      : `<div class="empty">${items.length ? '조건에 맞는 조치가 없습니다.' : '감소대책이 있는 워크시트 줄이 없습니다.'}</div>`;
+  };
+  main.addEventListener('click', e => {
+    const b = e.target.closest('[data-raa]'); if (b) { const [id, i] = b.dataset.raa.split(':').map(Number); const a = data.rows.find(x => x.id === id); if (a) raResult(a, i, () => qReload()).catch(fail); return; }
+    const d = e.target.closest('[data-raa-doc]'); if (d) raOpen(Number(d.dataset.raaDoc)).catch(fail);
+  });
+  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  await load();
+}
+const addDaysC = (d, n) => { const [y, m, dd] = d.split('-').map(Number); return new Date(Date.UTC(y, m - 1, dd + n)).toISOString().slice(0, 10); };
+async function pageReliability(main) {
+  const t = todayStr();
+  main.innerHTML = `<h1>설비 신뢰도 <span class="dept">생산</span></h1>
+  <p class="muted">설비 대장의 고장·수리 이력으로 계산합니다. 가동 기준 시간 = 기간 일수(설치일부터) × 하루 가동시간. <b>MTBF</b>(평균 고장 간격) = (가동 기준 − 비가동) ÷ 고장 수 · <b>MTTR</b>(평균 수리 시간) = 비가동 ÷ 고장 수 · <b>가용도</b> = MTBF ÷ (MTBF + MTTR) · <b>고장률 λ</b> = 1 ÷ MTBF · <b>신뢰도 R(t)</b> = e<sup>−t/MTBF</sup>(임무 시간 t 동안 고장 없이 돌 확률). 고장 기록에 비가동 시간을 넣어야 정확합니다.</p>
+  <div class="ip-tiles" id="relTiles"></div>
+  <form class="toolbar list-filters" id="relFilters"><label class="lf-sel">시작<input type="date" name="from" value="${addDaysC(t, -364)}" max="${t}"></label><label class="lf-sel">끝<input type="date" name="to" value="${t}" max="${t}"></label><label class="lf-sel">하루 가동시간<input type="number" name="hours" value="24" min="1" max="24" step="0.5" style="width:70px"></label><label class="lf-sel">임무 시간 t<input type="number" name="mission" value="8" min="1" step="1" style="width:70px"></label><label class="list-search">찾기<input type="search" name="q" placeholder="설비번호·설비명·위치"></label><span class="grow"></span><span id="relTools" class="ip-tools"><a class="btn" href="#/prod/equipment">설비 대장·이력</a></span></form>
+  <div id="relList"></div>`;
+  const form = $('#relFilters', main); let data = null, timer = 0;
+  const load = async () => { const v = formObj(form); data = await api('GET', `/api/equipment-reliability?from=${v.from}&to=${v.to}&hours=${v.hours}&mission=${v.mission}`); if (main.isConnected) draw(); };
+  main.qReload = () => load().catch(fail);
+  const f = (v, u = '') => v == null ? '<span class="muted">—</span>' : `${Number(v).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}${u}`;
+  const draw = () => {
+    const q = (formObj(form).q || '').trim().toLowerCase(), tot = data.total;
+    qTiles('relTiles', [['고장 건수', tot.fails, tot.fails ? 'yellow' : ''], ['전체 MTBF(시간)', tot.mtbf == null ? '고장 없음' : f(tot.mtbf)], ['전체 MTTR(시간)', tot.mttr == null ? '—' : f(tot.mttr)], ['전체 가용도', tot.availability == null ? '—' : f(tot.availability, '%'), tot.availability != null && tot.availability < 95 ? 'red' : 'green']]);
+    const rows = data.rows.filter(r => !q || [r.equip_no, r.name, r.location, r.kind].join(' ').toLowerCase().includes(q));
+    $('#relList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>설비번호</th><th>설비명</th><th>종류 · 위치</th><th>가동 기준(h)</th><th>고장</th><th>비가동(h)</th><th>MTBF(h)</th><th>MTTR(h)</th><th>가용도</th><th title="1,000시간당 고장 수">고장률 λ</th><th>신뢰도 R(${esc(data.mission)}h)</th><th>최근 고장</th><th></th></tr></thead><tbody>${rows.map(r => `<tr class="${r.availability != null && r.availability < 95 ? 'ip-over' : ''}"><td class="nowrap" data-card-primary><b>${esc(r.equip_no)}</b></td><td>${esc(r.name)}</td><td>${esc([r.kind, r.location].filter(Boolean).join(' · '))}</td><td class="r">${f(r.planned)}</td><td class="r">${r.fails}</td><td class="r">${f(r.down)}</td><td class="r">${r.fails ? f(r.mtbf) : r.planned ? '<span class="small muted">고장 없음</span>' : '—'}</td><td class="r">${f(r.mttr)}</td><td class="r">${f(r.availability, '%')}</td><td class="r">${r.fails ? f(r.lambda) : '0'}</td><td class="r">${f(r.reliability, '%')}</td><td class="c nowrap">${esc(r.last_fail || '')}</td><td class="nowrap">${hasRole('production') || hasRole('quality') ? `<button type="button" class="btn small" data-rel-fmea="${r.id}" title="이 설비로 공정 FMEA 작성">FMEA</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="empty">설비가 없습니다. 「설비 대장·이력」에서 설비를 등록하고 고장·수리를 기록하세요.</div>';
+  };
+  main.addEventListener('click', e => { const b = e.target.closest('[data-rel-fmea]'); if (b) { const r = data.rows.find(x => x.id === Number(b.dataset.relFmea)); raOpen(null, { method: 'fmea', equipment_id: r.id, title: `${r.name} 설비 FMEA`, process: r.location || '' }).catch(fail); } });
+  form.addEventListener('input', e => { if (e.target.name === 'q') return draw(); clearTimeout(timer); timer = setTimeout(() => load().catch(fail), 400); });
+  form.onsubmit = e => e.preventDefault();
+  await load();
+}
+
+// ── 15.316 연구소 › 개발원가 관리 ──
+// 개발 건(개발리스트)별 원가표: 엑셀처럼 줄을 쌓고(Enter·↑↓ 이동, 엑셀에서 여러 줄 복사 → 붙여넣기), 금액·구분별 소계·판관비·총원가·단위원가·이익률을 바로 계산.
+// 목록은 원가표별 합계와 누적 총원가, 「개발리스트 매칭」은 개발 건마다 원가표 수·총원가와 원가 없는 개발을 보여 준다.
+const DC_CAT_LABEL = { material: '매입가(재료)', incidental: '부대비용(운송·관세·포장)', outsource: '외주가공', test: '시험·인증', tooling: '금형·지그', labor: '인건비', sga: '판관비', etc: '기타' };
+const DC_STATUS_LABEL = { draft: '작성', confirmed: '확정' };
+const DC_CURS = ['KRW', 'USD', 'EUR', 'JPY', 'CNY'];
+const DC_VIEW_KEY = 'wpa:dc-view';
+const dcFmt = (v, d = 0) => v == null || v === '' || !Number.isFinite(Number(v)) ? '' : Number(v).toLocaleString('ko-KR', { maximumFractionDigits: d });
+const dcNum = v => { const n = Number(String(v ?? '').replace(/[,\s₩$]/g, '')); return Number.isFinite(n) ? n : 0; };
+// 서버와 같은 계산(화면에서 바로 보여 주기용, 저장 때는 서버 값이 기준)
+function dcCalcC(h, lines) {
+  const amt = l => { const cur = l.currency || 'KRW', fx = cur === 'KRW' ? 1 : (dcNum(l.fx) || 1); return Math.round((l.qty === '' || l.qty == null ? 1 : dcNum(l.qty)) * dcNum(l.unit_price) * fx); };
+  const by = Object.fromEntries(Object.keys(DC_CAT_LABEL).map(k => [k, 0])); for (const l of lines) by[l.cat || 'material'] += amt(l);
+  const direct = lines.filter(l => (l.cat || 'material') !== 'sga').reduce((s, l) => s + amt(l), 0), sgaAuto = Math.round(direct * dcNum(h.sga_rate) / 100), sga = by.sga + sgaAuto, total = direct + sga;
+  const base = dcNum(h.base_qty) > 0 ? dcNum(h.base_qty) : 1, unit = Math.round(total / base * 100) / 100, tp = h.target_price === '' || h.target_price == null ? null : dcNum(h.target_price);
+  const pr = dcNum(h.profit_rate);
+  return { amt, by, direct, sga_auto: sgaAuto, sga, total, unit_cost: unit, margin: tp == null ? null : Math.round((tp - unit) * 100) / 100, margin_rate: tp ? Math.round((tp - unit) / tp * 1000) / 10 : null, suggest: pr > 0 && pr < 100 ? Math.round(unit / (1 - pr / 100)) : null };
+}
+const DC_COLS_C = [
+  { k: 'date', l: '발생일', t: 'date', w: 116 }, { k: 'cat', l: '구분', t: 'sel', w: 112 }, { k: 'item', l: '품목·내용 *', t: 'text', w: 140 }, { k: 'spec', l: '규격', t: 'text', w: 80 }, { k: 'vendor', l: '거래처', t: 'text', w: 90 },
+  { k: 'qty', l: '수량', t: 'num', w: 58 }, { k: 'unit', l: '단위', t: 'text', w: 54 }, { k: 'unit_price', l: '단가', t: 'num', w: 84 }, { k: 'currency', l: '통화', t: 'cur', w: 76 }, { k: 'fx', l: '환율', t: 'num', w: 62 },
+  { k: '_amt', l: '금액(원)', t: 'calc', w: 100 }, { k: 'note', l: '비고', t: 'text', w: 80 },
+];
+// 붙여넣기 때 구분 글자 → 키(「매입가」·「부대비용」·「운송」 등)
+const dcCatOf = v => { const s = String(v || '').trim(); if (DC_CAT_LABEL[s]) return s; const hit = Object.entries(DC_CAT_LABEL).find(([, l]) => l.startsWith(s) || l.includes(s) && s.length >= 2); if (hit) return hit[0]; if (/운송|관세|포장|통관|보험|택배/.test(s)) return 'incidental'; if (/재료|원자재|매입|자재/.test(s)) return 'material'; if (/시험|인증|분석/.test(s)) return 'test'; if (/금형|지그|치구/.test(s)) return 'tooling'; if (/인건|노무/.test(s)) return 'labor'; if (/판관|영업|관리비|출장/.test(s)) return 'sga'; if (/외주|가공/.test(s)) return 'outsource'; return s ? 'etc' : 'material'; };
+async function costOpen(id = null, pre = {}) {
+  const list = await api('GET', '/api/dev-costs'), c = id ? list.rows.find(x => x.id === id) : null; if (id && !c) return toast('원가표를 찾을 수 없습니다.', 'err');
+  const can = list.can_manage, appr = list.can_confirm, st = c?.status || 'draft', edit = can && st === 'draft', dis = edit ? '' : ' disabled';
+  const h0 = c || { base_qty: 1, sga_rate: 0, profit_rate: 0, ...pre };
+  const lines = (c?.lines || []).map(l => ({ ...l }));
+  if (edit && !lines.length) for (let i = 0; i < 3; i++) lines.push({ cat: 'material', date: todayStr(), currency: 'KRW' });
+  const devOpt = d => `${d.req_no || '#' + d.id} · ${d.title}${d.customer ? ' · ' + d.customer : ''}`;
+  const m = modal(`<h3>${c ? `${esc(c.cost_no)} · ${esc(c.title)} <span class="chip ${st === 'confirmed' ? 'green' : ''}">${esc(DC_STATUS_LABEL[st])}</span>` : '새 개발원가표'}</h3>
+    <form class="stack" data-dc-form><div class="form-grid">
+      <label class="span2">개발리스트 매칭<select name="dev_request_id"${dis}><option value="">— 개발 건 없이(사전 검토)</option>${list.dev_requests.map(d => `<option value="${d.id}"${d.id === Number(h0.dev_request_id) ? ' selected' : ''}>${esc(devOpt(d))}</option>`).join('')}</select><span class="hint">고르면 이름·고객이 비어 있을 때 개발 건에서 채웁니다</span></label>
+      <label>원가표 이름 *<input name="title" maxlength="200" value="${esc(h0.title || '')}" placeholder="예) 9인치 와이퍼 1차 시제품"${dis}></label>
+      <label>고객<input name="customer" maxlength="100" value="${esc(h0.customer || '')}"${dis}></label>
+      <label>제품·모델<input name="product" maxlength="200" value="${esc(h0.product || '')}"${dis}></label>
+      <label>원가 기준 수량 *<input type="number" name="base_qty" min="0" step="any" value="${esc(h0.base_qty ?? 1)}"${dis}><span class="hint">단위원가 = 총원가 ÷ 이 수량</span></label>
+      <label>단위<input name="unit" maxlength="20" value="${esc(h0.unit || '')}" placeholder="EA·BOX·kg"${dis}></label>
+      <label>판관비율(%)<input type="number" name="sga_rate" min="0" max="99" step="any" value="${esc(h0.sga_rate ?? 0)}"${dis}><span class="hint">직접비 × 비율을 판관비로 더함</span></label>
+      <label>목표 이익률(%)<input type="number" name="profit_rate" min="0" max="99" step="any" value="${esc(h0.profit_rate ?? 0)}"${dis}><span class="hint">권장 판매단가 계산</span></label>
+      <label>목표 판매단가(원)<input type="number" name="target_price" min="0" step="any" value="${esc(h0.target_price ?? '')}"${dis}></label>
+      <label class="span3">비고<input name="note" maxlength="1000" value="${esc(h0.note || '')}"${dis}></label></div>
+      <fieldset class="vendor-sec"><legend>원가 내역 <span class="hint">${edit ? 'Enter·↑↓로 줄 이동, 엑셀에서 여러 칸·줄을 복사해 붙여넣으면 그 칸부터 채웁니다(열 순서: 발생일·구분·품목·규격·거래처·수량·단위·단가·통화·환율)' : '확정된 원가표는 잠겨 있습니다'}</span></legend>
+        <div class="table-wrap dc-wrap"><table class="grid dc-grid" data-no-sort data-no-filter data-keep-cols data-no-reorder data-no-autoalign><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
+        ${edit ? '<div class="actions"><button type="button" class="btn small" data-dc-add>＋ 줄</button><button type="button" class="btn small" data-dc-add5>＋ 5줄</button><span class="grow"></span></div>' : ''}
+      </fieldset>
+      <div class="dc-sum" data-dc-sum></div>
+      <div class="actions">${c ? '<button type="button" class="btn" data-dc-hist>이력</button><button type="button" class="btn" data-dc-xlsx>엑셀</button>' : ''}${c && edit && !c.history.some(x => /확정/.test(x.what || '')) ? '<button type="button" class="btn danger" data-dc-del>삭제</button>' : ''}<span class="grow"></span>
+        ${c && appr && st === 'confirmed' ? '<button type="button" class="btn" data-dc-to="draft">확정 취소</button>' : ''}${edit ? `<button class="btn${c && appr ? '' : ' primary'}">저장</button>` : ''}${c && appr && edit ? '<button type="button" class="btn primary" data-dc-to="confirmed">저장하고 확정</button>' : ''}</div>
+    </form>`, { wide: true });
+  m.el.classList.add('dc-modal');
+  const form = $('[data-dc-form]', m.el), table = $('.dc-grid', form), touched = () => { if (m.el.parentElement) m.el.parentElement.dataset.dirty = '1'; };
+  const head = () => edit ? formObj(form) : h0; // 읽기 전용(확정)이면 저장된 값으로
+  // 개발 건을 고르면 비어 있는 이름·고객을 그 개발 건에서 채움
+  form.elements.dev_request_id?.addEventListener('change', () => { const d = list.dev_requests.find(x => x.id === Number(form.elements.dev_request_id.value)); if (!d) return; if (!form.elements.title.value.trim()) form.elements.title.value = `${d.title}${d.cost_count ? ` ${d.cost_count + 1}차` : ''} 원가`; if (!form.elements.customer.value.trim()) form.elements.customer.value = d.customer || ''; });
+  const cell = (col, l, r) => {
+    const v = l[col.k] ?? '', at = `data-r="${r}" data-k="${col.k}" aria-label="${esc(col.l.replace(' *', ''))} ${r + 1}번 줄"`, st = ` style="min-width:${col.w}px"`;
+    if (col.t === 'calc') return `<td class="r dc-amt" data-amt="${r}">${dcFmt(dcCalcC(head(), [l]).amt(l))}</td>`;
+    if (!edit) return `<td class="${['num', 'calc'].includes(col.t) ? 'r' : col.t === 'date' || col.t === 'cur' ? 'c' : ''}">${esc(col.t === 'sel' ? DC_CAT_LABEL[v] || v : col.t === 'num' ? dcFmt(v, 4) : v)}</td>`;
+    if (col.t === 'sel') return `<td><select ${at}${st}>${Object.entries(DC_CAT_LABEL).map(([k, lb]) => `<option value="${k}"${(v || 'material') === k ? ' selected' : ''}>${esc(lb)}</option>`).join('')}</select></td>`;
+    if (col.t === 'cur') return `<td><select ${at}${st}>${DC_CURS.map(k => `<option${(v || 'KRW') === k ? ' selected' : ''}>${k}</option>`).join('')}</select></td>`;
+    if (col.t === 'date') return `<td><input type="date" ${at} value="${esc(v)}"${st}></td>`;
+    if (col.t === 'num') return `<td><input inputmode="decimal" class="r" ${at} value="${esc(v === '' || v == null ? '' : col.k === 'fx' && (l.currency || 'KRW') === 'KRW' ? '' : v)}"${col.k === 'fx' && (l.currency || 'KRW') === 'KRW' ? ' placeholder="1" disabled' : ''}${st}></td>`;
+    return `<td><input ${at} value="${esc(v)}" maxlength="${col.k === 'item' || col.k === 'spec' ? 200 : col.k === 'note' ? 300 : 100}"${st}></td>`;
+  };
+  const sum = () => {
+    const h = head(), k = dcCalcC(h, lines), cats = Object.entries(k.by).filter(([, v]) => v);
+    $('tfoot', table).innerHTML = `<tr class="dc-total"><td></td><td colspan="${DC_COLS_C.findIndex(c => c.k === '_amt')}" class="r"><b>합계 ${lines.length}줄</b></td><td class="r"><b>${dcFmt(Object.values(k.by).reduce((a, b) => a + b, 0))}</b></td><td colspan="${DC_COLS_C.length - DC_COLS_C.findIndex(c => c.k === '_amt') - 1 + (edit ? 1 : 0)}"></td></tr>`;
+    $('[data-dc-sum]', form).innerHTML = `<div class="dc-sum-grid"><table class="grid dc-cat" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>구분</th><th>금액(원)</th><th>비율</th></tr></thead><tbody>${cats.map(([c, v]) => `<tr><td>${esc(DC_CAT_LABEL[c])}</td><td class="r">${dcFmt(v)}</td><td class="r">${k.total ? dcFmt(v / k.total * 100, 1) + '%' : ''}</td></tr>`).join('') || '<tr><td colspan="3" class="muted small">원가 줄이 없습니다.</td></tr>'}${k.sga_auto ? `<tr><td>판관비(직접비 × ${dcFmt(h.sga_rate, 2)}%)</td><td class="r">${dcFmt(k.sga_auto)}</td><td class="r">${k.total ? dcFmt(k.sga_auto / k.total * 100, 1) + '%' : ''}</td></tr>` : ''}</tbody></table>
+      <dl class="dc-kpi"><div><dt>직접비</dt><dd>${dcFmt(k.direct)}</dd></div><div><dt>판관비</dt><dd>${dcFmt(k.sga)}</dd></div><div class="em"><dt>총원가</dt><dd>${dcFmt(k.total)}원</dd></div>
+        <div class="em"><dt>단위원가 (÷ ${dcFmt(h.base_qty || 1, 2)}${esc(h.unit || '')})</dt><dd>${dcFmt(k.unit_cost, 2)}원</dd></div>
+        ${k.margin != null ? `<div class="${k.margin < 0 ? 'neg' : 'pos'}"><dt>목표가 ${dcFmt(h.target_price, 2)} 대비 이익</dt><dd>${dcFmt(k.margin, 2)}원 · ${dcFmt(k.margin_rate, 1)}%</dd></div>` : ''}
+        ${k.suggest != null ? `<div><dt>이익률 ${dcFmt(h.profit_rate, 1)}% 권장 판매단가</dt><dd>${dcFmt(k.suggest)}원</dd></div>` : ''}</dl></div>`;
+  };
+  const draw = () => {
+    $('thead', table).innerHTML = `<tr><th class="c">No</th>${DC_COLS_C.map(c => `<th>${esc(c.l)}</th>`).join('')}${edit ? '<th></th>' : ''}</tr>`;
+    $('tbody', table).innerHTML = lines.map((l, r) => `<tr><td class="c">${r + 1}</td>${DC_COLS_C.map(c => cell(c, l, r)).join('')}${edit ? `<td class="nowrap"><button type="button" class="btn small" data-dc-dup="${r}" title="줄 복사">⧉</button> <button type="button" class="btn small" data-dc-rm="${r}" aria-label="${r + 1}번 줄 삭제">×</button></td>` : ''}</tr>`).join('') || `<tr><td colspan="${DC_COLS_C.length + 2}" class="empty">원가 줄이 없습니다.</td></tr>`;
+    sum();
+  };
+  draw();
+  const focus = (r, k) => { const el = $(`[data-r="${r}"][data-k="${k}"]`, table); if (el && !el.disabled) { el.focus(); el.select?.(); } };
+  const newLine = () => { const last = lines.at(-1) || {}; return { date: last.date || todayStr(), cat: last.cat || 'material', currency: last.currency || 'KRW', fx: last.currency && last.currency !== 'KRW' ? last.fx : '', vendor: last.vendor || '' }; };
+  const onEdit = e => {
+    const t = e.target.closest('[data-k]'); if (!t) return; const r = Number(t.dataset.r), l = lines[r]; if (!l) return;
+    l[t.dataset.k] = t.value; touched();
+    if (t.dataset.k === 'currency') { const fx = $(`[data-r="${r}"][data-k="fx"]`, table); if (fx) { fx.disabled = t.value === 'KRW'; fx.placeholder = t.value === 'KRW' ? '1' : '환율'; if (t.value === 'KRW') { fx.value = ''; l.fx = ''; } else fx.focus(); } }
+    const a = $(`[data-amt="${r}"]`, table); if (a) a.textContent = dcFmt(dcCalcC(head(), [l]).amt(l)); sum();
+  };
+  table.addEventListener('input', onEdit); table.addEventListener('change', onEdit);
+  form.addEventListener('input', e => { if (!e.target.closest('.dc-grid')) sum(); });
+  // 엑셀식 이동: Enter·↓ 다음 줄(마지막이면 줄 추가), ↑ 윗줄. 날짜·고르기 칸은 ↑↓를 값 바꾸기에 그대로 둠.
+  table.addEventListener('keydown', e => {
+    const t = e.target.closest('[data-k]'); if (!t || !edit) return; const r = Number(t.dataset.r), k = t.dataset.k;
+    if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); if (r === lines.length - 1) { lines.push(newLine()); draw(); } focus(r + 1, k); return; }
+    if (t.tagName === 'SELECT' || t.type === 'date') return;
+    if (e.key === 'ArrowDown' && r < lines.length - 1) { e.preventDefault(); focus(r + 1, k); } else if (e.key === 'ArrowUp' && r > 0) { e.preventDefault(); focus(r - 1, k); }
+  });
+  // 엑셀에서 복사한 여러 칸(탭)·여러 줄 붙여넣기: 그 칸부터 오른쪽·아래로 채움, 모자란 줄은 추가
+  table.addEventListener('paste', e => {
+    const t = e.target.closest('[data-k]'); if (!t || !edit) return; const text = e.clipboardData?.getData('text/plain') || ''; if (!/[\t\n]/.test(text.trim())) return;
+    e.preventDefault(); const rows = text.replace(/\r/g, '').replace(/\n$/, '').split('\n').map(x => x.split('\t'));
+    const keys = DC_COLS_C.filter(c => c.t !== 'calc').map(c => c.k), start = keys.indexOf(t.dataset.k), r0 = Number(t.dataset.r);
+    rows.forEach((vals, i) => {
+      const r = r0 + i; while (lines.length <= r) lines.push(newLine());
+      vals.forEach((v, j) => { const k = keys[start + j]; if (!k) return; v = v.trim(); lines[r][k] = k === 'cat' ? dcCatOf(v) : k === 'currency' ? (DC_CURS.includes(v.toUpperCase()) ? v.toUpperCase() : 'KRW') : ['qty', 'unit_price', 'fx'].includes(k) ? String(dcNum(v) || (v === '' ? '' : 0)) : k === 'date' ? (v.match(/\d{4}[-./]\d{1,2}[-./]\d{1,2}/)?.[0].replace(/[./]/g, '-').replace(/-(\d)(?=-|$)/g, '-0$1') || '') : v; });
+    });
+    touched(); draw(); toast(`${rows.length}줄을 붙여넣었습니다.`); focus(r0, t.dataset.k);
+  });
+  form.addEventListener('click', async e => {
+    if (e.target.closest('[data-dc-add]')) { lines.push(newLine()); touched(); draw(); focus(lines.length - 1, 'item'); return; }
+    if (e.target.closest('[data-dc-add5]')) { for (let i = 0; i < 5; i++) lines.push(newLine()); touched(); draw(); return; }
+    const d = e.target.closest('[data-dc-dup]'); if (d) { const r = Number(d.dataset.dcDup), { key, amount, ...rest } = lines[r]; void key; void amount; lines.splice(r + 1, 0, { ...rest }); touched(); draw(); return; }
+    const x = e.target.closest('[data-dc-rm]'); if (x) { lines.splice(Number(x.dataset.dcRm), 1); touched(); draw(); }
+  });
+  const body = () => { const h = head(); return { ...h, lines: lines.filter(l => String(l.item || '').trim() || dcNum(l.unit_price)).map(l => Object.fromEntries(Object.entries(l).filter(([k]) => k !== 'amount'))) }; };
+  const save = async () => c ? api('PUT', `/api/dev-costs/${c.id}`, { ...body(), revision: c.revision }) : api('POST', '/api/dev-costs', { ...body(), request_id: crypto.randomUUID() });
+  const reopen = async (r, msg) => { toast(msg); m.close(); qReload(); await costOpen(r.id); };
+  form.onsubmit = async e => { e.preventDefault(); try { reopen(await save(), '저장했습니다.'); } catch (err) { fail(err); } };
+  $$('[data-dc-to]', m.el).forEach(b => b.addEventListener('click', async () => {
+    try {
+      if (b.dataset.dcTo === 'confirmed') { const r = await save(); return reopen(await api('POST', `/api/dev-costs/${r.id}/step`, { to: 'confirmed', revision: r.revision }), '확정했습니다. 고치려면 「확정 취소」 하세요.'); }
+      const v = await promptBox('확정 취소', '<label>사유 *<input name="reason" required maxlength="300" placeholder="예) 원단 단가 변경"></label>'); if (!v) return;
+      reopen(await api('POST', `/api/dev-costs/${c.id}/step`, { to: 'draft', revision: c.revision, reason: v.reason }), '확정을 취소했습니다.');
+    } catch (err) { fail(err); }
+  }));
+  $('[data-dc-del]', m.el)?.addEventListener('click', async () => { if (!await confirmBox('이 원가표를 지울까요?')) return; try { await api('DELETE', `/api/dev-costs/${c.id}?revision=${c.revision}`); toast('지웠습니다.'); m.close(); qReload(); } catch (err) { fail(err); } });
+  $('[data-dc-hist]', m.el)?.addEventListener('click', () => qHistory(c.cost_no, c.history, DC_STATUS_LABEL));
+  $('[data-dc-xlsx]', m.el)?.addEventListener('click', () => dcXlsx(c));
+}
+function dcXlsx(c) {
+  const k = c.calc, rows = c.lines.map((l, i) => [i + 1, l.date || '', DC_CAT_LABEL[l.cat] || l.cat, l.item, l.spec, l.vendor, l.qty, l.unit, l.unit_price, l.currency, l.currency === 'KRW' ? '' : l.fx, l.amount, l.note]);
+  const blank = Array(13).fill(''), put = (label, v) => { const r = [...blank]; r[3] = label; r[11] = v; return r; };
+  rows.push([...blank], put('직접비', k.direct), put(`판관비${c.sga_rate ? ` (줄 + 직접비 × ${c.sga_rate}%)` : ''}`, k.sga), put('총원가', k.total), put(`단위원가 (÷ ${c.base_qty}${c.unit || ''})`, k.unit_cost));
+  if (k.margin != null) rows.push(put(`목표가 ${c.target_price} 대비 이익 (${k.margin_rate}%)`, k.margin)); if (k.suggest != null) rows.push(put(`권장 판매단가 (이익률 ${c.profit_rate}%)`, k.suggest));
+  xlsxDownload(`${c.cost_no}_${c.title}.xlsx`, { sheet: c.cost_no, titles: [`개발원가 ${c.cost_no} · ${c.title}`, `${c.dev ? `${c.dev.req_no} ${c.dev.title} · ` : ''}${c.customer || ''} ${c.product || ''} · ${DC_STATUS_LABEL[c.status]}${c.confirmed_by ? ' · 확정 ' + c.confirmed_by : ''}`],
+    columns: ['No', '발생일', '구분', '품목·내용', '규격', '거래처', '수량', '단위', '단가', '통화', '환율', '금액(원)', '비고'].map((label, i) => ({ label, type: [0, 6, 8, 10].includes(i) ? 'number' : i === 11 ? 'money' : i === 1 ? 'date' : 'text' })), rows });
+}
+async function pageDevCost(main) {
+  let view = (() => { try { return localStorage.getItem(DC_VIEW_KEY) === 'match' ? 'match' : 'list'; } catch { return 'list'; } })();
+  main.innerHTML = `<h1>개발원가 관리 <span class="dept">연구소</span></h1>
+    <p class="muted">개발 건마다 <b>매입가·부대비용(운송·관세·포장)·외주가공·시험·인증·금형·인건비·판관비</b>를 엑셀처럼 줄로 쌓으면 금액(수량 × 단가 × 환율)·구분별 소계·판관비(줄 + 직접비 × 판관비율)·총원가·단위원가·목표가 대비 이익률·권장 판매단가를 자동 계산합니다. 「개발리스트 매칭」에서 개발 건별 누적 원가와 원가표가 없는 개발을 봅니다.</p>
+    <div class="ip-tiles" id="dcTiles"></div>
+    <div class="seg dc-view" role="group" aria-label="보기"><button type="button" class="btn" data-dc-view="list">원가표 목록(누적)</button><button type="button" class="btn" data-dc-view="match">개발리스트 매칭</button></div>
+    <form class="toolbar list-filters" data-read-only id="dcFilters"><label class="lf-sel">상태<select name="st"><option value="">전체</option>${Object.entries(DC_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">원가 없는 개발만<select name="nocost"><option value="">아니오</option><option value="1">예</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="번호·개발명·고객·제품·품목"></label><span class="grow"></span><span id="dcTools" class="ip-tools"></span></form>
+    <div id="dcList"></div>`;
+  const form = $('#dcFilters', main); let data = { rows: [], dev_requests: [] };
+  const load = async () => { data = await api('GET', '/api/dev-costs'); if (main.isConnected) draw(); };
+  main.qReload = () => load().catch(fail);
+  const draw = () => {
+    const v = formObj(form), q = (v.q || '').trim().toLowerCase(), rows = data.rows;
+    $$('[data-dc-view]', main).forEach(b => b.classList.toggle('primary', b.dataset.dcView === view));
+    form.elements.nocost.closest('label').hidden = view !== 'match'; form.elements.st.closest('label').hidden = view !== 'list';
+    const live = data.dev_requests.filter(d => !['done', 'rejected'].includes(d.status)), noCost = live.filter(d => !d.cost_count), loss = rows.filter(r => r.calc.margin != null && r.calc.margin < 0);
+    qTiles('dcTiles', [['원가표', rows.length], ['작성 중', rows.filter(r => r.status === 'draft').length, rows.some(r => r.status === 'draft') ? 'yellow' : ''], ['확정', rows.filter(r => r.status === 'confirmed').length, 'green'], ['원가표 없는 진행 개발', noCost.length, noCost.length ? 'yellow' : ''], ['목표가 미달', loss.length, loss.length ? 'red' : ''], ['누적 총원가(원)', dcFmt(rows.reduce((s, r) => s + r.calc.total, 0))]]);
+    $('#dcTools', main).innerHTML = data.can_manage ? '<button type="button" class="btn primary" data-dc-new>＋ 원가표</button>' : '';
+    if (view === 'list') {
+      const shown = rows.filter(r => (!v.st || r.status === v.st) && (!q || [r.cost_no, r.title, r.customer, r.product, r.dev?.req_no, r.dev?.title, ...r.lines.map(l => l.item)].join(' ').toLowerCase().includes(q)));
+      // 누적: 발생일(첫 줄) 순으로 더해 간 총원가
+      const order = [...shown].sort((a, b) => String(a.calc.first_date || a.created_at).localeCompare(String(b.calc.first_date || b.created_at)) || a.id - b.id); let run = 0; const cum = {}; for (const r of order) { run += r.calc.total; cum[r.id] = run; }
+      const tot = k => shown.reduce((s, r) => s + (r.calc[k] || 0), 0);
+      $('#dcList', main).innerHTML = shown.length ? `<div class="table-wrap"><table class="grid ip-table dc-list"><thead><tr><th>번호</th><th>개발(개발리스트)</th><th>원가표 · 제품</th><th>고객</th><th>발생 기간</th><th>직접비</th><th>판관비</th><th>총원가</th><th>단위원가</th><th>목표가 · 이익률</th><th>누적 총원가</th><th>상태</th><th></th></tr></thead><tbody>${shown.map(r => `<tr data-dc-row="${r.id}" class="${r.calc.margin != null && r.calc.margin < 0 ? 'ip-over' : ''}"><td class="nowrap" data-card-primary><b>${esc(r.cost_no)}</b></td><td>${r.dev ? `<b>${esc(r.dev.req_no || '')}</b> ${esc(r.dev.title)}` : '<span class="muted small">매칭 없음</span>'}</td><td>${esc(r.title)}${r.product ? `<div class="small muted">${esc(r.product)}</div>` : ''}</td><td>${esc(r.customer || '')}</td><td class="c nowrap">${esc(r.calc.first_date || '')}${r.calc.last_date && r.calc.last_date !== r.calc.first_date ? ` ~ ${esc(r.calc.last_date)}` : ''}</td><td class="r">${dcFmt(r.calc.direct)}</td><td class="r">${dcFmt(r.calc.sga)}</td><td class="r"><b>${dcFmt(r.calc.total)}</b></td><td class="r">${dcFmt(r.calc.unit_cost, 2)}<div class="small muted">/${dcFmt(r.base_qty, 2)}${esc(r.unit || '')}</div></td><td class="r">${r.target_price != null ? `${dcFmt(r.target_price, 2)}<div class="small ${r.calc.margin < 0 ? 'err-text' : 'muted'}">${dcFmt(r.calc.margin_rate, 1)}%</div>` : '<span class="muted">—</span>'}</td><td class="r">${dcFmt(cum[r.id])}</td><td class="c"><span class="chip ${r.status === 'confirmed' ? 'green' : ''}">${esc(r.status_label)}</span></td><td><button type="button" class="btn small" data-dc-open="${r.id}">열기</button></td></tr>`).join('')}</tbody>
+        <tfoot><tr class="dc-total"><td colspan="5" class="r"><b>합계 ${shown.length}건</b></td><td class="r">${dcFmt(tot('direct'))}</td><td class="r">${dcFmt(tot('sga'))}</td><td class="r"><b>${dcFmt(tot('total'))}</b></td><td colspan="5"></td></tr></tfoot></table></div>`
+        : `<div class="empty">${rows.length ? '조건에 맞는 원가표가 없습니다.' : `원가표가 없습니다.${data.can_manage ? ' 「＋ 원가표」로 개발 건을 고르고 매입가·부대비용을 넣어 보세요. 엑셀에서 복사해 붙여넣어도 됩니다.' : ''}`}</div>`;
+    } else {
+      const shown = data.dev_requests.filter(d => (!v.nocost || !d.cost_count) && (!q || [d.req_no, d.title, d.customer].join(' ').toLowerCase().includes(q)));
+      $('#dcList', main).innerHTML = shown.length ? `<div class="table-wrap"><table class="grid ip-table dc-match"><thead><tr><th>개발 번호</th><th>개발명</th><th>고객</th><th>개발 상태</th><th>원가표</th><th>누적 총원가</th><th>최근 단위원가</th><th></th></tr></thead><tbody>${shown.map(d => { const mine = rows.filter(r => r.dev_request_id === d.id), last = mine[0]; return `<tr class="${!d.cost_count && !['done', 'rejected'].includes(d.status) ? 'ip-over' : ''}"><td class="nowrap" data-card-primary><b>${esc(d.req_no || '#' + d.id)}</b></td><td>${esc(d.title)}</td><td>${esc(d.customer || '')}</td><td class="c">${esc(REQ_STATE[d.status] || d.status || '')}</td><td class="r">${d.cost_count ? `${d.cost_count}건` : '<span class="chip yellow">없음</span>'}</td><td class="r"><b>${d.cost_total ? dcFmt(d.cost_total) : ''}</b></td><td class="r">${last ? `${dcFmt(last.calc.unit_cost, 2)}<div class="small muted">${esc(last.cost_no)}</div>` : ''}</td><td class="nowrap">${last ? `<button type="button" class="btn small" data-dc-open="${last.id}">열기</button> ` : ''}${data.can_manage ? `<button type="button" class="btn small" data-dc-start="${d.id}">＋ 원가표</button>` : ''}</td></tr>`; }).join('')}</tbody></table></div>`
+        : `<div class="empty">${data.dev_requests.length ? '조건에 맞는 개발 건이 없습니다.' : '개발리스트에 개발 건이 없습니다. 「개발 관리 › 개발의뢰」에서 먼저 등록하세요.'}</div>`;
+    }
+  };
+  main.addEventListener('click', e => {
+    const vb = e.target.closest('[data-dc-view]'); if (vb) { view = vb.dataset.dcView; try { localStorage.setItem(DC_VIEW_KEY, view); } catch {} draw(); return; }
+    if (e.target.closest('[data-dc-new]')) return costOpen().catch(fail);
+    const o = e.target.closest('[data-dc-open]'); if (o) return costOpen(Number(o.dataset.dcOpen)).catch(fail);
+    const s = e.target.closest('[data-dc-start]'); if (s) { const d = data.dev_requests.find(x => x.id === Number(s.dataset.dcStart)); costOpen(null, { dev_request_id: d.id, title: `${d.title}${d.cost_count ? ` ${d.cost_count + 1}차` : ''} 원가`, customer: d.customer || '' }).catch(fail); }
+  });
+  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  await load();
+}
+
+// ── 15.318 구매 › 원가 산출 관리 ──
+// 품목별 원가(엑셀식 원가표 · 리비전) · 원가 백데이터(원부자재 시점별 단가) · 공통 기준(인건비·경비율·환율, 시점별) · 원가 추이.
+const COST_KIND_LABEL = { product: '제조', goods: '상품' };
+const COST_LINE_LABEL = { mat: '원부자재', labor: '인건비', exp: '기타 직접비' };
+const COST_CAUSE_LABEL = { manual: '직접 수정', material: '단가 변경', rates: '공통 기준 변경', create: '최초 산출' };
+const COST_CURS = ['KRW', 'USD', 'EUR', 'JPY', 'CNY'];
+const cFmt = (v, d = 2) => v == null || v === '' || !Number.isFinite(Number(v)) ? '' : Number(v).toLocaleString('ko-KR', { maximumFractionDigits: d });
+const cPct = v => v == null ? '' : `${v > 0 ? '+' : ''}${cFmt(v, 2)}%`;
+const cPctChip = v => v == null ? '<span class="muted">—</span>' : `<span class="chip ${v > 0 ? 'red' : v < 0 ? 'green' : ''}">${esc(cPct(v))}</span>`;
+function costExprC(src) {
+  let s = String(src ?? '').trim(); if (s.startsWith('=')) s = s.slice(1); s = s.replace(/[,₩\s]/g, '').replace(/×/g, '*').replace(/÷/g, '/'); if (!s) return null;
+  let i = 0; const bad = () => { throw new Error('식'); };
+  const num = () => { const m = /^(\d+(\.\d*)?|\.\d+)/.exec(s.slice(i)); if (!m) bad(); i += m[0].length; return Number(m[0]); };
+  const factor = () => { if (s[i] === '(') { i++; const v = expr(); if (s[i] !== ')') bad(); i++; return v; } if (s[i] === '-') { i++; return -factor(); } if (s[i] === '+') { i++; return factor(); } return num(); };
+  const term = () => { let v = factor(); for (;;) { if (s[i] === '*') { i++; v *= factor(); } else if (s[i] === '/') { i++; const d = factor(); if (d === 0) bad(); v /= d; } else return v; } };
+  const expr = () => { let v = term(); for (;;) { if (s[i] === '+') { i++; v += term(); } else if (s[i] === '-') { i++; v -= term(); } else return v; } };
+  const v = expr(); if (i !== s.length || !Number.isFinite(v)) bad(); return v;
+}
+const costTry = src => { try { return { v: costExprC(src) }; } catch { return { err: true }; } };
+// 서버 costCompute와 같은 식(화면 미리 보기). 단가는 지금(오늘) 백데이터 단가.
+function costComputeC(h, lines, rates, mats) {
+  const o = h.overrides || {}, num = v => v === '' || v == null ? null : Number(v), pick = k => num(o[k]) ?? Number(rates?.[k] || 0);
+  const used = { labor_rate: pick('labor_rate'), mfg_rate: pick('mfg_rate'), sga_rate: pick('sga_rate'), defect_rate: pick('defect_rate') }, errs = [];
+  const out = lines.map((l, i) => {
+    const q = costTry(l.qty), qty = q.err ? (errs.push(i), 0) : q.v ?? 1, loss = Number(l.loss) || 0; let unit = 0, src = 'manual';
+    if (l.type === 'mat' && l.material_id && !l.manual_price) { const m = mats.find(x => x.id === Number(l.material_id)); unit = m?.krw_price ?? 0; src = m?.krw_price == null ? 'missing' : 'master'; }
+    else { const p = costTry(l.price); if (p.err) errs.push(i); unit = p.v ?? 0; }
+    let amount = 0;
+    if (l.type === 'labor') { const c = costTry(l.capa), w = costTry(l.workers); if (c.err || w.err) errs.push(i); const capa = c.v, workers = w.v ?? 1; amount = capa > 0 ? used.labor_rate * workers * qty / capa : qty * unit; if (capa > 0) src = 'rate'; }
+    else if (l.type === 'mat') amount = qty * unit * (1 + loss / 100); else amount = qty * unit;
+    return { amount, unit, src };
+  });
+  const sum = t => lines.reduce((s, l, i) => s + (l.type === t ? out[i].amount : 0), 0), material = sum('mat'), labor = sum('labor'), other = sum('exp'), direct = material + labor + other;
+  const defect = direct * used.defect_rate / 100, mfg = direct * used.mfg_rate / 100, sga = (h.sga_base === 'mfg' ? direct + mfg : direct) * used.sga_rate / 100, total = direct + defect + mfg + sga;
+  const sale = h.sale_price === '' || h.sale_price == null ? null : Number(h.sale_price), pcs = Number(h.pieces) > 0 ? Number(h.pieces) : null;
+  return { out, errs, used, totals: { material, labor, other, direct, defect, mfg, sga, total, piece_cost: pcs ? total / pcs : null, sale_price: sale, margin: sale == null ? null : sale - total, margin_rate: sale ? (sale - total) / sale * 100 : null } };
+}
+// 작은 선 그래프(SVG): series [{label, color, points:[{x:'YYYY-MM-DD', y, tip}]}]
+function costChart(series, { h = 200, fmt = v => cFmt(v, 0) } = {}) {
+  const pts = series.flatMap(s => s.points); if (!pts.length) return '<p class="muted small">리비전이 쌓이면 그래프가 그려집니다.</p>';
+  const xs = [...new Set(pts.map(p => p.x))].sort(), ys = pts.map(p => p.y).filter(Number.isFinite), lo = Math.min(...ys), hi = Math.max(...ys), pad = (hi - lo) * 0.12 || Math.abs(hi) * 0.05 || 1;
+  const W = 640, L = 64, R = 16, T = 12, B = 28, y0 = lo - pad, y1 = hi + pad, X = x => L + (xs.length === 1 ? (W - L - R) / 2 : xs.indexOf(x) * (W - L - R) / (xs.length - 1)), Y = y => T + (y1 - y) / (y1 - y0) * (h - T - B);
+  const grid = [0, 0.5, 1].map(f => { const v = y0 + (y1 - y0) * f; return `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" class="cc-grid"/><text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end" class="cc-ax">${esc(fmt(v))}</text>`; }).join('');
+  const xl = xs.map((x, i) => (xs.length <= 8 || i % Math.ceil(xs.length / 8) === 0 || i === xs.length - 1) ? `<text x="${X(x)}" y="${h - 8}" text-anchor="middle" class="cc-ax">${esc(x.slice(2))}</text>` : '').join('');
+  const lines = series.map(s => { const p = s.points.filter(q => Number.isFinite(q.y)).sort((a, b) => a.x.localeCompare(b.x)); if (!p.length) return ''; return `<polyline fill="none" stroke="${s.color}" stroke-width="2" ${s.dash ? 'stroke-dasharray="5 4"' : ''} points="${p.map(q => `${X(q.x)},${Y(q.y)}`).join(' ')}"/>${p.map(q => `<circle cx="${X(q.x)}" cy="${Y(q.y)}" r="3.5" fill="${s.color}"><title>${esc(`${s.label} ${q.x} · ${fmt(q.y)}${q.tip ? ' · ' + q.tip : ''}`)}</title></circle>`).join('')}`; }).join('');
+  return `<div class="cc-wrap"><svg viewBox="0 0 ${W} ${h}" class="cc-svg" role="img" aria-label="${esc(series.map(s => s.label).join(', '))} 추이">${grid}${xl}${lines}</svg><div class="cc-legend">${series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.label)}</span>`).join('')}</div></div>`;
+}
+// 엑셀식 그리드 키보드·붙여넣기(원가 줄 공용): Enter·↓ 아래, ↑ 위(마지막 줄 Enter → 줄 추가), 여러 칸·줄 붙여넣기
+function costGridKeys(table, { rows, keys, addRow, draw, setVal, onChange }) {
+  const focus = (r, k) => { const el = table.querySelector(`[data-r="${r}"][data-k="${k}"]`); if (el && !el.disabled) { el.focus(); el.select?.(); } };
+  table.addEventListener('keydown', e => {
+    const t = e.target.closest('[data-k]'); if (!t) return; const r = Number(t.dataset.r), k = t.dataset.k;
+    if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); if (r === rows().length - 1) { addRow(); draw(); } focus(r + 1, k); return; }
+    if (t.tagName === 'SELECT' || t.type === 'date') return;
+    if (e.key === 'ArrowDown' && r < rows().length - 1) { e.preventDefault(); focus(r + 1, k); } else if (e.key === 'ArrowUp' && r > 0) { e.preventDefault(); focus(r - 1, k); }
+  });
+  table.addEventListener('paste', e => {
+    const t = e.target.closest('[data-k]'); if (!t) return; const text = e.clipboardData?.getData('text/plain') || ''; if (!/[\t\n]/.test(text.trim())) return;
+    e.preventDefault(); const data = text.replace(/\r/g, '').replace(/\n$/, '').split('\n').map(x => x.split('\t')), start = keys.indexOf(t.dataset.k), r0 = Number(t.dataset.r); if (start < 0) return;
+    data.forEach((vals, i) => { while (rows().length <= r0 + i) addRow(); vals.forEach((v, j) => { const k = keys[start + j]; if (k) setVal(rows()[r0 + i], k, v.trim()); }); });
+    onChange(); draw(); toast(`${data.length}줄을 붙여넣었습니다.`); focus(r0, t.dataset.k);
+  });
+  return focus;
+}
+async function costItemOpen(id = null, pre = {}) {
+  const list = await api('GET', '/api/cost/items'), it = id ? list.rows.find(x => x.id === id) : null; if (id && !it) return toast('품목을 찾을 수 없습니다.', 'err');
+  const mats = list.materials, rates = list.rates, h0 = it || { kind: 'product', sga_base: 'direct', overrides: {}, ...pre };
+  const lines = (it?.lines || pre.lines || []).map(l => ({ ...l }));
+  if (!lines.length) lines.push({ type: 'mat', qty: '', loss: 0 }, { type: 'mat' }, { type: 'labor', qty: '1' });
+  const revs = it ? (await api('GET', `/api/cost/items/${it.id}/revs`)).rows : [];
+  const ov = h0.overrides || {}, ratePh = k => rates?.[k] != null ? `공통 ${cFmt(rates[k], 4)}` : '공통 기준 없음';
+  const matOpt = sel => `<option value="">직접 입력</option>${mats.map(m => `<option value="${m.id}"${Number(sel) === m.id ? ' selected' : ''}>${esc(m.code)} · ${esc(m.name)}${m.krw_price != null ? ` · ₩${cFmt(m.krw_price, 4)}/${esc(m.unit || '')}` : ' · 단가 없음'}</option>`).join('')}`;
+  const m = modal(`<h3>${it ? `${esc(it.item_code)} · ${esc(it.name)} <span class="chip">Rev.${it.rev}</span>${it.active ? '' : ' <span class="chip">사용 중지</span>'}${it.stale ? ' <span class="chip yellow" title="지금 단가·기준으로 다시 계산하면 원가가 다릅니다">재산출 필요</span>' : ''}` : '새 품목 원가'}</h3>
+    ${it ? `<p class="small muted">마지막 리비전 ${esc(it.rev_date || '')}${it.prev_total != null ? ` · 직전 원가 ${cFmt(it.prev_total)}원 → ${cFmt(it.totals.total)}원 ${esc(cPct(it.change_pct))}` : ''} · 원가가 바뀌는 수정은 저장할 때 변동 시점·사유를 받아 새 리비전으로 남깁니다.</p>` : ''}
+    <form class="stack" data-ci-form><div class="form-grid ci-head">
+      <label>품목코드<input name="item_code" maxlength="40" value="${esc(h0.item_code || '')}" placeholder="비우면 자동(CI-0001)"></label>
+      <label class="span2">품목명 *<input name="name" required maxlength="150" value="${esc(h0.name || '')}" placeholder='예) CF707 (5.5"*4.5") (200SH)'></label>
+      <label>규격<input name="spec" maxlength="150" value="${esc(h0.spec || '')}"></label>
+      <label>구분<select name="kind">${Object.entries(COST_KIND_LABEL).map(([k, l]) => `<option value="${k}"${h0.kind === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label>분류<input name="category" maxlength="50" value="${esc(h0.category || '')}" list="ciCats" placeholder="부직포 와이퍼·장갑·마스크"></label>
+      <label class="span2">제품등록 연결<select name="bom_id"><option value="">—</option>${list.boms.map(b => `<option value="${b.id}"${b.id === Number(h0.bom_id) ? ' selected' : ''}>${esc(b.product_code || '')} ${esc(b.product)}</option>`).join('')}</select></label>
+      <label>원가 단위<input name="unit" maxlength="20" value="${esc(h0.unit || '')}" placeholder="PK·BOX·EA"></label>
+      <label>낱개 수<input name="pieces" inputmode="decimal" value="${esc(h0.pieces ?? '')}" placeholder="예) 200(장)"><span class="hint">장당 원가 = 원가 ÷ 낱개 수</span></label>
+      <label>포장사양<input name="pack_spec" maxlength="100" value="${esc(h0.pack_spec || '')}" placeholder="200SH/PK, 10PK/BOX"></label>
+      <label>주요 고객사<input name="customer" maxlength="100" value="${esc(h0.customer || '')}"></label>
+      <label>판매가(원/${esc(h0.unit || '단위')})<input name="sale_price" inputmode="decimal" value="${esc(h0.sale_price ?? '')}"></label>
+      <label>판관비 기준<select name="sga_base"><option value="direct"${h0.sga_base !== 'mfg' ? ' selected' : ''}>직접비 × 판관비율</option><option value="mfg"${h0.sga_base === 'mfg' ? ' selected' : ''}>(직접비 + 제조경비) × 판관비율</option></select></label>
+      <label>시간당 인건비(원)<input name="ov_labor_rate" inputmode="decimal" value="${esc(ov.labor_rate ?? '')}" placeholder="${esc(ratePh('labor_rate'))}"></label>
+      <label>제조경비율(%)<input name="ov_mfg_rate" inputmode="decimal" value="${esc(ov.mfg_rate ?? '')}" placeholder="${esc(ratePh('mfg_rate'))}"></label>
+      <label>판관비율(%)<input name="ov_sga_rate" inputmode="decimal" value="${esc(ov.sga_rate ?? '')}" placeholder="${esc(ratePh('sga_rate'))}"></label>
+      <label>불량률(%, 가산)<input name="ov_defect_rate" inputmode="decimal" value="${esc(ov.defect_rate ?? '')}" placeholder="${esc(ratePh('defect_rate'))}"></label>
+      <label class="span3">비고<input name="note" maxlength="1000" value="${esc(h0.note || '')}"></label></div>
+      <datalist id="ciCats">${[...new Set(list.rows.map(r => r.category).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('')}</datalist>
+      <fieldset class="vendor-sec"><legend>원가 내역 <span class="hint">칸에 식을 그대로 써도 됩니다(예: 245000/1500*0.32, =9000*4). 원부자재는 백데이터를 고르면 그 시점 원화 단가를 씁니다. 인건비는 시간당 처리량을 넣으면 「시간당 인건비 × 인원 × 작업량 ÷ 처리량」. Enter·↑↓ 이동, 엑셀 여러 칸 붙여넣기.</span></legend>
+        <div class="table-wrap dc-wrap ci-wrap"><table class="grid dc-grid ci-grid" data-no-sort data-no-filter data-keep-cols data-no-reorder data-no-autoalign><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
+        <div class="actions"><button type="button" class="btn small" data-ci-add="mat">＋ 원부자재</button><button type="button" class="btn small" data-ci-add="labor">＋ 인건비 공정</button><button type="button" class="btn small" data-ci-add="exp">＋ 기타 직접비</button><span class="grow"></span></div>
+      </fieldset>
+      <div class="ci-sum" data-ci-sum></div>
+      ${it ? `<fieldset class="vendor-sec"><legend>원가 리비전 <span class="hint">원가가 바뀐 시점마다 그때의 원가 줄·단가·기준·합계를 그대로 남깁니다</span></legend><div data-ci-chart></div><div class="table-wrap"><table class="grid ci-revs" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>Rev</th><th>변동 시점</th><th>원인</th><th>사유</th><th>원부자재</th><th>인건비</th><th>원가</th><th>낱개당</th><th>직전 대비</th><th>판매가 · 마진율</th><th>작성</th><th></th></tr></thead><tbody>${[...revs].reverse().map((r, i, a) => { const p = a[i + 1], pct = p?.totals.total ? (r.totals.total - p.totals.total) / p.totals.total * 100 : null; return `<tr><td class="c"><b>Rev.${r.rev}</b></td><td class="c nowrap">${esc(r.effective_date)}</td><td class="c nowrap">${esc(r.cause_label)}</td><td>${esc(r.reason)}</td><td class="r">${cFmt(r.totals.material)}</td><td class="r">${cFmt(r.totals.labor)}</td><td class="r"><b>${cFmt(r.totals.total)}</b></td><td class="r">${cFmt(r.totals.piece_cost, 4)}</td><td class="c">${cPctChip(pct == null ? null : Math.round(pct * 100) / 100)}</td><td class="r">${r.totals.sale_price != null ? `${cFmt(r.totals.sale_price)}<div class="small ${r.totals.margin < 0 ? 'err-text' : 'muted'}">${cFmt(r.totals.margin_rate)}%</div>` : '<span class="muted">—</span>'}</td><td class="nowrap small">${esc(r.created_by)}<div class="muted">${esc(String(r.created_at).slice(0, 16))}</div></td><td class="nowrap"><button type="button" class="btn small" data-ci-rev="${r.rev}">보기·비교</button></td></tr>`; }).join('')}</tbody></table></div></fieldset>` : ''}
+      <div class="actions">${it ? `<button type="button" class="btn" data-ci-hist>이력</button><button type="button" class="btn" data-ci-xlsx>엑셀</button><button type="button" class="btn ${it.active ? 'danger' : ''}" data-ci-active>${it.active ? '사용 중지' : '다시 사용'}</button>${it.stale ? '<button type="button" class="btn" data-ci-recalc>지금 단가로 재산출</button>' : ''}` : ''}<span class="grow"></span><button class="btn primary">${it ? '저장' : '원가 산출(Rev.0)'}</button></div>
+    </form>`, { wide: true });
+  m.el.classList.add('ci-modal');
+  const form = $('[data-ci-form]', m.el), table = $('.ci-grid', form), touched = () => { if (m.el.parentElement) m.el.parentElement.dataset.dirty = '1'; };
+  const head = () => { const v = formObj(form); return { ...v, overrides: { labor_rate: v.ov_labor_rate, mfg_rate: v.ov_mfg_rate, sga_rate: v.ov_sga_rate, defect_rate: v.ov_defect_rate } }; };
+  const COLS = [['type', '구분', 92], ['material_id', '원가 백데이터', 170], ['name', '항목명', 120], ['spec', '규격', 76], ['unit', '단위', 64], ['qty', '소요량·작업량', 104], ['price', '단가(원)', 104], ['loss', '로스%', 56], ['capa', '시간당 처리량', 92], ['workers', '인원', 50], ['note', '비고', 90]];
+  const cell = (k, l, r, w) => {
+    const v = l[k] ?? '', at = `data-r="${r}" data-k="${k}" style="min-width:${w}px"`, ty = l.type || 'mat';
+    if (k === 'type') return `<td><select ${at}>${Object.entries(COST_LINE_LABEL).map(([a, b]) => `<option value="${a}"${ty === a ? ' selected' : ''}>${b}</option>`).join('')}</select></td>`;
+    if (k === 'material_id') return ty === 'mat' ? `<td><select ${at}>${matOpt(v)}</select>${l.material_id ? `<label class="chk ci-own"><input type="checkbox" data-r="${r}" data-k="manual_price"${l.manual_price ? ' checked' : ''}> 단가 직접</label>` : ''}</td>` : '<td class="muted small c">—</td>';
+    if (k === 'price' && ty === 'mat' && l.material_id && !l.manual_price) return `<td class="r small" data-ci-auto="${r}"></td>`;
+    if (k === 'price' && ty === 'labor' && costTry(l.capa).v > 0) return `<td class="r small muted" data-ci-auto="${r}"></td>`;
+    if ((k === 'loss' && ty !== 'mat') || ((k === 'capa' || k === 'workers') && ty !== 'labor')) return '<td class="muted small c">—</td>';
+    const ex = ['qty', 'price', 'capa', 'workers'].includes(k), bad = ex && costTry(v).err;
+    return `<td><input ${at} value="${esc(v)}" class="${ex || k === 'loss' ? 'r' : ''}${bad ? ' ci-bad' : ''}"${ex ? ' inputmode="text" spellcheck="false"' : k === 'loss' ? ' inputmode="decimal"' : ''}${k === 'qty' ? ' placeholder="1"' : k === 'workers' ? ' placeholder="1"' : ''}></td>`;
+  };
+  const sum = () => {
+    const h = head(), c = costComputeC(h, lines, rates, mats), t = c.totals;
+    lines.forEach((l, i) => { const a = $(`[data-ci-amt="${i}"]`, table); if (a) a.textContent = cFmt(c.out[i].amount, 4); const u = $(`[data-ci-auto="${i}"]`, table); if (u) u.innerHTML = c.out[i].src === 'missing' ? '<span class="err-text">단가 없음</span>' : c.out[i].src === 'rate' ? `시간당 ${cFmt(c.used.labor_rate, 2)}` : `₩${cFmt(c.out[i].unit, 4)}`; });
+    $$('[data-k]', table).forEach(el => { if (['qty', 'price', 'capa', 'workers'].includes(el.dataset.k)) el.classList.toggle('ci-bad', !!costTry(el.value).err); });
+    $('tfoot', table).innerHTML = `<tr class="dc-total"><td></td><td colspan="${COLS.length}" class="r"><b>원부자재 ${cFmt(t.material)} · 인건비 ${cFmt(t.labor)}${t.other ? ` · 기타 ${cFmt(t.other)}` : ''}</b></td><td class="r"><b>${cFmt(t.direct)}</b></td><td colspan="2"></td></tr>`;
+    const prev = it?.totals?.total, dPct = prev ? (t.total - prev) / prev * 100 : null;
+    $('[data-ci-sum]', form).innerHTML = `<dl class="dc-kpi ci-kpi"><div><dt>원부자재</dt><dd>${cFmt(t.material)}</dd></div><div><dt>인건비</dt><dd>${cFmt(t.labor)}</dd></div>${t.other ? `<div><dt>기타 직접비</dt><dd>${cFmt(t.other)}</dd></div>` : ''}<div><dt>직접비</dt><dd>${cFmt(t.direct)}</dd></div>
+      ${t.defect ? `<div><dt>불량 가산(${cFmt(c.used.defect_rate)}%)</dt><dd>${cFmt(t.defect)}</dd></div>` : ''}<div><dt>제조경비(${cFmt(c.used.mfg_rate)}%)</dt><dd>${cFmt(t.mfg)}</dd></div><div><dt>판관비(${cFmt(c.used.sga_rate)}%${h.sga_base === 'mfg' ? ', 직접비+제조경비' : ''})</dt><dd>${cFmt(t.sga)}</dd></div>
+      <div class="em"><dt>원가 (원/${esc(h.unit || '단위')})</dt><dd>${cFmt(t.total)}원</dd></div>${t.piece_cost != null ? `<div class="em"><dt>낱개당(÷${cFmt(h.pieces)})</dt><dd>${cFmt(t.piece_cost, 4)}원</dd></div>` : ''}
+      ${t.sale_price != null ? `<div class="${t.margin < 0 ? 'neg' : 'pos'}"><dt>판매가 ${cFmt(t.sale_price)} · 이윤</dt><dd>${cFmt(t.margin)}원 · ${cFmt(t.margin_rate)}%</dd></div>` : ''}
+      ${prev != null ? `<div class="${Math.abs(t.total - prev) > 0.005 ? 'chg' : ''}"><dt>지금 Rev.${it.rev} 원가 대비</dt><dd>${cFmt(prev)} → ${cFmt(t.total)} <small>${esc(cPct(dPct == null ? null : Math.round(dPct * 100) / 100))}</small></dd></div>` : ''}</dl>
+      <p class="small muted">적용 기준: 시간당 인건비 ${cFmt(c.used.labor_rate, 4)}원 · 제조경비 ${cFmt(c.used.mfg_rate)}% · 판관비 ${cFmt(c.used.sga_rate)}% · 불량 ${cFmt(c.used.defect_rate)}%${rates?.effective_date ? ` (공통 기준 ${esc(rates.effective_date)}~${Object.values(h.overrides).some(v => v !== '' && v != null) ? ', 일부 품목 덮어쓰기' : ''})` : ' — 공통 기준이 없습니다. 「공통 기준」 탭에서 먼저 넣으세요.'}${c.errs.length ? ` · <b class="err-text">식이 잘못된 칸 ${new Set(c.errs).size}줄</b>` : ''}</p>`;
+    return c;
+  };
+  const draw = () => {
+    $('thead', table).innerHTML = `<tr><th class="c">No</th>${COLS.map(([, l]) => `<th>${esc(l)}</th>`).join('')}<th>금액(원)</th><th></th></tr>`;
+    $('tbody', table).innerHTML = lines.map((l, r) => `<tr class="ci-${l.type || 'mat'}"><td class="c">${r + 1}</td>${COLS.map(([k, , w]) => cell(k, l, r, w)).join('')}<td class="r dc-amt" data-ci-amt="${r}"></td><td class="nowrap"><button type="button" class="btn small" data-ci-dup="${r}" title="줄 복사">⧉</button> <button type="button" class="btn small" data-ci-rm="${r}" aria-label="${r + 1}번 줄 삭제">×</button></td></tr>`).join('') || `<tr><td colspan="${COLS.length + 3}" class="empty">원가 줄이 없습니다.</td></tr>`;
+    sum();
+  };
+  draw();
+  const setVal = (l, k, v) => { if (k === 'type') l.type = Object.entries(COST_LINE_LABEL).find(([a, b]) => a === v || b.startsWith(v) || (v && b.includes(v)))?.[0] || (/인건|공정|작업/.test(v) ? 'labor' : /기타|외주|운송/.test(v) ? 'exp' : 'mat'); else if (k === 'loss') l.loss = String(v).replace('%', ''); else l[k] = v; };
+  const onEdit = e => {
+    const t = e.target.closest('[data-k]'); if (!t) return; const r = Number(t.dataset.r), l = lines[r]; if (!l) return; touched();
+    const k = t.dataset.k; if (k === 'manual_price') { l.manual_price = t.checked; if (t.checked && !l.price) { const mm = mats.find(x => x.id === Number(l.material_id)); l.price = mm?.krw_price ?? ''; } draw(); return; }
+    l[k] = t.value;
+    if (k === 'type') { draw(); return; }
+    if (k === 'material_id') { const mm = mats.find(x => x.id === Number(t.value)); if (mm) { if (!l.name) l.name = mm.name; if (!l.unit) l.unit = mm.unit; if (!l.spec) l.spec = mm.spec; } l.manual_price = false; draw(); return; }
+    if (k === 'capa') { const before = !!$(`[data-ci-auto="${r}"]`, table), now = l.type === 'labor' && costTry(l.capa).v > 0; if (before !== now) { draw(); return; } }
+    sum();
+  };
+  table.addEventListener('input', onEdit); table.addEventListener('change', onEdit);
+  form.addEventListener('input', e => { if (!e.target.closest('.ci-grid')) sum(); });
+  const newLine = type => ({ type: type || lines.at(-1)?.type || 'mat', qty: type === 'labor' ? '1' : '', loss: 0 });
+  costGridKeys(table, { rows: () => lines, keys: ['type', 'name', 'spec', 'unit', 'qty', 'price', 'loss', 'capa', 'workers', 'note'], addRow: () => lines.push(newLine()), draw, setVal, onChange: touched });
+  form.addEventListener('click', e => {
+    const a = e.target.closest('[data-ci-add]'); if (a) { lines.push(newLine(a.dataset.ciAdd)); touched(); draw(); $(`[data-r="${lines.length - 1}"][data-k="${a.dataset.ciAdd === 'mat' ? 'material_id' : 'name'}"]`, table)?.focus(); return; }
+    const d = e.target.closest('[data-ci-dup]'); if (d) { const i = Number(d.dataset.ciDup), { key, ...rest } = lines[i]; void key; lines.splice(i + 1, 0, { ...rest }); touched(); draw(); return; }
+    const x = e.target.closest('[data-ci-rm]'); if (x) { lines.splice(Number(x.dataset.ciRm), 1); touched(); draw(); return; }
+    const rv = e.target.closest('[data-ci-rev]'); if (rv) costRevView(it, revs, Number(rv.dataset.ciRev));
+  });
+  if (it && revs.length) $('[data-ci-chart]', form).innerHTML = costChart([{ label: '원가', color: '#3b6fd8', points: revs.map(r => ({ x: r.effective_date, y: r.totals.total, tip: `Rev.${r.rev} ${r.reason}` })) }, { label: '판매가', color: '#2f9e44', dash: true, points: revs.filter(r => r.totals.sale_price != null).map(r => ({ x: r.effective_date, y: r.totals.sale_price })) }]);
+  const body = () => { const h = head(); delete h.ov_labor_rate; delete h.ov_mfg_rate; delete h.ov_sga_rate; delete h.ov_defect_rate; return { ...h, lines: lines.filter(l => l.material_id || String(l.name || '').trim() || String(l.price || '').trim()).map(l => Object.fromEntries(Object.entries(l).filter(([k]) => !['qty_v', 'capa_v', 'workers_v', 'amount', 'unit_price', 'price_src', 'price_date'].includes(k)))) }; };
+  const reopen = async (r, msg) => { toast(msg); m.close(); qReload(); await costItemOpen(r.id); };
+  form.onsubmit = async e => {
+    e.preventDefault(); const c = sum(); if (c.errs.length) return toast(`식이 잘못된 칸이 있습니다(${[...new Set(c.errs)].map(i => i + 1).join(', ')}번 줄).`, 'err');
+    try {
+      if (!it) { const v = await promptBox('원가 산출(Rev.0)', `<p class="small">원가 <b>${cFmt(c.totals.total)}원</b>으로 처음 산출합니다.</p><div class="form-grid"><label>산출 시점 *<input type="date" name="effective_date" required value="${todayStr()}"></label><label class="span2">메모<input name="reason" maxlength="200" placeholder="예) 2026 원가 기준 최초 등록"></label></div><p class="small muted">시점의 백데이터 단가·공통 기준으로 계산합니다(오늘이 아니면 화면 숫자와 조금 다를 수 있습니다).</p>`); if (!v) return; return reopen(await api('POST', '/api/cost/items', { ...body(), ...v, request_id: crypto.randomUUID() }), 'Rev.0 원가를 산출했습니다.'); }
+      const b = body(), costKey = x => JSON.stringify([x.lines.map(l => [l.type, l.material_id ? Number(l.material_id) : null, !!l.manual_price, l.name || '', l.spec || '', l.unit || '', String(l.qty ?? ''), String(l.price ?? ''), Number(l.loss) || 0, String(l.capa ?? ''), String(l.workers ?? ''), l.note || '']), x.sga_base, Number(x.pieces) || null, x.kind, ['labor_rate', 'mfg_rate', 'sga_rate', 'defect_rate'].map(k => x.overrides?.[k] === '' || x.overrides?.[k] == null ? null : Number(x.overrides[k]))]);
+      let costChanged = costKey(b) !== costKey({ ...it, lines: it.lines }) || Math.abs(c.totals.total - (it.totals.total || 0)) > 0.005;
+      let extra = {};
+      const ask = async () => {
+        const pct = it.totals.total ? (c.totals.total - it.totals.total) / it.totals.total * 100 : null;
+        const v = await promptBox(`새 리비전 Rev.${it.rev + 1} 저장`, `<p class="small">원가 <b>${cFmt(it.totals.total)}원 → ${cFmt(c.totals.total)}원</b> ${cPctChip(pct == null ? null : Math.round(pct * 100) / 100)}</p><div class="form-grid"><label>원가 변동 시점 *<input type="date" name="effective_date" required value="${todayStr()}" min="${esc(it.rev_date || '')}"></label><label class="span2">변경 사유 *<input name="reason" required maxlength="200" placeholder="예) 원단 공급가 인상(5월), 포장 사양 변경"></label></div><p class="small muted">Rev.${it.rev}은(는) 그대로 남고, 이 시점부터 새 원가가 적용됩니다.</p>`);
+        if (!v) return false; extra = v; return true;
+      };
+      if (costChanged && !await ask()) return;
+      let r; try { r = await api('PUT', `/api/cost/items/${it.id}`, { ...b, ...extra, revision: it.revision }); }
+      catch (err) { if (costChanged || !/원가가 바뀌었습니다/.test(err.message || '')) throw err; costChanged = true; if (!await ask()) return; r = await api('PUT', `/api/cost/items/${it.id}`, { ...b, ...extra, revision: it.revision }); } /* 서버 계산으로 원가가 바뀐 경우(시점 단가 등) 사유를 받아 다시 */
+      reopen(r, r.rev !== it.rev ? `Rev.${r.rev}로 저장했습니다.` : '저장했습니다(원가 변동 없음).');
+    } catch (err) { fail(err); }
+  };
+  $('[data-ci-active]', m.el)?.addEventListener('click', async () => { try { const r = await api('PUT', `/api/cost/items/${it.id}`, { active: !it.active, revision: it.revision }); reopen(r, it.active ? '사용 중지했습니다.' : '다시 사용합니다.'); } catch (err) { fail(err); } });
+  $('[data-ci-recalc]', m.el)?.addEventListener('click', async () => { const v = await promptBox('지금 단가·기준으로 재산출', `<p class="small">원가 ${cFmt(it.totals.total)}원 → ${cFmt(it.live?.total)}원</p><div class="form-grid"><label>변동 시점 *<input type="date" name="effective_date" required value="${todayStr()}" min="${esc(it.rev_date || '')}"></label><label class="span2">사유 *<input name="reason" required maxlength="200" placeholder="예) 백데이터 단가 반영"></label></div>`); if (!v) return; try { const r = await api('POST', '/api/cost/items/recalc', { ids: [it.id], ...v }); toast(r.changed.length ? `Rev.${r.changed[0].rev}로 재산출했습니다.` : '원가 변동이 없습니다.'); m.close(); qReload(); await costItemOpen(it.id); } catch (err) { fail(err); } });
+  $('[data-ci-hist]', m.el)?.addEventListener('click', () => qHistory(it.item_code, it.history, {}));
+  $('[data-ci-xlsx]', m.el)?.addEventListener('click', () => costItemXlsx(it, revs));
+}
+function costRevView(it, revs, rev) {
+  const r = revs.find(x => x.rev === rev), p = revs.filter(x => x.rev < rev).at(-1); if (!r) return;
+  const key = l => l.key || `${l.type}:${l.name}`, pm = new Map((p?.lines || []).map(l => [key(l), l])), seen = new Set();
+  const rows = r.lines.map(l => { const o = pm.get(key(l)); seen.add(key(l)); const d = o ? l.amount - o.amount : null; return `<tr class="${!o ? 'ci-new' : Math.abs(d) > 0.00005 ? 'ci-chg' : ''}"><td>${esc(COST_LINE_LABEL[l.type] || l.type)}</td><td>${esc(l.name || '')}${l.spec ? ` <span class="muted small">${esc(l.spec)}</span>` : ''}</td><td class="r">${cFmt(l.qty_v, 4)}</td><td class="r">${l.type === 'labor' && l.capa_v ? `<span class="small muted">÷${cFmt(l.capa_v, 2)}/h</span>` : cFmt(l.unit_price, 4)}${o && o.unit_price !== l.unit_price && !(l.type === 'labor' && l.capa_v) ? `<div class="small muted">← ${cFmt(o.unit_price, 4)}</div>` : ''}</td><td class="r">${l.loss ? cFmt(l.loss) + '%' : ''}</td><td class="r"><b>${cFmt(l.amount, 4)}</b></td><td class="r">${o ? (Math.abs(d) > 0.00005 ? `<span class="${d > 0 ? 'err-text' : 'ok-text'}">${d > 0 ? '+' : ''}${cFmt(d, 4)}</span>` : '<span class="muted">같음</span>') : '<span class="chip">새 줄</span>'}</td></tr>`; }).join('')
+    + (p?.lines || []).filter(l => !seen.has(key(l))).map(l => `<tr class="ci-del"><td>${esc(COST_LINE_LABEL[l.type] || l.type)}</td><td><s>${esc(l.name || '')}</s></td><td></td><td></td><td></td><td class="r"><s>${cFmt(l.amount, 4)}</s></td><td class="r"><span class="chip">빠짐</span></td></tr>`).join('');
+  const t = r.totals, pt = p?.totals, row = (lbl, k, d = 2) => `<tr><th>${lbl}</th><td class="r">${pt ? cFmt(pt[k], d) : ''}</td><td class="r"><b>${cFmt(t[k], d)}</b></td><td class="r">${pt && pt[k] != null && t[k] != null ? cFmt(t[k] - pt[k], d) : ''}</td></tr>`;
+  const rt = r.rates || {}, prt = p?.rates || {}, rateTxt = x => `인건비 ${cFmt(x.labor_rate, 4)} · 제조경비 ${cFmt(x.mfg_rate)}% · 판관비 ${cFmt(x.sga_rate)}% · 불량 ${cFmt(x.defect_rate)}%`;
+  const mm = modal(`<h3>${esc(it.item_code)} · Rev.${r.rev} <span class="small muted">${esc(r.effective_date)} · ${esc(r.cause_label)}</span></h3><p class="small">${esc(r.reason)} · ${esc(r.created_by)} ${esc(String(r.created_at).slice(0, 16))}</p>
+    <div class="table-wrap"><table class="grid" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>구분</th><th>항목</th><th>소요량</th><th>단가</th><th>로스</th><th>금액</th><th>${p ? `Rev.${p.rev} 대비` : '직전 없음'}</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="table-wrap"><table class="grid ci-cmp" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th></th><th>${p ? `Rev.${p.rev} (${esc(p.effective_date)})` : '—'}</th><th>Rev.${r.rev} (${esc(r.effective_date)})</th><th>차이</th></tr></thead><tbody>${row('원부자재', 'material')}${row('인건비', 'labor')}${row('기타 직접비', 'other')}${row('직접비', 'direct')}${row('불량 가산', 'defect')}${row('제조경비', 'mfg')}${row('판관비', 'sga')}${row('원가', 'total')}${row('낱개당 원가', 'piece_cost', 4)}${row('판매가', 'sale_price')}${row('마진율(%)', 'margin_rate')}</tbody></table></div>
+    <p class="small muted">적용 기준 Rev.${r.rev}: ${esc(rateTxt(rt))}${p && rateTxt(prt) !== rateTxt(rt) ? `<br>Rev.${p.rev}: ${esc(rateTxt(prt))}` : ''}</p>
+    <div class="actions"><span class="grow"></span><button type="button" class="btn" data-x>닫기</button></div>`, { wide: true });
+  mm.el.querySelector('[data-x]').onclick = () => mm.close();
+}
+function costItemXlsx(it, revs) {
+  const t = it.totals, rows = it.lines.map((l, i) => [i + 1, COST_LINE_LABEL[l.type] || l.type, l.name || '', l.spec || '', l.unit || '', l.qty || '', l.material_id && !l.manual_price ? '(백데이터)' : l.price || '', l.loss || '', l.capa || '', l.workers || '', l.note || '']);
+  rows.push(Array(11).fill(''), ['', '원부자재', t.material], ['', '인건비', t.labor], ['', '기타 직접비', t.other], ['', '직접비', t.direct], ['', '불량 가산', t.defect], ['', '제조경비', t.mfg], ['', '판관비', t.sga], ['', '원가', t.total], ['', '낱개당 원가', t.piece_cost ?? ''], ['', '판매가', t.sale_price ?? ''], ['', '마진율(%)', t.margin_rate ?? ''], Array(11).fill(''), ['Rev', '변동 시점', '원인', '사유', '원가', '낱개당', '작성'], ...revs.map(r => [r.rev, r.effective_date, r.cause_label, r.reason, r.totals.total, r.totals.piece_cost ?? '', r.created_by]));
+  xlsxDownload(`원가_${it.item_code}_Rev${it.rev}.xlsx`, { sheet: it.item_code, titles: [`${it.item_code} · ${it.name} · Rev.${it.rev} (${it.rev_date || ''})`, `${it.spec || ''} ${it.pack_spec || ''} · 원가 단위 ${it.unit || ''}`], columns: ['No', '구분', '항목', '규격', '단위', '소요량·작업량(식)', '단가(식)', '로스%', '시간당 처리량', '인원', '비고'].map(label => ({ label, type: 'text' })), rows });
+}
+async function pageCostItems(main) {
+  main.innerHTML = `<h1>원가 산출 관리 <span class="dept">구매</span></h1>
+    <p class="muted">품목별 원가표(원부자재 · 인건비 공정 · 기타 직접비 → 직접비 · 불량 · 제조경비 · 판관비 → 원가)를 엑셀처럼 관리합니다. 원가가 바뀔 때마다 <b>변동 시점·사유와 함께 리비전</b>을 남기고, 「원가 백데이터」 단가나 「공통 기준」이 바뀌면 영향 품목을 한꺼번에 재산출합니다.</p>
+    <div class="ip-tiles" id="ciTiles"></div>
+    <form class="toolbar list-filters" data-read-only id="ciFilters"><label class="lf-sel">구분<select name="kind"><option value="">전체</option>${Object.entries(COST_KIND_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">상태<select name="st"><option value="active">사용 중</option><option value="loss">원가 미달(판매가 &lt; 원가)</option><option value="noprice">판매가 미기재</option><option value="stale">재산출 필요</option><option value="month">이번 달 변동</option><option value="off">사용 중지</option><option value="">전체</option></select></label><label class="lf-sel">분류<select name="cat"><option value="">전체</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="코드·품목·고객사·원부자재"></label><span class="grow"></span><span id="ciTools" class="ip-tools"></span></form>
+    <div id="ciList"></div>`;
+  const form = $('#ciFilters', main); let data = { rows: [] };
+  const load = async () => { data = await api('GET', '/api/cost/items'); if (!main.isConnected) return; const cats = [...new Set(data.rows.map(r => r.category).filter(Boolean))].sort(), cs = form.elements.cat, cur = cs.value; cs.innerHTML = '<option value="">전체</option>' + cats.map(c => `<option${c === cur ? ' selected' : ''}>${esc(c)}</option>`).join(''); draw(); };
+  main.qReload = () => load().catch(fail);
+  const draw = () => {
+    const v = formObj(form), q = (v.q || '').trim().toLowerCase(), act = data.rows.filter(r => r.active), month = data.today.slice(0, 7);
+    const loss = act.filter(r => r.totals.sale_price != null && r.totals.margin < 0), noprice = act.filter(r => r.totals.sale_price == null), stale = act.filter(r => r.stale), mon = act.filter(r => (r.rev_date || '').startsWith(month) && r.rev > 0);
+    const avg = act.filter(r => r.totals.margin_rate != null), avgM = avg.length ? avg.reduce((s, r) => s + r.totals.margin_rate, 0) / avg.length : null;
+    qTiles('ciTiles', [['품목', act.length], ['원가 미달', loss.length, loss.length ? 'red' : ''], ['판매가 미기재', noprice.length, noprice.length ? 'yellow' : ''], ['재산출 필요', stale.length, stale.length ? 'yellow' : ''], ['이번 달 원가 변동', mon.length], ['평균 마진율', avgM == null ? '—' : cFmt(avgM, 1) + '%', avgM != null && avgM < 10 ? 'yellow' : 'green']]);
+    $('#ciTools', main).innerHTML = `<button type="button" class="btn primary" data-ci-new>＋ 품목 원가</button>${stale.length ? `<button type="button" class="btn" data-ci-stale>재산출 필요 ${stale.length}건 일괄 재산출</button>` : ''}`;
+    const rows = data.rows.filter(r => (v.st === 'active' ? r.active : v.st === 'off' ? !r.active : v.st === 'loss' ? r.active && r.totals.sale_price != null && r.totals.margin < 0 : v.st === 'noprice' ? r.active && r.totals.sale_price == null : v.st === 'stale' ? r.active && r.stale : v.st === 'month' ? r.active && (r.rev_date || '').startsWith(month) && r.rev > 0 : true)
+      && (!v.kind || r.kind === v.kind) && (!v.cat || r.category === v.cat) && (!q || [r.item_code, r.name, r.spec, r.customer, r.category, ...r.lines.map(l => l.name)].join(' ').toLowerCase().includes(q)));
+    $('#ciList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table ci-list"><thead><tr><th>품목코드</th><th>품목 · 규격</th><th>구분</th><th>원부자재</th><th>인건비</th><th>직접비</th><th>제조경비</th><th>판관비</th><th>원가</th><th>낱개당</th><th>판매가</th><th>이윤 · 마진율</th><th>Rev · 변동 시점</th><th>직전 대비</th><th></th></tr></thead><tbody>${rows.map(r => { const t = r.totals; return `<tr data-ci-row="${r.id}" class="${!r.active ? 'row-off' : t.sale_price != null && t.margin < 0 ? 'ip-over' : ''}"><td class="nowrap" data-card-primary><b>${esc(r.item_code)}</b></td><td>${esc(r.name)}${r.spec || r.customer ? `<div class="small muted">${esc([r.spec, r.customer].filter(Boolean).join(' · '))}</div>` : ''}</td><td class="c nowrap">${esc(r.kind_label)}${r.category ? `<div class="small muted">${esc(r.category)}</div>` : ''}</td><td class="r">${cFmt(t.material)}</td><td class="r">${cFmt(t.labor)}</td><td class="r">${cFmt(t.direct)}</td><td class="r">${cFmt(t.mfg)}</td><td class="r">${cFmt(t.sga)}</td><td class="r"><b>${cFmt(t.total)}</b>${r.stale ? `<div class="small"><span class="chip yellow" title="지금 단가·기준이면 ${cFmt(r.live?.total)}원">재산출 ${esc(cFmt(r.live?.total))}</span></div>` : ''}</td><td class="r">${cFmt(t.piece_cost, 4)}</td><td class="r">${t.sale_price != null ? cFmt(t.sale_price) : '<span class="muted">미기재</span>'}</td><td class="r">${t.margin != null ? `${cFmt(t.margin)}<div class="small ${t.margin < 0 ? 'err-text' : 'muted'}">${cFmt(t.margin_rate)}%</div>` : '<span class="muted">—</span>'}</td><td class="c nowrap">Rev.${r.rev}<div class="small muted">${esc(r.rev_date || '')}</div></td><td class="c">${cPctChip(r.change_pct)}</td><td><button type="button" class="btn small" data-ci-open="${r.id}">열기</button></td></tr>`; }).join('')}</tbody></table></div>`
+      : `<div class="empty">${data.rows.length ? '조건에 맞는 품목이 없습니다.' : '등록된 품목 원가가 없습니다. 먼저 「공통 기준」(시간당 인건비·경비율)과 「원가 백데이터」(원단·포장재 단가)를 넣고, 「＋ 품목 원가」로 원가표를 만드세요.'}</div>`;
+  };
+  main.addEventListener('click', async e => {
+    if (e.target.closest('[data-ci-new]')) return costItemOpen().catch(fail);
+    const o = e.target.closest('[data-ci-open]'); if (o) return costItemOpen(Number(o.dataset.ciOpen)).catch(fail);
+    if (e.target.closest('[data-ci-stale]')) { const st = data.rows.filter(r => r.active && r.stale); const v = await promptBox(`재산출 필요 ${st.length}건 일괄 재산출`, `<p class="small">지금 백데이터 단가·공통 기준으로 다시 계산해 원가가 바뀐 품목마다 새 리비전을 남깁니다.</p><div class="form-grid"><label>변동 시점 *<input type="date" name="effective_date" required value="${data.today}"></label><label class="span2">사유 *<input name="reason" required maxlength="200" placeholder="예) 5월 원단 공급가 인상 반영"></label></div>`); if (!v) return; try { const r = await api('POST', '/api/cost/items/recalc', { ids: st.map(x => x.id), ...v }); toast(`${r.changed.length}건 새 리비전${r.skipped.length ? `, ${r.skipped.length}건 건너뜀(${r.skipped[0].why})` : ''}`, r.skipped.length ? 'err' : 'ok'); qReload(); } catch (err) { fail(err); } }
+  });
+  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  await load();
+}
+// ── 원가 백데이터 ──
+const costKrw = v => { const n = x => Number(String(x ?? '').replace(/,/g, '')) || 0; return ((n(v.price) + n(v.surcharge)) * (v.currency === 'KRW' ? 1 : n(v.fx))) + n(v.extra_krw); };
+const costPriceFields = (v, rates) => `<div class="form-grid"><label>통화<select name="currency">${COST_CURS.map(c => `<option${(v.currency || 'KRW') === c ? ' selected' : ''}>${c}</option>`).join('')}</select></label><label>단가 *<input name="price" required inputmode="decimal" value="${esc(v.price ?? '')}" placeholder="예) 0.3632 ($/SQM)"></label><label>할증(서차지)<input name="surcharge" inputmode="decimal" value="${esc(v.surcharge ?? '')}" placeholder="0"></label>
+  <label>환율(원/외화)<input name="fx" inputmode="decimal" value="${esc(v.currency && v.currency !== 'KRW' ? v.fx ?? '' : '')}" placeholder="${esc(Object.entries(rates?.fx || {}).map(([k, x]) => `${k} ${x}`).join(' · ') || '공통 기준 환율')}"></label><label>부대비(원/단위)<input name="extra_krw" inputmode="decimal" value="${esc(v.extra_krw ?? '')}" placeholder="슬리팅·물류·통관"><span class="hint">원화로 단위당 더함</span></label><label>인코텀즈<input name="incoterms" maxlength="30" value="${esc(v.incoterms || '')}" placeholder="CPT BUSAN·DDP"></label>
+  <label>적용 시점 *<input type="date" name="effective_date" required value="${esc(v.effective_date || todayStr())}"></label><label class="span2">사유<input name="reason" maxlength="200" value="${esc(v.reason || '')}" placeholder="예) 26년 5월 공급가 +4%"></label></div><p class="small" data-krw></p>`;
+const costKrwLive = (form, rates) => { const upd = () => { const v = formObj(form); if (v.currency !== 'KRW' && !v.fx) v.fx = rates?.fx?.[v.currency] || 0; form.querySelector('[data-krw]').innerHTML = `원화 단가 = (단가 + 할증) × 환율 + 부대비 = <b>₩${cFmt(costKrw(v), 4)}</b>${v.currency !== 'KRW' && !form.elements.fx.value ? ` <span class="muted">(공통 기준 ${esc(v.currency)} ${esc(v.fx)})</span>` : ''}`; form.elements.fx.disabled = v.currency === 'KRW'; }; form.addEventListener('input', upd); form.addEventListener('change', upd); upd(); };
+async function costMatOpen(id = null, data) {
+  const mat = id ? data.rows.find(x => x.id === id) : null, rates = data.rates;
+  const prices = mat ? (await api('GET', `/api/cost/materials/${mat.id}/prices`)).rows : [];
+  const m = modal(`<h3>${mat ? `${esc(mat.code)} · ${esc(mat.name)}${mat.active ? '' : ' <span class="chip">사용 중지</span>'}` : '원부자재 등록'}</h3>
+    <form class="stack" data-cm-form><div class="form-grid"><label>코드<input name="code" maxlength="40" value="${esc(mat?.code || '')}" placeholder="비우면 자동(M-0001)"></label><label class="span2">원부자재명 *<input name="name" required maxlength="150" value="${esc(mat?.name || '')}" placeholder="예) SONTARA 8864 원단"></label><label>규격<input name="spec" maxlength="150" value="${esc(mat?.spec || '')}" placeholder="56GSM · 140MM"></label>
+      <label>분류<input name="category" maxlength="30" value="${esc(mat?.category || '')}" list="cmCats" placeholder="원단·포장재·부자재·약품·상품"></label><label>공급사<input name="supplier" maxlength="100" value="${esc(mat?.supplier || '')}"></label><label>단위<input name="unit" maxlength="20" value="${esc(mat?.unit || '')}" placeholder="SQM·kg·EA·ROLL"></label><label class="span2">비고<input name="note" maxlength="500" value="${esc(mat?.note || '')}"></label></div>
+      <datalist id="cmCats">${[...new Set(data.rows.map(r => r.category).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('')}</datalist>
+      ${mat ? '' : `<fieldset class="vendor-sec"><legend>첫 단가</legend>${costPriceFields({ currency: 'KRW' }, rates)}</fieldset>`}
+      ${mat ? `<fieldset class="vendor-sec"><legend>단가 이력(시점별) <span class="hint">원가는 그 시점의 단가로 계산되고, 지난 리비전은 당시 단가를 그대로 갖고 있습니다</span></legend><div data-cm-chart></div>
+        <div class="table-wrap"><table class="grid" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>적용 시점</th><th>통화</th><th>단가</th><th>할증</th><th>환율</th><th>부대비</th><th>원화 단가</th><th>직전 대비</th><th>인코텀즈</th><th>사유</th><th>등록</th><th></th></tr></thead><tbody>${[...prices].reverse().map((p, i, a) => { const prev = a[i + 1], pct = prev?.krw_price ? (p.krw_price - prev.krw_price) / prev.krw_price * 100 : null; return `<tr class="${p.effective_date > data.today ? 'cm-future' : ''}"><td class="c nowrap">${esc(p.effective_date)}${p.effective_date > data.today ? ' <span class="chip yellow">예정</span>' : ''}</td><td class="c">${esc(p.currency)}</td><td class="r">${cFmt(p.price, 4)}</td><td class="r">${p.surcharge ? cFmt(p.surcharge, 4) : ''}</td><td class="r">${p.currency === 'KRW' ? '' : cFmt(p.fx, 2)}</td><td class="r">${p.extra_krw ? cFmt(p.extra_krw, 4) : ''}</td><td class="r"><b>${cFmt(p.krw_price, 4)}</b></td><td class="c">${cPctChip(pct == null ? null : Math.round(pct * 100) / 100)}</td><td class="c">${esc(p.incoterms)}</td><td>${esc(p.reason)}</td><td class="small nowrap">${esc(p.created_by)}</td><td>${prices.length > 1 ? `<button type="button" class="btn small" data-cm-pdel="${p.id}" title="잘못 넣은 단가 지우기">×</button>` : ''}</td></tr>`; }).join('')}</tbody></table></div>
+        <div class="actions"><button type="button" class="btn primary" data-cm-price>단가 변경(새 시점)</button></div></fieldset>
+        <fieldset class="vendor-sec"><legend>쓰는 품목 ${mat.used_by.length}개</legend>${mat.used_by.length ? `<div class="chip-wrap">${mat.used_by.map(u => `<button type="button" class="btn small" data-cm-item="${u.id}">${esc(u.item_code)} ${esc(u.name)}</button>`).join(' ')}</div>` : '<p class="small muted">아직 이 원부자재를 쓰는 품목 원가표가 없습니다.</p>'}</fieldset>` : ''}
+      <div class="actions">${mat ? `<button type="button" class="btn" data-cm-hist>이력</button><button type="button" class="btn ${mat.active ? 'danger' : ''}" data-cm-active>${mat.active ? '사용 중지' : '다시 사용'}</button>` : ''}<span class="grow"></span><button class="btn ${mat ? '' : 'primary'}">${mat ? '정보 저장' : '등록'}</button></div></form>`, { wide: true });
+  const form = $('[data-cm-form]', m.el); if (!mat) costKrwLive(form, rates);
+  if (mat && prices.length) $('[data-cm-chart]', form).innerHTML = costChart([{ label: `원화 단가(₩/${mat.unit || '단위'})`, color: '#e8590c', points: prices.map(p => ({ x: p.effective_date, y: p.krw_price, tip: p.reason })) }], { fmt: v => cFmt(v, 2) });
+  const done = async (msg, reopen = true) => { toast(msg); m.close(); qReload(); if (reopen && mat) { const d = await api('GET', '/api/cost/materials'); await costMatOpen(mat.id, d); } };
+  form.onsubmit = async e => { e.preventDefault(); const v = formObj(form); try { if (mat) await api('PUT', `/api/cost/materials/${mat.id}`, { ...v, revision: mat.revision }); else await api('POST', '/api/cost/materials', { ...v, request_id: crypto.randomUUID() }); done(mat ? '저장했습니다.' : '등록했습니다.', !!mat); } catch (err) { fail(err); } };
+  $('[data-cm-active]', m.el)?.addEventListener('click', async () => { try { await api('PUT', `/api/cost/materials/${mat.id}`, { active: !mat.active, revision: mat.revision }); done(mat.active ? '사용 중지했습니다.' : '다시 사용합니다.'); } catch (err) { fail(err); } });
+  $('[data-cm-hist]', m.el)?.addEventListener('click', () => qHistory(mat.code, mat.history, {}));
+  $$('[data-cm-pdel]', m.el).forEach(b => b.addEventListener('click', async () => { if (!await confirmBox('이 단가 이력을 지울까요? 잘못 넣은 경우에만 지우세요(지난 리비전은 당시 단가를 그대로 갖고 있습니다).')) return; try { await api('DELETE', `/api/cost/materials/${mat.id}/prices/${b.dataset.cmPdel}`); done('지웠습니다.'); } catch (err) { fail(err); } }));
+  $$('[data-cm-item]', m.el).forEach(b => b.addEventListener('click', () => { m.close(); costItemOpen(Number(b.dataset.cmItem)).catch(fail); }));
+  $('[data-cm-price]', m.el)?.addEventListener('click', () => costPriceOpen(mat, data, () => done('단가를 바꿨습니다.')));
+}
+async function costPriceOpen(mat, data, after) {
+  const cur = mat.current || {}, rates = data.rates;
+  const m = modal(`<h3>단가 변경 · ${esc(mat.code)} ${esc(mat.name)}</h3><p class="small muted">지금 단가: ${cur.krw_price != null ? `₩${cFmt(cur.krw_price, 4)} (${esc(cur.effective_date)}, ${esc(cur.currency)} ${cFmt(cur.price, 4)})` : '없음'} · 쓰는 품목 ${mat.used_by.length}개</p>
+    <form class="stack" data-cp-form>${costPriceFields({ ...cur, effective_date: todayStr(), reason: '' }, rates)}
+      <div data-cp-impact></div>
+      <label class="chk"><input type="checkbox" name="recalc" value="1" checked> 영향 품목을 이 시점으로 재산출해 리비전 남기기</label>
+      <div class="actions"><button type="button" class="btn" data-cp-dry>영향 미리 보기</button><span class="grow"></span><button class="btn primary">단가 저장</button></div></form>`, { wide: true });
+  const form = $('[data-cp-form]', m.el); costKrwLive(form, rates);
+  const showImpact = imp => { $('[data-cp-impact]', form).innerHTML = imp.changed.length ? `<div class="table-wrap"><table class="grid" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>품목</th><th>지금 원가</th><th>새 원가</th><th>변동률</th><th>판매가</th><th>새 마진율</th></tr></thead><tbody>${imp.changed.map(x => `<tr><td><b>${esc(x.item_code)}</b> ${esc(x.name)}</td><td class="r">${cFmt(x.old_total)}</td><td class="r"><b>${cFmt(x.new_total)}</b></td><td class="c">${cPctChip(x.pct)}</td><td class="r">${cFmt(x.sale_price)}</td><td class="r ${x.new_margin_rate != null && x.new_margin_rate < 0 ? 'err-text' : ''}">${x.new_margin_rate == null ? '' : cFmt(x.new_margin_rate) + '%'}</td></tr>`).join('')}</tbody></table></div>${imp.skipped?.length ? `<p class="small err-text">${esc(imp.skipped.map(s => `${s.item_code}: ${s.why}`).join(' / '))}</p>` : ''}` : '<p class="small muted">원가가 바뀌는 품목이 없습니다.</p>'; };
+  const val = () => { const v = formObj(form); return { ...v, recalc: !!(v.recalc && v.recalc.length) }; };
+  $('[data-cp-dry]', form).onclick = async () => { try { const r = await api('POST', `/api/cost/materials/${mat.id}/prices`, { ...val(), dry: true }); showImpact(r.impact); } catch (err) { fail(err); } };
+  form.onsubmit = async e => { e.preventDefault(); try { const r = await api('POST', `/api/cost/materials/${mat.id}/prices`, { ...val(), request_id: crypto.randomUUID() }); m.close(); toast(r.recalculated ? `단가를 저장하고 ${r.impact.changed.length}개 품목을 재산출했습니다(새 리비전).${r.impact.skipped.length ? ` 건너뜀 ${r.impact.skipped.length}` : ''}` : `단가를 저장했습니다. 영향 품목 ${r.impact.changed.length}개는 「재산출 필요」로 표시됩니다.`); after(); } catch (err) { fail(err); } };
+}
+async function pageCostMaterials(main) {
+  main.innerHTML = `<h1>원가 산출 관리 <span class="dept">구매</span></h1>
+    <p class="muted">원단·포장재·부자재·상품 매입 단가(BACK DATA)를 <b>시점별로</b> 쌓습니다. 원화 단가 = (단가 + 할증) × 환율 + 부대비(슬리팅·물류·통관 원/단위). 단가를 바꾸면 그 원부자재를 쓰는 품목의 원가 영향을 미리 보고, 그 시점으로 재산출해 리비전을 남길 수 있습니다.</p>
+    <div class="ip-tiles" id="cmTiles"></div>
+    <form class="toolbar list-filters" data-read-only id="cmFilters"><label class="lf-sel">분류<select name="cat"><option value="">전체</option></select></label><label class="lf-sel">사용<select name="st"><option value="active">사용 중</option><option value="unused">쓰는 품목 없음</option><option value="future">예정 단가 있음</option><option value="off">사용 중지</option><option value="">전체</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="코드·원부자재·공급사"></label><span class="grow"></span><span id="cmTools" class="ip-tools"><button type="button" class="btn" data-cm-bulk>엑셀 붙여넣기 등록</button><button type="button" class="btn primary" data-cm-new>＋ 원부자재</button></span></form>
+    <div id="cmList"></div>`;
+  const form = $('#cmFilters', main); let data = { rows: [] };
+  const load = async () => { data = await api('GET', '/api/cost/materials'); if (!main.isConnected) return; const cats = [...new Set(data.rows.map(r => r.category).filter(Boolean))].sort(), cs = form.elements.cat, cur = cs.value; cs.innerHTML = '<option value="">전체</option>' + cats.map(c => `<option${c === cur ? ' selected' : ''}>${esc(c)}</option>`).join(''); draw(); };
+  main.qReload = () => load().catch(fail);
+  const draw = () => {
+    const v = formObj(form), q = (v.q || '').trim().toLowerCase(), act = data.rows.filter(r => r.active), month = data.today.slice(0, 7);
+    qTiles('cmTiles', [['원부자재', act.length], ['이번 달 단가 변경', act.filter(r => (r.current?.effective_date || '').startsWith(month) && r.price_count > 1).length], ['예정 단가', act.filter(r => r.next).length, act.some(r => r.next) ? 'yellow' : ''], ['쓰는 품목 없음', act.filter(r => !r.used_by.length).length]]);
+    const rows = data.rows.filter(r => (v.st === 'active' ? r.active : v.st === 'off' ? !r.active : v.st === 'unused' ? r.active && !r.used_by.length : v.st === 'future' ? !!r.next : true) && (!v.cat || r.category === v.cat) && (!q || [r.code, r.name, r.spec, r.supplier, r.category].join(' ').toLowerCase().includes(q)));
+    $('#cmList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table cm-list"><thead><tr><th>코드</th><th>원부자재 · 규격</th><th>분류</th><th>공급사</th><th>단위</th><th>통화 · 단가</th><th>환율</th><th>부대비</th><th>원화 단가</th><th>직전 대비</th><th>적용 시점</th><th>예정</th><th>쓰는 품목</th><th></th></tr></thead><tbody>${rows.map(r => { const c = r.current; return `<tr data-cm-row="${r.id}" class="${r.active ? '' : 'row-off'}"><td class="nowrap" data-card-primary><b>${esc(r.code)}</b></td><td>${esc(r.name)}${r.spec ? `<div class="small muted">${esc(r.spec)}</div>` : ''}</td><td class="c">${esc(r.category)}</td><td>${esc(r.supplier)}</td><td class="c">${esc(r.unit)}</td><td class="r nowrap">${c ? `${c.currency === 'KRW' ? '' : esc(c.currency) + ' '}${cFmt(c.price, 4)}${c.surcharge ? `<div class="small muted">+할증 ${cFmt(c.surcharge, 4)}</div>` : ''}` : '<span class="err-text">없음</span>'}</td><td class="r">${c && c.currency !== 'KRW' ? cFmt(c.fx, 2) : ''}</td><td class="r">${c?.extra_krw ? cFmt(c.extra_krw, 4) : ''}</td><td class="r"><b>${c ? cFmt(c.krw_price, 4) : ''}</b></td><td class="c">${cPctChip(r.change_pct)}</td><td class="c nowrap">${esc(c?.effective_date || '')}</td><td class="c nowrap">${r.next ? `<span class="chip yellow" title="₩${cFmt(r.next.krw_price, 4)}">${esc(r.next.effective_date)}</span>` : ''}</td><td class="c">${r.used_by.length || ''}</td><td><button type="button" class="btn small" data-cm-open="${r.id}">열기</button></td></tr>`; }).join('')}</tbody></table></div>`
+      : `<div class="empty">${data.rows.length ? '조건에 맞는 원부자재가 없습니다.' : '등록된 백데이터가 없습니다. 「＋ 원부자재」나 「엑셀 붙여넣기 등록」으로 원단·포장재 단가를 넣으세요.'}</div>`;
+  };
+  main.addEventListener('click', async e => {
+    if (e.target.closest('[data-cm-new]')) return costMatOpen(null, data).catch(fail);
+    const o = e.target.closest('[data-cm-open]'); if (o) return costMatOpen(Number(o.dataset.cmOpen), data).catch(fail);
+    if (e.target.closest('[data-cm-bulk]')) {
+      const cols = ['code', 'name', 'spec', 'category', 'supplier', 'unit', 'currency', 'price', 'surcharge', 'fx', 'extra_krw', 'effective_date', 'reason'];
+      const v = await promptBox('엑셀 붙여넣기 등록', `<p class="small">엑셀에서 아래 열 순서로 복사해 붙여넣으세요(머리글 줄은 빼고). 코드가 이미 있으면 단가가 다를 때만 그 시점 단가로 쌓고, 없으면 새로 등록합니다.</p><p class="small muted">코드 · 원부자재명 · 규격 · 분류 · 공급사 · 단위 · 통화(KRW/USD…) · 단가 · 할증 · 환율 · 부대비(원) · 적용일(YYYY-MM-DD) · 사유</p><label>붙여넣기<textarea name="tsv" rows="10" required placeholder="SONTARA-8864	SONTARA 8864	56GSM	원단	듀폰	SQM	USD	0.3632	0	1400	75.79	2026-05-01	5월 인상"></textarea></label>`, { wide: true });
+      if (!v) return; const rows = v.tsv.replace(/\r/g, '').split('\n').map(l => l.split('\t')).filter(a => a.some(x => x.trim())).map(a => Object.fromEntries(cols.map((k, i) => [k, (a[i] || '').trim()]))).map(o => ({ ...o, currency: (o.currency || 'KRW').toUpperCase(), effective_date: (o.effective_date.match(/\d{4}[-./]\d{1,2}[-./]\d{1,2}/)?.[0] || '').replace(/[./]/g, '-').replace(/-(\d)(?=-|$)/g, '-0$1') || undefined }));
+      try { const r = await api('POST', '/api/cost/materials/bulk', { rows }); toast(`새로 ${r.created} · 새 시점 단가 ${r.priced} · 같은 단가 ${r.same}${r.errors.length ? ` · 오류 ${r.errors.length}(${r.errors[0]})` : ''}`, r.errors.length ? 'err' : 'ok'); qReload(); } catch (err) { fail(err); }
+    }
+  });
+  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  await load();
+}
+// ── 공통 기준 ──
+async function pageCostRates(main) {
+  main.innerHTML = `<h1>원가 산출 관리 <span class="dept">구매</span></h1>
+    <p class="muted">모든 품목 원가에 공통으로 쓰는 기준을 <b>시점별 버전</b>으로 관리합니다. 시간당 인건비(1 WH 실지출: 기본급·잔업·특근·수당·상여 ÷ 근무시간, 인상률 반영), 제조경비율·판관비율(3개년 재무제표 기준), 불량률(가산), 환율. 품목은 원가표에서 따로 덮어쓸 수 있습니다.</p>
+    <div id="crNow"></div>
+    <section class="card"><h2>기준 이력 <span class="small muted">새 버전을 넣으면 그 시점부터 적용되고, 지난 리비전은 당시 기준을 그대로 갖고 있습니다</span></h2><div id="crList"></div><div class="actions"><span class="grow"></span><button type="button" class="btn primary" data-cr-new>＋ 새 기준(시점)</button></div></section>`;
+  let data; const load = async () => { data = await api('GET', '/api/cost/rates'); if (main.isConnected) draw(); };
+  main.qReload = () => load().catch(fail);
+  const fx = r => Object.entries(r.fx || {}).map(([k, v]) => `${k} ${cFmt(v, 2)}`).join(' · ');
+  const draw = () => {
+    const c = data.current;
+    $('#crNow', main).innerHTML = c ? `<dl class="dc-kpi cr-now"><div class="em"><dt>시간당 인건비(1 WH)</dt><dd>${cFmt(c.labor_rate, 4)}원</dd></div><div><dt>제조경비율</dt><dd>${cFmt(c.mfg_rate)}%</dd></div><div><dt>판관비율</dt><dd>${cFmt(c.sga_rate)}%</dd></div><div><dt>불량률(가산)</dt><dd>${cFmt(c.defect_rate)}%</dd></div><div><dt>환율</dt><dd class="small">${esc(fx(c) || '—')}</dd></div><div><dt>적용 시점</dt><dd>${esc(c.effective_date)}${data.next ? `<small class="muted"> · 예정 ${esc(data.next.effective_date)}</small>` : ''}</dd></div></dl>` : '<div class="empty">공통 기준이 없습니다. 「＋ 새 기준」으로 시간당 인건비·제조경비율·판관비율을 먼저 넣으세요.</div>';
+    $('#crList', main).innerHTML = data.rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>적용 시점</th><th>시간당 인건비</th><th>제조경비율</th><th>판관비율</th><th>불량률</th><th>환율</th><th>사유</th><th>비고</th><th>등록</th><th></th></tr></thead><tbody>${data.rows.map(r => `<tr class="${r.effective_date > data.today ? 'cm-future' : r.id === c?.id ? 'cr-cur' : ''}"><td class="c nowrap"><b>${esc(r.effective_date)}</b>${r.id === c?.id ? ' <span class="chip green">지금</span>' : r.effective_date > data.today ? ' <span class="chip yellow">예정</span>' : ''}</td><td class="r">${cFmt(r.labor_rate, 4)}</td><td class="r">${cFmt(r.mfg_rate)}%</td><td class="r">${cFmt(r.sga_rate)}%</td><td class="r">${cFmt(r.defect_rate)}%</td><td class="small">${esc(fx(r))}</td><td>${esc(r.reason)}</td><td class="small">${esc(r.note)}</td><td class="small nowrap">${esc(r.created_by)}<div class="muted">${esc(String(r.created_at).slice(0, 10))}</div></td><td>${data.rows.length > 1 ? `<button type="button" class="btn small" data-cr-del="${r.id}" title="잘못 넣은 기준 지우기">×</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '';
+  };
+  main.addEventListener('click', async e => {
+    const d = e.target.closest('[data-cr-del]'); if (d) { if (!await confirmBox('이 기준 버전을 지울까요? 잘못 넣은 경우에만 지우세요.')) return; try { await api('DELETE', `/api/cost/rates/${d.dataset.crDel}`); toast('지웠습니다.'); qReload(); } catch (err) { fail(err); } return; }
+    if (!e.target.closest('[data-cr-new]')) return;
+    const c = data.current || {};
+    const v = await promptBox('새 공통 기준', `<div class="form-grid"><label>적용 시점 *<input type="date" name="effective_date" required value="${todayStr()}"></label><label>시간당 인건비(원) *<input name="labor_rate" required inputmode="decimal" value="${esc(c.labor_rate ?? '')}"></label><label>제조경비율(%) *<input name="mfg_rate" required inputmode="decimal" value="${esc(c.mfg_rate ?? '')}" placeholder="예) 10"></label><label>판관비율(%) *<input name="sga_rate" required inputmode="decimal" value="${esc(c.sga_rate ?? '')}" placeholder="예) 12"></label><label>불량률(%, 가산)<input name="defect_rate" inputmode="decimal" value="${esc(c.defect_rate ?? 0)}"></label>
+      ${COST_CURS.slice(1).map(k => `<label>${k} 환율<input name="fx_${k}" inputmode="decimal" value="${esc(c.fx?.[k] ?? '')}"></label>`).join('')}<label class="span3">사유${data.rows.length ? ' *' : ''}<input name="reason" maxlength="200"${data.rows.length ? ' required' : ''} placeholder="예) 2026 최저임금 인상·3개년 재무제표 갱신"></label><label class="span3">비고<input name="note" maxlength="500"></label></div>
+      <details class="cr-calc"><summary>시간당 인건비 계산 도우미</summary><div class="form-grid"><label>기간 인건비 합계(원)<input data-c="pay" inputmode="decimal" placeholder="기본급+잔업+특근+수당+상여"></label><label>기간 근무시간(h)<input data-c="hrs" inputmode="decimal" placeholder="통상+잔업+특근"></label><label>인상률(%)<input data-c="up" inputmode="decimal" placeholder="예) 2"></label></div><p class="small" data-c-out></p><button type="button" class="btn small" data-c-use>이 값 넣기</button></details>`,
+      { wide: true, onOpen: el => { const g = k => Number(String(el.querySelector(`[data-c="${k}"]`).value).replace(/,/g, '')) || 0, calc = () => { const h = g('hrs'), x = h ? g('pay') / h * (1 + g('up') / 100) : 0; el.querySelector('[data-c-out]').textContent = x ? `= ${cFmt(x, 4)}원/WH` : ''; return x; }; el.querySelector('.cr-calc').addEventListener('input', calc); el.querySelector('[data-c-use]').onclick = () => { const x = calc(); if (x) el.querySelector('[name=labor_rate]').value = Math.round(x * 10000) / 10000; }; } });
+    if (!v) return;
+    const fxv = Object.fromEntries(COST_CURS.slice(1).map(k => [k, v['fx_' + k]]).filter(([, x]) => x));
+    try {
+      await api('POST', '/api/cost/rates', { ...v, fx: fxv, request_id: crypto.randomUUID() });
+      const imp = await api('POST', '/api/cost/items/recalc', { rates: true, effective_date: v.effective_date, dry: true });
+      if (imp.changed.length && await confirmBox(`새 기준을 넣었습니다. 공통 기준을 쓰는 품목 ${imp.changed.length}개의 원가가 바뀝니다(예: ${imp.changed[0].item_code} ${cFmt(imp.changed[0].old_total)} → ${cFmt(imp.changed[0].new_total)}). ${v.effective_date} 시점으로 재산출해 리비전을 남길까요?`)) {
+        const r = await api('POST', '/api/cost/items/recalc', { rates: true, effective_date: v.effective_date, reason: `공통 기준 변경 · ${v.reason || '최초'}` }); toast(`${r.changed.length}개 품목 재산출(새 리비전)${r.skipped.length ? `, 건너뜀 ${r.skipped.length}` : ''}`);
+      } else toast('새 기준을 넣었습니다.');
+      qReload();
+    } catch (err) { fail(err); }
+  });
+  await load();
+}
+// ── 원가 추이 ──
+async function pageCostTrend(main) {
+  main.innerHTML = `<h1>원가 산출 관리 <span class="dept">구매</span></h1>
+    <p class="muted">품목마다 직전 리비전 대비 원가 변동과 판매 차익·마진율, 품목·원부자재를 고르면 시점별 추이 그래프를 봅니다(내부용).</p>
+    <div class="ct-pick"><section class="card"><h2>품목 원가 추이</h2><label class="lf-sel">품목<select id="ctItem"><option value="">고르세요</option></select></label><div id="ctItemBox"></div></section>
+      <section class="card"><h2>원부자재 단가 추이</h2><label class="lf-sel">원부자재<select id="ctMat"><option value="">고르세요</option></select></label><div id="ctMatBox"></div></section></div>
+    <form class="toolbar list-filters" data-read-only id="ctFilters"><label class="lf-sel">확인<select name="st"><option value="">전체</option><option value="loss">원가 미달</option><option value="noprice">판매가 미기재</option><option value="up">원가 상승</option><option value="down">원가 하락</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="코드·품목"></label><span class="grow"></span><span class="ip-tools"></span></form>
+    <div id="ctList"></div>`;
+  const form = $('#ctFilters', main); let items, mats;
+  const load = async () => { [items, mats] = await Promise.all([api('GET', '/api/cost/items'), api('GET', '/api/cost/materials')]); if (!main.isConnected) return;
+    $('#ctItem', main).innerHTML = '<option value="">고르세요</option>' + items.rows.filter(r => r.active).map(r => `<option value="${r.id}">${esc(r.item_code)} · ${esc(r.name)}</option>`).join('');
+    $('#ctMat', main).innerHTML = '<option value="">고르세요</option>' + mats.rows.filter(r => r.active).map(r => `<option value="${r.id}">${esc(r.code)} · ${esc(r.name)}</option>`).join(''); draw(); };
+  main.qReload = () => load().catch(fail);
+  const status = r => r.totals.sale_price == null ? '판매가 미기재' : r.totals.margin < 0 ? '원가 미달' : '정상';
+  const draw = () => {
+    const v = formObj(form), q = (v.q || '').trim().toLowerCase();
+    const rows = items.rows.filter(r => r.active && (!v.st || (v.st === 'loss' ? status(r) === '원가 미달' : v.st === 'noprice' ? status(r) === '판매가 미기재' : v.st === 'up' ? r.change_pct > 0 : r.change_pct < 0)) && (!q || [r.item_code, r.name].join(' ').toLowerCase().includes(q)));
+    $('#ctList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ct-list"><thead><tr><th>구분</th><th>품목</th><th>판매가</th><th>직전 원가</th><th>현재 원가</th><th>원가 증감</th><th>변동률</th><th>판매 차익</th><th>마진율</th><th>확인</th><th>최근 변동</th><th>리비전</th></tr></thead><tbody>${rows.map(r => { const t = r.totals, s = status(r); return `<tr class="${s === '원가 미달' ? 'ip-over' : ''}"><td class="c">${esc(r.kind_label)}</td><td><b>${esc(r.item_code)}</b> ${esc(r.name)}</td><td class="r">${t.sale_price != null ? cFmt(t.sale_price) : ''}</td><td class="r">${cFmt(r.prev_total)}</td><td class="r"><b>${cFmt(t.total)}</b></td><td class="r">${r.prev_total != null ? cFmt(t.total - r.prev_total) : ''}</td><td class="c">${cPctChip(r.change_pct)}</td><td class="r">${t.margin != null ? cFmt(t.margin) : ''}</td><td class="r ${t.margin < 0 ? 'err-text' : ''}">${t.margin_rate != null ? cFmt(t.margin_rate) + '%' : ''}</td><td class="c"><span class="chip ${s === '원가 미달' ? 'red' : s === '판매가 미기재' ? 'yellow' : 'green'}">${s}</span></td><td class="c nowrap">${esc(r.rev_date || '')}</td><td class="c">${r.rev_count}</td></tr>`; }).join('')}</tbody></table></div>` : '<div class="empty">조건에 맞는 품목이 없습니다.</div>';
+  };
+  $('#ctItem', main).addEventListener('change', async e => { const id = Number(e.target.value), box = $('#ctItemBox', main); if (!id) { box.innerHTML = ''; return; } const r = (await api('GET', `/api/cost/items/${id}/revs`)).rows;
+    box.innerHTML = costChart([{ label: '원가', color: '#3b6fd8', points: r.map(x => ({ x: x.effective_date, y: x.totals.total, tip: `Rev.${x.rev} ${x.reason}` })) }, { label: '판매가', color: '#2f9e44', dash: true, points: r.filter(x => x.totals.sale_price != null).map(x => ({ x: x.effective_date, y: x.totals.sale_price })) }, { label: '원부자재', color: '#e8590c', points: r.map(x => ({ x: x.effective_date, y: x.totals.material })) }])
+      + `<div class="table-wrap"><table class="grid" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>Rev</th><th>시점</th><th>원인</th><th>사유</th><th>원가</th><th>변동률</th></tr></thead><tbody>${[...r].reverse().map((x, i, a) => { const p = a[i + 1], pct = p?.totals.total ? Math.round((x.totals.total - p.totals.total) / p.totals.total * 10000) / 100 : null; return `<tr><td class="c">Rev.${x.rev}</td><td class="c">${esc(x.effective_date)}</td><td class="c">${esc(x.cause_label)}</td><td>${esc(x.reason)}</td><td class="r"><b>${cFmt(x.totals.total)}</b></td><td class="c">${cPctChip(pct)}</td></tr>`; }).join('')}</tbody></table></div><div class="actions"><button type="button" class="btn small" data-ct-open="${id}">원가표 열기</button></div>`; });
+  $('#ctMat', main).addEventListener('change', async e => { const id = Number(e.target.value), box = $('#ctMatBox', main); if (!id) { box.innerHTML = ''; return; } const d = await api('GET', `/api/cost/materials/${id}/prices`);
+    box.innerHTML = costChart([{ label: `원화 단가(₩/${d.material.unit || '단위'})`, color: '#e8590c', points: d.rows.map(p => ({ x: p.effective_date, y: p.krw_price, tip: p.reason })) }], { fmt: v => cFmt(v, 2) }) + `<p class="small muted">${d.rows.map(p => `${p.effective_date} ₩${cFmt(p.krw_price, 4)}`).join(' → ')}</p>`; });
+  main.addEventListener('click', e => { const o = e.target.closest('[data-ct-open]'); if (o) costItemOpen(Number(o.dataset.ctOpen)).catch(fail); });
   form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }
