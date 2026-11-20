@@ -95,7 +95,7 @@ async function pageStock(main) {
   const loadPlaces = async mine => {
     const v = formObj(form), data = await api('GET', '/api/inventory/places?' + new URLSearchParams({ asof: v.asof || todayStr(), q: v.q || '' }));
     if (mine !== version || !main.isConnected) return;
-    $('#stockAdjustSlot').innerHTML = '';
+    $('#stockAdjustSlot').innerHTML = stMoveBtn();
     placeAll = data.rows; drawTree(); const rows = data.rows.filter(matchWh), whs = new Set(rows.map(r => r.warehouse || '(위치 미지정)')); current = { asof: data.asof, group: 'place', rows };
     $('#stockSummary').innerHTML = `${fmtNum(rows.length)}줄 · 창고 ${whs.size}곳 · 기준일 ${esc(data.asof)}${data.more ? ' · <span class="chip yellow">앞 3000줄</span>' : ''}`;
     let prev = '';
@@ -110,7 +110,7 @@ async function pageStock(main) {
   const loadLots = async mine => {
     const v = formObj(form), data = await api('GET', '/api/inventory/lots?' + new URLSearchParams({ asof: v.asof || todayStr(), q: v.q || '', qc: '1', cat: '1', ...(v.state === 'instock' ? { state: 'instock' } : {}) }));
     if (mine !== version || !main.isConnected) return;
-    $('#stockAdjustSlot').innerHTML = '';
+    $('#stockAdjustSlot').innerHTML = stMoveBtn();
     lotAll = data.rows.filter(r => r.lot !== '(LOT 미지정)'); itemAll = lotAll; drawTree();
     const rows = lotAll.filter(matchCat).filter(r => v.state !== 'negative' || r.balance < 0);
     current = { asof: data.asof, group: 'lot', rows };
@@ -125,6 +125,7 @@ async function pageStock(main) {
     const pr = e.target.closest('[data-place-row]'); if (pr && current.group === 'place') { const r = current.rows[Number(pr.dataset.placeRow)]; if (r.lot && r.lot !== '(LOT 미지정)') openLot({ item: r.item, lot: r.lot, unit: r.unit }); return; }
     const ir = e.target.closest('[data-item-row]'); if (ir && (current.group === 'item' || current.group === 'spec')) itemLotWindow(current.rows[Number(ir.dataset.itemRow)], form.elements.asof.value || todayStr(), () => load()).catch(fail);
   });
+  main.addEventListener('click', e => { if (e.target.closest('[data-st-move-any]')) stockMovePicker(() => load()).catch(fail); }); // 15.291
   main.addEventListener('click', e => { // 15.265 LOT별 줄: 조정·이동
     const aj = e.target.closest('[data-lot-adj]'); if (aj && current.group === 'lot') { const r = current.rows[Number(aj.dataset.lotAdj)]; stockAdjustWindow({ item: r.item, unit: r.unit, lot: r.lot, current: r.balance, places: r.places }, () => load()).catch(fail); return; }
     const mv = e.target.closest('[data-lot-mv2]'); if (mv && current.group === 'lot') { const r = current.rows[Number(mv.dataset.lotMv2)]; lotMoveWindow({ item: r.item, unit: r.unit, lot: r.lot }, () => load()).catch(fail); }
@@ -140,7 +141,7 @@ async function pageStock(main) {
     itemAll = result.rows; const rows = result.rows.filter(matchCat); current = { ...result, rows }; drawTree(); const bySpec = result.group === 'spec';
     const qv = (form.elements.q.value || '').trim(); if (qv) api('GET', '/api/inventory/lots?' + new URLSearchParams({ asof: result.asof, q: qv })).then(d => { const n = d.rows.filter(x => x.lot.toLowerCase().includes(qv.toLowerCase())).length; if (n && mine === version && main.isConnected) $('#stockSummary').insertAdjacentHTML('beforeend', ` · <button type="button" class="link-btn" data-to-lot>LOT 「${esc(qv)}」 ${n}개 → LOT별로 보기</button>`); }).catch(() => {}); // 15.260
     const lowRows = result.group === 'item' ? rows.filter(r => r.low) : [];
-    $('#stockAdjustSlot').innerHTML = (result.can_adjust ? '<button type="button" class="btn" id="stockAdjust">＋ 기초재고·실사·조정</button>' : '')
+    $('#stockAdjustSlot').innerHTML = (result.can_adjust ? '<button type="button" class="btn" id="stockAdjust">＋ 기초재고·실사·조정</button>' : '') + stMoveBtn()
       + (lowRows.length && (ME.is_admin || ME.roles.includes('purchase')) ? ` <button type="button" class="btn" id="stockReorder" title="안전재고 미달 품목을 매입처별 발주로">부족분 발주 <span class="sub-count">${lowRows.length}</span></button>` : '');
     if ($('#stockReorder')) $('#stockReorder').onclick = () => stockReorder(lowRows).catch(fail);
     if (result.can_adjust) $('#stockAdjust').onclick = () => adjust();
@@ -152,7 +153,7 @@ async function pageStock(main) {
         <td class="r"><b class="${r.negative ? 'red-text' : ''}">${fmtNum(r.stock)}</b> ${esc(r.unit || '단위 미지정')}${r.converted ? `<br><span class="small muted">= ${fmtNum(r.converted.qty)} ${esc(r.converted.unit)}</span>` : ''}${r.low ? ' <span class="chip yellow">미달</span>' : ''}</td>
         ${bySpec ? '' : `<td class="r">${r.min_qty == null ? '<span class="muted">—</span>' : fmtNum(r.min_qty)}</td>`}
         <td class="small muted">${esc(r.last_date === '0000-00-00' ? '' : r.last_date)}</td>
-        <td class="nowrap"><button class="btn small" data-stock-lots="${i}" aria-expanded="false" title="이 품목의 LOT별 남은 수량">LOT ▾</button> <button class="btn small" data-stock-moves="${i}">내역</button>${result.can_adjust ? `${bySpec ? '' : ` <button class="btn small" data-stock-min="${i}">안전재고</button>`} <button class="btn small" data-stock-count="${i}">실사</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
+        <td class="nowrap"><button class="btn small" data-stock-lots="${i}" aria-expanded="false" title="이 품목의 LOT별 남은 수량">LOT ▾</button> <button class="btn small" data-stock-moves="${i}">내역</button>${stCanMove() && !bySpec ? ` <button class="btn small" data-stock-mv="${i}" title="이 품목의 LOT을 다른 창고·위치로">이동</button>` : ''}${result.can_adjust ? `${bySpec ? '' : ` <button class="btn small" data-stock-min="${i}">안전재고</button>`} <button class="btn small" data-stock-count="${i}">실사</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">해당하는 재고가 없습니다. 입고·생산실적·출하를 등록하거나 기초재고를 입력하면 여기에 나타납니다.</div>';
     // 15.150 품목 줄 아래에 LOT별 남은 수량(위치·처음 입고일) 펼치기
     $$('[data-stock-lots]', main).forEach(button => button.onclick = async () => {
@@ -166,6 +167,7 @@ async function pageStock(main) {
         button.setAttribute('aria-expanded', 'true'); button.textContent = 'LOT ▴';
       } catch (error) { fail(error); } finally { button.disabled = false; }
     });
+    $$('[data-stock-mv]', main).forEach(b => b.onclick = () => stockMovePicker(() => load(), rows[Number(b.dataset.stockMv)].item).catch(fail)); // 15.291
     $$('[data-stock-moves]', main).forEach(button => button.onclick = async () => {
       const r = rows[button.dataset.stockMoves];
       try {
@@ -218,6 +220,18 @@ async function stockLotWindow(asof, q = '') {
   await load().catch(fail);
 }
 
+// 15.291 재고 현황 「⇄ 창고·위치 이동」: 재고 있는 LOT을 찾아 고르면 창고 이동 창(일부 수량 다른 창고로 · 같은 창고 안 위치 바꾸기)
+async function stockMovePicker(after, item = '') {
+  const data = await api('GET', '/api/inventory/lots?' + new URLSearchParams({ state: 'instock', q: item }));
+  const rows = data.rows.filter(r => r.lot !== '(LOT 미지정)' && r.balance > 0 && (!item || r.item === item));
+  const m = modal(`<h3>창고·위치 이동 <span class="small muted">LOT 고르기</span></h3>
+    <p class="small muted">옮길 LOT을 고르면 위치별 잔량이 나오고, 일부 수량만 다른 창고로 보내거나 같은 창고 안에서 위치(Location)만 바꿀 수 있습니다. 품목 전체 재고는 그대로입니다.</p>
+    <label class="list-search">찾기<input type="search" data-mv-q placeholder="품목명·코드·LOT·창고" value=""></label>
+    <div class="table-wrap st-mv-pick"><table class="grid keep-table" data-no-sort data-no-filter data-keep-cols><thead><tr><th>품목</th><th>LOT</th><th class="r">잔량</th><th>지금 위치</th><th></th></tr></thead><tbody>${rows.map((r, i) => `<tr data-mv-row="${i}" data-q="${esc(`${r.item} ${r.product_code || ''} ${r.lot} ${r.places || ''}`.toLowerCase())}" style="cursor:pointer"><td><b>${esc(r.item)}</b>${r.product_code ? ` <span class="small muted">${esc(r.product_code)}</span>` : ''}</td><td class="nowrap">${esc(r.lot)}</td><td class="r nowrap">${fmtNum(r.balance)} ${esc(r.unit || '')}</td><td class="small">${esc(r.places || '위치 미지정')}</td><td><button type="button" class="btn small primary" data-mv-pick="${i}">이동</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">재고가 있는 LOT이 없습니다.</td></tr>'}</tbody></table></div>`, { wide: true });
+  $('[data-mv-q]', m.el).addEventListener('input', e => { const q = e.target.value.trim().toLowerCase(); $$('[data-mv-row]', m.el).forEach(tr => { tr.hidden = q && !tr.dataset.q.includes(q); }); });
+  m.el.addEventListener('click', e => { const tr = e.target.closest('[data-mv-row]'); if (!tr) return; const r = rows[Number(tr.dataset.mvRow)]; m.close(); lotMoveWindow({ item: r.item, unit: r.unit, lot: r.lot }, after).catch(fail); });
+  $('[data-mv-q]', m.el).focus();
+}
 // 15.114 창고 이동: LOT의 위치별 잔량(위치가 적힌 입고 + 이동 들어옴 − 나감, 출하는 먼저 들어온 위치부터) → 다른 창고·위치로 옮기기.
 // 품목 전체 재고는 바뀌지 않는다. 이동 기록은 취소(옮긴 위치에 그만큼 남아 있을 때만)할 수 있다.
 async function lotMoveWindow(lot, after) {
@@ -607,6 +621,7 @@ async function pagePurchaseStock(main) {
 }
 // 15.265 재고 수량 조정 창(물류팀장·관리자): 실사(센 수량 → 차이 자동) 또는 증감(+/−). LOT·창고·위치를 주면 그 단위로 조정.
 const stCanAdjust = () => !!ME && (ME.is_admin || ME.roles.includes('logistics_approver'));
+const stMoveBtn = () => stCanMove() ? ' <button type="button" class="btn" data-st-move-any title="LOT의 일부 수량을 다른 창고로 · 같은 창고 안에서 위치 바꾸기">⇄ 창고·위치 이동</button>' : ''; // 15.291
 const stCanMove = () => !!ME && (ME.is_admin || ME.roles.includes('logistics') || ME.roles.includes('logistics_approver'));
 async function stockAdjustWindow(t, onDone) {
   const where = [t.lot ? `LOT <b>${esc(t.lot)}</b>` : '', t.warehouse ? `위치 <b>${esc([t.warehouse, t.location].filter(Boolean).join(' '))}</b>` : (t.lot && t.places ? `<span class="muted">(${esc(t.places)})</span>` : '')].filter(Boolean).join(' · ');
