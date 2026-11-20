@@ -3889,3 +3889,8 @@ label.inline { width: fit-content; max-width: 100%; justify-self: start; }
 .dc-ana-item.j-fail .dc-ana-res b { color: #c92a2a; }
 .modal table.rm-view th, .modal table.rm-view td { padding: 6px 10px !important; }
 .modal table.rm-view th.insp-item-c { vertical-align: top; }
+/* 15.301 디자인 통일 점검: ① 머리글에 전체 선택 체크가 있는 표도 다른 표와 같은 머리 높이 ② 휴대폰 카드 안 작은 단추는 글자가 한 글자씩 꺾이지 않게 */
+table.grid thead th input[type=checkbox] { margin: 0; width: 16px; height: 16px; min-height: 0; vertical-align: middle; }
+table.grid thead th:has(> input[type=checkbox]), table.grid thead th:has(> label > input[type=checkbox]) { padding-top: 4px !important; padding-bottom: 4px !important; line-height: 1; }
+.btn.small, table .btn, .m-grid .btn { white-space: nowrap; }
+@media (max-width: 860px) { #main table td .btn.small, #main table td button.small { white-space: nowrap !important; min-width: max-content; flex: 0 0 auto; } }
