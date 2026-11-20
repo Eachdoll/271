@@ -436,3 +436,25 @@ test('15.269 note from the book can carry its own amount and partner', async () 
   assert.equal(r.status, 200, JSON.stringify(r.body));
   assert.equal(r.body.bill_note.partner, '발행회사'); assert.equal(r.body.bill_note.memo, '외상매출금 회수'); assert.equal(r.body.bill_note.amount, 1000000);
 });
+
+test('15.271 partner book add: 1-won sales/purchase adjustment bills (negative allowed) and memos show in the book', async () => {
+  await admin('POST', '/api/vendors', { name: '조정거래처', is_sales: true, is_purchase: true });
+  const add = b => admin('POST', '/api/book-entries', { party: '조정거래처', date: today, request_id: rid(), ...b });
+  assert.equal((await add({ side: 'sales', kind: 'bill', supply: 0, vat: 0 })).status, 400);
+  const s1 = await add({ side: 'sales', kind: 'bill', item: '세금계산서 1원 차이', supply: 1, vat: 0, note: '11월분' });
+  assert.equal(s1.status, 200, JSON.stringify(s1.body)); assert.match(s1.body.bill_no, /^SB-/); assert.equal(s1.body.total, 1);
+  const s2 = await add({ side: 'sales', kind: 'bill', supply: -1, vat: 0 }); assert.equal(s2.status, 200, JSON.stringify(s2.body)); assert.equal(s2.body.total, -1);
+  const p1 = await add({ side: 'purchase', kind: 'bill', supply: 10, vat: 1 }); assert.equal(p1.status, 200, JSON.stringify(p1.body)); assert.match(p1.body.bill_no, /^PB-/); assert.equal(p1.body.total, 11);
+  const m = await add({ side: 'sales', kind: 'memo', text: '1원 차이 거래처 확인' }); assert.equal(m.status, 200);
+  const book = (await admin('GET', '/api/partner-book?' + new URLSearchParams({ side: 'sales', party: '조정거래처', from: today, to: today }))).body;
+  assert.deepEqual(book.rows.map(r => [r.kind, r.total]).sort(), [['bill', -1], ['bill', 1], ['memo', 0]].sort());
+  assert.equal(book.totals.balance, 0);
+  const pb = (await admin('GET', '/api/partner-book?' + new URLSearchParams({ side: 'purchase', party: '조정거래처', from: today, to: today }))).body;
+  assert.equal(pb.totals.total, 11);
+  // 매입전표 상세가 조정 줄로도 열림
+  assert.equal((await admin('GET', `/api/purchase-bills/${p1.body.id}`)).status, 200);
+  // 메모 지우기
+  assert.equal((await admin('POST', `/api/book-memos/${m.body.id}/delete`, {})).status, 200);
+  assert.equal((await admin('GET', '/api/partner-book?' + new URLSearchParams({ side: 'sales', party: '조정거래처', from: today, to: today }))).body.rows.filter(r => r.kind === 'memo').length, 0);
+  assert.equal((await prod('POST', '/api/book-entries', { side: 'sales', kind: 'memo', party: '조정거래처', date: today, text: 'x', request_id: rid() })).status, 403);
+});

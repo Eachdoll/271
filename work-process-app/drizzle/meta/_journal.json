@@ -519,6 +519,13 @@
       "when": 1798282413000,
       "tag": "0073_note_payment_link",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "6",
+      "when": 1798368813000,
+      "tag": "0074_book_memos",
+      "breakpoints": true
     }
   ]
 }

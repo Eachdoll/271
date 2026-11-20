@@ -629,12 +629,57 @@ async function pagePartnerBook(main, side = 'sales') {
         : '<div class="empty">그 기간에 거래가 없습니다.</div>';
       return;
     }
-    head.innerHTML = sumLine([[S.who, `<b>${esc(data.party)}</b>`], ['기간', `${esc(data.from)} ~ ${esc(data.to)}`], ['기초 잔액', `${won(data.opening)}원`], ['전표 합계', `${won(t.total - data.rows.filter(r => r.kind === 'opening').reduce((s, r) => s + r.total, 0))}원`], [S.pay, `${won(t.paid)}원`], ['기말 잔액', `<b>${won(t.balance)}원</b>`], [side === 'sales' ? '계산서 미발행' : '계산서 미수취', `<span class="${t.uninvoiced ? 'red-text' : ''}">${won(t.uninvoiced)}원</span>`]]);
+    head.innerHTML = sumLine([[S.who, `<b>${esc(data.party)}</b>`], ['기간', `${esc(data.from)} ~ ${esc(data.to)}`], ['기초 잔액', `${won(data.opening)}원`], ['전표 합계', `${won(t.total - data.rows.filter(r => r.kind === 'opening').reduce((s, r) => s + r.total, 0))}원`], [S.pay, `${won(t.paid)}원`], ['기말 잔액', `<b>${won(t.balance)}원</b>`], [side === 'sales' ? '계산서 미발행' : '계산서 미수취', `<span class="${t.uninvoiced ? 'red-text' : ''}">${won(t.uninvoiced)}원</span>`]]) + '<button type="button" class="btn primary small book-add-btn" data-book-add title="매출·매입·반입·반출·입금·출금·메모 중 골라 장부에 추가">＋ 추가</button>';
     box.innerHTML = `<div class="table-wrap"><table class="grid book-grid"><thead><tr><th>전표 일자</th><th>전표번호</th><th>내용</th><th class="r">공급가액</th><th class="r">부가세</th><th class="r">합계</th><th class="r">${S.pay}</th><th class="r">잔액</th><th>세금계산서</th><th>비고</th></tr></thead>
-      <tbody><tr class="book-open"><td colspan="7">기초 잔액 (${esc(data.from)} 이전)</td><td class="r"><b>${won(data.opening)}</b></td><td colspan="2"></td></tr>${data.rows.map(r => `<tr class="${r.kind === 'bill' ? '' : 'book-pay'}"><td class="nowrap">${esc(r.date)}</td><td>${r.kind === 'bill' ? `<button type="button" class="link-btn" data-book-bill="${r.id}">${esc(r.bill_no)}</button>` : ''}</td><td>${esc(r.label)}</td>
-        <td class="r">${r.kind === 'bill' ? won(r.supply) : ''}</td><td class="r">${r.kind === 'bill' ? won(r.vat) : ''}</td><td class="r">${r.total ? won(r.total) : ''}</td><td class="r">${r.paid ? won(r.paid) : ''}</td><td class="r"><b>${won(r.balance)}</b></td><td>${invCell(r)}</td><td class="small">${esc(r.note || '')}${r.kind !== 'bill' ? ` <button type="button" class="btn small" data-book-paycancel="${r.id}" title="이 ${r.kind === 'opening' ? '기초 잔액' : S.pay}을 취소">취소</button>` : ''}</td></tr>`).join('')}</tbody>
+      <tbody><tr class="book-open"><td colspan="7">기초 잔액 (${esc(data.from)} 이전)</td><td class="r"><b>${won(data.opening)}</b></td><td colspan="2"></td></tr>${data.rows.map(r => `<tr class="${r.kind === 'bill' ? '' : r.kind === 'memo' ? 'book-memo' : 'book-pay'}"><td class="nowrap">${esc(r.date)}</td><td>${r.kind === 'bill' ? `<button type="button" class="link-btn" data-book-bill="${r.id}">${esc(r.bill_no)}</button>` : r.kind === 'memo' ? '<span class="chip">메모</span>' : ''}</td><td>${esc(r.label)}</td>
+        <td class="r">${r.kind === 'bill' ? won(r.supply) : ''}</td><td class="r">${r.kind === 'bill' ? won(r.vat) : ''}</td><td class="r">${r.total ? won(r.total) : ''}</td><td class="r">${r.paid ? won(r.paid) : ''}</td><td class="r"><b>${won(r.balance)}</b></td><td>${invCell(r)}</td><td class="small">${esc(r.note || '')}${r.kind === 'memo' ? ` <button type="button" class="btn small" data-book-memodel="${r.id}" title="이 메모 지우기">지우기</button>` : r.kind !== 'bill' ? ` <button type="button" class="btn small" data-book-paycancel="${r.id}" title="이 ${r.kind === 'opening' ? '기초 잔액' : S.pay}을 취소">취소</button>` : ''}</td></tr>`).join('')}</tbody>
       <tfoot><tr><th colspan="3">합계</th><td class="r">${won(t.supply)}</td><td class="r">${won(t.vat)}</td><td class="r">${won(t.total)}</td><td class="r">${won(t.paid)}</td><td class="r"><b>${won(t.balance)}</b></td><td colspan="2"></td></tr></tfoot></table></div>`;
   };
+  // 15.271 장부 「+ 추가」: 거래구분(매출·매입·반입·반출·입금·출금·메모)을 골라 바로 작성. 매출·매입은 조정 전표(1원 맞추기 등, − 가능)
+  const KINDS = [['sales', '매출'], ['purchase', '매입'], ['in', '반입'], ['out', '반출'], ['pay_in', '입금'], ['pay_out', '출금'], ['memo', '메모']];
+  const addEntry = async () => {
+    if (!data?.party) return toast(`${S.who}를 먼저 고르세요.`, 'err');
+    const token = crypto.randomUUID(), def = side === 'sales' ? 'sales' : 'purchase';
+    const v = await promptBox(`장부 거래 추가 · ${data.party}`, `<div class="form-grid book-add">
+      <label>거래일자<input type="date" name="date" required value="${todayStr()}" max="${todayStr()}"></label>
+      <label>거래구분<select name="kind" data-ba-kind>${KINDS.map(([k, l]) => `<option value="${k}"${k === def ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+      <div class="span2 small muted" data-ba-help></div>
+      <label data-ba="bill" class="span2">적요<input name="item" maxlength="200" value="장부 조정" placeholder="예) 세금계산서 1원 차이 조정"></label>
+      <label data-ba="bill">과세구분<select name="tax_type"><option value="taxable">과세(10%)</option><option value="zero">영세(0%)</option></select></label>
+      <label data-ba="bill">공급가액 <span class="hint">(줄일 때는 −)</span><input type="number" name="supply" step="1" inputmode="numeric" placeholder="예) 1 또는 -1"></label>
+      <label data-ba="bill">부가세 <span class="hint">(자동 10%, 고칠 수 있음)</span><input type="number" name="vat" step="1" inputmode="numeric"></label>
+      <div data-ba="bill" class="book-add-total"><span>합계</span><b data-ba-total>0</b></div>
+      <label data-ba="pay">금액<input type="number" name="amount" min="1" step="1" inputmode="numeric"></label>
+      <label data-ba="pay">계좌·방법<input name="method" maxlength="50" placeholder="예) 기업은행 · 현금"></label>
+      <label data-ba="memo" class="span2">메모<textarea name="text" rows="3" maxlength="500" placeholder="예) 11월 세금계산서 1원 차이 — 거래처 확인 완료"></textarea></label>
+      <label data-ba="bill pay" class="span2">비고<input name="note" maxlength="200"></label></div>`, { wide: true, onOpen: el => {
+        const f = el.querySelector('form'), kindSel = f.elements.kind; let vatTouched = false;
+        const help = { sales: '매출 조정 전표를 만듭니다(매출 장부·세금계산서 대조에 들어감).', purchase: '매입 조정 전표를 만듭니다(매입 장부·받은 세금계산서 대조에 들어감).', in: '반입은 품목·수량이 필요해 「반입 입력」 화면에서 작성합니다(거래처를 채워 엽니다).', out: '반출은 품목·수량이 필요해 「반출 입력」 화면에서 작성합니다(거래처를 채워 엽니다).', pay_in: '받은 돈(매출 장부의 입금). 어음은 장부의 입금 줄에서 「어음」으로 넣으세요.', pay_out: '준 돈(매입 장부의 지급). 어음은 매입 장부의 지급 줄에서 넣으세요.', memo: '금액 없이 장부에 메모를 남깁니다.' };
+        const sync = () => { const k = kindSel.value, grp = ['sales', 'purchase'].includes(k) ? 'bill' : ['pay_in', 'pay_out'].includes(k) ? 'pay' : k === 'memo' ? 'memo' : 'none';
+          for (const x of f.querySelectorAll('[data-ba]')) { const on = x.dataset.ba.split(' ').includes(grp); x.hidden = !on; for (const i of x.querySelectorAll('input, textarea')) i.required = on && ['supply', 'amount', 'text'].includes(i.name); }
+          const other = (side === 'sales' && ['purchase', 'out', 'pay_out'].includes(k)) || (side === 'purchase' && ['sales', 'in', 'pay_in'].includes(k));
+          f.querySelector('[data-ba-help]').textContent = help[k] + (other ? ` ※ ${side === 'sales' ? '매입' : '매출'} 장부에 기록됩니다.` : ''); total(); };
+        const total = () => { const s = Number(f.elements.supply.value) || 0; if (!vatTouched) f.elements.vat.value = f.elements.tax_type.value === 'zero' || !f.elements.supply.value ? '' : Math.trunc(s * 0.1); f.querySelector('[data-ba-total]').textContent = fmtNum(s + (Number(f.elements.vat.value) || 0)); };
+        kindSel.onchange = sync; f.elements.supply.oninput = total; f.elements.tax_type.onchange = total; f.elements.vat.oninput = () => { vatTouched = f.elements.vat.value !== ''; total(); };
+        sync(); setTimeout(() => f.elements.supply.focus(), 30);
+      }, submit: async v => {
+        const k = v.kind;
+        if (k === 'in' || k === 'out') { try { sessionStorage.setItem('wpa:ret-party', data.party); } catch { /* 편의 */ } location.hash = k === 'in' ? '#/sales/returns/new' : '#/purchase/returns/new'; return { nav: true }; }
+        if (k === 'sales' || k === 'purchase') return api('POST', '/api/book-entries', { side: k, kind: 'bill', party: data.party, date: v.date, item: v.item, tax_type: v.tax_type, supply: v.supply, vat: v.vat, note: v.note, request_id: token });
+        if (k === 'pay_in') return api('POST', '/api/sales-payments', { customer: data.party, pay_date: v.date, kind: 'payment', amount: Number(v.amount), method: v.method, note: v.note, request_id: token });
+        if (k === 'pay_out') return api('POST', '/api/purchase-payments', { vendor: data.party, pay_date: v.date, kind: 'payment', amount: Number(v.amount), method: v.method, note: v.note, request_id: token });
+        return api('POST', '/api/book-entries', { side, kind: 'memo', party: data.party, date: v.date, text: v.text, request_id: token });
+      } });
+    if (!v || v.nav) return;
+    const k = v.kind ?? '', label = r => r.bill_no ? `전표 ${r.bill_no}` : r.text ? '메모' : '입금·지급';
+    const otherSide = v.bill_no ? (v.bill_no.startsWith('SB') ? 'sales' : 'purchase') !== side : v.customer ? side !== 'sales' : v.vendor ? side !== 'purchase' : false;
+    toast(`${data.party} · ${label(v)}을(를) 넣었습니다.${otherSide ? ` (${side === 'sales' ? '매입' : '매출'} 장부에 기록)` : ''}`); void k;
+    await load();
+  };
+  main.addEventListener('click', async e => {
+    if (e.target.closest('[data-book-add]')) { addEntry().catch(fail); return; }
+    const md = e.target.closest('[data-book-memodel]'); if (md) { if (!await confirmBox('이 메모를 지울까요?')) return; try { await api('POST', `/api/book-memos/${md.dataset.bookMemodel}/delete`); toast('메모를 지웠습니다.'); await load(); } catch (error) { fail(error); } }
+  });
   // 15.145 장부에서 바로 입금(매출)·지급(매입) 넣기 — 입금확인·지급확인과 같은 기록
   const P = PAY_SIDE[side]; let payToken = crypto.randomUUID(), payBusy = false;
   const drawPay = () => {

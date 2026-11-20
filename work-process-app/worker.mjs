@@ -2476,6 +2476,50 @@ const BOOK = {
   sales: { bills: 'sales_bills', col: 'customer', key: customerKey, pays: 'sales_payments', link: 'tax_invoice_bills', inv: 'tax_invoices', live: "i.status<>'cancelled'", lines: 'sales_bill_lines', need: requireSales },
   purchase: { bills: 'purchase_bills', col: 'vendor', key: billVendorKey, pays: 'purchase_payments', link: 'purchase_tax_invoice_bills', inv: 'purchase_tax_invoices', live: "i.status='received'", lines: 'purchase_bill_lines', need: requirePurchase },
 };
+// 15.271 거래처 장부 「추가」: 매출/매입 조정 전표(세금계산서와 1원 차이 맞추기 등 — 금액 음수 가능)·메모
+route('POST', '/api/book-entries', async ({ user, body }) => {
+  const side = body.side === 'purchase' ? 'purchase' : 'sales', c = BOOK[side]; c.need(user);
+  const kind = body.kind === 'memo' ? 'memo' : 'bill';
+  const token = String(body.request_id || ''); if (!/^[a-zA-Z0-9-]{16,80}$/.test(token)) throw bad('등록 요청 번호를 확인하세요.');
+  const party = reqStr(body.party, '거래처', 100), date = dateStr(body.date, '거래일자'); if (date > today()) throw bad('거래일자는 오늘 이전으로 넣으세요.');
+  if (kind === 'memo') {
+    const old = await db.prepare('SELECT * FROM book_memos WHERE request_id=?').get(token); if (old) return { ...old, duplicate: true };
+    const text = reqStr(body.text, '메모', 500);
+    await db.prepare('INSERT INTO book_memos(side,party,party_key,memo_date,text,created_by,created_by_id,request_id) VALUES(?,?,?,?,?,?,?,?)').run(side, party, nameKey(party), date, text, user.name, user.id, token);
+    return db.prepare('SELECT * FROM book_memos WHERE request_id=?').get(token);
+  }
+  const prior = await db.prepare(`SELECT * FROM ${c.bills} WHERE request_id=?`).get(token); if (prior) return { ...prior, duplicate: true };
+  const item = str(body.item, 200) || '장부 조정', note = str(body.note, 200);
+  const signed = (v, label) => { if (v === '' || v == null) throw bad(`${label}을(를) 입력하세요.`); const n = Number(v); if (!Number.isFinite(n)) throw bad(`${label}을(를) 숫자로 넣으세요.`); return n; }; // 조정은 − 가능
+  const supply = signed(body.supply, '공급가액'), vat = body.vat === undefined || body.vat === '' || body.vat === null ? Math.trunc(supply * 0.1) : signed(body.vat, '부가세');
+  if (!Number.isInteger(supply) || !Number.isInteger(vat)) throw bad('금액은 원 단위(정수)로 넣으세요.');
+  if (!supply && !vat) throw bad('공급가액이나 부가세를 넣으세요(줄일 때는 −).');
+  if (Math.abs(supply) > 1e11 || Math.abs(vat) > 1e10) throw bad('금액이 너무 큽니다.');
+  const total = supply + vat, taxType = body.tax_type === 'zero' ? 'zero' : 'taxable';
+  if (taxType === 'zero' && vat) throw bad('영세 전표는 부가세가 0이어야 합니다.');
+  const ymd = date.slice(2).replace(/-/g, ''), prefix = `${side === 'sales' ? 'SB' : 'PB'}-${ymd}-`, BID = `(SELECT id FROM ${c.bills} WHERE request_id=?)`, memo = `장부 조정${note ? ' · ' + note : ''}`;
+  if (side === 'sales') {
+    if (await salesClosed(party, date)) throw bad(closedMessage(party, date, '등록하세요'));
+    await ensureVendor(party, user, 'sales');
+    await db.batch([
+      { sql: `INSERT INTO sales_bills(bill_no,bill_date,customer,tax_type,supply_total,vat_total,total,note,created_by,created_by_id,request_id) VALUES(${nextDocNo('sales_bills', 'bill_no')},?,?,?,?,?,?,?,?,?,?)`, args: [prefix, prefix, prefix, date, party, taxType, supply, vat, total, memo, user.name, user.id, token] },
+      { sql: `INSERT INTO sales_bill_lines(bill_id,item_category,source_type,source_id,item,spec,unit,product_code,lot,ship_date,qty,unit_price,supply,vat,note) VALUES(${BID},'','manual',NULL,?,'','','','',?,1,?,?,?,?)`, args: [token, item, date, supply, supply, vat, '장부 조정'] }]);
+  } else {
+    if (await closedPeriod(party, date)) throw bad(`${party}의 ${date.slice(0, 7)} 매입은 마감되었습니다. 마감 취소(관리자) 뒤에 등록하세요.`);
+    await ensureVendor(party, user, 'purchase');
+    // 매입전표 줄은 입고 줄을 가리키므로 조정 줄은 겹치지 않는 음수 번호(반출 줄과 같은 방식)
+    await db.batch([
+      { sql: `INSERT INTO purchase_bills(bill_no,bill_date,vendor,tax_type,supply_total,vat_total,total,note,created_by,created_by_id,request_id) VALUES(${nextDocNo('purchase_bills', 'bill_no')},?,?,?,?,?,?,?,?,?,?)`, args: [prefix, prefix, prefix, date, party, taxType, supply, vat, total, memo, user.name, user.id, token] },
+      { sql: `INSERT INTO purchase_bill_lines(bill_id,item_category,source_type,source_id,po_id,req_no,item,spec,unit,product_code,lot,received_date,qty,unit_price,supply,note) VALUES(${BID},'','other',?,NULL,'',?,'','','','',?,1,?,?,?)`, args: [token, -(Date.now() * 100 + 99), item, date, supply, supply, '장부 조정'] }]);
+  }
+  return db.prepare(`SELECT * FROM ${c.bills} WHERE request_id=?`).get(token);
+});
+route('POST', '/api/book-memos/:id/delete', async ({ user, params }) => {
+  const m = await mustGet('book_memos', params.id); BOOK[m.side].need(user);
+  if (m.status !== 'active') throw new HttpError(409, '이미 지운 메모입니다.');
+  await db.prepare("UPDATE book_memos SET status='deleted',deleted_at=?,deleted_by=? WHERE id=? AND status='active'").run(now(), user.name, m.id);
+  return { ok: true };
+});
 route('GET', '/api/partner-book', async ({ user, query }) => {
   const side = query.side === 'purchase' ? 'purchase' : 'sales', c = BOOK[side]; c.need(user);
   const from = dateStr(query.from, '시작일'), to = dateStr(query.to, '종료일'); if (from > to) throw bad('시작일이 종료일보다 늦습니다.');
@@ -2500,7 +2544,9 @@ route('GET', '/api/partner-book', async ({ user, query }) => {
     FROM ${c.bills} b WHERE b.status='confirmed' AND b.bill_date BETWEEN ? AND ? AND ${c.key('b.' + c.col)}=? ORDER BY b.bill_date, b.id LIMIT 5001`).all(from, to, nameKey(party));
   const pays = await db.prepare(`SELECT id, pay_date AS date, kind, amount, method, note FROM ${c.pays} WHERE status='confirmed' AND pay_date BETWEEN ? AND ? AND ${K}=? ORDER BY pay_date, id LIMIT 5001`).all(from, to, nameKey(party));
   if (bills.length > 5000 || pays.length > 5000) throw bad('줄이 너무 많습니다. 기간을 좁히세요.');
+  const memos = await db.prepare("SELECT id, memo_date AS date, text, created_by FROM book_memos WHERE side=? AND party_key=? AND status='active' AND memo_date BETWEEN ? AND ? ORDER BY memo_date, id LIMIT 2000").all(side, nameKey(party), from, to); // 15.271
   const rows = [
+    ...memos.map(m => ({ kind: 'memo', date: m.date, order: 3, id: m.id, label: m.text, note: m.created_by, supply: 0, vat: 0, total: 0, paid: 0 })),
     ...pays.map(p => ({ kind: p.kind, date: p.date, order: p.kind === 'opening' ? -1 : 2, id: p.id, label: p.kind === 'opening' ? (side === 'sales' ? '기초 미수금' : '기초 미지급') : (side === 'sales' ? '입금' : '지급') + (p.method ? ` · ${p.method}` : ''), note: p.note, total: p.kind === 'opening' ? p.amount : 0, paid: p.kind === 'payment' ? p.amount : 0 })),
     ...bills.map(b => { const [invoice_no, invoice_status, invoice_id, approval_no] = b.invoice ? b.invoice.split('|') : []; return { kind: 'bill', date: b.date, order: 1, id: b.id, bill_no: b.bill_no, label: b.first_item ? `${b.first_item}${b.line_count > 1 ? ` 외 ${b.line_count - 1}건` : ''}` : '', note: b.note, supply: b.supply, vat: b.vat, total: b.total, paid: 0, invoice_no: invoice_no || '', invoice_status: invoice_status || '', invoice_id: invoice_id ? Number(invoice_id) : null, approval_no: approval_no || '' }; }),
   ].sort((a, b) => stockCompare(a.date, b.date) || a.order - b.order || a.id - b.id);

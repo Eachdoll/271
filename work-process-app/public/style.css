@@ -3539,3 +3539,8 @@ tr.lot-tk-sub > td { background: #fffbe6 !important; box-shadow: inset 3px 0 0 #
 .suggest-item mark { background: #ffe58a; color: inherit; padding: 0 1px; border-radius: 2px; }
 .suggest-sub { color: var(--muted); font-size: 12.5px; margin-left: 4px; }
 .suggest-more, .suggest-none { padding: 6px 10px; color: var(--muted); font-size: 12.5px; }
+
+/* 15.271 장부 추가 */
+.book-add-btn { margin-left: 10px; }
+.book-add-total { display: flex; flex-direction: column; justify-content: flex-end; } .book-add-total span { font-size: 13px; color: var(--muted); } .book-add-total b { font-size: 20px; }
+tr.book-memo > td { background: var(--bg); font-style: italic; }
