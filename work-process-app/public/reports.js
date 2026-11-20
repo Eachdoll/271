@@ -249,65 +249,115 @@ let DEV_DIRECTORY = null;
 // 15.292·15.293 검사규격 · 측정값(품질 분석결과와 같은 그리드): 위 검사규격 표(항목·단위·하한·상한·횟수) + 아래 시료별 측정 그리드.
 // 시료 추가·빼기, 「⇄ 종횡 바꾸기」(항목별 ↔ 시료별 묶음), 칸마다 평균·판정, 전체 판정.
 const rndMeasureHtml = () => `<fieldset class="vendor-sec rnd-meas" data-rm><legend>검사규격 · 측정값 <span class="hint">(하한·상한을 넣으면 합격·불합격을 바로 판정)</span></legend>
-  <div class="rm-tools"><label>검사규격 불러오기<select data-rm-spec><option value="">— 고르기 —</option></select></label><label>항목 보관함<select data-rm-lib><option value="">— 항목 넣기 —</option></select></label><button type="button" class="btn small" data-rm-add>＋ 항목</button></div>
-  <div class="table-wrap"><table class="grid keep-table rm-spec" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>측정 항목</th><th>단위</th><th class="r">하한</th><th class="r">상한</th><th class="r">측정 횟수</th><th></th></tr></thead><tbody data-rm-spec-rows></tbody></table></div>
+  <div class="rm-tools"><label>연구소 검사규격<select data-rm-rspec><option value="">— 고르기 —</option></select></label><a class="btn small" href="#/dev/specs" title="연구소 검사규격 만들기·고치기">⚙ 항목설정</a><label>품질 검사규격<select data-rm-spec><option value="">— 고르기 —</option></select></label><label>항목 보관함<select data-rm-lib><option value="">— 항목 넣기 —</option></select></label></div>
   <div class="insp-samples rm-samples" data-rm-samples></div>
-  <div class="rm-bar"><button type="button" class="btn small" data-rm-mode>⇄ 종횡 바꾸기</button><span class="small muted" data-rm-hint></span></div>
+  <div class="rm-bar"><button type="button" class="btn small" data-rm-add>＋ 측정 항목</button><button type="button" class="btn small" data-rm-mode>⇄ 종횡 바꾸기</button><span class="small muted" data-rm-hint></span></div>
   <div class="table-wrap insp-wrap"><table class="grid keep-table insp-grid rm-grid" data-no-sort data-no-filter data-keep-cols data-no-reorder data-rm-grid></table></div>
   <p class="rm-total" data-rm-total></p></fieldset>`;
 const rmRange = it => { const a = it.min === '' || it.min == null ? null : Number(it.min), b = it.max === '' || it.max == null ? null : Number(it.max); return { a, b, txt: a !== null && b !== null ? `${fmtNum(a)} ~ ${fmtNum(b)}` : a !== null ? `≥ ${fmtNum(a)}` : b !== null ? `≤ ${fmtNum(b)}` : '규격 없음' }; };
 const rmJudgeVals = (it, vals) => { const { a, b } = rmRange(it), got = vals.filter(v => v !== '' && v != null).map(Number); if (!got.length) return ['', null]; const fail = got.some(v => (a !== null && v < a) || (b !== null && v > b)); const avg = Math.round(got.reduce((t, v) => t + v, 0) / got.length * 1000) / 1000; return [a === null && b === null ? 'info' : fail ? 'fail' : got.length < (Number(it.count) || 1) ? 'wait' : 'pass', avg]; };
 const RM_CHIP = { pass: '<span class="chip green">합격</span>', fail: '<span class="chip red">불합격</span>', wait: '<span class="chip yellow">측정 중</span>', info: '<span class="chip">기록</span>', '': '' };
+// 15.296 엑셀에서 복사한 칸(탭·줄바꿈)을 2차원 배열로. 한 칸만 복사했으면 null(브라우저 기본 붙여넣기).
+const xlGrid = e => { const t = (e.clipboardData || window.clipboardData)?.getData('text') || ''; if (!/[\t\n]/.test(t.replace(/\r?\n$/, ''))) return null; return t.replace(/\r/g, '').replace(/\n$/, '').split('\n').map(l => l.split('\t').map(v => v.trim())); };
+const xlNum = v => { const x = String(v ?? '').replace(/,/g, '').replace(/\s/g, ''); return x === '' ? '' : Number.isFinite(Number(x)) ? x : null; };
 let RM_MODE = (() => { try { return localStorage.getItem('wpa:rm-mode') || 'item'; } catch { return 'item'; } })();
 async function bindRndMeasure(root, init = null) {
-  const box = $('[data-rm]', root), specBody = $('[data-rm-spec-rows]', box), grid = $('[data-rm-grid]', box), strip = $('[data-rm-samples]', box);
+  const box = $('[data-rm]', root), grid = $('[data-rm-grid]', box), strip = $('[data-rm-samples]', box);
   const st = { items: [], samples: [] };
   const fit = s => { s.vals = st.items.map((it, ii) => { const n = Math.max(1, Math.min(10, Number(it.count) || 1)), old = s.vals?.[ii] || []; return Array.from({ length: n }, (_, k) => old[k] ?? ''); }); };
   if (init?.items?.length) { st.items = init.items.map(it => ({ name: it.name || '', unit: it.unit || '', min: it.min ?? '', max: it.max ?? '', count: it.count || 1 }));
     st.samples = (init.rows?.length ? init.rows : [{ lot: '시료 1', values: {} }]).map((r, s) => ({ lot: r.lot || `시료 ${s + 1}`, vals: init.items.map(it => (r.values?.[it.key] || []).map(v => v ?? '')) })); }
   else { st.items = [{ name: '', unit: '', min: '', max: '', count: 1 }]; st.samples = [{ lot: '시료 1', vals: [] }]; }
   st.samples.forEach(fit);
-  const specRow = (it, ii) => `<tr data-rm-i="${ii}"><td><input data-rs="name" maxlength="100" value="${esc(it.name)}" placeholder="예) 파티클" aria-label="측정 항목"></td><td><input data-rs="unit" maxlength="30" value="${esc(it.unit)}" placeholder="단위" aria-label="단위"></td><td class="r"><input data-rs="min" type="number" step="any" value="${esc(String(it.min ?? ''))}" aria-label="하한"></td><td class="r"><input data-rs="max" type="number" step="any" value="${esc(String(it.max ?? ''))}" aria-label="상한"></td><td class="r"><input data-rs="count" type="number" min="1" max="10" step="1" value="${it.count}" aria-label="측정 횟수"></td><td><button type="button" class="btn small danger" data-rm-del="${ii}" aria-label="항목 빼기">×</button></td></tr>`;
-  const drawSpec = () => { specBody.innerHTML = st.items.map(specRow).join(''); };
+  // 15.297 위 규격 표를 없애고 측정 그리드의 항목 칸에서 바로 이름·단위·하한~상한·횟수를 넣고 고친다(항목별 보기).
   const named = () => st.items.map((it, ii) => [it, ii]).filter(([it]) => it.name.trim());
   const cellJudge = (ii, s) => rmJudgeVals(st.items[ii], st.samples[s].vals[ii]);
   const total = () => { const all = []; for (const [, ii] of named()) for (let s = 0; s < st.samples.length; s++) { const [j] = cellJudge(ii, s); if (j) all.push(j); }
-    $('[data-rm-total]', box).innerHTML = !named().length ? '<span class="muted small">위 검사규격에 측정 항목을 넣으세요(검사규격 불러오기 · 항목 보관함 · ＋ 항목).</span>' : !all.length ? '<span class="muted small">측정값을 넣으면 평균·판정이 나옵니다.</span>' : `전체 판정 ${all.includes('fail') ? RM_CHIP.fail : all.includes('wait') ? RM_CHIP.wait : all.includes('pass') ? RM_CHIP.pass : '<span class="small muted">규격 없이 기록</span>'} <span class="small muted">· 시료 ${st.samples.length} · 항목 ${named().length}</span>`; };
+    $('[data-rm-total]', box).innerHTML = !named().length ? '<span class="muted small">표 왼쪽 칸에 측정 항목 이름을 넣거나 「연구소 검사규격」으로 불러오세요. 항목은 「＋ 측정 항목」으로 하나씩 더합니다.</span>' : !all.length ? '<span class="muted small">측정값을 넣으면 평균·판정이 나옵니다.</span>' : `전체 판정 ${all.includes('fail') ? RM_CHIP.fail : all.includes('wait') ? RM_CHIP.wait : all.includes('pass') ? RM_CHIP.pass : '<span class="small muted">규격 없이 기록</span>'} <span class="small muted">· 시료 ${st.samples.length} · 항목 ${named().length}</span>`; };
   const drawGrid = () => {
-    const list = named(), W = Math.max(1, ...list.map(([it]) => Math.max(1, Math.min(10, Number(it.count) || 1))));
+    const MODE = st.mode = RM_MODE === 'sample' && named().length ? 'sample' : 'item'; // 15.297 항목이 아직 없으면 항목별 보기로 시작(바로 입력)
+    const list = MODE === 'item' ? st.items.map((it, ii) => [it, ii]) : named(), W = Math.max(1, ...list.map(([it]) => Math.max(1, Math.min(10, Number(it.count) || 1))));
     strip.innerHTML = `<span class="insp-samples-h">시료</span>${st.samples.map((x, s) => `<span class="insp-s"><b>${s + 1}</b><input data-rm-lot="${s}" maxlength="100" value="${esc(x.lot)}" aria-label="시료 ${s + 1} 이름"><span data-rm-sj="${s}"></span>${st.samples.length > 1 ? `<button type="button" class="btn small danger" data-rm-sdel="${s}" aria-label="시료 ${s + 1} 빼기">×</button>` : ''}</span>`).join('')}<button type="button" class="btn small" data-rm-sadd>＋ 시료 추가</button>`;
-    if (!list.length) { grid.innerHTML = ''; total(); return; }
+    if (!list.length) { grid.innerHTML = '<tbody><tr><td class="rm-empty">측정 항목이 없습니다. 「⇄ 종횡 바꾸기」로 항목별 보기로 돌아가 항목을 넣으세요.</td></tr></tbody>'; sampleJudges(); total(); return; }
     const nums = `${Array.from({ length: W }, (_, k) => `<th class="c insp-n">#${k + 1}</th>`).join('')}<th class="c insp-avg-h">평균</th><th class="c">판정</th>`;
     const cells = (ii, s) => { const it = st.items[ii], n = st.samples[s].vals[ii].length, [j, avg] = cellJudge(ii, s), { a, b } = rmRange(it);
       return Array.from({ length: W }, (_, k) => k >= n ? '<td class="insp-blank"></td>' : `<td class="insp-cell"><input type="number" step="any" inputmode="decimal" data-rm-v data-ii="${ii}" data-s="${s}" data-k="${k}" value="${esc(String(st.samples[s].vals[ii][k] ?? ''))}" placeholder="#${k + 1}" class="${st.samples[s].vals[ii][k] !== '' && ((a !== null && Number(st.samples[s].vals[ii][k]) < a) || (b !== null && Number(st.samples[s].vals[ii][k]) > b)) ? 'rm-out' : ''}" aria-label="${esc(it.name)} 시료 ${s + 1} #${k + 1}"></td>`).join('') + `<td class="r insp-avg" data-rm-avg="${ii}-${s}">${avg === null ? '' : fmtNum(avg)}</td><td data-rm-j="${ii}-${s}">${RM_CHIP[j]}</td>`; };
-    const itemTh = (it, rs) => `<th scope="rowgroup" rowspan="${rs}" class="insp-item-c">${esc(it.name)}${it.unit ? ` <span class="small muted">${esc(it.unit)}</span>` : ''}<div class="small muted">${rmRange(it).txt}</div></th>`;
+    const itemTh = (it, rs, ii) => `<th scope="rowgroup" rowspan="${rs}" class="insp-item-c rm-item-ed" data-rm-item="${ii}">
+      <div class="rm-ed-top"><input data-rs="name" data-ii="${ii}" maxlength="100" value="${esc(it.name)}" placeholder="측정 항목 (예: 파티클)" aria-label="측정 항목"><button type="button" class="btn small danger" data-rm-del="${ii}" title="이 측정 항목 빼기" aria-label="${esc(it.name || '측정 항목')} 빼기">×</button></div>
+      <div class="rm-ed-row"><input data-rs="unit" data-ii="${ii}" maxlength="30" value="${esc(it.unit)}" placeholder="단위" aria-label="단위" class="rm-ed-unit"><input data-rs="min" data-ii="${ii}" type="number" step="any" value="${esc(String(it.min ?? ''))}" placeholder="하한" aria-label="하한" class="rm-ed-num"><span class="muted">~</span><input data-rs="max" data-ii="${ii}" type="number" step="any" value="${esc(String(it.max ?? ''))}" placeholder="상한" aria-label="상한" class="rm-ed-num"></div>
+      <div class="rm-ed-cnt"><span>측정 횟수</span><input data-rs="count" data-ii="${ii}" type="number" min="1" max="10" step="1" value="${it.count}" aria-label="측정 횟수"><span>회</span></div></th>`;
     const sampTh = (s, rs) => `<th scope="rowgroup" rowspan="${rs}" class="insp-samp-c"><span class="insp-sno">시료 ${s + 1}</span><div class="insp-lot-t" data-rm-lt="${s}">${esc(st.samples[s].lot)}</div></th>`;
-    if (RM_MODE === 'item') grid.innerHTML = `<thead><tr><th class="c insp-item-c">측정 항목 · 규격</th><th class="c insp-samp-c">시료</th>${nums}</tr></thead>${list.map(([it, ii]) => `<tbody class="insp-grp">${st.samples.map((_, s) => `<tr>${!s ? itemTh(it, st.samples.length) : ''}<th class="insp-samp-c" data-rm-lt="${s}">${esc(st.samples[s].lot)}</th>${cells(ii, s)}</tr>`).join('')}</tbody>`).join('')}`;
+    if (MODE === 'item') grid.innerHTML = `<thead><tr><th class="c insp-item-c">측정 항목 · 규격</th><th class="c insp-samp-c">시료</th>${nums}</tr></thead>${list.map(([it, ii]) => `<tbody class="insp-grp">${st.samples.map((_, s) => `<tr>${!s ? itemTh(it, st.samples.length, ii) : ''}<th class="insp-samp-c" data-rm-lt="${s}">${esc(st.samples[s].lot)}</th>${cells(ii, s)}</tr>`).join('')}</tbody>`).join('')}<tfoot><tr><td colspan="${W + 4}" class="rm-add-row"><button type="button" class="btn small" data-rm-add>＋ 측정 항목 추가</button> <span class="small muted">엑셀에서 「항목·단위·하한·상한·횟수」 여러 줄을 복사해 항목 이름 칸에 붙여 넣어도 됩니다.</span></td></tr></tfoot>`;
     else grid.innerHTML = `<thead><tr><th class="c insp-samp-c">시료</th><th class="c insp-item-c">측정 항목 · 규격</th>${nums}</tr></thead>${st.samples.map((_, s) => `<tbody class="insp-grp">${list.map(([it, ii], n) => `<tr>${!n ? sampTh(s, list.length) : ''}<th class="insp-item-c">${esc(it.name)}${it.unit ? ` <span class="small muted">${esc(it.unit)}</span>` : ''} <span class="small muted">${rmRange(it).txt}</span></th>${cells(ii, s)}</tr>`).join('')}</tbody>`).join('')}`;
-    $('[data-rm-mode]', box).textContent = RM_MODE === 'item' ? '⇄ 종횡 바꾸기 (시료별로 보기)' : '⇄ 종횡 바꾸기 (항목별로 보기)';
-    $('[data-rm-hint]', box).textContent = RM_MODE === 'item' ? '측정 항목별로 묶어 시료를 줄로 보여 줍니다. Enter·방향키로 다음 칸.' : '시료별로 묶어 측정 항목을 줄로 보여 줍니다. Enter·방향키로 다음 칸.';
+    $('[data-rm-mode]', box).textContent = MODE === 'item' ? '⇄ 종횡 바꾸기 (시료별로 보기)' : '⇄ 종횡 바꾸기 (항목별로 보기)';
+    $('[data-rm-hint]', box).textContent = (MODE === 'item' ? '항목별로 묶어 시료를 줄로 보여 줍니다.' : '시료별로 묶어 측정 항목을 줄로 보여 줍니다.') + ' 엑셀에서 여러 칸을 복사해 첫 칸에 붙여 넣으면 그 모양대로 들어갑니다. Enter로 다음 칸.';
     sampleJudges(); total();
   };
   const sampleJudges = () => st.samples.forEach((_, s) => { const js = named().map(([, ii]) => cellJudge(ii, s)[0]).filter(Boolean); const el = $(`[data-rm-sj="${s}"]`, strip); if (el) el.innerHTML = js.includes('fail') ? RM_CHIP.fail : js.includes('wait') ? RM_CHIP.wait : js.includes('pass') ? RM_CHIP.pass : ''; });
   const refresh = (ii, s) => { const [j, avg] = cellJudge(ii, s), { a, b } = rmRange(st.items[ii]); const av = $(`[data-rm-avg="${ii}-${s}"]`, grid), jj = $(`[data-rm-j="${ii}-${s}"]`, grid); if (av) av.textContent = avg === null ? '' : fmtNum(avg); if (jj) jj.innerHTML = RM_CHIP[j];
     $$(`[data-rm-v][data-ii="${ii}"][data-s="${s}"]`, grid).forEach(i => i.classList.toggle('rm-out', i.value !== '' && ((a !== null && Number(i.value) < a) || (b !== null && Number(i.value) > b)))); sampleJudges(); total(); };
-  drawSpec(); drawGrid();
+  drawGrid();
   box.addEventListener('input', e => {
-    const sp = e.target.closest('[data-rm-i]'); if (sp && e.target.dataset.rs) { const it = st.items[Number(sp.dataset.rmI)]; it[e.target.dataset.rs] = e.target.value; if (e.target.dataset.rs === 'count') st.samples.forEach(fit); drawGrid(); return; }
+    const rs = e.target.dataset.rs; if (rs && e.target.dataset.ii !== undefined) { const ii = Number(e.target.dataset.ii), it = st.items[ii]; it[rs] = e.target.value;
+      if (rs === 'count') { const n = Number(e.target.value); if (!Number.isInteger(n) || n < 1 || n > 10) return; st.samples.forEach(fit); drawGrid(); const el = $(`[data-rs="count"][data-ii="${ii}"]`, grid); el?.focus(); return; }
+      if (rs === 'min' || rs === 'max') st.samples.forEach((_, s2) => refresh(ii, s2)); else { sampleJudges(); total(); }
+      return; }
     const v = e.target.closest('[data-rm-v]'); if (v) { st.samples[Number(v.dataset.s)].vals[Number(v.dataset.ii)][Number(v.dataset.k)] = v.value; refresh(Number(v.dataset.ii), Number(v.dataset.s)); return; }
     const l = e.target.closest('[data-rm-lot]'); if (l) { const s = Number(l.dataset.rmLot); st.samples[s].lot = l.value; $$(`[data-rm-lt="${s}"]`, grid).forEach(x => { x.textContent = l.value; }); }
   });
+  // 15.296 엑셀 붙여넣기: 측정값 칸에 여러 칸을 붙이면 복사한 모양대로(가로 = #1·#2…, 세로 = 다음 시료/다음 항목, 시료가 모자라면 20개까지 자동 추가),
+  // 규격 표에 붙이면 측정 항목·단위·하한·상한·횟수 순서로(줄이 모자라면 항목 추가).
+  box.addEventListener('paste', e => {
+    const v = e.target.closest('[data-rm-v]'), sp = e.target.dataset.rs && e.target.dataset.ii !== undefined ? e.target : null;
+    if (!v && !sp) return;
+    const rows = xlGrid(e); if (!rows) return; e.preventDefault();
+    let put = 0, skip = 0;
+    if (v) {
+      const list = named().map(([, ii]) => ii), ii0 = Number(v.dataset.ii), s0 = Number(v.dataset.s), k0 = Number(v.dataset.k), p0 = list.indexOf(ii0);
+      rows.forEach((vals, i) => {
+        let ii = ii0, s = s0; if (st.mode === 'item') s = s0 + i; else ii = list[p0 + i];
+        if (ii === undefined) { skip += vals.length; return; }
+        while (s >= st.samples.length) { if (st.samples.length >= 20) { skip += vals.length; return; } const x = { lot: `시료 ${st.samples.length + 1}`, vals: [] }; fit(x); st.samples.push(x); }
+        vals.forEach((raw, j) => { const k = k0 + j, cell = st.samples[s].vals[ii]; const n = xlNum(raw); if (k >= cell.length || n === null) { if (raw !== '') skip++; return; } cell[k] = n; put++; });
+      });
+      drawGrid();
+      const last = rows.length - 1, lastLen = rows[last].length; const lr = st.mode === 'item' ? { ii: ii0, s: Math.min(s0 + last, st.samples.length - 1) } : { ii: list[Math.min(p0 + last, list.length - 1)], s: s0 };
+      $(`[data-rm-v][data-ii="${lr.ii}"][data-s="${lr.s}"][data-k="${Math.min(k0 + lastLen - 1, st.samples[lr.s].vals[lr.ii].length - 1)}"]`, grid)?.focus();
+    } else {
+      const KEYS = ['name', 'unit', 'min', 'max', 'count'], c0 = KEYS.indexOf(e.target.dataset.rs), i0 = Number(sp.dataset.ii);
+      rows.forEach((vals, i) => {
+        const ii = i0 + i; if (ii >= 30) { skip += vals.length; return; }
+        while (ii >= st.items.length) st.items.push({ name: '', unit: '', min: '', max: '', count: 1 });
+        vals.forEach((raw, j) => { const key = KEYS[c0 + j]; if (!key) { if (raw !== '') skip++; return; }
+          if (key === 'name' || key === 'unit') { st.items[ii][key] = raw.slice(0, key === 'name' ? 100 : 30); put++; return; }
+          const n = xlNum(raw); if (n === null) { skip++; return; }
+          if (key === 'count') { const c = Math.round(Number(n) || 1); st.items[ii].count = Math.max(1, Math.min(10, c)); } else st.items[ii][key] = n; put++; });
+      });
+      st.samples.forEach(fit); drawGrid();
+    }
+    toast(`엑셀에서 ${put}칸을 붙여 넣었습니다.${skip ? ` (${skip}칸은 칸이 없거나 숫자가 아니라 뺐습니다)` : ''}`, skip ? 'err' : undefined);
+  });
+  box.addEventListener('keydown', e => { // 15.297 항목 칸에서 Enter: 다음 칸(이름 → 단위 → 하한 → 상한 → 횟수 → 그 항목 첫 측정 칸), 폼 저장 안 됨
+    if (e.key !== 'Enter' || !e.target.dataset.rs || e.target.dataset.ii === undefined) return; e.preventDefault();
+    const ii = e.target.dataset.ii, order = ['name', 'unit', 'min', 'max', 'count'], nx = order[order.indexOf(e.target.dataset.rs) + 1];
+    const el = nx ? $(`[data-rs="${nx}"][data-ii="${ii}"]`, grid) : $(`[data-rm-v][data-ii="${ii}"][data-s="0"][data-k="0"]`, grid); el?.focus(); el?.select?.();
+  });
   box.addEventListener('keydown', e => { const v = e.target.closest('[data-rm-v]'); if (v && e.key === 'Enter') { e.preventDefault(); const all = $$('[data-rm-v]', grid), i = all.indexOf(v); all[i + 1]?.focus(); all[i + 1]?.select?.(); } });
   box.addEventListener('click', e => {
-    if (e.target.closest('[data-rm-add]')) { st.items.push({ name: '', unit: '', min: '', max: '', count: 1 }); st.samples.forEach(fit); drawSpec(); drawGrid(); specBody.lastElementChild.querySelector('input').focus(); return; }
-    const d = e.target.closest('[data-rm-del]'); if (d) { const ii = Number(d.dataset.rmDel); if (st.items.length === 1) { st.items[0] = { name: '', unit: '', min: '', max: '', count: 1 }; } else { st.items.splice(ii, 1); st.samples.forEach(s => s.vals.splice(ii, 1)); } st.samples.forEach(fit); drawSpec(); drawGrid(); return; }
+    if (e.target.closest('[data-rm-add]')) { if (st.items.length >= 30) return toast('측정 항목은 30개까지입니다.', 'err');
+      if (RM_MODE !== 'item') { RM_MODE = 'item'; try { localStorage.setItem('wpa:rm-mode', RM_MODE); } catch { /* 편의 */ } }
+      st.items.push({ name: '', unit: '', min: '', max: '', count: 1 }); st.samples.forEach(fit); drawGrid(); const el = $(`[data-rs="name"][data-ii="${st.items.length - 1}"]`, grid); el?.scrollIntoView({ block: 'nearest' }); el?.focus(); return; }
+    const d = e.target.closest('[data-rm-del]'); if (d) { const ii = Number(d.dataset.rmDel); if (st.items.length === 1) { st.items[0] = { name: '', unit: '', min: '', max: '', count: 1 }; } else { st.items.splice(ii, 1); st.samples.forEach(s => s.vals.splice(ii, 1)); } st.samples.forEach(fit); drawGrid(); return; }
     if (e.target.closest('[data-rm-sadd]')) { if (st.samples.length >= 20) return toast('시료는 20개까지입니다.', 'err'); const s = { lot: `시료 ${st.samples.length + 1}`, vals: [] }; fit(s); st.samples.push(s); drawGrid(); $(`[data-rm-lot="${st.samples.length - 1}"]`, strip)?.select(); return; }
     const sd = e.target.closest('[data-rm-sdel]'); if (sd) { st.samples.splice(Number(sd.dataset.rmSdel), 1); drawGrid(); return; }
-    if (e.target.closest('[data-rm-mode]')) { RM_MODE = RM_MODE === 'item' ? 'sample' : 'item'; try { localStorage.setItem('wpa:rm-mode', RM_MODE); } catch { /* 편의 */ } drawGrid(); }
+    if (e.target.closest('[data-rm-mode]')) { if (!named().length) return toast('먼저 측정 항목 이름을 넣으세요.', 'err'); RM_MODE = st.mode === 'item' ? 'sample' : 'item'; try { localStorage.setItem('wpa:rm-mode', RM_MODE); } catch { /* 편의 */ } drawGrid(); }
   });
-  const put = list => { const empty = st.items.every(it => !it.name.trim()); if (empty) st.items = []; for (const it of list) st.items.push({ name: it.name, unit: it.unit || '', min: it.min ?? '', max: it.max ?? '', count: it.count || 1 }); st.samples.forEach(fit); drawSpec(); drawGrid(); };
+  const put = list => { const empty = st.items.every(it => !it.name.trim()); if (empty) st.items = []; for (const it of list) st.items.push({ name: it.name, unit: it.unit || '', min: it.min ?? '', max: it.max ?? '', count: it.count || 1 }); st.samples.forEach(fit); drawGrid(); };
   box._rm = st;
-  const [specs, lib] = await Promise.all([api('GET', '/api/inspection-specs').then(x => (x.specs || []).filter(s => s.active)).catch(() => []), api('GET', '/api/inspection-items').then(x => x.items || []).catch(() => [])]);
+  const [specs, lib, rspecs] = await Promise.all([api('GET', '/api/inspection-specs').then(x => (x.specs || []).filter(s => s.active)).catch(() => []), api('GET', '/api/inspection-items').then(x => x.items || []).catch(() => []),
+    api('GET', '/api/rnd-specs').then(x => (x.specs || []).filter(s => s.active !== false).sort((a, b) => (a.group || '').localeCompare(b.group || '', 'ko') || a.name.localeCompare(b.name, 'ko'))).catch(() => [])]); // 15.295 연구소 검사규격
+  $('[data-rm-rspec]', box).insertAdjacentHTML('beforeend', rspecs.length ? rspecs.map((s, i) => `<option value="${i}">${s.group ? esc(s.group) + ' · ' : ''}${esc(s.name)} (${s.items.length}항목)</option>`).join('') : '<option value="" disabled>아직 없음 — ⚙ 항목설정에서 만드세요</option>');
+  $('[data-rm-rspec]', box).onchange = e => { const s = rspecs[Number(e.target.value)]; e.target.value = ''; if (s) put(s.items); };
   $('[data-rm-spec]', box).insertAdjacentHTML('beforeend', specs.map((s, i) => `<option value="${i}">${esc(s.kind)} · ${esc(s.item_category)} · ${esc(s.product)} (${s.items.length}항목)</option>`).join(''));
   $('[data-rm-lib]', box).insertAdjacentHTML('beforeend', lib.map((it, i) => `<option value="${i}">${esc(it.group)} · ${esc(it.name)}${it.unit ? ` (${esc(it.unit)})` : ''}</option>`).join(''));
   $('[data-rm-spec]', box).onchange = e => { const s = specs[Number(e.target.value)]; e.target.value = ''; if (s) put(s.items); };
@@ -370,7 +420,7 @@ async function rndAnalysisData(dev, step = '') {
 // 15.288 개발 › 연구 분석 관리 › 분석데이터 입력(연구원만): 의뢰·승인 없이 완료된 분석으로 저장, 개발건·단계는 골라서 연결
 async function pageRndData(main) {
   const can = hasRole('dev') || hasRole('dev_approver');
-  main.innerHTML = `<h1>연구 분석 관리 <span class="dept">개발</span></h1>
+  main.innerHTML = `<h1>연구 분석 관리 <span class="dept">연구소</span></h1>
     <p class="muted">연구원이 분석한 데이터를 바로 넣습니다. 저장하면 완료된 연구 분석(RA-분석일 번호)이 되어 분석리스트에 올라가고, 개발건·단계를 고르면 개발 › 스케줄 관리의 단계별 분석 결과와 소통 이력에도 남습니다. 그래프·성적서는 저장 뒤 분석을 열어 「사진 보기·첨부」로 붙입니다.</p>
     ${can ? '<form class="card stack rnd-data-form" id="rndDataForm"><p class="muted">불러오는 중…</p></form>' : '<div class="empty">분석데이터는 연구원(개발·개발책임자)만 입력합니다. 결과는 「분석리스트」에서 볼 수 있습니다.</div>'}
     <section class="card"><h3>최근 입력한 분석데이터</h3><div id="rndRecent"><p class="muted">불러오는 중…</p></div></section>`;
@@ -483,7 +533,7 @@ async function pageDevRoadmap(main) {
   if (!['all', 'short', 'mid', 'long', ''].includes(termSel)) termSel = 'all';
   const pref = drPref(); let zoom = ['3m', '6m', '1y', 'all'].includes(pref.zoom) ? pref.zoom : '6m', sort = pref.sort || 'end', kpi = '', folded = new Set(pref.folded || []);
   const canPlan = hasRole('dev') || hasRole('dev_approver');
-  main.innerHTML = `<h1>스케줄 관리 <span class="dept">개발</span></h1>
+  main.innerHTML = `<h1>스케줄 관리 <span class="dept">연구소</span></h1>
   <p class="muted">개발리스트의 제품마다 구분(단기·중장기·장기), 공정표, 현재 진행현황·다음 진행예정·완료예정일을 넣으면 로드맵에 표시됩니다. 줄을 누르면 진행건 창(담당자·소통), ✎는 일정 입력입니다.</p>
   <div class="dr-kpis" id="drKpis"></div>
   <form class="toolbar list-filters dr-tools" id="drForm" data-read-only="true">
@@ -574,5 +624,87 @@ async function pageDevRoadmap(main) {
   form.onsubmit = e => { e.preventDefault(); load().catch(fail); }; form.elements.done.onchange = () => load().catch(fail);
   form.elements.mine.onchange = () => draw(); form.elements.q.oninput = () => draw(); form.elements.sort.onchange = () => { sort = form.elements.sort.value; drPref({ sort }); draw(); };
   let rz = 0; const onResize = () => { if (!main.isConnected) { removeEventListener('resize', onResize); return; } clearTimeout(rz); rz = setTimeout(() => { if (rows.length) draw(); }, 200); }; addEventListener('resize', onResize);
+  await load();
+}
+
+// 15.295 연구소 검사규격 항목설정: 분석 종류별 측정 항목 세트(이름·단위·하한·상한·측정 횟수)를 만들어 두면
+// 분석데이터 입력의 「연구소 검사규격」에서 골라 한 번에 불러온다. 연구원(개발·개발책임자)만 만들고 고친다.
+const rsRange = it => it.min != null && it.min !== '' && it.max != null && it.max !== '' ? `${it.min} ~ ${it.max}` : it.min != null && it.min !== '' ? `≥ ${it.min}` : it.max != null && it.max !== '' ? `≤ ${it.max}` : '—';
+async function pageRndSpecs(main) {
+  main.innerHTML = `<h1>검사규격 항목설정 <span class="dept">연구소</span></h1>
+  <p class="muted">분석 종류(예: 와이퍼 흡수 시험, 글러브 물성)마다 측정 항목·단위·하한·상한·측정 횟수를 미리 정해 두면, <a href="#/dev/analysis/request">분석데이터 입력</a>에서 「연구소 검사규격」으로 골라 한 번에 불러옵니다. 불러온 뒤에도 그 분석에서만 항목을 더하거나 고칠 수 있습니다.</p>
+  <form class="toolbar" data-read-only id="rsFilters"><label class="list-search">찾기<input type="search" name="q" placeholder="규격 이름·분류·측정 항목"></label><label class="inline"><input type="checkbox" name="off"> 사용 중지 포함</label><span class="grow"></span><span id="rsNew"></span></form>
+  <div id="rsSummary" class="counts"></div><div id="rsList"></div>`;
+  let lib = { revision: 0, specs: [], can_manage: false };
+  const form = $('#rsFilters', main);
+  const load = async () => { lib = await api('GET', '/api/rnd-specs'); if (main.isConnected) draw(); };
+  const draw = () => {
+    $('#rsNew', main).innerHTML = lib.can_manage ? '<button type="button" class="btn primary" data-rs-new>＋ 새 검사규격</button>' : '<span class="small muted">연구원(개발·개발책임자)만 만들고 고칩니다.</span>';
+    const q = form.elements.q.value.trim().toLowerCase(), off = form.elements.off.checked;
+    const rows = lib.specs.filter(s => (off || s.active !== false) && (!q || [s.name, s.group, s.note, ...s.items.map(i => i.name)].join(' ').toLowerCase().includes(q)))
+      .sort((a, b) => (b.active !== false) - (a.active !== false) || (a.group || '').localeCompare(b.group || '', 'ko') || a.name.localeCompare(b.name, 'ko'));
+    $('#rsSummary', main).textContent = `검사규격 ${rows.length}개${lib.specs.length !== rows.length ? ` (전체 ${lib.specs.length})` : ''}`;
+    $('#rsList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid rs-table"><thead><tr><th>분류</th><th>규격 이름</th><th>측정 항목 (단위 · 규격 · 횟수)</th><th>비고</th><th>사용</th><th>수정</th><th></th></tr></thead><tbody>${rows.map(s => `<tr data-rs-row="${s.id}"${s.active === false ? ' class="row-off"' : ''}>
+      <td>${esc(s.group || '—')}</td><td data-card-primary><b>${esc(s.name)}</b> <span class="small muted">${s.items.length}항목</span></td>
+      <td class="rs-items">${s.items.map(i => `<div><b>${esc(i.name)}</b>${i.unit ? ` <span class="muted">(${esc(i.unit)})</span>` : ''} <span class="rs-rng">${esc(rsRange(i))}</span>${i.count > 1 ? ` <span class="small muted">· ${i.count}회</span>` : ''}</div>`).join('')}</td>
+      <td class="small">${esc(s.note || '')}</td><td>${s.active === false ? '<span class="chip">사용 중지</span>' : '<span class="chip green">사용</span>'}</td>
+      <td class="small muted nowrap">${esc(s.updated_by || '')}<br>${esc(String(s.updated_at || '').slice(0, 16))}</td>
+      <td class="nowrap">${lib.can_manage ? `<button type="button" class="btn small" data-rs-edit="${s.id}">수정</button> <button type="button" class="btn small" data-rs-copy="${s.id}">복사</button> <button type="button" class="btn small" data-rs-del="${s.id}">삭제</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
+      : `<div class="empty">${lib.specs.length ? '조건에 맞는 검사규격이 없습니다.' : '아직 연구소 검사규격이 없습니다. 「＋ 새 검사규격」으로 만들어 두면 분석데이터 입력에서 불러올 수 있습니다.'}</div>`;
+  };
+  const editor = async (spec, copy = false) => {
+    const lib2 = await api('GET', '/api/inspection-items').then(x => x.items || []).catch(() => []);
+    const st = { items: (spec?.items || [{ name: '', unit: '', min: null, max: null, count: 1 }]).map(i => ({ ...i })) };
+    const groups = [...new Set(lib.specs.map(s => s.group).filter(Boolean))];
+    const m = modal(`<h3>${spec && !copy ? '검사규격 수정' : '새 검사규격'}</h3><form class="stack" data-rs-form>
+      <div class="form-grid"><label>분류 <span class="opt">(선택)</span><input name="group" maxlength="50" list="rsGroups" value="${esc(spec?.group || '')}" placeholder="예) 천와이퍼"><datalist id="rsGroups">${groups.map(g => `<option value="${esc(g)}">`).join('')}</datalist></label>
+        <label>규격 이름 *<input name="name" required maxlength="100" value="${esc(copy ? `${spec.name} (복사)` : spec?.name || '')}" placeholder="예) 흡수 시험"></label>
+        <label class="span2">비고 <span class="opt">(선택)</span><input name="note" maxlength="300" value="${esc(spec?.note || '')}"></label>
+        <label class="inline"><input type="checkbox" name="active" ${spec?.active === false ? '' : 'checked'}> 사용 (분석데이터 입력에서 고를 수 있음)</label></div>
+      <div class="rm-tools"><label>항목 보관함에서 넣기<select data-rs-lib><option value="">— 항목 넣기 —</option>${lib2.map((it, i) => `<option value="${i}">${esc(it.group)} · ${esc(it.name)}${it.unit ? ` (${esc(it.unit)})` : ''}</option>`).join('')}</select></label><button type="button" class="btn small" data-rs-add>＋ 항목</button></div>
+      <div class="table-wrap"><table class="grid keep-table rm-spec" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>측정 항목 *</th><th>단위</th><th class="r">하한</th><th class="r">상한</th><th class="r">측정 횟수</th><th></th></tr></thead><tbody data-rs-items></tbody></table></div>
+      <div class="actions"><button type="button" class="btn" data-no>취소</button><button class="btn primary">저장</button></div></form>`, { wide: true });
+    const f = $('[data-rs-form]', m.el), body = $('[data-rs-items]', f);
+    const drawItems = () => { body.innerHTML = st.items.map((it, i) => `<tr data-rs-i="${i}"><td><input data-k="name" maxlength="100" value="${esc(it.name || '')}" aria-label="측정 항목"></td><td><input data-k="unit" maxlength="30" class="rm-unit" value="${esc(it.unit || '')}" aria-label="단위"></td>
+      <td><input data-k="min" type="number" step="any" class="rm-num" value="${it.min ?? ''}" aria-label="하한"></td><td><input data-k="max" type="number" step="any" class="rm-num" value="${it.max ?? ''}" aria-label="상한"></td>
+      <td><input data-k="count" type="number" min="1" max="10" step="1" class="rm-num" value="${it.count || 1}" aria-label="측정 횟수"></td>
+      <td class="nowrap"><button type="button" class="btn small" data-rs-up="${i}" title="위로" ${i ? '' : 'disabled'}>↑</button> <button type="button" class="btn small" data-rs-x="${i}" title="빼기">×</button></td></tr>`).join(''); };
+    drawItems();
+    body.addEventListener('input', e => { const tr = e.target.closest('[data-rs-i]'); if (tr && e.target.dataset.k) st.items[Number(tr.dataset.rsI)][e.target.dataset.k] = e.target.value; });
+    body.addEventListener('paste', e => { // 15.296 엑셀에서 항목 표(이름·단위·하한·상한·횟수)를 복사해 붙이기
+      const tr = e.target.closest('[data-rs-i]'); if (!tr || !e.target.dataset.k) return; const rows = xlGrid(e); if (!rows) return; e.preventDefault();
+      const KEYS = ['name', 'unit', 'min', 'max', 'count'], c0 = KEYS.indexOf(e.target.dataset.k), i0 = Number(tr.dataset.rsI); let put = 0, skip = 0;
+      rows.forEach((vals, i) => { const ii = i0 + i; if (ii >= 30) { skip += vals.length; return; } while (ii >= st.items.length) st.items.push({ name: '', unit: '', min: null, max: null, count: 1 });
+        vals.forEach((raw, j) => { const key = KEYS[c0 + j]; if (!key) { if (raw !== '') skip++; return; } if (key === 'name' || key === 'unit') { st.items[ii][key] = raw; put++; return; }
+          const n = xlNum(raw); if (n === null) { skip++; return; } st.items[ii][key] = key === 'count' ? Math.max(1, Math.min(10, Math.round(Number(n) || 1))) : n === '' ? null : n; put++; }); });
+      drawItems(); toast(`엑셀에서 ${put}칸을 붙여 넣었습니다.${skip ? ` (${skip}칸은 뺐습니다)` : ''}`, skip ? 'err' : undefined);
+    });
+    f.addEventListener('click', e => {
+      if (e.target.closest('[data-rs-add]')) { st.items.push({ name: '', unit: '', min: null, max: null, count: 1 }); drawItems(); body.lastElementChild.querySelector('input').focus(); return; }
+      const x = e.target.closest('[data-rs-x]'); if (x) { st.items.splice(Number(x.dataset.rsX), 1); if (!st.items.length) st.items.push({ name: '', unit: '', min: null, max: null, count: 1 }); drawItems(); return; }
+      const u = e.target.closest('[data-rs-up]'); if (u) { const i = Number(u.dataset.rsUp); [st.items[i - 1], st.items[i]] = [st.items[i], st.items[i - 1]]; drawItems(); }
+    });
+    $('[data-rs-lib]', f).onchange = e => { const it = lib2[Number(e.target.value)]; e.target.value = ''; if (!it) return; st.items = st.items.filter(i => String(i.name || '').trim()); st.items.push({ name: it.name, unit: it.unit || '', min: it.min ?? null, max: it.max ?? null, count: it.count || 1 }); drawItems(); };
+    $('[data-no]', f).onclick = () => m.close();
+    f.onsubmit = async e => {
+      e.preventDefault(); const v = formObj(f), btn = $('button.primary', f);
+      const items = st.items.filter(i => String(i.name || '').trim()).map(i => ({ name: String(i.name).trim(), unit: String(i.unit || '').trim(), min: i.min, max: i.max, count: Number(i.count) || 1 }));
+      btn.disabled = true;
+      try { lib = await api('PUT', '/api/rnd-specs', { revision: lib.revision, spec: { id: spec && !copy ? spec.id : undefined, name: v.name, group: v.group, note: v.note, active: f.elements.active.checked, items } }); toast('검사규격을 저장했습니다.'); m.close(); draw(); }
+      catch (error) { fail(error); if (error.status === 409) load().catch(() => {}); } finally { btn.disabled = false; }
+    };
+  };
+  main.addEventListener('click', async e => {
+    if (e.target.closest('[data-rs-new]')) return editor(null).catch(fail);
+    const ed = e.target.closest('[data-rs-edit]'), cp = e.target.closest('[data-rs-copy]'), dl = e.target.closest('[data-rs-del]');
+    const s = lib.specs.find(x => x.id === Number((ed || cp || dl)?.dataset.rsEdit || (ed || cp || dl)?.dataset.rsCopy || (ed || cp || dl)?.dataset.rsDel)); if (!s) return;
+    if (ed) return editor(s).catch(fail);
+    if (cp) return editor(s, true).catch(fail);
+    if (dl && await confirmBox(`「${s.name}」 검사규격을 삭제할까요? 이미 입력한 분석데이터의 측정값은 그대로 남습니다. 잠시 쓰지 않을 거면 「수정」에서 사용을 끄세요.`)) {
+      try { lib = await api('DELETE', `/api/rnd-specs/${s.id}?revision=${lib.revision}`); toast('삭제했습니다.'); draw(); } catch (error) { fail(error); if (error.status === 409) load().catch(() => {}); }
+    }
+  });
+  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-rs-row]'); if (tr && lib.can_manage && !e.target.closest('button')) { const s = lib.specs.find(x => x.id === Number(tr.dataset.rsRow)); if (s) editor(s).catch(fail); } });
+  form.addEventListener('input', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }

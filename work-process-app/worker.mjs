@@ -3722,6 +3722,44 @@ async function createRndData(user, body, devId) {
   await db.batch(cmds);
   return decodeRequest(row);
 }
+// 15.295 연구소 검사규격(항목 세트): 연구원이 분석 종류별 측정 항목(이름·단위·하한·상한·횟수)을 미리 만들어 두고 분석데이터 입력에서 불러온다.
+// settings 'rnd_spec_library' = {revision, specs:[{id,name,group,note,active,items,updated_by,updated_at}]} — 새 테이블·마이그레이션 없이, 동시 수정은 revision으로 막는다.
+async function rndSpecLibrary() { const raw = await getSetting('rnd_spec_library'); return { raw, ...(raw ? JSON.parse(raw) : { revision: 0, specs: [] }) }; }
+function rndSpecValidate(o) {
+  const spec = o && typeof o === 'object' ? o : {};
+  if (!Array.isArray(spec.items) || !spec.items.length) throw bad('측정 항목을 하나 이상 넣으세요.');
+  if (spec.items.length > 30) throw bad('측정 항목은 30개까지입니다.');
+  const num = (v, label) => { if (v === '' || v == null) return null; if (!['string', 'number'].includes(typeof v) || !Number.isFinite(Number(v))) throw bad(`${label}은(는) 숫자로 입력하세요.`); return Number(v); };
+  const items = spec.items.map((it, i) => { const x = it && typeof it === 'object' ? it : {}; const name = reqStr(x.name, `${i + 1}번째 측정 항목`, 100), min = num(x.min, `${name} 하한`), max = num(x.max, `${name} 상한`), count = Number(x.count) || 1;
+    if (min !== null && max !== null && min > max) throw bad(`${name}: 하한이 상한보다 큽니다.`); if (!Number.isInteger(count) || count < 1 || count > 10) throw bad(`${name}: 측정 횟수는 1~10회입니다.`);
+    return { name, unit: str(x.unit, 30), min, max, count }; });
+  const names = items.map(i => i.name.toLowerCase()); if (new Set(names).size !== names.length) throw bad('같은 이름의 측정 항목이 있습니다.');
+  return { name: reqStr(spec.name, '규격 이름', 100), group: str(spec.group, 50), note: str(spec.note, 300), active: spec.active !== false, items };
+}
+async function rndSpecWrite(prior, specs) {
+  const value = JSON.stringify({ revision: prior.revision + 1, specs });
+  const changed = await db.prepare(`INSERT INTO settings(key,value) SELECT 'rnd_spec_library',? WHERE ?=0 OR EXISTS(SELECT 1 FROM settings WHERE key='rnd_spec_library' AND value=?)
+    ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE settings.value=?`).run(value, prior.revision, prior.raw, prior.raw);
+  if (!changed.changes) throw new HttpError(409, '다른 사람이 검사규격을 바꿨습니다. 다시 열어 주세요.');
+  return JSON.parse(value);
+}
+route('GET', '/api/rnd-specs', async ({ user }) => { const { raw, ...lib } = await rndSpecLibrary(); return { ...lib, can_manage: isResearcher(user) }; });
+route('PUT', '/api/rnd-specs', async ({ user, body }) => {
+  if (!isResearcher(user)) throw new HttpError(403, '연구소 검사규격은 연구원(개발·개발책임자)만 설정합니다.');
+  const prior = await rndSpecLibrary(); if (Number(body.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 검사규격을 바꿨습니다. 다시 열어 주세요.');
+  const spec = rndSpecValidate(body.spec), id = Number(body.spec?.id) || 0, specs = [...prior.specs];
+  if (specs.some(x => x.id !== id && x.name.toLowerCase() === spec.name.toLowerCase() && (x.group || '') === spec.group)) throw bad(`「${spec.group ? spec.group + ' · ' : ''}${spec.name}」 규격이 이미 있습니다.`);
+  const stamp = { updated_by: user.name, updated_at: now() };
+  if (id) { const i = specs.findIndex(x => x.id === id); if (i < 0) throw new HttpError(404, '검사규격을 찾을 수 없습니다.'); specs[i] = { ...specs[i], ...spec, ...stamp }; }
+  else { if (specs.length >= 200) throw bad('연구소 검사규격은 200개까지입니다.'); specs.push({ id: specs.reduce((m, x) => Math.max(m, x.id), 0) + 1, ...spec, ...stamp }); }
+  return { ...(await rndSpecWrite(prior, specs)), can_manage: true };
+});
+route('DELETE', '/api/rnd-specs/:id', async ({ user, params, query }) => {
+  if (!isResearcher(user)) throw new HttpError(403, '연구소 검사규격은 연구원(개발·개발책임자)만 설정합니다.');
+  const prior = await rndSpecLibrary(); if (Number(query.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 검사규격을 바꿨습니다. 다시 열어 주세요.');
+  const id = Number(params.id); if (!prior.specs.some(x => x.id === id)) throw new HttpError(404, '검사규격을 찾을 수 없습니다.');
+  return { ...(await rndSpecWrite(prior, prior.specs.filter(x => x.id !== id))), can_manage: true };
+});
 route('GET', '/api/requests/:id/rnd-measure', async ({ params }) => {
   const r = await getRequest(params.id); if (r.type !== 'rnd_analysis') throw bad('연구 분석만 볼 수 있습니다.');
   const m = await db.prepare('SELECT * FROM inspection_measurements WHERE request_id=?').get(r.id);
@@ -4217,7 +4255,7 @@ route('GET', '/api/schedules', async ({ query }) => {
   return (await db.prepare(`SELECT *,COALESCE((SELECT SUM(a.qty) FROM production_actuals a WHERE a.schedule_id=schedules.id AND a.voided_at IS NULL),0) + COALESCE((SELECT SUM(c.qty) FROM semi_records c WHERE ${semiCutMatch('schedules')}),0) AS actual_qty,
       (SELECT COUNT(*) FROM production_actuals a WHERE a.schedule_id=schedules.id AND a.voided_at IS NULL) + (SELECT COUNT(*) FROM semi_records c WHERE ${semiCutMatch('schedules')}) AS actual_count,
       (SELECT group_concat(work_order, ',') FROM (SELECT a.work_order FROM production_actuals a WHERE a.schedule_id=schedules.id AND a.voided_at IS NULL AND a.work_order<>'' ORDER BY a.id)) AS work_orders,
-      (SELECT json_group_array(json_object('lot', a.lot, 'qty', a.qty, 'wo', a.work_order, 'date', a.production_date)) FROM production_actuals a WHERE a.schedule_id=schedules.id AND a.voided_at IS NULL AND a.lot<>'') AS actual_lots,
+      (SELECT json_group_array(json_object('lot', a.lot, 'qty', a.qty, 'wo', a.work_order, 'date', a.production_date, 'id', a.id, 'st', a.work_status)) FROM production_actuals a WHERE a.schedule_id=schedules.id AND a.voided_at IS NULL AND a.lot<>'') AS actual_lots, -- 15.298 id·상태: 실적 입력 화면에서 이날 기록을 「수정」
       COALESCE((SELECT SUM(c.qty) FROM semi_records c WHERE ${semiCutMatch('schedules')}),0) AS cut_qty,
       (SELECT r.req_no || ' · ' || r.customer || CASE WHEN r.order_no!='' THEN ' · ' || r.order_no ELSE '' END FROM production_request_lines l JOIN production_requests r ON r.id=l.request_id WHERE l.id=schedules.production_line_id) AS order_ref,
       (SELECT l.request_id FROM production_request_lines l WHERE l.id=schedules.production_line_id) AS order_id FROM schedules WHERE kind=? AND (
