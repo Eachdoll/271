@@ -193,6 +193,15 @@ async function prForm(host, existing = null, { onDone } = {}) {
     restore: value => { uxFormRestore(form, value.head); items.replaceChildren(); (value.items && value.items.length ? value.items : [{}]).forEach(it => addItem(it)); for (const kind of Object.keys(line)) line[kind] = (value.line && Array.isArray(value.line[kind]) ? value.line[kind] : []).filter(id => people.some(p => p.id === id)); drawLines(); },
     afterRestore: totals,
   });
+  // 15.284 수주에서 만든 구매의뢰: 품목을 채우고 수주 번호를 붙여 상신
+  let fromOrder = null;
+  if (!existing) { try { fromOrder = JSON.parse(sessionStorage.getItem('wpa:pr-from-order') || 'null'); sessionStorage.removeItem('wpa:pr-from-order'); } catch { fromOrder = null; } }
+  if (fromOrder && Array.isArray(fromOrder.lines) && fromOrder.lines.length) {
+    items.replaceChildren(); fromOrder.lines.slice(0, 30).forEach(it => addItem(it)); renumber?.(); totals();
+    if (!form.elements.title.value) form.elements.title.value = `${fromOrder.no} ${fromOrder.customer} 구매의뢰`;
+    form.insertAdjacentHTML('afterbegin', `<p class="pr-from-order" data-pr-order>수주 <b>${esc(fromOrder.no)}</b> · ${esc(fromOrder.customer)}에서 품목 ${fromOrder.lines.length}개를 채웠습니다. 상신하면 이 수주에 연결됩니다. <button type="button" class="btn small" data-pr-unlink>연결 끊기</button></p>`);
+    $('[data-pr-unlink]', form).onclick = () => { fromOrder = null; $('[data-pr-order]', form).remove(); };
+  }
   // 저장 재시도(응답이 끊겨 다시 누름)는 같은 request_id를 보내 서버가 처음 저장한 의뢰서를 돌려준다. 성공하면 화면을 떠난다.
   let busy = false; const saveId = existing ? null : crypto.randomUUID();
   form.onsubmit = async event => {
@@ -207,7 +216,7 @@ async function prForm(host, existing = null, { onDone } = {}) {
       let saved;
       if (existing) saved = await api('PUT', `/api/purchase-requests/${existing.id}`, { ...body, revision: existing.revision });
       else {
-        saved = await api('POST', '/api/purchase-requests', { ...body, request_id: saveId }); entryDraft?.clear();
+        saved = await api('POST', '/api/purchase-requests', { ...body, request_id: saveId, ...(fromOrder ? { sales_order_id: fromOrder.id } : {}) }); entryDraft?.clear();
         if (draft.photos.length && !saved.photos.length) {
           try { saved = await api('PUT', `/api/purchase-requests/${saved.id}/photos`, { photos: [...draft.photos], revision: saved.revision }); }
           catch { fail(new Error('의뢰서는 상신했으나 사진 저장에 실패했습니다. 의뢰서를 열어 「사진 변경」으로 다시 올리세요.')); }
@@ -243,7 +252,7 @@ async function pageSalesPrList(main) {
     rows = next === true ? rows.concat(data.rows) : data.rows; page = data.page; more = data.more;
     listCount(form, rows.length); if (more) $('[data-list-count]', form).textContent += ' · 더 있음';
     $('#prList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>의뢰번호 · 작성일</th><th>제목 · 품목</th><th class="r">매입 / 판매 금액</th><th>공급선 · 고객사</th><th>요청자 · 의뢰부서</th><th>결재</th><th></th></tr></thead><tbody>${rows.map(r => `<tr class="${r.my_turn ? 'row-yellow' : ''}">
-      <td><b>${esc(r.doc_no)}</b><br><span class="small muted">${esc(r.doc_date)}</span></td>
+      <td><b>${esc(r.doc_no)}</b><br><span class="small muted">${esc(r.doc_date)}</span>${r.sales_order_no ? `<div class="small"><span class="chip">수주 ${esc(r.sales_order_no)}</span></div>` : ''}</td>
       <td>${esc(r.title || r.first_item)}${r.title ? `<div class="small muted">${esc(r.first_item)}${r.item_count > 1 ? ` 외 ${r.item_count - 1}건` : ''}</div>` : r.item_count > 1 ? ` <span class="small muted">외 ${r.item_count - 1}건</span>` : ''}</td>
       <td class="r">${prMoney(r.purchase_total)}<br><span class="small muted">${prMoney(r.sale_total)}</span></td>
       <td>${esc(r.vendors || '—')}<div class="small muted">${esc(r.customers)}</div></td>
@@ -283,6 +292,7 @@ async function prOpen(id, after = () => {}) {
     ${pr.can_decide ? '<p class="pr-turn">지금 내 결재 차례입니다. 본문을 확인하고 승인 또는 반려하세요.</p>' : ''}
     <section><h4>결재 정보</h4>${prLineRows(pr)}</section>
     <section><h4>본문 · 구매의뢰서</h4>
+      ${pr.sales_order_no ? `<p class="pr-from-order">수주 <b>${esc(pr.sales_order_no)}</b>에서 만든 구매의뢰${hasRole('sales') ? ` <button type="button" class="btn small" data-pr-so="${pr.sales_order_id}">수주 보기</button>` : ''}</p>` : ''}
       <p><span class="muted">작성일</span> <b>${esc(pr.doc_date)}</b> <span class="muted">의뢰부서</span> <b>${esc(pr.department || '—')}</b> <span class="muted">요청자</span> <b>${esc(pr.author_name)}</b> <span>${esc(pr.author_position || '')}</span></p>
       <div class="table-wrap"><table class="grid pr-items"><thead><tr><th>NO</th><th>품목 · 규격</th><th>단위</th><th class="r">수량</th><th class="r">매입단가</th><th class="r">매입금액</th><th class="r">판매단가</th><th class="r">판매금액</th><th>공급선</th><th>납품예정수량</th><th>사용고객사</th><th>현재고</th><th>입고요청일</th>${pr.items.some(it => it.manager) ? '<th>담당자</th>' : ''}<th>월사용량</th><th>발주</th></tr></thead>
       <tbody>${pr.items.map(it => `<tr><td>${it.line_no}</td><td><b>${esc(it.item)}</b>${it.spec ? `<div class="small">${esc(it.spec)}</div>` : ''}${it.product_code ? `<div class="small muted">제품코드 ${esc(it.product_code)}</div>` : ''}</td><td>${esc(it.unit)}</td><td class="r">${fmtNum(it.qty)}</td><td class="r">${prMoney(it.purchase_price)}</td><td class="r">${it.purchase_price == null ? '' : prMoney(it.purchase_price * it.qty)}</td><td class="r">${prMoney(it.sale_price)}</td><td class="r">${it.sale_price == null ? '' : prMoney(it.sale_price * it.qty)}</td><td>${esc(it.vendor)}</td><td>${esc(it.delivery_qty || '전량')}</td><td>${esc(it.customer)}</td><td>${esc(it.stock_qty)}</td><td>${esc(it.due_text)}</td>${pr.items.some(x => x.manager) ? `<td>${esc(it.manager)}</td>` : ''}<td>${esc(it.monthly_usage)}</td><td>${it.po_id ? '<span class="chip green">발주됨</span>' : it.order_closed ? `<span class="chip" title="${esc(it.order_closed)}">발주 안 함</span>${pr.status === 'approved' && hasRole('purchase') ? ` <button type="button" class="btn small" data-pr-reopen="${it.id}">발주 대기로</button>` : ''}` : ''}</td></tr>`).join('')}</tbody></table></div>
@@ -295,6 +305,7 @@ async function prOpen(id, after = () => {}) {
       ${pr.can_edit ? '<button class="btn" data-pr-edit>고쳐서 다시 상신</button>' : ''}
       ${isAuthor && pr.status !== 'approved' ? '<button class="btn" data-pr-photos>사진 변경</button>' : ''}
       ${pr.can_delete ? '<button class="btn danger" data-pr-delete>삭제</button>' : ''}</div>`, { wide: true });
+  $('[data-pr-so]', m.el)?.addEventListener('click', async e => { try { salesOrderSheet(await api('GET', '/api/sales-orders/' + e.currentTarget.dataset.prSo)); } catch (error) { fail(error); } }); // 15.284
   $$('img[data-big]', m.el).forEach(img => img.onclick = () => lightbox(img.dataset.big));
   const done = async () => { m.close(); await after(); refreshNavBadges(); };
   const decide = async (decision) => {

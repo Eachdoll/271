@@ -6460,7 +6460,8 @@ async function orderDetail(order) {
     WHERE l.active=1 AND l.order_line_id IN (SELECT id FROM sales_order_lines WHERE order_id=?) ORDER BY b.bill_date, b.id`).all(order.id);
   const ordered = lines.reduce((t, l) => t + l.qty, 0), billed = lines.reduce((t, l) => t + Math.min(l.qty, l.billed_qty + l.shipped_unbilled), 0);
   const state = order.status !== 'open' ? order.status : billed <= 0 ? 'waiting' : billed + 0.000001 >= ordered ? 'done' : 'partial';
-  return { ...order, lines, bills, state, amount: lines.reduce((t, l) => t + (l.unit_price == null ? 0 : billTrunc(l.qty * l.unit_price)), 0) };
+  const purchase_requests = await db.prepare(`SELECT pr.id, pr.doc_no, pr.doc_date, pr.status, pr.author_name, (SELECT COUNT(*) FROM purchase_request_items i WHERE i.request_id=pr.id) AS items, (SELECT COUNT(*) FROM purchase_request_items i WHERE i.request_id=pr.id AND i.po_id IS NOT NULL) AS ordered FROM purchase_requests pr WHERE pr.sales_order_id=? ORDER BY pr.id`).all(order.id); // 15.284
+  return { ...order, lines, bills, state, purchase_requests, amount: lines.reduce((t, l) => t + (l.unit_price == null ? 0 : billTrunc(l.qty * l.unit_price)), 0) };
 }
 route('GET', '/api/sales-orders', async ({ user, query }) => {
   requireSales(user);
@@ -7028,8 +7029,8 @@ route('GET', '/api/purchase-requests', async ({ user, query }) => {
   if (q) {
     if (q.length > 200) throw bad('검색어는 200자까지 입력하세요.');
     const pattern = '%' + q.replace(/[\\%_]/g, '\\$&') + '%';
-    where.push("(pr.doc_no LIKE ? ESCAPE '\\' OR pr.title LIKE ? ESCAPE '\\' OR pr.department LIKE ? ESCAPE '\\' OR pr.author_name LIKE ? ESCAPE '\\' OR EXISTS(SELECT 1 FROM purchase_request_items i WHERE i.request_id=pr.id AND (i.item LIKE ? ESCAPE '\\' OR i.product_code LIKE ? ESCAPE '\\' OR i.vendor LIKE ? ESCAPE '\\' OR i.customer LIKE ? ESCAPE '\\')))");
-    args.push(...Array(8).fill(pattern));
+    where.push("(pr.doc_no LIKE ? ESCAPE '\\' OR pr.sales_order_no LIKE ? ESCAPE '\\' OR pr.title LIKE ? ESCAPE '\\' OR pr.department LIKE ? ESCAPE '\\' OR pr.author_name LIKE ? ESCAPE '\\' OR EXISTS(SELECT 1 FROM purchase_request_items i WHERE i.request_id=pr.id AND (i.item LIKE ? ESCAPE '\\' OR i.product_code LIKE ? ESCAPE '\\' OR i.vendor LIKE ? ESCAPE '\\' OR i.customer LIKE ? ESCAPE '\\')))");
+    args.push(...Array(9).fill(pattern));
   }
   // 200건씩 page로 나눈다. 화면은 paged=1로 {rows, page, more}를 받아 「더 보기」를 붙인다(paged 없이 부르면 첫 페이지 배열).
   const page = query.page === undefined || query.page === '' ? 0 : Number(query.page);
@@ -7073,10 +7074,12 @@ route('POST', '/api/purchase-requests', async ({ user, body }) => {
   const prior = await savedByRequestId('purchase_requests', requestId, user, '구매의뢰서');
   if (prior) return { ...await prDetail(prior, user), duplicate: true };
   const head = prHead(body, user), items = await prItems(body.items), lines = await prLines(body, user.id);
+  // 15.284 수주에서 만든 구매의뢰: 수주 번호를 함께 남긴다(없는 수주면 거절)
+  let so = null; if (body.sales_order_id !== undefined && body.sales_order_id !== null && body.sales_order_id !== '') { if (!/^[1-9]\d*$/.test(String(body.sales_order_id))) throw bad('연결할 수주를 다시 고르세요.'); so = await db.prepare('SELECT id, order_no FROM sales_orders WHERE id=?').get(Number(body.sales_order_id)); if (!so) throw bad('연결할 수주를 찾을 수 없습니다.'); }
   const prefix = 'PR-' + head.doc_date.slice(2).replace(/-/g, '') + '-';
   const token = requestId || 'srv:' + crypto.randomUUID();
   try {
-    await db.batch([{ sql: `INSERT INTO purchase_requests(doc_no,doc_date,department,title,note,author_id,author_name,author_position,request_id,freight) VALUES(${nextPurchaseNo},?,?,?,?,?,?,?,?,?)`, args: [prefix, prefix, prefix, head.doc_date, head.department, head.title, head.note, user.id, user.name, user.position || '', token, head.freight] }, ...prInsertDetails('request_id=?', [token], items, lines)]);
+    await db.batch([{ sql: `INSERT INTO purchase_requests(doc_no,doc_date,department,title,note,author_id,author_name,author_position,request_id,freight,sales_order_id,sales_order_no) VALUES(${nextPurchaseNo},?,?,?,?,?,?,?,?,?,?,?)`, args: [prefix, prefix, prefix, head.doc_date, head.department, head.title, head.note, user.id, user.name, user.position || '', token, head.freight, so ? so.id : null, so ? so.order_no : ''] }, ...prInsertDetails('request_id=?', [token], items, lines)]);
   } catch (error) {
     const done = String(error.message).includes('UNIQUE') && await savedByRequestId('purchase_requests', requestId, user, '구매의뢰서');
     if (done) return { ...await prDetail(done, user), duplicate: true };
