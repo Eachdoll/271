@@ -182,7 +182,7 @@ function modal(html, { wide = false, onClose = () => {} } = {}) {
   wrap.className = 'modal-wrap';
   wrap.innerHTML = `<div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true"><button class="modal-x" aria-label="닫기">×</button>${html}</div>`;
   const opener = document.activeElement;
-  const close = () => { if (!wrap.isConnected) return; wrap.remove(); syncModalInert(); document.removeEventListener('keydown', onKey); onClose(); const top = $$('.modal-wrap').at(-1); if (top) { if (!top.contains(document.activeElement)) ($('.modal', top)?.focus?.()); } else if (opener?.isConnected) opener.focus?.(); };
+  const close = () => { if (!wrap.isConnected) return; wrap.remove(); syncModalInert(); document.removeEventListener('keydown', onKey); window.removeEventListener('hashchange', close); onClose(); const top = $$('.modal-wrap').at(-1); if (top) { if (!top.contains(document.activeElement)) ($('.modal', top)?.focus?.()); } else if (opener?.isConnected) opener.focus?.(); };
   const onKey = (e) => {
     if (wrap !== $$('.modal-wrap').at(-1)) return; // only the top dialog reacts
     if (e.key === 'Escape') close();
@@ -198,6 +198,7 @@ function modal(html, { wide = false, onClose = () => {} } = {}) {
   wrap.addEventListener('mousedown', (e) => { if (e.target === wrap) close(); });
   $('.modal-x', wrap).onclick = close;
   document.addEventListener('keydown', onKey);
+  window.addEventListener('hashchange', close); // 15.299 다른 화면으로 가면(메뉴·뒤로 가기) 열린 창을 닫음 — 예전 창이 새 화면 위에 남던 문제
   document.body.appendChild(wrap); syncModalInert();
   { // 15.211 휴대폰: 화면보다 긴 팝업은 보이는 화면에 꽉 차게(닫기 × 위에 고정, 단추 줄 아래 고정). 세금계산서 양식은 PC 배율 그대로 줄여 보이고 손가락으로 확대.
     const box = $('.modal', wrap), fit = () => { if (!wrap.isConnected) { ro.disconnect(); return; } fitFixedForms(box); box.classList.toggle('modal-tall', innerWidth <= 700 && box.scrollHeight > box.clientHeight + 4); };
@@ -405,6 +406,18 @@ for (const g of NAV) g.items = g.items.map(i => !Array.isArray(i) && i.items.len
 // 홈·리포트·내 정보·관리자 화면은 묶음에 속하지 않아 항상 열린다(관리자 화면은 관리자만).
 const MENU_GROUP_LABELS = [['sales', '영업'], ['purchase', '구매'], ['quality', '품질'], ['dev', '연구소'], ['production', '생산'], ['logistics', '물류'], ['master', '기준 정보 (거래처·검사규격)']];
 const NAV_GROUP_KEY = { 영업: 'sales', 구매: 'purchase', 경리: 'accounting', 품질: 'quality', 연구소: 'dev', 개발: 'dev', 생산: 'production', 물류: 'logistics' };
+// 15.299 긴 목록(tw-fill)은 표 안에서 스크롤된다. 같은 화면에서 목록을 다시 그리면(조회·저장·상태 변경 뒤 새로 불러오기) 표 칸이 새로 만들어져
+// 맨 위로 튀던 문제 → 화면별·표 순서별 마지막 스크롤 위치를 기억했다가 새 표 칸에 되돌린다(다른 화면으로 가면 지움, 줄이 줄면 브라우저가 끝으로 맞춤).
+const TW_KEEP = { route: '', pos: [] };
+const twRoute = () => String(location.hash || '#/').split('?')[0];
+const twList = () => [...document.querySelectorAll('#main .table-wrap.tw-fill')];
+document.addEventListener('scroll', e => { const w = e.target; if (!(w instanceof Element) || !w.matches('#main .table-wrap.tw-fill')) return; const i = twList().indexOf(w); if (i < 0) return;
+  if (TW_KEEP.route !== twRoute()) { TW_KEEP.route = twRoute(); TW_KEEP.pos = []; } TW_KEEP.pos[i] = { t: w.scrollTop, l: w.scrollLeft }; }, true);
+window.addEventListener('hashchange', () => { if (TW_KEEP.route !== twRoute()) { TW_KEEP.route = ''; TW_KEEP.pos = []; } });
+function twRestore(w) {
+  if (TW_KEEP.route !== twRoute() || !w.closest('#main')) return; const i = twList().indexOf(w), p = TW_KEEP.pos[i]; if (!p || (!p.t && !p.l)) return;
+  const put = () => { if (w.isConnected && w.scrollTop === 0 && w.scrollLeft === 0) { w.scrollTop = p.t; w.scrollLeft = p.l; } }; put(); requestAnimationFrame(put);
+}
 function routeMenu(route) {
   const path = String(route || '#/').split('?')[0];
   // 구매의뢰 목록은 결재선에 지정된 누구나 들어와 결재해야 하므로 막지 않는다(서버가 본인 관련 의뢰만 보여 준다).
@@ -1540,7 +1553,7 @@ function labelGridTables() {
       if (CENTER_HEADS.test(head) && !cells.some(td => td.querySelector('input, select, button:not(.link-btn)'))) [ths[i], ...cells].forEach(c => c && !c.classList.contains('r') && c.classList.add('c')); // 15.180
     });
     gridLayout(table); // 15.173 열 너비·순서(빈 열 숨긴 뒤)
-    if (rows.length > 15 && !table.closest('.modal-wrap')) table.closest('.table-wrap')?.classList.add('tw-fill'); // 15.180 긴 목록: 머리글 고정
+    if (rows.length > 15 && !table.closest('.modal-wrap')) { const tw = table.closest('.table-wrap'); if (tw) { tw.classList.add('tw-fill'); twRestore(tw); } } // 15.180 긴 목록: 머리글 고정 · 15.299 다시 그려도 보던 자리
     requestAnimationFrame(() => gridFreeze(table)); // 15.182 가로로 길면 앞 열 고정
     if (!table.classList.contains('as-cards')) return;
     let secondary = 0;

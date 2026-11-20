@@ -682,3 +682,17 @@ test('15.293 research measurements with several samples (grid like quality analy
   assert.deepEqual(m.measurement.rows.map(x => [x.lot, x.values.i0]), [['당사', [90, 110]], ['경쟁사 A', [180, 200]]]);
   assert.equal((await admin('POST', '/api/rnd-analysis-data', { title: 'x', category: '기타', spec_items: items, samples: Array.from({ length: 21 }, () => ({ values: { i0: [1, 1], i1: [1] } })) })).status, 400);
 });
+
+test('15.299 production request made from a sales order keeps the order link; the order lists its production requests', async () => {
+  await admin('POST', '/api/vendors', { name: 'MR고객', type: 'sales' });
+  const g = (await admin('POST', '/api/boms', { product: 'MR 와이퍼', product_code: 'MRW-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'BOX', materials: [] })).body;
+  const so = (await admin('POST', '/api/sales-orders', { customer: 'MR고객', customer_po: 'PO-77', order_date: today, request_id: rid(), lines: [{ bom_id: g.id, qty: 30, unit_price: 1000 }] })).body;
+  const base = { customer: 'MR고객', order_no: 'PO-77', order_date: today, lines: [{ bom_id: g.id, item: g.product, qty: 30, unit: 'BOX' }] };
+  assert.equal((await admin('POST', '/api/production-requests', { ...base, request_id: rid(), sales_order_id: 999999 })).status, 400);
+  assert.equal((await admin('POST', '/api/production-requests', { ...base, request_id: rid(), sales_order_id: 'x' })).status, 400);
+  const mr = await admin('POST', '/api/production-requests', { ...base, request_id: rid(), sales_order_id: so.id });
+  assert.equal(mr.status, 200, JSON.stringify(mr.body)); assert.equal(mr.body.sales_order_id, so.id); assert.equal(mr.body.sales_order_no, so.order_no);
+  const plain = (await admin('POST', '/api/production-requests', { ...base, request_id: rid() })).body; assert.equal(plain.sales_order_id, null);
+  const d = (await admin('GET', `/api/sales-orders/${so.id}`)).body;
+  assert.deepEqual(d.production_requests.map(x => [x.id, x.req_no, x.items]), [[mr.body.id, mr.body.req_no, 1]]);
+});

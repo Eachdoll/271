@@ -6637,7 +6637,10 @@ async function orderDetail(order) {
   const ordered = lines.reduce((t, l) => t + l.qty, 0), billed = lines.reduce((t, l) => t + Math.min(l.qty, l.billed_qty + l.shipped_unbilled), 0);
   const state = order.status !== 'open' ? order.status : billed <= 0 ? 'waiting' : billed + 0.000001 >= ordered ? 'done' : 'partial';
   const purchase_requests = await db.prepare(`SELECT pr.id, pr.doc_no, pr.doc_date, pr.status, pr.author_name, (SELECT COUNT(*) FROM purchase_request_items i WHERE i.request_id=pr.id) AS items, (SELECT COUNT(*) FROM purchase_request_items i WHERE i.request_id=pr.id AND i.po_id IS NOT NULL) AS ordered FROM purchase_requests pr WHERE pr.sales_order_id=? ORDER BY pr.id`).all(order.id); // 15.284
-  return { ...order, lines, bills, state, purchase_requests, amount: lines.reduce((t, l) => t + (l.unit_price == null ? 0 : billTrunc(l.qty * l.unit_price)), 0) };
+  const mrRows = await db.prepare('SELECT * FROM production_requests WHERE sales_order_id=? ORDER BY id').all(order.id); // 15.299 이 수주에서 만든 생산의뢰(진행 상태는 목록과 같은 계산)
+  const mrLinesAll = mrRows.length ? await mrLineProgress(mrRows.map(r => r.id)) : [];
+  const production_requests = mrRows.map(r => { const ls = mrLinesAll.filter(l => l.request_id === r.id); return { id: r.id, req_no: r.req_no, order_date: r.order_date, author_name: r.author_name, shipped: !!r.shipped, items: ls.length, status: mrState(r, ls).status }; });
+  return { ...order, lines, bills, state, purchase_requests, production_requests, amount: lines.reduce((t, l) => t + (l.unit_price == null ? 0 : billTrunc(l.qty * l.unit_price)), 0) };
 }
 route('GET', '/api/sales-orders', async ({ user, query }) => {
   requireSales(user);
@@ -6979,12 +6982,13 @@ route('POST', '/api/production-requests', async ({ user, body }) => {
   const prior = await savedByRequestId('production_requests', requestId, user, '생산의뢰');
   if (prior) return { ...await mrDetail(prior, user), duplicate: true };
   const head = mrHead(body), lines = await mrLines(body.lines);
+  let so = null; if (body.sales_order_id !== undefined && body.sales_order_id !== null && body.sales_order_id !== '') { if (!/^[1-9]\d*$/.test(String(body.sales_order_id))) throw bad('연결할 수주를 다시 고르세요.'); so = await db.prepare('SELECT id, order_no FROM sales_orders WHERE id=?').get(Number(body.sales_order_id)); if (!so) throw bad('연결할 수주를 찾을 수 없습니다.'); } // 15.299 수주 → 생산의뢰
   const prefix = 'MR-' + head.order_date.slice(2).replace(/-/g, '') + '-';
   // 줄은 의뢰를 request_id로 찾아 붙인다. 화면이 보내지 않은 경우에도 서버 토큰으로 채운다.
   const token = requestId || 'srv:' + crypto.randomUUID();
   try {
     await db.batch([
-      { sql: `INSERT INTO production_requests(req_no,order_date,customer,order_no,ship_text,ship_date,spec,note,author_id,author_name,author_department,request_id) VALUES(${nextDocNo('production_requests', 'req_no')},?,?,?,?,?,?,?,?,?,?,?)`, args: [prefix, prefix, prefix, head.order_date, head.customer, head.order_no, head.ship_text, head.ship_date, head.spec, head.note, user.id, user.name, user.department || '', token] },
+      { sql: `INSERT INTO production_requests(req_no,order_date,customer,order_no,ship_text,ship_date,spec,note,author_id,author_name,author_department,request_id,sales_order_id,sales_order_no) VALUES(${nextDocNo('production_requests', 'req_no')},?,?,?,?,?,?,?,?,?,?,?,?,?)`, args: [prefix, prefix, prefix, head.order_date, head.customer, head.order_no, head.ship_text, head.ship_date, head.spec, head.note, user.id, user.name, user.department || '', token, so ? so.id : null, so ? so.order_no : ''] },
       ...lines.map(l => ({ sql: 'INSERT INTO production_request_lines(request_id,line_no,bom_id,product_code,item,spec,unit,qty) SELECT id,?,?,?,?,?,?,? FROM production_requests WHERE request_id=?', args: [l.line_no, l.bom_id, l.product_code, l.item, l.spec, l.unit, l.qty, token] })),
     ]);
   } catch (error) {
