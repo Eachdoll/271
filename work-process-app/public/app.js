@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.294';
+const APP_VERSION = '15.295';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -384,7 +384,7 @@ const NAV = [
     ['#/quality/list', '분석 관리'],
     ['#/quality/voc/list', 'VOC 관리'],
   ] },
-  { group: '개발', items: [['#/dev/list', '개발 관리'], ['#/dev/schedule', '스케줄 관리'], ['#/dev/analysis', '연구 분석 관리']] }, // 15.276 · 15.285
+  { group: '연구소', items: [['#/dev/list', '개발 관리'], ['#/dev/schedule', '스케줄 관리'], ['#/dev/analysis', '연구 분석 관리'], ['#/dev/specs', '검사규격 항목설정']] }, // 15.276 · 15.285 · 15.295 메뉴 이름 개발 → 연구소, 연구소 검사규격
   { group: '생산', items: [
     { sub: '샘플(제품)', items: [['#/prod/list', '제품 샘플리스트']] },
     ['#/prod/orders', '생산의뢰 접수'],
@@ -403,8 +403,8 @@ const NAV = [
 for (const g of NAV) g.items = g.items.map(i => !Array.isArray(i) && i.items.length === 1 ? i.items[0] : i);
 // ── 메뉴 열람 권한(15.59) ── ME.menus가 null이면 전체, 배열이면 그 업무 묶음만 메뉴에 보이고 주소로 들어와도 막는다.
 // 홈·리포트·내 정보·관리자 화면은 묶음에 속하지 않아 항상 열린다(관리자 화면은 관리자만).
-const MENU_GROUP_LABELS = [['sales', '영업'], ['purchase', '구매'], ['quality', '품질'], ['dev', '개발'], ['production', '생산'], ['logistics', '물류'], ['master', '기준 정보 (거래처·검사규격)']];
-const NAV_GROUP_KEY = { 영업: 'sales', 구매: 'purchase', 경리: 'accounting', 품질: 'quality', 개발: 'dev', 생산: 'production', 물류: 'logistics' };
+const MENU_GROUP_LABELS = [['sales', '영업'], ['purchase', '구매'], ['quality', '품질'], ['dev', '연구소'], ['production', '생산'], ['logistics', '물류'], ['master', '기준 정보 (거래처·검사규격)']];
+const NAV_GROUP_KEY = { 영업: 'sales', 구매: 'purchase', 경리: 'accounting', 품질: 'quality', 연구소: 'dev', 개발: 'dev', 생산: 'production', 물류: 'logistics' };
 function routeMenu(route) {
   const path = String(route || '#/').split('?')[0];
   // 구매의뢰 목록은 결재선에 지정된 누구나 들어와 결재해야 하므로 막지 않는다(서버가 본인 관련 의뢰만 보여 준다).
@@ -577,6 +577,7 @@ const PAGES = {
   '#/dev/list': () => pageWorkList('development'),
   '#/dev/analysis': () => pageWorkList('rnd_analysis'), // 15.285 연구팀 분석 관리
   '#/dev/analysis/request': main => pageRndData(main), // 15.288 분석데이터 입력(연구원)
+  '#/dev/specs': main => pageRndSpecs(main), // 15.295 연구소 검사규격 항목설정
   '#/dev/schedule': main => pageDevRoadmap(main), // 15.276 개발 스케줄 관리(로드맵)
   '#/prod/request': () => { location.replace('#/sales/sample/product'); }, // 15.183 영업으로 옮김(예전 즐겨찾기)
   '#/sales/sample/product': () => pageIntake('sample'), // 15.183 제품 샘플의뢰(영업)

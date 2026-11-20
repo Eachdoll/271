@@ -3821,3 +3821,7 @@ label.inline { width: fit-content; max-width: 100%; justify-self: start; }
 .rnd-meas .rm-samples { margin-top: 10px; }
 /* 15.293 BOM 소요량 분류별 */
 .bs-cat { margin-bottom: 16px; } .bs-cat-h { margin: 14px 0 6px; padding: 6px 10px; border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 6px; font-size: 15px; }
+/* 15.295 연구소 검사규격 항목설정 */
+.rs-table .rs-items { text-align: left; } .rs-table .rs-items > div { padding: 1px 0; white-space: nowrap; } .rs-table .rs-items > div + div { border-top: 1px dashed var(--line, #dde3ea); }
+.rs-table .rs-rng { display: inline-block; min-width: 64px; padding: 0 6px; margin-left: 4px; border-radius: 4px; background: var(--accent-soft, #eef4ff); font-variant-numeric: tabular-nums; }
+#rsFilters label.inline { flex-direction: row; align-items: center; gap: 6px; white-space: nowrap; }
