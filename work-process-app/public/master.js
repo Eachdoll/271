@@ -230,7 +230,7 @@ async function openVendorForm(v, done) {
     onOpen: el => { root = el; el.classList.add('vendor-modal'); el.addEventListener('click', e => {
       if (e.target.closest('[data-contact-add]')) { const body = el.querySelector('[data-contacts]'); if (body.children.length >= 30) return toast('담당자는 30명까지입니다.', 'err'); body.insertAdjacentHTML('beforeend', vendorContactRow()); body.lastElementChild.querySelector('input').focus(); }
       const del = e.target.closest('[data-contact-del]'); if (del) { const tr = del.closest('tr'), body = tr.parentElement; if (body.children.length > 1) tr.remove(); else tr.querySelectorAll('input').forEach(i => { i.value = ''; }); }
-    }); setTimeout(() => el.querySelector('[name=name]')?.focus(), 30); },
+    }); setTimeout(() => { const ae = document.activeElement; if (!ae?.matches?.('input, select, textarea') || !el.contains(ae)) el.querySelector('[name=name]')?.focus(); }, 30); }, // 15.299 이미 다른 칸에 입력 중이면 커서를 빼앗지 않음
     submit: async vals => { const body = { ...vendorBody(vals), contacts: readContacts(root) }; return v ? api('PUT', '/api/vendors/' + v.id, body) : api('POST', '/api/vendors', body); } });
   if (!saved) return;
   toast(v ? '거래처를 수정했습니다.' : '거래처를 등록했습니다.'); await done?.();
