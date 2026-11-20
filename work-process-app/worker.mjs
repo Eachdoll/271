@@ -4601,7 +4601,7 @@ route('POST', '/api/schedules/:id/actuals', async ({ user, params, body }) => {
   const bags = await packBags(body.bags); // 15.249 이날 포장에 쓴 세탁 완료 봉투 LOT
   // 15.249 완제품 LOT: 직접 적지 않으면 포장일_품목코드_P순번(261121_NX808_P1).
   const snap = JSON.parse(schedule.bom_snapshot || '{}');
-  if (progress && !bags.length && (snap.materials || []).some(m => m.item_category === '반제품')) throw bad('작업중으로 저장하려면 포장에 쓸 봉투 LOT을 고르세요.'); // 15.283 반제품 없는 품목(부직포와이퍼 등)은 봉투 없이
+  if (progress && !bags.length && (snap.materials || []).some(m => m.item_category === '반제품')) throw bad('작업중으로 저장하려면 포장에 쓸 반제품 LOT을 고르세요.'); // 15.283 반제품 없는 품목(부직포와이퍼 등)은 봉투 없이
   const lot = qty > 0 || progress ? (str(body.lot, 100) || await nextFinishedLot(date, lotCode(snap.product_code, schedule.product))) : '';
   const wo = `WOR_${date.replace(/-/g, '')}_`; // 15.230 작업지시번호 WOR_YYYYMMDD_001(실적 날짜 기준)
   const cmds = [{ sql: "INSERT INTO production_actuals(schedule_id,production_date,qty,note,author_id,author_name,request_id,lot,work_order,work_status) VALUES(?,?,?,?,?,?,?,?,(SELECT ? || printf('%03d', COALESCE(MAX(CAST(substr(work_order, 14) AS INTEGER)), 0) + 1) FROM production_actuals WHERE substr(work_order, 1, 13)=?),?)", args: [schedule.id, date, qty, note, user.id, user.name, key, lot, wo, wo, progress ? 'progress' : 'done'] },
@@ -4643,11 +4643,11 @@ const bagReadySql = (c = 'c') => `((${WASH_FREE_SQL(c)} AND ${c}.work_status='do
 // 포장에 쓴 봉투: 세탁을 마친 봉투 LOT만(남은 봉투는 다음 포장에 다시 고를 수 있음). 세탁 없는 봉투(부직포)는 커팅 작업완료면 됨.
 async function packBags(raw) {
   const list = Array.isArray(raw) ? [...new Set(raw.map(x => str(typeof x === 'object' && x ? x.lot : x, 100)).filter(Boolean))] : [];
-  if (list.length > 60) throw bad('봉투 LOT은 한 번에 60개까지 고를 수 있습니다.');
+  if (list.length > 60) throw bad('반제품 LOT은 한 번에 60개까지 고를 수 있습니다.');
   const out = [];
   for (const lot of list) {
-    const bag = await semiBagRecord(lot); if (!bag) throw bad(`봉투 LOT ${lot}을 찾을 수 없습니다.`);
-    if (!await db.prepare(`SELECT 1 FROM semi_records c WHERE c.id=? AND ${bagReadySql('c')}`).get(bag.id)) throw bad(bag.work_status === 'progress' ? `봉투 LOT ${lot}은 아직 커팅·융착 작업중입니다. 작업완료한 뒤 고르세요.` : `봉투 LOT ${lot}은 아직 세탁·건조를 마치지 않았습니다(기록 없음 또는 작업중). 세탁을 작업완료한 뒤 고르세요.`); // 15.255 · 15.279 부직포는 세탁 없음
+    const bag = await semiBagRecord(lot); if (!bag) throw bad(`반제품 LOT ${lot}을 찾을 수 없습니다.`);
+    if (!await db.prepare(`SELECT 1 FROM semi_records c WHERE c.id=? AND ${bagReadySql('c')}`).get(bag.id)) throw bad(bag.work_status === 'progress' ? `반제품 LOT ${lot}은 아직 커팅·융착 작업중입니다. 작업완료한 뒤 고르세요.` : `반제품 LOT ${lot}은 아직 세탁·건조를 마치지 않았습니다(기록 없음 또는 작업중). 세탁을 작업완료한 뒤 고르세요.`); // 15.255 · 15.279 부직포는 세탁 없음
     out.push({ lot, item: bag.item_name || '' });
   }
   return out;

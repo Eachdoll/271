@@ -476,7 +476,7 @@ async function pageFinishedPlan(main) {
   await load();
 }
 
-// 15.283 반제품 공정이 없는 품목(부직포와이퍼 등: 자재 투입 → 바로 완제품 포장)은 봉투 LOT 대신 자재 LOT을 고른다.
+// 15.283 반제품 공정이 없는 품목(부직포와이퍼 등: 자재 투입 → 바로 완제품 포장)은 반제품 LOT 대신 자재 LOT을 고른다. 15.289 화면 이름 봉투 LOT → 반제품 LOT
 const faSemi = s => (s.bom_snapshot?.materials || []).some(m => m.item_category === '반제품');
 async function faPickMats(s, qty, current) {
   const info = await api('GET', `/api/schedules/${s.id}/lot-materials`), mats = (info.materials || []).filter(m => m.item_category !== '반제품');
@@ -498,7 +498,7 @@ async function pageFinishedActual(main) {
   const canEnter = hasRole('production');
   main.innerHTML = `<h1>완제품 실적 입력 <span class="dept">생산</span></h1>
   <div id="actualChanges"></div>
-  <p class="muted">「완제품 계획생산 접수·관리」에서 <b>확정</b>한 계획이 나옵니다. 양품수량을 넣고 「저장」(여러 줄은 「입력한 줄 모두 저장」)하면 완제품 LOT(포장일_품목코드_P순번)가 붙습니다. 반제품을 쓰는 품목은 「봉투 LOT」으로 이날 포장한 세탁 완료 봉투를 고르면 봉투·원자재 LOT까지 이어집니다(생산 › LOT 연결 조회). 그 밖의 투입 자재 LOT는 먼저 들어온 것부터 자동으로 채웁니다. 자재 LOT를 직접 고르거나 지난 실적을 고치려면 「상세」.</p>
+  <p class="muted">「완제품 계획생산 접수·관리」에서 <b>확정</b>한 계획이 나옵니다. 양품수량을 넣고 「저장」(여러 줄은 「입력한 줄 모두 저장」)하면 완제품 LOT(포장일_품목코드_P순번)가 붙습니다. 반제품을 쓰는 품목은 「반제품 LOT」으로 이날 포장한 세탁 완료 반제품을 고르면 반제품·원자재 LOT까지 이어집니다(생산 › LOT 연결 조회). 그 밖의 투입 자재 LOT는 먼저 들어온 것부터 자동으로 채웁니다. 자재 LOT를 직접 고르거나 지난 실적을 고치려면 「상세」.</p>
   <form class="toolbar fa-tools" id="faTools" data-read-only>
     <label>생산일<input type="date" name="date" value="${todayStr()}" max="${todayStr()}" required></label>
     <div class="nav-date"><button type="button" class="btn small" data-fa-move="-1" aria-label="전날">◀</button><button type="button" class="btn small" data-fa-move="0">오늘</button><button type="button" class="btn small" data-fa-move="1" aria-label="다음 날">▶</button></div>
@@ -530,14 +530,14 @@ async function pageFinishedActual(main) {
       return `<tr data-fa-row="${i}" class="${s.done || left <= 0 ? 'fa-done' : s.start_date < date ? 'fa-late' : ''}"><td class="c">${i + 1}</td><td class="nowrap">${s.period === 'day' ? esc(s.start_date.slice(5)) : `${PERIOD[s.period]} ${esc(s.start_date.slice(5))}~`}${s.start_date < date && s.period === 'day' ? ' <span class="chip yellow">지난 계획</span>' : ''}</td><td class="nowrap wo-cell">${wos.length ? wos.map(w => `<div><button type="button" class="link-btn" data-wo-qr="${esc(w)}" data-wo-sub="${esc(`${s.product} · 계획 ${s.start_date}`)}" title="QR코드 발행">${esc(w)}</button></div>`).join('') : '<span class="small muted" title="양품수량을 저장하면 실적 날짜로 번호가 붙습니다">저장 시 부여</span>'}</td>
         <td class="nowrap">${esc(s.bom_snapshot?.product_code || '—')}</td><td><b>${esc(s.product)}</b>${s.spec ? ` <span class="small muted">${esc(s.spec)}</span>` : ''}</td><td>${esc(unit)}</td>
         <td class="r">${fmtNum(s.qty)}</td><td class="r">${fmtNum(s.actual_qty)}</td><td class="r ${left <= 0 || s.done ? 'green-text' : ''}"><b>${left <= 0 ? '완료' : s.done ? '완료' : fmtNum(left)}</b>${s.done && left > 0 ? `<div class="small muted">부족 ${fmtNum(left)}</div>` : ''}</td>
-        <td class="r"><input type="number" min="0" step="any" inputmode="decimal" data-fa-qty placeholder="${left > 0 ? fmtNum(left) : ''}" aria-label="${esc(s.product)} 양품수량"${canEnter ? '' : ' disabled'}>${(wip.get(s.id) || []).map(a => `<div class="small"><span class="chip yellow">작업중</span> <b>${esc(a.lot)}</b> <span class="muted">봉투 ${a.bags.length}개 · 수량을 넣고 저장하면 작업완료</span></div>`).join('')}</td>
+        <td class="r"><input type="number" min="0" step="any" inputmode="decimal" data-fa-qty placeholder="${left > 0 ? fmtNum(left) : ''}" aria-label="${esc(s.product)} 양품수량"${canEnter ? '' : ' disabled'}>${(wip.get(s.id) || []).map(a => `<div class="small"><span class="chip yellow">작업중</span> <b>${esc(a.lot)}</b> <span class="muted">반제품 ${a.bags.length}개 · 수량을 넣고 저장하면 작업완료</span></div>`).join('')}</td>
         <td><input data-fa-note maxlength="200" aria-label="${esc(s.product)} 비고"${canEnter ? '' : ' disabled'}></td>
-        <td class="nowrap">${canEnter ? `${faSemi(s) ? '<button type="button" class="btn small" data-fa-bags title="이날 포장에 쓴 봉투 LOT">봉투 LOT <b data-fa-bagn>0</b></button>' : '<button type="button" class="btn small" data-fa-mats title="이 포장에 투입한 자재 LOT(반제품 공정 없음). 안 고르면 먼저 들어온 LOT부터 자동">자재 LOT <b data-fa-matn>자동</b></button>'}` + ' <button type="button" class="btn small" data-fa-wip title="완제품 LOT을 먼저 받습니다. 수량은 나중에 넣고 저장하면 작업완료">작업중</button> <button type="button" class="btn small primary" data-fa-save>저장</button> ' : ''}${canEnter ? (s.done ? '<button type="button" class="btn small" data-fa-close title="완료 처리를 취소하고 다시 실적을 넣습니다">완료 취소</button> ' : left > 0 ? '<button type="button" class="btn small" data-fa-close title="계획보다 덜 만들어도 이 계획을 완료로 닫습니다(넣은 양품수량이 있으면 먼저 저장)">완료 처리</button> ' : '') : ''}<button type="button" class="btn small" data-fa-detail>상세</button></td></tr>`; }).join('')}</tbody></table></div>`;
+        <td class="nowrap">${canEnter ? `${faSemi(s) ? '<button type="button" class="btn small" data-fa-bags title="이날 포장에 쓴 반제품 LOT">반제품 LOT <b data-fa-bagn>0</b></button>' : '<button type="button" class="btn small" data-fa-mats title="이 포장에 투입한 자재 LOT(반제품 공정 없음). 안 고르면 먼저 들어온 LOT부터 자동">자재 LOT <b data-fa-matn>자동</b></button>'}` + ' <button type="button" class="btn small" data-fa-wip title="완제품 LOT을 먼저 받습니다. 수량은 나중에 넣고 저장하면 작업완료">작업중</button> <button type="button" class="btn small primary" data-fa-save>저장</button> ' : ''}${canEnter ? (s.done ? '<button type="button" class="btn small" data-fa-close title="완료 처리를 취소하고 다시 실적을 넣습니다">완료 취소</button> ' : left > 0 ? '<button type="button" class="btn small" data-fa-close title="계획보다 덜 만들어도 이 계획을 완료로 닫습니다(넣은 양품수량이 있으면 먼저 저장)">완료 처리</button> ' : '') : ''}<button type="button" class="btn small" data-fa-detail>상세</button></td></tr>`; }).join('')}</tbody></table></div>`;
     $$('[data-fa-row]', main).forEach(tr => { const s = rows[Number(tr.dataset.faRow)];
       $('[data-fa-detail]', tr).onclick = () => openProductionActuals(s.id, { onChange: () => load() }).catch(fail);
       $('[data-fa-close]', tr)?.addEventListener('click', async e => { const btn = e.currentTarget; btn.disabled = true; try { if (await closePlan(s, tr)) await load(); } finally { btn.disabled = false; } });
       tr._mats = null; $('[data-fa-mats]', tr)?.addEventListener('click', async () => { const picked = await faPickMats(s, Number($('[data-fa-qty]', tr).value) || 0, tr._mats).catch(e => { fail(e); return null; }); if (!picked) return; tr._mats = picked.length ? picked : null; $('[data-fa-matn]', tr).textContent = picked.length ? `${picked.length}` : '자동'; $('[data-fa-mats]', tr).classList.toggle('on', picked.length > 0); }); // 15.283
-      tr._bags = []; $('[data-fa-bags]', tr)?.addEventListener('click', async () => { const picked = await packPickBags(s, tr._bags).catch(e => { fail(e); return null; }); if (!picked) return; tr._bags = picked; $('[data-fa-bagn]', tr).textContent = picked.length; $('[data-fa-bags]', tr).classList.toggle('on', picked.length > 0); const ex = packExpected(s, picked.sheets || 0); $('[data-fa-qty]', tr).placeholder = ex.expected != null ? `예상 ${fmtNum(ex.expected)}` : $('[data-fa-qty]', tr).placeholder; $('[data-fa-bags]', tr).title = packExpectedText(s, picked); toast(packExpectedText(s, picked) || '봉투를 골랐습니다.'); $('[data-fa-qty]', tr).focus(); }); // 15.249 · 15.254 예상 생산량
+      tr._bags = []; $('[data-fa-bags]', tr)?.addEventListener('click', async () => { const picked = await packPickBags(s, tr._bags).catch(e => { fail(e); return null; }); if (!picked) return; tr._bags = picked; $('[data-fa-bagn]', tr).textContent = picked.length; $('[data-fa-bags]', tr).classList.toggle('on', picked.length > 0); const ex = packExpected(s, picked.sheets || 0); $('[data-fa-qty]', tr).placeholder = ex.expected != null ? `예상 ${fmtNum(ex.expected)}` : $('[data-fa-qty]', tr).placeholder; $('[data-fa-bags]', tr).title = packExpectedText(s, picked); toast(packExpectedText(s, picked) || '반제품을 골랐습니다.'); $('[data-fa-qty]', tr).focus(); }); // 15.249 · 15.254 예상 생산량
       const q = $('[data-fa-qty]', tr); q.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('[data-fa-save]', tr)?.click(); } });
       $('[data-fa-save]', tr)?.addEventListener('click', async e => { const btn = e.currentTarget; btn.disabled = true; try { if (await save(s, tr)) await load(); } finally { btn.disabled = false; } });
       $('[data-fa-wip]', tr)?.addEventListener('click', async e => { const btn = e.currentTarget; btn.disabled = true; try { if (await saveWip(s, tr)) await load(); } finally { btn.disabled = false; } }); });
@@ -557,7 +557,7 @@ async function pageFinishedActual(main) {
       if (short.length && !await confirmBox(`${s.product}: 투입 자재 LOT 재고가 모자랍니다(${short.join(', ')}). 있는 만큼만 넣고 저장할까요?`)) return false;
       try { const r = await api('POST', `/api/actuals/${open.id}/complete`, { qty, note: $('[data-fa-note]', tr).value, inputs: out, bags: tr._bags || [] }); toast(`${s.product} 작업완료 · 양품 ${fmtNum(qty)} · LOT ${r.lot}`); return true; } catch (error) { fail(error); return false; }
     }
-    if (hasSemi && !(tr._bags || []).length && !await confirmBox(`${s.product}: 포장에 쓴 봉투 LOT을 고르지 않았습니다. 고르지 않으면 이 완제품 LOT에서 봉투·원자재 LOT으로 거슬러 볼 수 없습니다. 그래도 저장할까요?`)) { $('[data-fa-bags]', tr)?.focus(); return false; }
+    if (hasSemi && !(tr._bags || []).length && !await confirmBox(`${s.product}: 포장에 쓴 반제품 LOT을 고르지 않았습니다. 고르지 않으면 이 완제품 LOT에서 반제품·원자재 LOT으로 거슬러 볼 수 없습니다. 그래도 저장할까요?`)) { $('[data-fa-bags]', tr)?.focus(); return false; }
     const { out, short } = tr._mats ? { out: tr._mats, short: [] } : await lotInputs(s, qty); // 15.283 고른 자재 LOT
     if (short.length && !await confirmBox(`${s.product}: 투입 자재 LOT 재고가 모자랍니다(${short.join(', ')}). 있는 만큼만 넣고 저장할까요?`)) return false;
     try {
@@ -575,10 +575,10 @@ async function pageFinishedActual(main) {
     if (typed > 0 && !await save(s, tr)) return false;
     try { await api('PUT', `/api/schedules/${s.id}`, { set_done: 1, reason: reason.reason || '' }); toast(`${s.product} 완료 처리${short > 0 ? ` (부족 ${fmtNum(short)})` : ''}`); return true; } catch (error) { fail(error); return false; }
   };
-  // 15.255 작업중으로 저장: 봉투 LOT만 고르고 완제품 LOT을 먼저 받는다(수량은 나중에)
+  // 15.255 작업중으로 저장: 반제품 LOT만 고르고 완제품 LOT을 먼저 받는다(수량은 나중에)
   const saveWip = async (s, tr) => {
     if ((wip.get(s.id) || []).length) { $('[data-fa-qty]', tr).focus(); toast('이미 작업중인 포장이 있습니다. 수량을 넣고 「저장」하면 작업완료됩니다.', 'err'); return false; }
-    if (faSemi(s) && !(tr._bags || []).length) { $('[data-fa-bags]', tr)?.focus(); toast('작업중으로 저장하려면 「봉투 LOT」으로 포장할 봉투를 먼저 고르세요.', 'err'); return false; } // 15.283 반제품 없는 품목은 봉투 없이
+    if (faSemi(s) && !(tr._bags || []).length) { $('[data-fa-bags]', tr)?.focus(); toast('작업중으로 저장하려면 「반제품 LOT」으로 포장할 반제품을 먼저 고르세요.', 'err'); return false; } // 15.283 반제품 없는 품목은 반제품 없이
     const date = form.elements.date.value, last = end(s), pd = date < s.start_date ? s.start_date : date > last ? last : date;
     try { const r = await api('POST', `/api/schedules/${s.id}/actuals`, { production_date: pd, qty: '', work_status: 'progress', note: $('[data-fa-note]', tr).value, bags: tr._bags, request_id: crypto.randomUUID() }); toast(`${s.product} 작업중 저장 · LOT ${r.lot}. 수량을 넣고 「저장」하면 작업완료됩니다.`); return true; } catch (error) { fail(error); return false; }
   };
