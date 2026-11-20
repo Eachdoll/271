@@ -406,7 +406,15 @@ async function mrForm(host, existing = null, { onDone } = {}) {
     $('[data-remove-line]', row).onclick = () => { if (lines.children.length === 1) return toast('품목은 1줄 이상 필요합니다.', 'err'); row.remove(); renumber(); $('[data-add-line]', form).focus(); };
     renumber(); if (focus) k('item').focus();
   };
-  (existing ? existing.lines : [{}]).forEach(l => addLine(l));
+  // 15.299 수주에서 만든 생산의뢰: 고객사·고객 주문번호·출고 희망(납기)·품목을 채우고 저장하면 그 수주에 연결
+  let fromOrder = null;
+  if (!existing) { try { fromOrder = JSON.parse(sessionStorage.getItem('wpa:mr-from-order') || 'null'); sessionStorage.removeItem('wpa:mr-from-order'); } catch { fromOrder = null; } }
+  if (fromOrder && Array.isArray(fromOrder.lines) && fromOrder.lines.length) {
+    form.elements.customer.value = fromOrder.customer || ''; if (fromOrder.po) form.elements.order_no.value = fromOrder.po; if (fromOrder.due) form.elements.ship_date.value = fromOrder.due;
+    fromOrder.lines.slice(0, 60).forEach(l => addLine(l));
+    form.insertAdjacentHTML('afterbegin', `<p class="pr-from-order" data-mr-order>수주 <b>${esc(fromOrder.no)}</b> · ${esc(fromOrder.customer)}에서 품목 ${fromOrder.lines.length}개를 채웠습니다. 저장하면 이 수주에 연결됩니다. <button type="button" class="btn small" data-mr-unlink>연결 끊기</button></p>`);
+    $('[data-mr-unlink]', form).onclick = () => { fromOrder = null; $('[data-mr-order]', form).remove(); };
+  } else (existing ? existing.lines : [{}]).forEach(l => addLine(l));
   $('[data-add-line]', form).onclick = () => addLine({}, true);
   form.addEventListener('input', event => { if (event.target.closest('.mr-line')) total(); });
   const box = $('[data-size-box]', form);
@@ -453,7 +461,7 @@ async function mrForm(host, existing = null, { onDone } = {}) {
   form.onsubmit = async event => {
     event.preventDefault(); if (busy) return;
     const v = formObj(form);
-    const body = { ...v, ship_date: v.ship_date || null, lines: readLines() };
+    const body = { ...v, ship_date: v.ship_date || null, lines: readLines(), ...(!existing && fromOrder ? { sales_order_id: fromOrder.id } : {}) };
     busy = true; draft?.start();
     try {
       const saved = existing ? await api('PUT', `/api/production-requests/${existing.id}`, { ...body, revision: existing.revision }) : await api('POST', '/api/production-requests', { ...body, request_id: saveId });
@@ -515,7 +523,7 @@ async function mrOpen(id) {
   const after = async () => { const main = $('#main'); if (main?.mrReload) await main.mrReload(); else if (main && /#\/prod\/(finished|semi)/.test(location.hash)) render(); refreshNavBadges(); };
   const m = modal(`<h3>${esc(r.req_no)} · ${esc(r.customer)} <span class="chip ${MR_CHIP[r.status]}">${MR_STATUS[r.status]}</span></h3>
     <p><span class="muted">발주일</span> <b>${esc(r.order_date)}</b> <span class="muted">주문번호</span> <b>${esc(r.order_no || '—')}</b> <span class="muted">출고 희망</span> <b>${esc(mrShip(r))}</b></p>
-    <p class="small muted"><span>요청자</span> ${esc(r.author_name)} ${esc(r.author_department)} · <span>등록</span> ${esc(String(r.created_at).slice(0, 16))}</p>
+    <p class="small muted"><span>요청자</span> ${esc(r.author_name)} ${esc(r.author_department)} · <span>등록</span> ${esc(String(r.created_at).slice(0, 16))}${r.sales_order_no ? ` · <span>연결 수주</span> <b>${esc(r.sales_order_no)}</b>` : ''}</p>
     ${r.spec ? `<p class="mr-spec">${esc(r.spec)}</p>` : ''}
     <section><h4>생산 품목 · 진행 현황</h4><div class="table-wrap"><table class="grid"><thead><tr><th>품목</th><th>규격·사이즈</th><th class="r">수량</th><th class="r">계획</th><th>생산</th></tr></thead><tbody>${r.lines.map(l => `<tr><td><b>${esc(l.item)}</b>${l.product_code ? `<div class="small muted">${esc(l.product_code)}</div>` : ''}</td><td>${esc(l.spec || '—')}</td><td class="r">${fmtNum(l.qty)} ${esc(l.unit)}</td><td class="r ${l.planned_qty < l.qty ? 'red-text' : ''}">${fmtNum(l.planned_qty)}</td><td data-card-primary>${mrBar(Math.min(l.produced_qty, l.qty), l.qty)}</td></tr>`).join('')}</tbody></table></div>
       ${(r.units || []).map(u => `<p class="pr-totals">${`합계${u.unit ? ' (' + esc(u.unit) + ')' : ''} · 의뢰 ${fmtNum(u.qty)} · 계획 ${fmtNum(u.planned)} · 생산 ${fmtNum(u.produced)}`}</p>`).join('')}${r.done_date ? `<p><span class="chip green">생산완료</span> ${esc(r.done_date)}</p>` : ''}</section>

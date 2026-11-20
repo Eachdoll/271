@@ -291,11 +291,14 @@ async function bindRndMeasure(root, init = null) {
     else grid.innerHTML = `<thead><tr><th class="c insp-samp-c">시료</th><th class="c insp-item-c">측정 항목 · 규격</th>${nums}</tr></thead>${st.samples.map((_, s) => `<tbody class="insp-grp">${list.map(([it, ii], n) => `<tr>${!n ? sampTh(s, list.length) : ''}<th class="insp-item-c">${esc(it.name)}${it.unit ? ` <span class="small muted">${esc(it.unit)}</span>` : ''} <span class="small muted">${rmRange(it).txt}</span></th>${cells(ii, s)}</tr>`).join('')}</tbody>`).join('')}`;
     $('[data-rm-mode]', box).textContent = MODE === 'item' ? '⇄ 종횡 바꾸기 (시료별로 보기)' : '⇄ 종횡 바꾸기 (항목별로 보기)';
     $('[data-rm-hint]', box).textContent = (MODE === 'item' ? '항목별로 묶어 시료를 줄로 보여 줍니다.' : '시료별로 묶어 측정 항목을 줄로 보여 줍니다.') + ' 엑셀에서 여러 칸을 복사해 첫 칸에 붙여 넣으면 그 모양대로 들어갑니다. Enter로 다음 칸.';
-    sampleJudges(); total();
+    sampleJudges(); total(); st.items.forEach((_, ii) => shade(ii));
   };
+  const shade = ii => { // 15.299 불합격이면 그 줄과 측정 항목 칸을 옅은 빨강으로
+    let any = false; st.samples.forEach((_, s) => { const f = cellJudge(ii, s)[0] === 'fail'; if (f) any = true; $(`[data-rm-j="${ii}-${s}"]`, grid)?.closest('tr')?.classList.toggle('rm-fail-row', f); });
+    $(`[data-rm-item="${ii}"]`, grid)?.classList.toggle('rm-fail-c', any); };
   const sampleJudges = () => st.samples.forEach((_, s) => { const js = named().map(([, ii]) => cellJudge(ii, s)[0]).filter(Boolean); const el = $(`[data-rm-sj="${s}"]`, strip); if (el) el.innerHTML = js.includes('fail') ? RM_CHIP.fail : js.includes('wait') ? RM_CHIP.wait : js.includes('pass') ? RM_CHIP.pass : ''; });
   const refresh = (ii, s) => { const [j, avg] = cellJudge(ii, s), { a, b } = rmRange(st.items[ii]); const av = $(`[data-rm-avg="${ii}-${s}"]`, grid), jj = $(`[data-rm-j="${ii}-${s}"]`, grid); if (av) av.textContent = avg === null ? '' : fmtNum(avg); if (jj) jj.innerHTML = RM_CHIP[j];
-    $$(`[data-rm-v][data-ii="${ii}"][data-s="${s}"]`, grid).forEach(i => i.classList.toggle('rm-out', i.value !== '' && ((a !== null && Number(i.value) < a) || (b !== null && Number(i.value) > b)))); sampleJudges(); total(); };
+    $$(`[data-rm-v][data-ii="${ii}"][data-s="${s}"]`, grid).forEach(i => i.classList.toggle('rm-out', i.value !== '' && ((a !== null && Number(i.value) < a) || (b !== null && Number(i.value) > b)))); sampleJudges(); total(); shade(ii); };
   drawGrid();
   box.addEventListener('input', e => {
     const rs = e.target.dataset.rs; if (rs && e.target.dataset.ii !== undefined) { const ii = Number(e.target.dataset.ii), it = st.items[ii]; it[rs] = e.target.value;
@@ -373,8 +376,8 @@ function readRndMeasure(root) {
 function rndMeasureTable(spec, m) {
   if (!spec?.items?.length) return '';
   const rows = m?.rows?.length ? m.rows : [{ lot: '', values: {} }], W = Math.max(1, ...spec.items.map(it => it.count || 1));
-  return `<div class="table-wrap"><table class="grid keep-table insp-grid rm-view" data-no-sort data-no-filter data-keep-cols><thead><tr><th class="c insp-item-c">측정 항목 · 규격</th><th class="c insp-samp-c">시료</th>${Array.from({ length: W }, (_, k) => `<th class="c insp-n">#${k + 1}</th>`).join('')}<th class="c">평균</th><th class="c">판정</th></tr></thead>${spec.items.map(it => `<tbody class="insp-grp">${rows.map((r, s) => { const vals = (r.values?.[it.key] || []), [j, avg] = rmJudgeVals(it, vals), { a, b } = rmRange(it);
-    return `<tr>${!s ? `<th rowspan="${rows.length}" class="insp-item-c"><b>${esc(it.name)}</b>${it.unit ? ` <span class="small muted">${esc(it.unit)}</span>` : ''}<div class="small muted">${rmRange(it).txt}</div></th>` : ''}<th class="insp-samp-c">${esc(r.lot || `시료 ${s + 1}`)}</th>${Array.from({ length: W }, (_, k) => k >= (it.count || 1) ? '<td class="insp-blank"></td>' : `<td class="r${vals[k] != null && ((a !== null && vals[k] < a) || (b !== null && vals[k] > b)) ? ' red-text' : ''}">${vals[k] == null ? '<span class="muted">·</span>' : fmtNum(vals[k])}</td>`).join('')}<td class="r">${avg === null ? '' : fmtNum(avg)}</td><td>${RM_CHIP[j]}</td></tr>`; }).join('')}</tbody>`).join('')}</table></div>
+  return `<div class="table-wrap"><table class="grid keep-table insp-grid rm-view" data-no-sort data-no-filter data-keep-cols><thead><tr><th class="c insp-item-c">측정 항목 · 규격</th><th class="c insp-samp-c">시료</th>${Array.from({ length: W }, (_, k) => `<th class="c insp-n">#${k + 1}</th>`).join('')}<th class="c">평균</th><th class="c">판정</th></tr></thead>${spec.items.map(it => { const anyFail = rows.some(r => rmJudgeVals(it, r.values?.[it.key] || [])[0] === 'fail'); return `<tbody class="insp-grp${anyFail ? ' rm-fail' : ''}">${rows.map((r, s) => { const vals = (r.values?.[it.key] || []), [j, avg] = rmJudgeVals(it, vals), { a, b } = rmRange(it);
+    return `<tr${j === 'fail' ? ' class="rm-fail-row"' : ''}>${!s ? `<th rowspan="${rows.length}" class="insp-item-c"><b>${esc(it.name)}</b>${it.unit ? ` <span class="small muted">${esc(it.unit)}</span>` : ''}<div class="small muted">${rmRange(it).txt}</div></th>` : ''}<th class="insp-samp-c">${esc(r.lot || `시료 ${s + 1}`)}</th>${Array.from({ length: W }, (_, k) => k >= (it.count || 1) ? '<td class="insp-blank"></td>' : `<td class="r${vals[k] != null && ((a !== null && vals[k] < a) || (b !== null && vals[k] > b)) ? ' red-text' : ''}">${vals[k] == null ? '<span class="muted">·</span>' : fmtNum(vals[k])}</td>`).join('')}<td class="r">${avg === null ? '' : fmtNum(avg)}</td><td>${RM_CHIP[j]}</td></tr>`; }).join('')}</tbody>`; }).join('')}</table></div>
     <p class="small">전체 판정 ${{ pass: RM_CHIP.pass, fail: RM_CHIP.fail, pending: RM_CHIP.wait }[m?.result] || ''} <span class="muted">· 시료 ${rows.length} · ${esc(m?.updated_by || '')} ${esc(String(m?.updated_at || '').slice(0, 16))}${m?.revision > 1 ? ` · 수정 ${m.revision - 1}회` : ''}</span></p>`;
 }
 async function rndMeasureEdit(r, after) {
@@ -489,7 +492,7 @@ async function devCaseWindow(id, done) {
   const anaBox = () => {
     const list = r.analyses || [], names = [...r.steps.map(s => s.name), ...list.map(a => a.dev_step).filter(Boolean)].filter((n, i, all) => all.indexOf(n) === i);
     const groups = [...names.map(n => [n, r.steps.find(s => s.name === n)]), ['', null]];
-    const item = a => `<button type="button" class="dc-ana-item st-${a.status}" data-dc-ana-open="${a.id}">${a.req_no ? `<span class="dc-ana-no">${esc(a.req_no)}</span> ` : ''}<b>${esc(a.title)}</b> <span class="chip">${esc(a.category)}</span> ${a.judge === 'pass' ? '<span class="chip green">합격</span>' : a.judge === 'fail' ? '<span class="chip red">불합격</span>' : a.judge === 'pending' ? '<span class="chip yellow">측정 중</span>' : statusChip(a.status)}<div class="dc-ana-res">${a.result_note ? `결과 <b>${esc(a.result_note)}</b>` : '<span class="muted">결과 대기</span>'} <span class="small muted">· ${esc(a.analysis_date || String(a.updated_at || a.created_at).slice(0, 10))}</span></div></button>`;
+    const item = a => `<button type="button" class="dc-ana-item st-${a.status}${a.judge === 'fail' ? ' j-fail' : ''}" data-dc-ana-open="${a.id}">${a.req_no ? `<span class="dc-ana-no">${esc(a.req_no)}</span> ` : ''}<b>${esc(a.title)}</b> <span class="chip">${esc(a.category)}</span> ${a.judge === 'pass' ? '<span class="chip green">합격</span>' : a.judge === 'fail' ? '<span class="chip red">불합격</span>' : a.judge === 'pending' ? '<span class="chip yellow">측정 중</span>' : statusChip(a.status)}<div class="dc-ana-res">${a.result_note ? `결과 <b>${esc(a.result_note)}</b>` : '<span class="muted">결과 대기</span>'} <span class="small muted">· ${esc(a.analysis_date || String(a.updated_at || a.created_at).slice(0, 10))}</span></div></button>`;
     $('[data-dc-ana]', el).innerHTML = groups.map(([n, st]) => { const as = list.filter(a => (a.dev_step || '') === n); if (!n && !as.length) return ''; return `<div class="dc-ana-step"><div class="dc-ana-h"><b>${n ? esc(n) : '단계 미지정'}</b>${st ? ` <span class="small muted">${esc((st.start_date || '').slice(5))}~${esc((st.end_date || '').slice(5))}</span> <span class="chip" style="color:${DEV_STEP_STATE[st.status]?.[1]};border-color:${DEV_STEP_STATE[st.status]?.[1]}">${DEV_STEP_STATE[st.status]?.[0] || ''}</span>` : ''}<span class="small muted">분석 ${as.length}건${as.length ? ` · 완료 ${as.filter(a => a.status === 'done').length}` : ''}</span>${canAna ? `<button type="button" class="btn small" data-dc-ana-new="${esc(n)}">＋ 분석데이터</button>` : ''}</div>${as.map(item).join('') || '<p class="small muted dc-ana-none">아직 연결된 분석이 없습니다.</p>'}</div>`; }).join('') || '<p class="small muted">공정표에 단계를 넣으면 단계별로 분석데이터를 넣고 볼 수 있습니다.</p>';
     if (!r.steps.length && !list.length && canAna) $('[data-dc-ana]', el).insertAdjacentHTML('beforeend', '<div class="actions" style="justify-content:flex-start"><button type="button" class="btn small" data-dc-ana-new="">＋ 분석데이터</button></div>');
   };
@@ -706,5 +709,384 @@ async function pageRndSpecs(main) {
   });
   main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-rs-row]'); if (tr && lib.can_manage && !e.target.closest('button')) { const s = lib.specs.find(x => x.id === Number(tr.dataset.rsRow)); if (s) editor(s).catch(fail); } });
   form.addEventListener('input', draw); form.onsubmit = e => e.preventDefault();
+  await load();
+}
+
+// 15.302 연구소 › 지식재산권 관리: 보유 권리(특허·실용신안·디자인·상표·저작권 등)와 갱신 기한(연차료 납부·존속기간 갱신) 관리
+const IP_KIND_INFO = { // 국내 기준 참고값(정확한 기한은 특허청·대리인 확인). term: 존속기간, from: 기산일, due: 갱신 방식
+  '특허': { term: 20, from: 'app', due: 'annual', hint: '출원일부터 20년 · 등록 뒤 매년 연차료' },
+  '실용신안': { term: 10, from: 'app', due: 'annual', hint: '출원일부터 10년 · 등록 뒤 매년 연차료' },
+  '디자인': { term: 20, from: 'app', due: 'annual', hint: '출원일부터 20년 · 등록 뒤 매년 연차료' },
+  '상표': { term: 10, from: 'reg', due: 'renew', hint: '등록일부터 10년 · 10년마다 존속기간 갱신(만료 1년 전부터 신청)' },
+  '저작권': { term: 0, hint: '등록 없이 생기며 보통 저작자 사후 70년(업무상 저작물은 공표 후 70년) · 갱신 없음' },
+  '반도체 배치설계': { term: 10, from: 'reg', due: 'none', hint: '설정등록일부터 10년' },
+  '영업비밀': { term: 0, hint: '등록 제도 없음 · 비밀 관리 현황 점검용' },
+  '기타': { term: 0, hint: '' },
+};
+const IP_STATUS_CHIP = { prep: '', filed: 'yellow', exam: 'yellow', registered: 'green', rejected: 'red', abandoned: '', expired: '' };
+const ipAddYears = (d, n) => { if (!d) return ''; const [y, m, dd] = d.split('-').map(Number); const t = new Date(Date.UTC(y + n, m - 1, dd)); if (t.getUTCMonth() !== m - 1) t.setUTCDate(0); return t.toISOString().slice(0, 10); };
+const ipDday = (d, today) => d ? Math.round((Date.parse(d) - Date.parse(today)) / 86400000) : null;
+// 다음 기한 제안: 연차료는 등록일 기준 해마다 같은 날(오늘 이후 첫 날), 상표·배치설계는 만료일
+function ipSuggest(kind, appDate, regDate, today) {
+  const k = IP_KIND_INFO[kind] || {}; const base = k.from === 'app' ? appDate : regDate;
+  const expire = k.term && base ? ipAddYears(base, k.term) : '';
+  let next = '', dueKind = '';
+  if (k.due === 'annual' && regDate) { let n = 1; let d = ipAddYears(regDate, n); while (d && d < today && n < 30) d = ipAddYears(regDate, ++n); next = expire && d > expire ? '' : d; dueKind = '연차료 납부'; }
+  else if (k.due === 'renew' && expire) { next = expire; dueKind = '존속기간 갱신'; }
+  else if (k.due === 'none' && expire) { next = ''; dueKind = ''; }
+  return { expire, next, dueKind };
+}
+async function pageIpRights(main) {
+  main.innerHTML = `<h1>지식재산권 관리 <span class="dept">연구소</span></h1>
+  <p class="muted">회사가 가진 특허·실용신안·디자인·상표 등을 한곳에 모아 <b>언제까지 유효한지, 다음에 무엇을 언제 해야 하는지</b>(연차료 납부·존속기간 갱신) 관리합니다. 기한이 지나면 빨강, 90일 안이면 노랑으로 보입니다. 기간 자동 계산은 국내 기준 참고값이니 정확한 날짜는 특허청·대리인 안내로 확인해 고치세요.</p>
+  <div class="ip-tiles" id="ipTiles"></div>
+  <form class="toolbar list-filters" data-read-only id="ipFilters">
+    <label class="lf-sel">구분<select name="kind"><option value="">전체</option>${Object.keys(IP_KIND_INFO).map(k => `<option>${k}</option>`).join('')}</select></label>
+    <label class="lf-sel">상태<select name="status"><option value="">전체</option><option value="live">살아 있는 권리(소멸·거절·포기 빼고)</option>${Object.entries({ prep: '출원 준비', filed: '출원중', exam: '심사중', registered: '등록완료', rejected: '거절(불허)', abandoned: '포기·취하', expired: '소멸(만료)' }).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>
+    <label class="lf-sel">기한<select name="due"><option value="">전체</option><option value="soon">90일 안 · 지남</option><option value="over">기한 지남</option></select></label>
+    <label class="list-search">찾기<input type="search" name="q" placeholder="등록·출원번호·명칭·권리자·제품·담당자"></label>
+    <span class="grow"></span><span id="ipTools"></span>
+  </form>
+  <div id="ipList"></div>`;
+  const form = $('#ipFilters', main); let data = { rows: [], can_manage: false, today: todayStr() };
+  const load = async () => { data = await api('GET', '/api/ip-rights'); if (main.isConnected) draw(); };
+  const dueCls = r => { const d = ipDday(r.next_due, data.today); return d === null || !['registered', 'filed', 'exam'].includes(r.status) ? '' : d < 0 ? 'over' : d <= 90 ? 'soon' : ''; };
+  const live = r => !['rejected', 'abandoned', 'expired'].includes(r.status);
+  const filtered = () => { const v = formObj(form), q = (v.q || '').trim().toLowerCase();
+    return data.rows.filter(r => (!v.kind || r.kind === v.kind) && (!v.status || (v.status === 'live' ? live(r) : r.status === v.status)) && (!v.due || (v.due === 'over' ? dueCls(r) === 'over' : !!dueCls(r)))
+      && (!q || [r.reg_no, r.app_no, r.title, r.holder, r.product, r.owner_name, r.agent, r.note].join(' ').toLowerCase().includes(q))); };
+  const draw = () => {
+    const rows = data.rows, over = rows.filter(r => dueCls(r) === 'over').length, soon = rows.filter(r => dueCls(r) === 'soon').length;
+    $('#ipTiles', main).innerHTML = [['전체', rows.length, ''], ['등록완료', rows.filter(r => r.status === 'registered').length, 'green'], ['출원·심사중', rows.filter(r => ['prep', 'filed', 'exam'].includes(r.status)).length, ''], ['90일 안 기한', soon, soon ? 'yellow' : ''], ['기한 지남', over, over ? 'red' : '']]
+      .map(([l, n, c], i) => `<button type="button" class="ip-tile ${c}" data-ip-tile="${i}"><span>${l}</span><b>${n}</b></button>`).join('');
+    $('#ipTools', main).innerHTML = `<button type="button" class="btn" id="ipXlsx">엑셀</button>${data.can_manage ? ' <button type="button" class="btn primary" id="ipNew">＋ 지식재산권 등록</button>' : ''}`;
+    const list = filtered();
+    $('#ipList', main).innerHTML = list.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>구분</th><th>등록번호 · 출원번호</th><th>지식재산권명</th><th>권리자</th><th>출원일</th><th>등록일</th><th>유효기간</th><th>다음 기한</th><th>상태</th><th>담당자</th><th></th></tr></thead><tbody>${list.map(r => { const d = ipDday(r.next_due, data.today), cls = dueCls(r);
+      return `<tr data-ip-row="${r.id}" class="${cls ? 'ip-' + cls : ''}${live(r) ? '' : ' row-off'}"><td class="nowrap"><b>${esc(r.kind)}</b>${r.country && r.country !== 'KR' ? ` <span class="chip">${esc(r.country)}</span>` : ''}</td>
+        <td class="nowrap">${r.reg_no ? `<b>${esc(r.reg_no)}</b>` : '<span class="muted">미등록</span>'}${r.app_no ? `<div class="small muted">출원 ${esc(r.app_no)}</div>` : ''}</td>
+        <td data-card-primary><b>${esc(r.title)}</b>${r.product ? `<div class="small muted">${esc(r.product)}</div>` : ''}</td><td>${esc(r.holder)}</td>
+        <td class="nowrap">${esc(r.app_date || '')}</td><td class="nowrap">${esc(r.reg_date || '')}</td><td class="nowrap">${r.expire_date ? `~ ${esc(r.expire_date)}` : '<span class="muted">—</span>'}</td>
+        <td class="nowrap">${r.next_due ? `${esc(r.next_due)} <span class="ip-dd ${cls}">${d < 0 ? `D+${-d}` : d === 0 ? 'D-DAY' : `D-${d}`}</span>${r.due_kind ? `<div class="small muted">${esc(r.due_kind)}</div>` : ''}` : '<span class="muted">—</span>'}</td>
+        <td><span class="chip ${IP_STATUS_CHIP[r.status] || ''}">${esc(r.status_label)}</span></td><td>${esc(r.owner_name)}</td>
+        <td class="nowrap">${data.can_manage ? `<button type="button" class="btn small" data-ip-edit="${r.id}">수정</button>${r.status === 'registered' && r.next_due ? ` <button type="button" class="btn small primary" data-ip-renew="${r.id}">갱신 처리</button>` : ''}` : ''} <button type="button" class="btn small" data-ip-hist="${r.id}">이력</button></td></tr>`; }).join('')}</tbody></table></div>`
+      : `<div class="empty">${data.rows.length ? '조건에 맞는 지식재산권이 없습니다.' : '아직 등록한 지식재산권이 없습니다. 「＋ 지식재산권 등록」으로 특허·디자인·상표 등을 넣어 두면 갱신 기한을 함께 관리합니다.'}</div>`;
+  };
+  const editor = async (r = null) => {
+    const v = r || { kind: '특허', country: 'KR', status: 'filed' }, statusOpts = Object.entries({ prep: '출원 준비', filed: '출원중', exam: '심사중', registered: '등록완료', rejected: '거절(불허)', abandoned: '포기·취하', expired: '소멸(만료)' });
+    const m = modal(`<h3>${r ? '지식재산권 수정' : '지식재산권 등록'}</h3><form class="stack" data-ip-form>
+      <fieldset class="vendor-sec"><legend>기본</legend><div class="form-grid">
+        <label>구분 *<select name="kind" required>${Object.keys(IP_KIND_INFO).map(k => `<option${v.kind === k ? ' selected' : ''}>${k}</option>`).join('')}</select></label>
+        <label>상태 *<select name="status" required>${statusOpts.map(([k, l]) => `<option value="${k}"${v.status === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label>국가 <span class="hint">(KR·US·CN·JP·EP·PCT 등)</span><input name="country" maxlength="30" value="${esc(v.country || 'KR')}" list="ipCountry"><datalist id="ipCountry">${['KR', 'US', 'CN', 'JP', 'EP', 'PCT', 'VN'].map(c => `<option value="${c}">`).join('')}</datalist></label>
+        <label class="span3">지식재산권명 *<input name="title" required maxlength="200" value="${esc(v.title || '')}" placeholder="예) 흡수성이 향상된 부직포 와이퍼 및 그 제조방법"></label>
+        <label>등록번호<input name="reg_no" maxlength="60" value="${esc(v.reg_no || '')}" placeholder="예) 10-2345678"></label>
+        <label>출원번호<input name="app_no" maxlength="60" value="${esc(v.app_no || '')}" placeholder="예) 10-2024-0012345"></label>
+        <label>권리자<input name="holder" maxlength="100" value="${esc(v.holder || '')}" placeholder="예) 서울세미텍(주)"></label>
+        <label>관련 제품<input name="product" maxlength="200" value="${esc(v.product || '')}"></label>
+        <label>담당자<input name="owner_name" maxlength="50" value="${esc(v.owner_name || '')}"></label>
+        <label>대리인(특허사무소)<input name="agent" maxlength="100" value="${esc(v.agent || '')}"></label>
+      </div></fieldset>
+      <fieldset class="vendor-sec"><legend>기간 · 갱신 <span class="hint" data-ip-hint></span></legend><div class="form-grid">
+        <label>출원일<input type="date" name="app_date" value="${esc(v.app_date || '')}"></label>
+        <label>등록일<input type="date" name="reg_date" value="${esc(v.reg_date || '')}"></label>
+        <label>유효기간(만료일)<input type="date" name="expire_date" value="${esc(v.expire_date || '')}"></label>
+        <label>다음 기한<input type="date" name="next_due" value="${esc(v.next_due || '')}"></label>
+        <label>기한 내용<input name="due_kind" maxlength="30" value="${esc(v.due_kind || '')}" list="ipDueKind" placeholder="연차료 납부 · 존속기간 갱신"><datalist id="ipDueKind"><option value="연차료 납부"><option value="존속기간 갱신"><option value="심사청구"><option value="의견서 제출"><option value="해외 출원(우선권)"></datalist></label>
+        <div class="ip-calc"><button type="button" class="btn small" data-ip-calc>기간 자동 계산</button></div>
+      </div></fieldset>
+      <label>메모<textarea name="note" rows="2" maxlength="1000">${esc(v.note || '')}</textarea></label>
+      <div class="actions">${r ? '<button type="button" class="btn danger" data-ip-del>삭제</button>' : ''}<span class="grow"></span><button type="button" class="btn" data-no>취소</button><button class="btn primary">저장</button></div></form>`, { wide: true });
+    const f = $('[data-ip-form]', m.el), el = n => f.elements[n];
+    const hint = () => { $('[data-ip-hint]', f).textContent = IP_KIND_INFO[el('kind').value]?.hint ? `(${IP_KIND_INFO[el('kind').value].hint} · 참고값)` : ''; };
+    const calc = (force) => { const s = ipSuggest(el('kind').value, el('app_date').value, el('reg_date').value, data.today);
+      if (s.expire && (force || !el('expire_date').value)) el('expire_date').value = s.expire; if (force || !el('next_due').value) el('next_due').value = s.next || el('next_due').value; if (s.dueKind && (force || !el('due_kind').value)) el('due_kind').value = s.dueKind; };
+    hint(); el('kind').onchange = () => { hint(); calc(false); }; el('app_date').onchange = () => calc(false); el('reg_date').onchange = () => calc(false);
+    $('[data-ip-calc]', f).onclick = () => { calc(true); toast('구분·출원일·등록일로 유효기간과 다음 기한을 채웠습니다(참고값).'); };
+    $('[data-no]', f).onclick = () => m.close();
+    $('[data-ip-del]', f)?.addEventListener('click', async () => { if (!await confirmBox(`「${r.title}」을(를) 목록에서 지울까요? 권리를 잃은 경우에는 지우지 말고 상태를 「소멸(만료)」·「포기·취하」로 바꾸면 이력이 남습니다.`)) return; try { await api('DELETE', `/api/ip-rights/${r.id}?revision=${r.revision}`); toast('지웠습니다.'); m.close(); await load(); } catch (e) { fail(e); } });
+    f.onsubmit = async e => { e.preventDefault(); const body = formObj(f), btn = $('button.primary', f); btn.disabled = true;
+      try { if (r) await api('PUT', `/api/ip-rights/${r.id}`, { ...body, revision: r.revision }); else await api('POST', '/api/ip-rights', { ...body, request_id: crypto.randomUUID() }); toast('저장했습니다.'); m.close(); await load(); }
+      catch (error) { fail(error); if (error.status === 409) load().catch(() => {}); } finally { btn.disabled = false; } };
+  };
+  const renew = async r => {
+    const k = IP_KIND_INFO[r.kind] || {}, nextSug = k.due === 'renew' ? ipAddYears(r.next_due, 10) : ipAddYears(r.next_due, 1), expSug = k.due === 'renew' ? ipAddYears(r.expire_date || r.next_due, 10) : r.expire_date || '';
+    const next = expSug && nextSug > expSug ? '' : nextSug;
+    const v = await promptBox(`갱신 처리 · ${r.title}`, `<p>${esc(r.kind)} ${esc(r.reg_no || '')} · 지금 기한 <b>${esc(r.next_due)}</b> ${esc(r.due_kind || '')}</p><p class="small muted">${k.due === 'renew' ? '상표 존속기간 갱신: 만료일과 다음 기한을 10년 뒤로 넘깁니다.' : '연차료 납부: 다음 기한을 1년 뒤로 넘깁니다(만료일을 넘으면 비움).'} 날짜는 고칠 수 있습니다.</p>
+      <div class="form-grid"><label>처리일 *<input type="date" name="done_date" required value="${todayStr()}"></label><label>다음 기한<input type="date" name="next_due" value="${esc(next)}"></label><label>유효기간(만료일)<input type="date" name="expire_date" value="${esc(expSug)}"></label>
+      <label class="span3">메모<input name="note" maxlength="300" placeholder="예) 4년차 연차료 납부 · 영수증 번호"></label></div>`, { wide: true });
+    if (!v) return; try { await api('POST', `/api/ip-rights/${r.id}/renew`, { ...v, revision: r.revision, due_kind: r.due_kind }); toast('갱신 처리했습니다.'); await load(); } catch (e) { fail(e); }
+  };
+  const history = r => modal(`<h3>이력 · ${esc(r.title)}</h3>${(r.history || []).length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>일시</th><th>담당</th><th>내용</th></tr></thead><tbody>${[...r.history].reverse().map(h => `<tr><td class="nowrap">${esc(String(h.at || '').slice(0, 16))}</td><td>${esc(h.by || '')}</td><td>${h.what === '갱신' ? `<b>갱신</b> ${esc(h.kind || '')} · 처리 ${esc(h.done || '')} · 기한 ${esc(h.due || '—')} → ${esc(h.next || '없음')}${h.expire ? ` · 만료 ${esc(h.expire[0] || '—')} → ${esc(h.expire[1] || '—')}` : ''}${h.note ? ` · ${esc(h.note)}` : ''}` : h.what === '수정' ? `수정 (${(h.fields || []).length}칸)${h.status ? ` · 상태 ${esc(IP_STATUS_LABEL[h.status[0]] || h.status[0])} → ${esc(IP_STATUS_LABEL[h.status[1]] || h.status[1])}` : ''}` : esc(h.what || '')}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">이력이 없습니다.</p>'}`, { wide: true });
+  main.addEventListener('click', e => {
+    const t = e.target.closest('[data-ip-tile]'); if (t) { const i = Number(t.dataset.ipTile); form.elements.status.value = i === 1 ? 'registered' : ''; form.elements.due.value = i === 3 ? 'soon' : i === 4 ? 'over' : ''; if (i === 2) form.elements.status.value = 'filed'; draw(); return; }
+    if (e.target.closest('#ipNew')) return editor().catch?.(fail);
+    if (e.target.closest('#ipXlsx')) { const list = filtered(); if (!list.length) return toast('내보낼 줄이 없습니다.', 'err');
+      return xlsxDownload(`지식재산권_${data.today}.xlsx`, { sheet: '지식재산권', titles: ['지식재산권 관리', data.today], columns: ['구분', '국가', '등록번호', '출원번호', '지식재산권명', '권리자', '관련 제품', '출원일', '등록일', '유효기간', '다음 기한', '기한 내용', '상태', '담당자', '대리인', '메모'].map(label => ({ label, type: 'text' })),
+        rows: list.map(r => [r.kind, r.country, r.reg_no, r.app_no, r.title, r.holder, r.product, r.app_date || '', r.reg_date || '', r.expire_date || '', r.next_due || '', r.due_kind, r.status_label, r.owner_name, r.agent, r.note]) }); }
+    const find = a => data.rows.find(x => x.id === Number(e.target.closest(`[${a}]`)?.getAttribute(a)));
+    if (e.target.closest('[data-ip-edit]')) return editor(find('data-ip-edit'));
+    if (e.target.closest('[data-ip-renew]')) return renew(find('data-ip-renew')).catch(fail);
+    if (e.target.closest('[data-ip-hist]')) return history(find('data-ip-hist'));
+  });
+  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-ip-row]'); if (tr && data.can_manage && !e.target.closest('button')) editor(data.rows.find(x => x.id === Number(tr.dataset.ipRow))); });
+  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  await load();
+}
+const IP_STATUS_LABEL = { prep: '출원 준비', filed: '출원중', exam: '심사중', registered: '등록완료', rejected: '거절(불허)', abandoned: '포기·취하', expired: '소멸(만료)' };
+
+// 15.303 품질 › 인증서 관리: ISO 9001·14001·45001·IATF 16949·GRS·RCS·OEKO-TEX·FSC·KC 등의 유효기간과 다음 심사(사후·갱신) 일정 관리
+const CERT_INFO = { // 일반적인 주기(참고값 — 인증기관 계약·심사 일정에 따라 고쳐 쓰세요). cycle: 인증서 유효 연수, annual: 그 사이 매년 사후심사
+  'ISO 9001': { cycle: 3, annual: true, area: '품질경영', hint: '인증서 3년 · 1·2년차 사후심사 · 만료 전 갱신심사' },
+  'ISO 14001': { cycle: 3, annual: true, area: '환경경영', hint: '인증서 3년 · 1·2년차 사후심사 · 만료 전 갱신심사' },
+  'ISO 45001': { cycle: 3, annual: true, area: '안전보건경영', hint: '인증서 3년 · 1·2년차 사후심사 · 만료 전 갱신심사' },
+  'IATF 16949': { cycle: 3, annual: true, area: '자동차 품질경영', hint: '인증서 3년 · 매년 사후심사 · 만료 전 갱신심사' },
+  'GRS': { cycle: 1, annual: false, area: '재활용 원료(Global Recycled Standard)', hint: '인증서 1년 · 해마다 갱신심사(만료 전)' },
+  'RCS': { cycle: 1, annual: false, area: '재활용 원료 함량(Recycled Claim Standard)', hint: '인증서 1년 · 해마다 갱신심사' },
+  'OEKO-TEX STANDARD 100': { cycle: 1, annual: false, area: '섬유 유해물질', hint: '인증서 1년 · 해마다 갱신' },
+  'FSC': { cycle: 5, annual: true, area: '산림 인증(CoC)', hint: '인증서 5년 · 매년 사후심사' },
+  'KC': { cycle: 0, annual: false, area: '국내 안전인증', hint: '품목·제도마다 유효기간이 다름 — 직접 넣으세요' },
+  'ISO 14644(클린룸)': { cycle: 1, annual: false, area: '클린룸 청정도 등급', hint: '보통 1년마다 재측정·성적서 갱신' },
+  '기타': { cycle: 0, annual: false, area: '', hint: '' },
+};
+const CERT_STATUS_LABEL = { prep: '준비·신청', valid: '유효', suspended: '정지', expired: '만료', withdrawn: '취소·반납' };
+const CERT_STATUS_CHIP = { prep: 'yellow', valid: 'green', suspended: 'red', expired: '', withdrawn: '' };
+// 다음 심사 제안: 매년 사후심사가 있으면 발행일 기준 오늘 뒤 첫 해(만료 해에는 만료 3개월 전 갱신심사), 없으면 만료 2개월 전 갱신심사
+function certSuggest(kind, issue, today) {
+  const k = CERT_INFO[kind] || {}; if (!k.cycle || !issue) return { expire: '', next: '', nextKind: '' };
+  const expire = new Date(Date.parse(ipAddYears(issue, k.cycle)) - 86400000).toISOString().slice(0, 10), minus = (d, mo) => { const [y, m, dd] = d.split('-').map(Number); const t = new Date(Date.UTC(y, m - 1 - mo, dd)); return t.toISOString().slice(0, 10); };
+  const renew = minus(expire, k.annual ? 3 : 2);
+  if (k.annual) { for (let n = 1; n < k.cycle; n++) { const d = ipAddYears(issue, n); if (d >= today && d < renew) return { expire, next: d, nextKind: `${n}차 사후심사` }; } }
+  return { expire, next: renew, nextKind: '갱신심사' };
+}
+async function pageCerts(main) {
+  main.innerHTML = `<h1>인증서 관리 <span class="dept">품질</span></h1>
+  <p class="muted">회사가 받은 인증(ISO 9001·14001·45001, GRS 등)의 <b>유효기간</b>과 <b>다음 심사</b>(사후심사·갱신심사) 일정을 관리합니다. 다음 심사일이나 만료일이 지나면 빨강, 90일 안이면 노랑. 기간 자동 계산은 일반적인 주기(참고값)이니 인증기관 일정에 맞춰 고치세요.</p>
+  <div class="ip-tiles" id="ctTiles"></div>
+  <form class="toolbar list-filters" data-read-only id="ctFilters">
+    <label class="lf-sel">인증 종류<select name="kind"><option value="">전체</option>${Object.keys(CERT_INFO).map(k => `<option>${esc(k)}</option>`).join('')}</select></label>
+    <label class="lf-sel">상태<select name="status"><option value="">전체</option><option value="live">유효·정지·준비(만료·반납 빼고)</option>${Object.entries(CERT_STATUS_LABEL).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>
+    <label class="lf-sel">기한<select name="due"><option value="">전체</option><option value="soon">90일 안 · 지남</option><option value="over">기한 지남</option></select></label>
+    <label class="list-search">찾기<input type="search" name="q" placeholder="인증번호·범위·인증기관·사업장·담당자"></label>
+    <span class="grow"></span><span id="ctTools" class="ip-tools"></span>
+  </form>
+  <div id="ctList"></div>`;
+  const form = $('#ctFilters', main); let data = { rows: [], can_manage: false, today: todayStr() };
+  const load = async () => { data = await api('GET', '/api/certs'); if (main.isConnected) draw(); };
+  const live = r => ['valid', 'suspended', 'prep'].includes(r.status);
+  const firstDue = r => [r.next_audit, r.expire_date].filter(Boolean).sort()[0] || null; // 심사·만료 중 먼저 오는 것
+  const dueCls = r => { const d = ipDday(firstDue(r), data.today); return d === null || !live(r) ? '' : d < 0 ? 'over' : d <= 90 ? 'soon' : ''; };
+  const filtered = () => { const v = formObj(form), q = (v.q || '').trim().toLowerCase();
+    return data.rows.filter(r => (!v.kind || r.kind === v.kind) && (!v.status || (v.status === 'live' ? live(r) : r.status === v.status)) && (!v.due || (v.due === 'over' ? dueCls(r) === 'over' : !!dueCls(r)))
+      && (!q || [r.cert_no, r.title, r.scope, r.body, r.site, r.owner_name, r.note].join(' ').toLowerCase().includes(q))); };
+  const dd = (d, cls, on = true) => { const n = ipDday(d, data.today); return n === null || !on ? '' : ` <span class="ip-dd ${cls}">${n < 0 ? `D+${-n}` : n === 0 ? 'D-DAY' : `D-${n}`}</span>`; };
+  const draw = () => {
+    const rows = data.rows, over = rows.filter(r => dueCls(r) === 'over').length, soon = rows.filter(r => dueCls(r) === 'soon').length;
+    $('#ctTiles', main).innerHTML = [['전체', rows.length, ''], ['유효', rows.filter(r => r.status === 'valid').length, 'green'], ['준비·신청', rows.filter(r => r.status === 'prep').length, ''], ['90일 안 심사·만료', soon, soon ? 'yellow' : ''], ['기한 지남', over, over ? 'red' : '']]
+      .map(([l, n, c], i) => `<button type="button" class="ip-tile ${c}" data-ct-tile="${i}"><span>${l}</span><b>${n}</b></button>`).join('');
+    $('#ctTools', main).innerHTML = `<button type="button" class="btn" id="ctXlsx">엑셀</button>${data.can_manage ? '<button type="button" class="btn primary" id="ctNew">＋ 인증서 등록</button>' : ''}`;
+    const list = filtered();
+    $('#ctList', main).innerHTML = list.length ? `<div class="table-wrap"><table class="grid ip-table ct-table"><thead><tr><th>인증 종류</th><th>인증번호</th><th>인증 범위 · 인증명</th><th>인증기관</th><th>사업장</th><th>발행일</th><th>유효기간</th><th>다음 심사</th><th>상태</th><th>담당자</th><th></th></tr></thead><tbody>${list.map(r => { const cls = dueCls(r), eDays = ipDday(r.expire_date, data.today), nDays = ipDday(r.next_audit, data.today), ec = live(r) && eDays !== null ? (eDays < 0 ? 'over' : eDays <= 90 ? 'soon' : '') : '', nc = live(r) && nDays !== null ? (nDays < 0 ? 'over' : nDays <= 90 ? 'soon' : '') : '';
+      return `<tr data-ct-row="${r.id}" class="${cls ? 'ip-' + cls : ''}${live(r) ? '' : ' row-off'}"><td class="nowrap"><b>${esc(r.kind)}</b><div class="small muted">${esc(CERT_INFO[r.kind]?.area || '')}</div></td>
+        <td class="nowrap">${r.cert_no ? `<b>${esc(r.cert_no)}</b>` : '<span class="muted">—</span>'}</td>
+        <td data-card-primary>${r.title ? `<b>${esc(r.title)}</b>` : ''}${r.scope ? `<div class="small ct-scope">${esc(r.scope)}</div>` : ''}</td><td>${esc(r.body)}</td><td>${esc(r.site)}</td>
+        <td class="nowrap">${esc(r.issue_date || '')}${r.first_date && r.first_date !== r.issue_date ? `<div class="small muted">최초 ${esc(r.first_date)}</div>` : ''}</td>
+        <td class="nowrap">${r.expire_date ? `~ ${esc(r.expire_date)}${dd(r.expire_date, ec, live(r))}` : '<span class="muted">—</span>'}</td>
+        <td class="nowrap">${r.next_audit ? `${esc(r.next_audit)}${dd(r.next_audit, nc, live(r))}${r.audit_kind ? `<div class="small muted">${esc(r.audit_kind)}</div>` : ''}` : '<span class="muted">—</span>'}</td>
+        <td><span class="chip ${CERT_STATUS_CHIP[r.status] || ''}">${esc(r.status_label)}</span></td><td>${esc(r.owner_name)}</td>
+        <td class="nowrap">${data.can_manage ? `<button type="button" class="btn small" data-ct-edit="${r.id}">수정</button>${['valid', 'suspended'].includes(r.status) ? ` <button type="button" class="btn small primary" data-ct-audit="${r.id}">심사 완료</button>` : ''}` : ''} <button type="button" class="btn small" data-ct-hist="${r.id}">이력</button></td></tr>`; }).join('')}</tbody></table></div>`
+      : `<div class="empty">${data.rows.length ? '조건에 맞는 인증서가 없습니다.' : '아직 등록한 인증서가 없습니다. 「＋ 인증서 등록」으로 ISO 9001·14001, GRS 등을 넣어 두면 심사·갱신 일정을 함께 관리합니다.'}</div>`;
+  };
+  const editor = async (r = null) => {
+    const v = r || { kind: 'ISO 9001', status: 'valid' };
+    const m = modal(`<h3>${r ? '인증서 수정' : '인증서 등록'}</h3><form class="stack" data-ct-form>
+      <fieldset class="vendor-sec"><legend>기본</legend><div class="form-grid">
+        <label>인증 종류 *<select name="kind" required>${Object.keys(CERT_INFO).map(k => `<option${v.kind === k ? ' selected' : ''}>${esc(k)}</option>`).join('')}</select></label>
+        <label>상태 *<select name="status" required>${Object.entries(CERT_STATUS_LABEL).map(([k, l]) => `<option value="${k}"${v.status === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label>인증번호<input name="cert_no" maxlength="80" value="${esc(v.cert_no || '')}" placeholder="예) FS 123456 · CU1234567GRS-2026"></label>
+        <label class="span2">인증명 <span class="hint">(기타는 꼭)</span><input name="title" maxlength="200" value="${esc(v.title || '')}" placeholder="비우면 인증 종류로 표시"></label>
+        <label>인증기관<input name="body" maxlength="100" list="ctBodies" value="${esc(v.body || '')}" placeholder="예) BSI · DNV · SGS · KFQ · Control Union"><datalist id="ctBodies">${['BSI', 'DNV', 'SGS', 'KFQ(한국품질재단)', 'KSA(한국표준협회)', 'KTR', 'Intertek', 'TÜV', 'Control Union', 'OEKO-TEX(Hohenstein)'].map(x => `<option value="${x}">`).join('')}</datalist></label>
+        <label class="span2">인증 범위<input name="scope" maxlength="500" value="${esc(v.scope || '')}" placeholder="예) 클린룸용 와이퍼·장갑의 제조 및 판매"></label>
+        <label>대상 사업장<input name="site" maxlength="100" value="${esc(v.site || '')}" placeholder="예) 본사·안성 공장"></label>
+        <label>담당자<input name="owner_name" maxlength="50" value="${esc(v.owner_name || '')}"></label>
+      </div></fieldset>
+      <fieldset class="vendor-sec"><legend>유효기간 · 심사 <span class="hint" data-ct-hint></span></legend><div class="form-grid">
+        <label>최초 인증일<input type="date" name="first_date" value="${esc(v.first_date || '')}"></label>
+        <label>발행일(현 인증서)<input type="date" name="issue_date" value="${esc(v.issue_date || '')}"></label>
+        <label>유효기간(만료일)<input type="date" name="expire_date" value="${esc(v.expire_date || '')}"></label>
+        <label>다음 심사일<input type="date" name="next_audit" value="${esc(v.next_audit || '')}"></label>
+        <label>심사 종류<input name="audit_kind" maxlength="30" list="ctAudit" value="${esc(v.audit_kind || '')}" placeholder="1차 사후심사 · 갱신심사"><datalist id="ctAudit"><option value="1차 사후심사"><option value="2차 사후심사"><option value="갱신심사"><option value="최초심사"><option value="특별심사"></datalist></label>
+        <div class="ip-calc"><button type="button" class="btn small" data-ct-calc>기간 자동 계산</button></div>
+      </div></fieldset>
+      <label>메모<textarea name="note" rows="2" maxlength="1000">${esc(v.note || '')}</textarea></label>
+      <div class="actions">${r ? '<button type="button" class="btn danger" data-ct-del>삭제</button>' : ''}<span class="grow"></span><button type="button" class="btn" data-no>취소</button><button class="btn primary">저장</button></div></form>`, { wide: true });
+    const f = $('[data-ct-form]', m.el), el = n => f.elements[n];
+    const hint = () => { const h = CERT_INFO[el('kind').value]?.hint; $('[data-ct-hint]', f).textContent = h ? `(${h} · 참고값)` : ''; };
+    const calc = force => { const s = certSuggest(el('kind').value, el('issue_date').value, data.today); if (s.expire && (force || !el('expire_date').value)) el('expire_date').value = s.expire; if (s.next && (force || !el('next_audit').value)) el('next_audit').value = s.next; if (s.nextKind && (force || !el('audit_kind').value)) el('audit_kind').value = s.nextKind; };
+    hint(); el('kind').onchange = () => { hint(); calc(false); }; el('issue_date').onchange = () => { if (!el('first_date').value) el('first_date').value = el('issue_date').value; calc(false); };
+    $('[data-ct-calc]', f).onclick = () => { calc(true); toast('인증 종류·발행일로 유효기간과 다음 심사를 채웠습니다(참고값).'); };
+    $('[data-no]', f).onclick = () => m.close();
+    $('[data-ct-del]', f)?.addEventListener('click', async () => { if (!await confirmBox(`${r.kind} ${r.cert_no || ''}을(를) 목록에서 지울까요? 인증이 끝난 경우에는 지우지 말고 상태를 「만료」·「취소·반납」으로 바꾸면 이력이 남습니다.`)) return; try { await api('DELETE', `/api/certs/${r.id}?revision=${r.revision}`); toast('지웠습니다.'); m.close(); await load(); } catch (e) { fail(e); } });
+    f.onsubmit = async e => { e.preventDefault(); const body = formObj(f), btn = $('button.primary', f); btn.disabled = true;
+      try { if (r) await api('PUT', `/api/certs/${r.id}`, { ...body, revision: r.revision }); else await api('POST', '/api/certs', { ...body, request_id: crypto.randomUUID() }); toast('저장했습니다.'); m.close(); await load(); }
+      catch (error) { fail(error); if (error.status === 409) load().catch(() => {}); } finally { btn.disabled = false; } };
+  };
+  const audit = async r => {
+    const k = CERT_INFO[r.kind] || {}, renewal = /갱신/.test(r.audit_kind || '') || !k.annual;
+    const dayAfter = d => new Date(Date.parse(d || todayStr()) + 86400000).toISOString().slice(0, 10);
+    const newIssue = renewal ? (r.expire_date || todayStr()) : r.issue_date || '';
+    // 갱신: 새 발행일 기준 유효기간·첫 사후심사 / 사후: 지금 예정일 다음의 사후심사(없으면 갱신심사)
+    const sug = renewal ? certSuggest(r.kind, newIssue, newIssue) : { ...certSuggest(r.kind, r.issue_date, dayAfter(r.next_audit)), expire: r.expire_date };
+    const v = await promptBox(`심사 완료 · ${r.kind} ${r.cert_no || ''}`, `<p>예정 <b>${esc(r.next_audit || '—')}</b> ${esc(r.audit_kind || '')}${r.expire_date ? ` · 지금 유효기간 ~ ${esc(r.expire_date)}` : ''}</p>
+      <p class="small muted">${renewal ? '갱신심사: 새 인증서의 발행일·유효기간과 다음 심사를 넣습니다.' : '사후심사: 다음 심사일을 넘깁니다(유효기간은 그대로).'} 제안 날짜는 고칠 수 있습니다. 「부적합」이면 상태가 「정지」가 됩니다.</p>
+      <div class="form-grid"><label>심사일 *<input type="date" name="done_date" required value="${todayStr()}"></label>
+      <label>결과 *<select name="result"><option>적합</option><option>조건부 적합</option><option>부적합</option></select></label><label>심사 종류<input name="audit_kind" maxlength="30" value="${esc(r.audit_kind || '')}"></label>
+      ${renewal ? `<label>새 발행일<input type="date" name="issue_date" value="${esc(newIssue)}"></label><label>새 유효기간(만료일)<input type="date" name="expire_date" value="${esc(sug.expire || '')}"></label>` : ''}
+      <label>다음 심사일<input type="date" name="next_audit" value="${esc(sug.next || '')}"></label><label>다음 심사 종류<input name="next_kind" maxlength="30" value="${esc(sug.nextKind || '')}" list="ctAudit2"><datalist id="ctAudit2"><option value="1차 사후심사"><option value="2차 사후심사"><option value="갱신심사"></datalist></label>
+      <label class="span3">메모<input name="note" maxlength="300" placeholder="예) 부적합 경미 2건 · 시정조치 12월 제출"></label></div>`, { wide: true });
+    if (!v) return; try { await api('POST', `/api/certs/${r.id}/audit`, { ...v, revision: r.revision }); toast('심사 결과를 저장했습니다.'); await load(); } catch (e) { fail(e); }
+  };
+  const history = r => modal(`<h3>이력 · ${esc(r.kind)} ${esc(r.cert_no || '')}</h3>${(r.history || []).length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>일시</th><th>담당</th><th>내용</th></tr></thead><tbody>${[...r.history].reverse().map(h => `<tr><td class="nowrap">${esc(String(h.at || '').slice(0, 16))}</td><td>${esc(h.by || '')}</td><td>${h.what === '심사' ? `<b>심사</b> ${esc(h.kind || '')} · ${esc(h.done || '')} · <span class="chip ${h.result === '부적합' ? 'red' : h.result === '적합' ? 'green' : 'yellow'}">${esc(h.result || '')}</span> · 다음 ${esc(h.next || '없음')}${h.expire ? ` · 유효기간 ${esc(h.expire[0] || '—')} → ${esc(h.expire[1] || '—')}` : ''}${h.status ? ` · 상태 ${esc(CERT_STATUS_LABEL[h.status[0]] || '')} → ${esc(CERT_STATUS_LABEL[h.status[1]] || '')}` : ''}${h.note ? ` · ${esc(h.note)}` : ''}` : h.what === '수정' ? `수정 (${(h.fields || []).length}칸)${h.status ? ` · 상태 ${esc(CERT_STATUS_LABEL[h.status[0]] || '')} → ${esc(CERT_STATUS_LABEL[h.status[1]] || '')}` : ''}` : esc(h.what || '')}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">이력이 없습니다.</p>'}`, { wide: true });
+  main.addEventListener('click', e => {
+    const t = e.target.closest('[data-ct-tile]'); if (t) { const i = Number(t.dataset.ctTile); form.elements.status.value = i === 1 ? 'valid' : i === 2 ? 'prep' : ''; form.elements.due.value = i === 3 ? 'soon' : i === 4 ? 'over' : ''; draw(); return; }
+    if (e.target.closest('#ctNew')) return editor().catch?.(fail);
+    if (e.target.closest('#ctXlsx')) { const list = filtered(); if (!list.length) return toast('내보낼 줄이 없습니다.', 'err');
+      return xlsxDownload(`인증서_${data.today}.xlsx`, { sheet: '인증서', titles: ['인증서 관리', data.today], columns: ['인증 종류', '인증번호', '인증명', '인증 범위', '인증기관', '사업장', '최초 인증일', '발행일', '유효기간', '다음 심사일', '심사 종류', '상태', '담당자', '메모'].map(label => ({ label, type: 'text' })),
+        rows: list.map(r => [r.kind, r.cert_no, r.title, r.scope, r.body, r.site, r.first_date || '', r.issue_date || '', r.expire_date || '', r.next_audit || '', r.audit_kind, r.status_label, r.owner_name, r.note]) }); }
+    const find = a => data.rows.find(x => x.id === Number(e.target.closest(`[${a}]`)?.getAttribute(a)));
+    if (e.target.closest('[data-ct-edit]')) return editor(find('data-ct-edit'));
+    if (e.target.closest('[data-ct-audit]')) return audit(find('data-ct-audit')).catch(fail);
+    if (e.target.closest('[data-ct-hist]')) return history(find('data-ct-hist'));
+  });
+  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-ct-row]'); if (tr && data.can_manage && !e.target.closest('button')) editor(data.rows.find(x => x.id === Number(tr.dataset.ctRow))); });
+  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  await load();
+}
+
+// 15.304 품질 › 검교정 관리(계측기 대장): 어디에 어떤 계측기가 있고, 언제 교정했고, 언제까지 다시 교정해야 하는지
+const INST_STATUS_LABEL = { in_use: '사용 중', at_cal: '교정 중', out: '사용중지', spare: '예비', disposed: '폐기' };
+const INST_STATUS_CHIP = { in_use: 'green', at_cal: 'yellow', out: 'red', spare: '', disposed: '' };
+const INST_CAL_LABEL = { external: '외부 교정(KOLAS 등)', internal: '자체 교정', check: '일상 점검' };
+const INST_RESULT_CHIP = { '적합': 'green', '조정 후 적합': 'yellow', '부적합': 'red' };
+const INST_NAMES = ['온습도계', '온도계', '습도계', '파티클 카운터', '저울(전자저울)', '버니어 캘리퍼스', '마이크로미터', '두께 측정기', '인장시험기', '차압계', '풍속계', '표면저항 측정기', '정전기 측정기', 'pH 미터', '수분 측정기', '타이머·스톱워치', '압력계', '조도계'];
+// 다음 교정일 = 교정일 + 주기(개월) − 1일 (서버와 같은 계산)
+function calNext(done, months) { if (!done || !months) return ''; const [y, m, d] = done.split('-').map(Number); const t = new Date(Date.UTC(y, m - 1 + Number(months), d)); if (t.getUTCDate() !== d) t.setUTCDate(0); t.setUTCDate(t.getUTCDate() - 1); return t.toISOString().slice(0, 10); }
+async function pageCalibration(main) {
+  main.innerHTML = `<h1>검교정 관리 <span class="dept">품질</span></h1>
+  <p class="muted">측정·시험에 쓰는 계측기(온습도계·저울·파티클 카운터 등)를 <b>관리번호·위치·모델·제조사</b>로 등록하고, <b>교정 주기</b>에 맞춰 다음 교정일을 관리합니다(ISO 9001 7.1.5). 다음 교정일 = 교정일 + 주기 − 1일 (예: 2026-12-01 교정, 1년 → 2027-11-30까지). 지나면 빨강, 30일 안이면 노랑. 여러 대를 체크해 한꺼번에 교정 처리·QR 라벨 발행할 수 있습니다.</p>
+  <div class="ip-tiles" id="calTiles"></div>
+  <form class="toolbar list-filters" data-read-only id="calFilters">
+    <label class="lf-sel">위치<select name="loc"><option value="">전체</option></select></label>
+    <label class="lf-sel">상태<select name="status"><option value="">전체(폐기 빼고)</option>${Object.entries(INST_STATUS_LABEL).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}<option value="all">폐기 포함 전체</option></select></label>
+    <label class="lf-sel">기한<select name="due"><option value="">전체</option><option value="soon">30일 안 · 지남</option><option value="over">기한 지남</option><option value="60">60일 안 · 지남</option></select></label>
+    <label class="list-search">찾기<input type="search" name="q" placeholder="관리번호·장비명·모델·제조사·S/N·담당"></label>
+    <span class="grow"></span><span id="calTools" class="ip-tools"></span>
+  </form>
+  <div class="cal-bar" id="calBar" hidden></div>
+  <div id="calList"></div>`;
+  const form = $('#calFilters', main); let data = { rows: [], can_manage: false, today: todayStr() }; const picked = new Set();
+  const load = async () => { data = await api('GET', '/api/instruments'); if (!main.isConnected) return; const locs = [...new Set(data.rows.map(r => r.location).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko')); const sel = form.elements.loc, cur = sel.value; sel.innerHTML = '<option value="">전체</option>' + locs.map(l => `<option>${esc(l)}</option>`).join(''); sel.value = cur; for (const id of [...picked]) if (!data.rows.some(r => r.id === id)) picked.delete(id); draw(); };
+  const active = r => !['disposed', 'spare'].includes(r.status);
+  const dueCls = (r, soonDays = 30) => { const d = ipDday(r.next_due, data.today); return d === null || !active(r) ? '' : d < 0 ? 'over' : d <= soonDays ? 'soon' : ''; };
+  const filtered = () => { const v = formObj(form), q = (v.q || '').trim().toLowerCase();
+    return data.rows.filter(r => (!v.loc || r.location === v.loc) && (v.status === 'all' ? true : v.status ? r.status === v.status : r.status !== 'disposed') && (!v.due || (v.due === 'over' ? dueCls(r) === 'over' : v.due === '60' ? !!dueCls(r, 60) : !!dueCls(r)))
+      && (!q || [r.mgmt_no, r.name, r.model, r.maker, r.serial_no, r.owner_name, r.dept, r.cal_agency, r.location_detail, r.note].join(' ').toLowerCase().includes(q))); };
+  const bar = () => { const b = $('#calBar', main); b.hidden = !picked.size || !data.can_manage; b.innerHTML = picked.size ? `<b>${picked.size}대 선택</b><button type="button" class="btn primary" data-cal-batch>선택 교정 처리</button><button type="button" class="btn" data-cal-qr-sel>선택 QR 라벨</button><button type="button" class="btn" data-cal-clear>선택 풀기</button>` : ''; };
+  const draw = () => {
+    const live = data.rows.filter(r => r.status !== 'disposed'), over = live.filter(r => dueCls(r) === 'over').length, soon = live.filter(r => dueCls(r) === 'soon').length;
+    $('#calTiles', main).innerHTML = [['보유 계측기', live.length, ''], ['사용 중', live.filter(r => r.status === 'in_use').length, 'green'], ['30일 안 교정', soon, soon ? 'yellow' : ''], ['교정 기한 지남', over, over ? 'red' : ''], ['교정 중', live.filter(r => r.status === 'at_cal').length, ''], ['사용중지', live.filter(r => r.status === 'out').length, live.some(r => r.status === 'out') ? 'red' : '']]
+      .map(([l, n, c], i) => `<button type="button" class="ip-tile ${c}" data-cal-tile="${i}"><span>${l}</span><b>${n}</b></button>`).join('');
+    $('#calTools', main).innerHTML = `<button type="button" class="btn" id="calXlsx">엑셀</button>${data.can_manage ? '<button type="button" class="btn primary" id="calNew">＋ 계측기 등록</button>' : ''}`;
+    const list = filtered();
+    $('#calList', main).innerHTML = list.length ? `<div class="table-wrap"><table class="grid ip-table cal-table"><thead><tr>${data.can_manage ? '<th><input type="checkbox" data-cal-all aria-label="모두 선택"></th>' : ''}<th>관리번호</th><th>장비명</th><th>모델명 · 제조사</th><th>S/N</th><th>위치</th><th>교정 주기</th><th>직전 교정일</th><th>다음 교정일</th><th>교정 방식 · 기관</th><th>결과</th><th>상태</th><th>담당</th><th></th></tr></thead><tbody>${list.map(r => { const cls = dueCls(r), d = ipDday(r.next_due, data.today);
+      return `<tr data-cal-row="${r.id}" class="${cls ? 'ip-' + cls : ''}${r.status === 'disposed' || r.status === 'spare' ? ' row-off' : ''}">${data.can_manage ? `<td class="c"><input type="checkbox" data-cal-pick="${r.id}"${picked.has(r.id) ? ' checked' : ''}${r.status === 'disposed' ? ' disabled' : ''} aria-label="${esc(r.mgmt_no)} 선택"></td>` : ''}
+        <td class="nowrap" data-card-primary><b>${esc(r.mgmt_no)}</b></td><td><b>${esc(r.name)}</b>${r.spec ? `<div class="small muted">${esc(r.spec)}</div>` : ''}</td>
+        <td>${esc(r.model)}${r.maker ? `<div class="small muted">${esc(r.maker)}</div>` : ''}</td><td class="small">${esc(r.serial_no)}</td>
+        <td>${esc(r.location)}${r.location_detail ? `<div class="small muted">${esc(r.location_detail)}</div>` : ''}</td>
+        <td class="c nowrap">${r.cycle_months % 12 === 0 ? `${r.cycle_months / 12}년` : `${r.cycle_months}개월`}</td>
+        <td class="nowrap">${esc(r.last_cal || '')}</td>
+        <td class="nowrap">${r.next_due ? `<b>${esc(r.next_due)}</b>${active(r) ? ` <span class="ip-dd ${cls}">${d < 0 ? `D+${-d}` : d === 0 ? 'D-DAY' : `D-${d}`}</span>` : ''}` : '<span class="muted">—</span>'}</td>
+        <td>${esc(INST_CAL_LABEL[r.cal_type] || '')}${r.cal_agency ? `<div class="small muted">${esc(r.cal_agency)}</div>` : ''}</td>
+        <td>${r.last_result ? `<span class="chip ${INST_RESULT_CHIP[r.last_result] || ''}">${esc(r.last_result)}</span>` : ''}${r.cert_no ? `<div class="small muted">${esc(r.cert_no)}</div>` : ''}</td>
+        <td><span class="chip ${INST_STATUS_CHIP[r.status] || ''}">${esc(r.status_label)}</span></td><td>${esc(r.owner_name)}${r.dept ? `<div class="small muted">${esc(r.dept)}</div>` : ''}</td>
+        <td class="nowrap">${data.can_manage ? `<button type="button" class="btn small" data-cal-edit="${r.id}">수정</button>${r.status !== 'disposed' ? ` <button type="button" class="btn small primary" data-cal-do="${r.id}">교정 처리</button>` : ''}` : ''} <button type="button" class="btn small" data-cal-hist="${r.id}">이력</button></td></tr>`; }).join('')}</tbody></table></div>`
+      : `<div class="empty">${data.rows.length ? '조건에 맞는 계측기가 없습니다.' : '아직 등록한 계측기가 없습니다. 「＋ 계측기 등록」으로 관리번호·위치·모델·교정 주기·직전 교정일을 넣으면 다음 교정일을 자동으로 관리합니다.'}</div>`;
+    bar();
+  };
+  const editor = async (r = null) => {
+    const v = r || { status: 'in_use', cal_type: 'external', cycle_months: 12 };
+    const [whs] = await Promise.all([api('GET', '/api/warehouses').catch(() => [])]);
+    const locs = [...new Set([...(whs || []).map(w => w.name), ...data.rows.map(x => x.location)].filter(Boolean))];
+    const m = modal(`<h3>${r ? '계측기 수정' : '계측기 등록'}</h3><form class="stack" data-cal-form>
+      <fieldset class="vendor-sec"><legend>계측기</legend><div class="form-grid">
+        <label>관리번호 *<input name="mgmt_no" required maxlength="50" value="${esc(v.mgmt_no || '')}" placeholder="예) T-01" autocapitalize="characters"></label>
+        <label>장비명 *<input name="name" required maxlength="100" list="calNames" value="${esc(v.name || '')}" placeholder="예) 온습도계"><datalist id="calNames">${INST_NAMES.map(n => `<option value="${n}">`).join('')}</datalist></label>
+        <label>상태 *<select name="status">${Object.entries(INST_STATUS_LABEL).map(([k, l]) => `<option value="${k}"${v.status === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label>모델명<input name="model" maxlength="100" value="${esc(v.model || '')}" placeholder="예) TR-72wb"></label>
+        <label>제조사<input name="maker" maxlength="100" value="${esc(v.maker || '')}" placeholder="예) T&D"></label>
+        <label>S/N(제조번호)<input name="serial_no" maxlength="100" value="${esc(v.serial_no || '')}"></label>
+        <label class="span2">측정 범위 · 분해능<input name="spec" maxlength="200" value="${esc(v.spec || '')}" placeholder="예) -20~60℃ ±0.3℃ / 10~95%RH"></label>
+        <label>구입일<input type="date" name="purchase_date" value="${esc(v.purchase_date || '')}"></label>
+      </div></fieldset>
+      <fieldset class="vendor-sec"><legend>위치 · 담당</legend><div class="form-grid">
+        <label>위치 <span class="hint">(동·라인·실)</span><input name="location" maxlength="100" list="calLocs" value="${esc(v.location || '')}" placeholder="예) 1동"><datalist id="calLocs">${locs.map(l => `<option value="${esc(l)}">`).join('')}</datalist></label>
+        <label>세부 위치<input name="location_detail" maxlength="100" value="${esc(v.location_detail || '')}" placeholder="예) 클린룸 A 입구"></label>
+        <label>사용 부서<input name="dept" maxlength="50" value="${esc(v.dept || '')}"></label>
+        <label>담당자<input name="owner_name" maxlength="50" value="${esc(v.owner_name || '')}"></label>
+      </div></fieldset>
+      <fieldset class="vendor-sec"><legend>검교정 <span class="hint">(다음 교정일 = 직전 교정일 + 주기 − 1일, 비우면 자동)</span></legend><div class="form-grid">
+        <label>교정 주기 *<select name="cycle_months">${[3, 6, 12, 24, 36].map(n => `<option value="${n}"${Number(v.cycle_months) === n ? ' selected' : ''}>${n % 12 ? n + '개월' : n / 12 + '년'}</option>`).join('')}${[3, 6, 12, 24, 36].includes(Number(v.cycle_months)) ? '' : `<option value="${v.cycle_months}" selected>${v.cycle_months}개월</option>`}</select></label>
+        <label>교정 방식 *<select name="cal_type">${Object.entries(INST_CAL_LABEL).map(([k, l]) => `<option value="${k}"${v.cal_type === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label>교정기관<input name="cal_agency" maxlength="100" value="${esc(v.cal_agency || '')}" placeholder="예) KTL · KTC · KTR · 자체"></label>
+        <label>직전 교정일<input type="date" name="last_cal" value="${esc(v.last_cal || '')}"></label>
+        <label>다음 교정일<input type="date" name="next_due" value="${esc(v.next_due || '')}"></label>
+        <label>직전 결과<select name="last_result"><option value="">—</option>${['적합', '조정 후 적합', '부적합'].map(x => `<option${v.last_result === x ? ' selected' : ''}>${x}</option>`).join('')}</select></label>
+        <label>성적서 번호<input name="cert_no" maxlength="80" value="${esc(v.cert_no || '')}"></label>
+      </div></fieldset>
+      <label>메모<textarea name="note" rows="2" maxlength="1000">${esc(v.note || '')}</textarea></label>
+      <div class="actions">${r ? '<button type="button" class="btn danger" data-cal-del>삭제</button>' : ''}<span class="grow"></span><button type="button" class="btn" data-no>취소</button><button class="btn primary">저장</button></div></form>`, { wide: true });
+    const f = $('[data-cal-form]', m.el), el = n => f.elements[n]; let autoNext = !v.next_due || v.next_due === calNext(v.last_cal, v.cycle_months);
+    const sync = () => { if (autoNext && el('last_cal').value) el('next_due').value = calNext(el('last_cal').value, el('cycle_months').value); };
+    el('last_cal').onchange = sync; el('cycle_months').onchange = sync; el('next_due').oninput = () => { autoNext = false; };
+    $('[data-no]', f).onclick = () => m.close();
+    $('[data-cal-del]', f)?.addEventListener('click', async () => { if (!await confirmBox(`${r.mgmt_no} ${r.name}을(를) 지울까요? 쓰지 않게 된 계측기는 지우지 말고 상태를 「폐기」로 바꾸면 교정 이력이 남습니다.`)) return; try { await api('DELETE', `/api/instruments/${r.id}?revision=${r.revision}`); toast('지웠습니다.'); m.close(); await load(); } catch (e) { fail(e); } });
+    f.onsubmit = async e => { e.preventDefault(); const body = formObj(f), btn = $('button.primary', f); btn.disabled = true;
+      try { if (r) await api('PUT', `/api/instruments/${r.id}`, { ...body, revision: r.revision }); else await api('POST', '/api/instruments', { ...body, request_id: crypto.randomUUID() }); toast('저장했습니다.'); m.close(); await load(); }
+      catch (error) { fail(error); if (error.status === 409) load().catch(() => {}); } finally { btn.disabled = false; } };
+  };
+  const calibrate = async list => {
+    const one = list.length === 1 ? list[0] : null;
+    const v = await promptBox(one ? `교정 처리 · ${one.mgmt_no} ${one.name}` : `교정 처리 · ${list.length}대`, `${one ? `<p>주기 ${one.cycle_months % 12 ? one.cycle_months + '개월' : one.cycle_months / 12 + '년'} · 직전 ${esc(one.last_cal || '—')} · 예정 <b>${esc(one.next_due || '—')}</b></p>` : `<p class="small">${list.map(x => `<b>${esc(x.mgmt_no)}</b> ${esc(x.name)}`).join(' · ')}</p><p class="small muted">다음 교정일은 계측기마다 교정일 + 각자 주기 − 1일로 넣습니다.</p>`}
+      <div class="form-grid"><label>교정일 *<input type="date" name="done_date" required value="${todayStr()}" max="${todayStr()}" data-cal-done></label>
+      <label>결과 *<select name="result" data-cal-res><option>적합</option><option>조정 후 적합</option><option>부적합</option></select></label>
+      <label>교정기관<input name="agency" maxlength="100" value="${esc(one?.cal_agency || '')}"></label>
+      ${one ? `<label>성적서 번호<input name="cert_no" maxlength="80"></label><label>다음 교정일<input type="date" name="next_due" value="${esc(calNext(todayStr(), one.cycle_months))}" data-cal-next></label><label>비용(원)<input type="number" name="cost" min="0" step="1"></label>` : ''}
+      <label class="span3">메모 <span class="hint" data-cal-memo-hint>(부적합이면 꼭: 조치·이전 측정 결과 영향 검토)</span><input name="note" maxlength="300" placeholder="예) 2℃ 편차 → 조정 후 적합 / 부적합: 지난 3개월 측정 기록 재검토"></label></div>`, { wide: true,
+      onOpen: el => { const d = $('[data-cal-done]', el), n = $('[data-cal-next]', el); if (n) d.onchange = () => { n.value = calNext(d.value, one.cycle_months); }; } });
+    if (!v) return;
+    try { const r = await api('POST', '/api/instruments/calibrate', { ...v, items: list.map(x => ({ id: x.id, revision: x.revision })) }); toast(`${r.done}대 교정 처리했습니다.${v.result === '부적합' ? ' 부적합 장비는 사용중지로 바꿨습니다.' : ''}`); picked.clear(); await load(); } catch (e) { fail(e); if (e.status === 409) load().catch(() => {}); }
+  };
+  const qr = list => qrIssue(list.map(r => ({ code: r.mgmt_no, sub: [r.name, r.model, r.location, r.next_due ? `다음 교정 ${r.next_due}` : ''].filter(Boolean).join(' · ') })), { title: `계측기 라벨 · ${list.length}대`, file: '계측기라벨' });
+  const history = r => modal(`<h3>이력 · ${esc(r.mgmt_no)} ${esc(r.name)}</h3>${(r.history || []).length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>일시</th><th>담당</th><th>내용</th></tr></thead><tbody>${[...r.history].reverse().map(h => `<tr><td class="nowrap">${esc(String(h.at || '').slice(0, 16))}</td><td>${esc(h.by || '')}</td><td>${h.what === '교정' ? `<b>교정</b> ${esc(h.done || '')} · <span class="chip ${INST_RESULT_CHIP[h.result] || ''}">${esc(h.result || '')}</span>${h.agency ? ` · ${esc(h.agency)}` : ''}${h.cert ? ` · 성적서 ${esc(h.cert)}` : ''}${h.cost != null ? ` · ${fmtNum(h.cost)}원` : ''} · 다음 ${esc(h.next || '—')}${h.status ? ` · 상태 ${esc(INST_STATUS_LABEL[h.status[0]] || '')} → ${esc(INST_STATUS_LABEL[h.status[1]] || '')}` : ''}${h.note ? ` · ${esc(h.note)}` : ''}` : h.what === '수정' ? `수정 (${(h.fields || []).length}칸)${h.moved ? ` · 위치 ${esc(h.moved[0] || '—')} → ${esc(h.moved[1] || '—')}` : ''}${h.status ? ` · 상태 ${esc(INST_STATUS_LABEL[h.status[0]] || '')} → ${esc(INST_STATUS_LABEL[h.status[1]] || '')}` : ''}` : esc(h.what || '')}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">이력이 없습니다.</p>'}`, { wide: true });
+  main.addEventListener('change', e => {
+    const p = e.target.closest('[data-cal-pick]'); if (p) { const id = Number(p.dataset.calPick); p.checked ? picked.add(id) : picked.delete(id); bar(); return; }
+    if (e.target.closest('[data-cal-all]')) { const on = e.target.checked; filtered().filter(r => r.status !== 'disposed').forEach(r => on ? picked.add(r.id) : picked.delete(r.id)); draw(); }
+  });
+  main.addEventListener('click', e => {
+    const t = e.target.closest('[data-cal-tile]'); if (t) { const i = Number(t.dataset.calTile); form.elements.status.value = i === 1 ? 'in_use' : i === 4 ? 'at_cal' : i === 5 ? 'out' : ''; form.elements.due.value = i === 2 ? 'soon' : i === 3 ? 'over' : ''; draw(); return; }
+    if (e.target.closest('#calNew')) return editor().catch(fail);
+    if (e.target.closest('#calXlsx')) { const list = filtered(); if (!list.length) return toast('내보낼 줄이 없습니다.', 'err');
+      return xlsxDownload(`계측기_검교정_${data.today}.xlsx`, { sheet: '검교정', titles: ['검교정 관리(계측기 대장)', data.today], columns: ['관리번호', '장비명', '모델명', '제조사', 'S/N', '측정 범위', '위치', '세부 위치', '사용 부서', '담당자', '교정 주기(개월)', '교정 방식', '교정기관', '직전 교정일', '다음 교정일', '결과', '성적서 번호', '상태', '메모'].map(label => ({ label, type: label === '교정 주기(개월)' ? 'number' : 'text' })),
+        rows: list.map(r => [r.mgmt_no, r.name, r.model, r.maker, r.serial_no, r.spec, r.location, r.location_detail, r.dept, r.owner_name, r.cycle_months, r.cal_label, r.cal_agency, r.last_cal || '', r.next_due || '', r.last_result, r.cert_no, r.status_label, r.note]) }); }
+    const sel = () => data.rows.filter(r => picked.has(r.id));
+    if (e.target.closest('[data-cal-batch]')) return calibrate(sel()).catch(fail);
+    if (e.target.closest('[data-cal-qr-sel]')) return qr(sel());
+    if (e.target.closest('[data-cal-clear]')) { picked.clear(); draw(); return; }
+    const find = a => data.rows.find(x => x.id === Number(e.target.closest(`[${a}]`)?.getAttribute(a)));
+    if (e.target.closest('[data-cal-edit]')) return editor(find('data-cal-edit')).catch(fail);
+    if (e.target.closest('[data-cal-do]')) return calibrate([find('data-cal-do')]).catch(fail);
+    if (e.target.closest('[data-cal-hist]')) return history(find('data-cal-hist'));
+  });
+  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-cal-row]'); if (tr && data.can_manage && !e.target.closest('button, input')) editor(data.rows.find(x => x.id === Number(tr.dataset.calRow))).catch(fail); });
+  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }

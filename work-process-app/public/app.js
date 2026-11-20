@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.298';
+const APP_VERSION = '15.304';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -182,7 +182,7 @@ function modal(html, { wide = false, onClose = () => {} } = {}) {
   wrap.className = 'modal-wrap';
   wrap.innerHTML = `<div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true"><button class="modal-x" aria-label="닫기">×</button>${html}</div>`;
   const opener = document.activeElement;
-  const close = () => { if (!wrap.isConnected) return; wrap.remove(); syncModalInert(); document.removeEventListener('keydown', onKey); onClose(); const top = $$('.modal-wrap').at(-1); if (top) { if (!top.contains(document.activeElement)) ($('.modal', top)?.focus?.()); } else if (opener?.isConnected) opener.focus?.(); };
+  const close = () => { if (!wrap.isConnected) return; wrap.remove(); syncModalInert(); document.removeEventListener('keydown', onKey); window.removeEventListener('hashchange', close); onClose(); const top = $$('.modal-wrap').at(-1); if (top) { if (!top.contains(document.activeElement)) ($('.modal', top)?.focus?.()); } else if (opener?.isConnected) opener.focus?.(); };
   const onKey = (e) => {
     if (wrap !== $$('.modal-wrap').at(-1)) return; // only the top dialog reacts
     if (e.key === 'Escape') close();
@@ -198,6 +198,7 @@ function modal(html, { wide = false, onClose = () => {} } = {}) {
   wrap.addEventListener('mousedown', (e) => { if (e.target === wrap) close(); });
   $('.modal-x', wrap).onclick = close;
   document.addEventListener('keydown', onKey);
+  window.addEventListener('hashchange', close); // 15.299 다른 화면으로 가면(메뉴·뒤로 가기) 열린 창을 닫음 — 예전 창이 새 화면 위에 남던 문제
   document.body.appendChild(wrap); syncModalInert();
   { // 15.211 휴대폰: 화면보다 긴 팝업은 보이는 화면에 꽉 차게(닫기 × 위에 고정, 단추 줄 아래 고정). 세금계산서 양식은 PC 배율 그대로 줄여 보이고 손가락으로 확대.
     const box = $('.modal', wrap), fit = () => { if (!wrap.isConnected) { ro.disconnect(); return; } fitFixedForms(box); box.classList.toggle('modal-tall', innerWidth <= 700 && box.scrollHeight > box.clientHeight + 4); };
@@ -383,8 +384,10 @@ const NAV = [
     ['#/quality/inspections', '수입·출하 검사 이력'],
     ['#/quality/list', '분석 관리'],
     ['#/quality/voc/list', 'VOC 관리'],
+    ['#/quality/certs', '인증서 관리'], // 15.303 ISO·GRS 등 인증 갱신 관리
+    ['#/quality/calibration', '검교정 관리'], // 15.304 계측기 대장·교정 일정
   ] },
-  { group: '연구소', items: [['#/dev/list', '개발 관리'], ['#/dev/schedule', '스케줄 관리'], ['#/dev/analysis', '연구 분석 관리'], ['#/dev/specs', '검사규격 항목설정']] }, // 15.276 · 15.285 · 15.295 메뉴 이름 개발 → 연구소, 연구소 검사규격
+  { group: '연구소', items: [['#/dev/list', '개발 관리'], ['#/dev/schedule', '스케줄 관리'], ['#/dev/analysis', '연구 분석 관리'], ['#/dev/specs', '검사규격 항목설정'], ['#/dev/ip', '지식재산권 관리']] }, // 15.302 지식재산권 // 15.276 · 15.285 · 15.295 메뉴 이름 개발 → 연구소, 연구소 검사규격
   { group: '생산', items: [
     { sub: '샘플(제품)', items: [['#/prod/list', '제품 샘플리스트']] },
     ['#/prod/orders', '생산의뢰 접수'],
@@ -405,6 +408,18 @@ for (const g of NAV) g.items = g.items.map(i => !Array.isArray(i) && i.items.len
 // 홈·리포트·내 정보·관리자 화면은 묶음에 속하지 않아 항상 열린다(관리자 화면은 관리자만).
 const MENU_GROUP_LABELS = [['sales', '영업'], ['purchase', '구매'], ['quality', '품질'], ['dev', '연구소'], ['production', '생산'], ['logistics', '물류'], ['master', '기준 정보 (거래처·검사규격)']];
 const NAV_GROUP_KEY = { 영업: 'sales', 구매: 'purchase', 경리: 'accounting', 품질: 'quality', 연구소: 'dev', 개발: 'dev', 생산: 'production', 물류: 'logistics' };
+// 15.299 긴 목록(tw-fill)은 표 안에서 스크롤된다. 같은 화면에서 목록을 다시 그리면(조회·저장·상태 변경 뒤 새로 불러오기) 표 칸이 새로 만들어져
+// 맨 위로 튀던 문제 → 화면별·표 순서별 마지막 스크롤 위치를 기억했다가 새 표 칸에 되돌린다(다른 화면으로 가면 지움, 줄이 줄면 브라우저가 끝으로 맞춤).
+const TW_KEEP = { route: '', pos: [] };
+const twRoute = () => String(location.hash || '#/').split('?')[0];
+const twList = () => [...document.querySelectorAll('#main .table-wrap.tw-fill')];
+document.addEventListener('scroll', e => { const w = e.target; if (!(w instanceof Element) || !w.matches('#main .table-wrap.tw-fill')) return; const i = twList().indexOf(w); if (i < 0) return;
+  if (TW_KEEP.route !== twRoute()) { TW_KEEP.route = twRoute(); TW_KEEP.pos = []; } TW_KEEP.pos[i] = { t: w.scrollTop, l: w.scrollLeft }; }, true);
+window.addEventListener('hashchange', () => { if (TW_KEEP.route !== twRoute()) { TW_KEEP.route = ''; TW_KEEP.pos = []; } });
+function twRestore(w) {
+  if (TW_KEEP.route !== twRoute() || !w.closest('#main')) return; const i = twList().indexOf(w), p = TW_KEEP.pos[i]; if (!p || (!p.t && !p.l)) return;
+  const put = () => { if (w.isConnected && w.scrollTop === 0 && w.scrollLeft === 0) { w.scrollTop = p.t; w.scrollLeft = p.l; } }; put(); requestAnimationFrame(put);
+}
 function routeMenu(route) {
   const path = String(route || '#/').split('?')[0];
   // 구매의뢰 목록은 결재선에 지정된 누구나 들어와 결재해야 하므로 막지 않는다(서버가 본인 관련 의뢰만 보여 준다).
@@ -569,6 +584,8 @@ const PAGES = {
   '#/quality/inspections': pageInspections,
   '#/quality/incoming': () => { location.replace('#/quality/inspections'); }, // 15.151 수입검사 현황 메뉴 없앰(검사 이력의 필터로 봄) — 예전 즐겨찾기는 이력으로
   '#/quality/specs': pageInspectionSpecs,
+  '#/quality/certs': main => pageCerts(main), // 15.303
+  '#/quality/calibration': main => pageCalibration(main), // 15.304
   '#/quality/request': () => pageIntake('analysis'),
   '#/quality/list': () => pageWorkList('analysis'),
   '#/quality/voc/request': () => pageIntake('voc'),
@@ -578,6 +595,7 @@ const PAGES = {
   '#/dev/analysis': () => pageWorkList('rnd_analysis'), // 15.285 연구팀 분석 관리
   '#/dev/analysis/request': main => pageRndData(main), // 15.288 분석데이터 입력(연구원)
   '#/dev/specs': main => pageRndSpecs(main), // 15.295 연구소 검사규격 항목설정
+  '#/dev/ip': main => pageIpRights(main), // 15.302 지식재산권 관리
   '#/dev/schedule': main => pageDevRoadmap(main), // 15.276 개발 스케줄 관리(로드맵)
   '#/prod/request': () => { location.replace('#/sales/sample/product'); }, // 15.183 영업으로 옮김(예전 즐겨찾기)
   '#/sales/sample/product': () => pageIntake('sample'), // 15.183 제품 샘플의뢰(영업)
@@ -1540,7 +1558,7 @@ function labelGridTables() {
       if (CENTER_HEADS.test(head) && !cells.some(td => td.querySelector('input, select, button:not(.link-btn)'))) [ths[i], ...cells].forEach(c => c && !c.classList.contains('r') && c.classList.add('c')); // 15.180
     });
     gridLayout(table); // 15.173 열 너비·순서(빈 열 숨긴 뒤)
-    if (rows.length > 15 && !table.closest('.modal-wrap')) table.closest('.table-wrap')?.classList.add('tw-fill'); // 15.180 긴 목록: 머리글 고정
+    if (rows.length > 15 && !table.closest('.modal-wrap')) { const tw = table.closest('.table-wrap'); if (tw) { tw.classList.add('tw-fill'); twRestore(tw); } } // 15.180 긴 목록: 머리글 고정 · 15.299 다시 그려도 보던 자리
     requestAnimationFrame(() => gridFreeze(table)); // 15.182 가로로 길면 앞 열 고정
     if (!table.classList.contains('as-cards')) return;
     let secondary = 0;
@@ -2313,7 +2331,7 @@ function requestDetail(type, r, reload) {
       ${kv('접수번호', esc(r.req_no || '(승인 시 발급)'))}${keyRows}
       ${kv('의뢰자', `${esc(r.requester_name)} <span class="muted small">${esc(r.created_at.slice(0, 10))}</span>`)}
       ${r.reject_reason ? `<div class="rq-kv full"><span>반려 사유</span><b class="red-text">${esc(r.reject_reason)}</b></div>` : ''}
-      ${r.result_note ? `<div class="rq-kv full"><span>결과/메모</span><b>${esc(r.result_note)}</b></div>` : ''}
+      ${r.result_note ? `<div class="rq-kv full"><span>결과/메모</span><b data-rq-result>${esc(r.result_note)}</b></div>` : ''}
       ${type === 'rnd_analysis' ? `<div class="rq-kv full"><span>연결 개발건</span><b>${r.data?.dev_request_id ? `${esc(r.data.dev_title || '')}${r.data.dev_step ? ` · 단계 「${esc(r.data.dev_step)}」` : ''}` : '<span class="muted">연결 안 됨</span>'}</b></div>` : ''}
       ${type === 'voc' && r.data?.lot ? `<div class="rq-kv full"><span>LOT 연결</span><b><button type="button" class="link-btn" data-lt-open="${esc(r.data.lot)}">${esc(r.data.lot)} · LOT 연결 조회 →</button></b></div>` : ''}
     </div>
@@ -2344,7 +2362,9 @@ function requestDetail(type, r, reload) {
       ${mgr && ['waiting', 'progress', 'done'].includes(r.status) ? `<button class="btn" data-a="status">${type === 'rnd_analysis' ? '상태·의견' : '상태/결과 변경'}</button>` : ''}
     </div>`, { wide: true });
   if (['development','sample','sample_goods','voc','rnd_analysis'].includes(type)) renderAttachmentPreview($('[data-request-photos]', m.el), 'request', r.id);
-  if (type === 'rnd_analysis') api('GET', `/api/requests/${r.id}/rnd-measure`).then(x => { const b = $('[data-rnd-meas]', m.el); if (b) b.innerHTML = x.spec ? `<h4>측정값</h4>${rndMeasureTable(x.spec, x.measurement)}${x.memo ? `<p><span class="muted">종합 의견</span> ${esc(x.memo)}</p>` : ''}` : ''; }).catch(() => {}); // 15.292
+  if (type === 'rnd_analysis') api('GET', `/api/requests/${r.id}/rnd-measure`).then(x => { const b = $('[data-rnd-meas]', m.el); if (b) b.innerHTML = x.spec ? `<h4>측정값</h4>${rndMeasureTable(x.spec, x.measurement)}${x.memo ? `<p><span class="muted">종합 의견</span> ${esc(x.memo)}</p>` : ''}` : '';
+    const rb = $('[data-rq-result]', m.el); if (rb && x.summary) { rb.innerHTML = `${/^(시료 \d+개 · )?불합격/.test(x.summary) ? '<span class="chip red">불합격</span> ' : /전 항목 합격/.test(x.summary) ? '<span class="chip green">합격</span> ' : ''}${esc(x.summary.replace(/^(시료 \d+개 · )?불합격 \d+항목: /, '$1').replace(/^(시료 \d+개 · )?전 항목 합격/, '$1전 항목 합격'))}${x.memo ? ` <span class="muted">/ 의견:</span> ${esc(x.memo)}` : ''}`; } // 15.299 측정값에서 짧은 요약(불합격 항목만)
+  }).catch(() => {}); // 15.292
   else if (r.source_type) renderAttachmentPreview($('[data-request-photos]', m.el), r.source_type, r.source_id);
   const act = async (a) => {
     try {

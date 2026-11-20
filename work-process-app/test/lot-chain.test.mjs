@@ -658,7 +658,7 @@ test('15.292 research analysis data in inspection format: spec items + readings,
   assert.equal((await admin('POST', '/api/rnd-analysis-data', { title: 'x', category: '시제품분석', spec_items: items, values: {} })).status, 400, 'at least one reading');
   const r = await admin('POST', '/api/rnd-analysis-data', { title: '시제품 C', category: '시제품분석', spec_items: items, values: { i0: [90, 100, 110], i1: [40, 45], i2: [40.2] }, result_note: '양호' });
   assert.equal(r.status, 200, JSON.stringify(r.body));
-  assert.match(r.body.result_note, /^파티클 평균 100 ea\/ft² \(≤150\) 합격 · 흡수속도 평균 42\.5 초 \(0~60\) 합격 · 평량 40\.2 g\/㎡ → 합격 \/ 의견: 양호$/, r.body.result_note);
+  assert.match(r.body.result_note, /^전 항목 합격 \(2항목\) \/ 의견: 양호$/, r.body.result_note); // 15.299 짧은 요약
   const m = (await admin('GET', `/api/requests/${r.body.id}/rnd-measure`)).body;
   assert.equal(m.measurement.result, 'pass'); assert.deepEqual(m.spec.items.map(i => [i.name, i.min, i.max, i.count]), [['파티클', null, 150, 3], ['흡수속도', 0, 60, 2], ['평량', null, null, 1]]);
   assert.equal(m.memo, '양호');
@@ -666,7 +666,7 @@ test('15.292 research analysis data in inspection format: spec items + readings,
   assert.equal((await admin('PUT', `/api/requests/${r.body.id}/rnd-measure`, { spec_items: items, values: { i0: [90, 200, 110], i1: [40, 45], i2: [40.2] } })).status, 400, 'reason required');
   assert.equal((await prod('PUT', `/api/requests/${r.body.id}/rnd-measure`, { spec_items: items, values: { i0: [1, 1, 1] }, reason: 'x' })).status, 403);
   const e = await admin('PUT', `/api/requests/${r.body.id}/rnd-measure`, { spec_items: items, values: { i0: [90, 200, 110], i1: [40, 45], i2: [40.2] }, reason: '재측정' });
-  assert.equal(e.status, 200, JSON.stringify(e.body)); assert.match(e.body.result_note, /파티클 평균 133\.333 ea\/ft² \(≤150\) 불합격.*→ 불합격/);
+  assert.equal(e.status, 200, JSON.stringify(e.body)); assert.match(e.body.result_note, /^불합격 1항목: 파티클 평균 133\.333 ea\/ft² \(≤150\) \/ 의견: 양호$/, e.body.result_note);
   const m2 = (await admin('GET', `/api/requests/${r.body.id}/rnd-measure`)).body; assert.equal(m2.measurement.result, 'fail'); assert.equal(m2.measurement.revision, 2);
   // 메모만으로도(측정 없이) 저장 가능
   assert.equal((await admin('POST', '/api/rnd-analysis-data', { title: '관찰', category: '기타', result_note: '외관 이상 없음' })).status, 200);
@@ -677,8 +677,107 @@ test('15.293 research measurements with several samples (grid like quality analy
   const items = [{ name: '파티클', unit: 'ea', max: 150, count: 2 }, { name: '흡수', unit: 's', min: 0, max: 60, count: 1 }];
   const r = await admin('POST', '/api/rnd-analysis-data', { title: '비교 시험', category: '경쟁사분석', spec_items: items, samples: [{ lot: '당사', values: { i0: [90, 110], i1: [40] } }, { lot: '경쟁사 A', values: { i0: [180, 200], i1: [55] } }] });
   assert.equal(r.status, 200, JSON.stringify(r.body));
-  assert.match(r.body.result_note, /^시료 2개 · 파티클 평균 145 ea \(≤150\) 불합격 · 흡수 평균 47\.5 s \(0~60\) 합격 → 불합격$/, r.body.result_note);
+  assert.match(r.body.result_note, /^시료 2개 · 불합격 1항목: 파티클 평균 145 ea \(≤150\) \[경쟁사 A\]$/, r.body.result_note); const sm = (await admin('GET', `/api/requests/${r.body.id}/rnd-measure`)).body.summary; assert.equal(sm, '시료 2개 · 불합격 1항목: 파티클 평균 145 ea (≤150) [경쟁사 A]');
   const m = (await admin('GET', `/api/requests/${r.body.id}/rnd-measure`)).body;
   assert.deepEqual(m.measurement.rows.map(x => [x.lot, x.values.i0]), [['당사', [90, 110]], ['경쟁사 A', [180, 200]]]);
   assert.equal((await admin('POST', '/api/rnd-analysis-data', { title: 'x', category: '기타', spec_items: items, samples: Array.from({ length: 21 }, () => ({ values: { i0: [1, 1], i1: [1] } })) })).status, 400);
+});
+
+test('15.299 production request made from a sales order keeps the order link; the order lists its production requests', async () => {
+  await admin('POST', '/api/vendors', { name: 'MR고객', type: 'sales' });
+  const g = (await admin('POST', '/api/boms', { product: 'MR 와이퍼', product_code: 'MRW-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'BOX', materials: [] })).body;
+  const so = (await admin('POST', '/api/sales-orders', { customer: 'MR고객', customer_po: 'PO-77', order_date: today, request_id: rid(), lines: [{ bom_id: g.id, qty: 30, unit_price: 1000 }] })).body;
+  const base = { customer: 'MR고객', order_no: 'PO-77', order_date: today, lines: [{ bom_id: g.id, item: g.product, qty: 30, unit: 'BOX' }] };
+  assert.equal((await admin('POST', '/api/production-requests', { ...base, request_id: rid(), sales_order_id: 999999 })).status, 400);
+  assert.equal((await admin('POST', '/api/production-requests', { ...base, request_id: rid(), sales_order_id: 'x' })).status, 400);
+  const mr = await admin('POST', '/api/production-requests', { ...base, request_id: rid(), sales_order_id: so.id });
+  assert.equal(mr.status, 200, JSON.stringify(mr.body)); assert.equal(mr.body.sales_order_id, so.id); assert.equal(mr.body.sales_order_no, so.order_no);
+  const plain = (await admin('POST', '/api/production-requests', { ...base, request_id: rid() })).body; assert.equal(plain.sales_order_id, null);
+  const d = (await admin('GET', `/api/sales-orders/${so.id}`)).body;
+  assert.deepEqual(d.production_requests.map(x => [x.id, x.req_no, x.items]), [[mr.body.id, mr.body.req_no, 1]]);
+});
+
+test('15.299 production request linked to a sales order is marked shipped automatically once the whole order ships', async () => {
+  await admin('POST', '/api/vendors', { name: '자동출고고객', is_sales: true, is_purchase: true });
+  const g = (await admin('POST', '/api/boms', { product: '자동출고 와이퍼', product_code: 'AS-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'BOX', materials: [] })).body;
+  const rc = await admin('POST', '/api/receipts', { receipt_date: today, vendor: '자동출고고객', request_id: rid(), lines: [{ bom_id: g.id, lot: 'AS-LOT', qty: 100 }] }); assert.equal(rc.status, 200, JSON.stringify(rc.body));
+  const so = (await admin('POST', '/api/sales-orders', { customer: '자동출고고객', order_date: today, request_id: rid(), lines: [{ bom_id: g.id, qty: 30, unit_price: 1000 }] })).body;
+  const mr = (await admin('POST', '/api/production-requests', { customer: '자동출고고객', order_date: today, request_id: rid(), sales_order_id: so.id, lines: [{ bom_id: g.id, item: g.product, qty: 30, unit: 'BOX' }] })).body;
+  const other = (await admin('POST', '/api/production-requests', { customer: '자동출고고객', order_date: today, request_id: rid(), lines: [{ bom_id: g.id, item: g.product, qty: 5, unit: 'BOX' }] })).body;
+  const bill = async qty => admin('POST', '/api/sales-bills', { customer: '자동출고고객', bill_date: today, request_id: rid(), lines: [{ source_type: 'order', order_line_id: so.lines[0].id, qty }] });
+  const ship = async () => { const ins = (await admin('GET', '/api/ship-instructions')).body.rows.filter(i => i.order_no === so.order_no && i.status !== 'shipped'); return admin('POST', '/api/ship-instructions/ship', { ids: ins.map(i => i.id), ship_date: today, lots: Object.fromEntries(ins.map(i => [i.id, 'AS-LOT'])) }); };
+  assert.equal((await bill(20)).status, 200); assert.equal((await ship()).status, 200);
+  assert.equal((await admin('GET', `/api/production-requests/${mr.id}`)).body.shipped, false, 'part shipped: not yet');
+  assert.equal((await bill(10)).status, 200); const s2 = await ship(); assert.equal(s2.status, 200, JSON.stringify(s2.body));
+  const after = (await admin('GET', `/api/production-requests/${mr.id}`)).body;
+  assert.equal(after.shipped, true); assert.equal(after.shipped_date, today); assert.match(after.shipped_by, /수주 출하 완료 자동/);
+  assert.equal((await admin('GET', `/api/production-requests/${other.id}`)).body.shipped, false, 'unlinked request untouched');
+});
+
+test('15.302 intellectual property rights: researchers register, edit and renew; dates and duplicates checked; others read only', async () => {
+  const base = { kind: '특허', country: 'KR', title: '흡수성 부직포 와이퍼', app_no: '10-2020-0001', app_date: '2020-03-02', reg_date: '2022-05-10', reg_no: '10-2400001', expire_date: '2040-03-02', next_due: '2026-05-10', due_kind: '연차료 납부', status: 'registered', holder: '서울세미텍' };
+  assert.equal((await admin('POST', '/api/ip-rights', { ...base, kind: '없는것' })).status, 400);
+  assert.equal((await admin('POST', '/api/ip-rights', { ...base, reg_date: '2019-01-01' })).status, 400, 'reg before application');
+  assert.equal((await admin('POST', '/api/ip-rights', { ...base, reg_no: '' })).status, 400, 'registered needs a number');
+  assert.equal((await prod('POST', '/api/ip-rights', base)).status, 403);
+  const r = await admin('POST', '/api/ip-rights', { ...base, request_id: rid() }); assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.status_label, '등록완료'); assert.equal(r.body.history.length, 1);
+  assert.equal((await admin('POST', '/api/ip-rights', { ...base, request_id: rid() })).status, 400, 'duplicate registration number');
+  const list = await prod('GET', '/api/ip-rights'); assert.equal(list.status, 200); assert.equal(list.body.can_manage, false); assert.ok(list.body.rows.some(x => x.id === r.body.id));
+  assert.equal((await admin('POST', `/api/ip-rights/${r.body.id}/renew`, { revision: r.body.revision, next_due: '2026-05-01' })).status, 400, 'next due must move forward');
+  const n = await admin('POST', `/api/ip-rights/${r.body.id}/renew`, { revision: r.body.revision, next_due: '2027-05-10', note: '5년차' }); assert.equal(n.status, 200, JSON.stringify(n.body));
+  assert.equal(n.body.next_due, '2027-05-10'); assert.equal(n.body.history.at(-1).what, '갱신'); assert.equal(n.body.history.at(-1).due, '2026-05-10');
+  assert.equal((await admin('PUT', `/api/ip-rights/${r.body.id}`, { ...base, status: 'expired', revision: r.body.revision })).status, 409, 'stale revision');
+  const e = await admin('PUT', `/api/ip-rights/${r.body.id}`, { ...base, next_due: '2027-05-10', status: 'expired', revision: n.body.revision }); assert.equal(e.status, 200, JSON.stringify(e.body));
+  assert.deepEqual(e.body.history.at(-1).status, ['registered', 'expired']);
+  const tm = (await admin('POST', '/api/ip-rights', { kind: '상표', title: 'SST', status: 'filed', app_date: '2025-01-01' })).body; assert.equal(tm.reg_no, '');
+  assert.equal((await admin('POST', `/api/ip-rights/${tm.id}/renew`, { revision: tm.revision, next_due: '2030-01-01' })).status, 400, 'only registered rights renew');
+  assert.equal((await admin('DELETE', `/api/ip-rights/${tm.id}?revision=${tm.revision}`)).status, 200);
+});
+
+test('15.303 certifications: quality registers ISO/GRS certificates, records audits (surveillance, renewal, nonconformity), others read only', async () => {
+  const base = { kind: 'ISO 9001', cert_no: 'FS 600001', scope: '와이퍼 제조', body: 'BSI', first_date: '2020-06-01', issue_date: '2023-06-01', expire_date: '2026-05-31', next_audit: '2025-06-01', audit_kind: '2차 사후심사', status: 'valid' };
+  assert.equal((await admin('POST', '/api/certs', { ...base, kind: 'ISO 0000' })).status, 400);
+  assert.equal((await admin('POST', '/api/certs', { ...base, expire_date: '2023-01-01' })).status, 400, 'expiry after issue');
+  assert.equal((await admin('POST', '/api/certs', { ...base, cert_no: '' })).status, 400, 'valid needs a number');
+  assert.equal((await admin('POST', '/api/certs', { kind: '기타', status: 'prep' })).status, 400, 'other needs a name');
+  assert.equal((await prod('POST', '/api/certs', base)).status, 403);
+  const c = await admin('POST', '/api/certs', { ...base, request_id: rid() }); assert.equal(c.status, 200, JSON.stringify(c.body)); assert.equal(c.body.status_label, '유효');
+  assert.equal((await admin('POST', '/api/certs', { ...base, request_id: rid() })).status, 400, 'duplicate number');
+  const l = await prod('GET', '/api/certs'); assert.equal(l.status, 200); assert.equal(l.body.can_manage, false);
+  // 사후심사 적합 → 다음 심사 넘김
+  const s1 = await admin('POST', `/api/certs/${c.body.id}/audit`, { revision: c.body.revision, done_date: '2025-06-03', result: '적합', next_audit: '2026-03-01', next_kind: '갱신심사' }); assert.equal(s1.status, 200, JSON.stringify(s1.body));
+  assert.equal(s1.body.next_audit, '2026-03-01'); assert.equal(s1.body.audit_kind, '갱신심사'); assert.equal(s1.body.history.at(-1).result, '적합');
+  // 부적합 → 정지, 갱신심사 적합 → 새 유효기간·유효
+  const s2 = await admin('POST', `/api/certs/${c.body.id}/audit`, { revision: s1.body.revision, done_date: '2026-03-02', result: '부적합', next_audit: '2026-04-01', next_kind: '특별심사' }); assert.equal(s2.body.status, 'suspended');
+  assert.equal((await admin('POST', `/api/certs/${c.body.id}/audit`, { revision: s2.body.revision, done_date: '2026-04-02', next_audit: '2026-04-01' })).status, 400, 'next audit after the audit');
+  const s3 = await admin('POST', `/api/certs/${c.body.id}/audit`, { revision: s2.body.revision, done_date: '2026-04-02', result: '적합', issue_date: '2026-06-01', expire_date: '2029-05-31', next_audit: '2027-06-01', next_kind: '1차 사후심사' });
+  assert.equal(s3.status, 200, JSON.stringify(s3.body)); assert.equal(s3.body.status, 'valid'); assert.equal(s3.body.expire_date, '2029-05-31'); assert.deepEqual(s3.body.history.at(-1).expire, ['2026-05-31', '2029-05-31']);
+  const g = (await admin('POST', '/api/certs', { kind: 'GRS', status: 'prep', body: 'Control Union' })).body;
+  assert.equal((await admin('POST', `/api/certs/${g.id}/audit`, { revision: g.revision })).status, 400, 'prep cannot be audited');
+  assert.equal((await admin('PUT', `/api/certs/${g.id}`, { kind: 'GRS', status: 'valid', cert_no: 'CU-GRS-1', issue_date: '2026-01-10', expire_date: '2027-01-09', revision: g.revision })).status, 200);
+});
+
+test('15.304 calibration: instrument register, next due = calibrated + cycle - 1 day, batch calibration, nonconforming takes it out of use', async () => {
+  const t01 = { mgmt_no: 't-01', name: '온습도계', model: 'TR-72wb', maker: 'T&D', location: '1동', cycle_months: 12, cal_type: 'external', cal_agency: 'KTL', last_cal: '2026-12-01', last_result: '적합', status: 'in_use' };
+  assert.equal((await prod('POST', '/api/instruments', t01)).status, 403);
+  assert.equal((await admin('POST', '/api/instruments', { ...t01, cycle_months: 0 })).status, 400);
+  assert.equal((await admin('POST', '/api/instruments', { ...t01, next_due: '2026-11-01' })).status, 400, 'next due after last');
+  const a = await admin('POST', '/api/instruments', { ...t01, request_id: rid() }); assert.equal(a.status, 200, JSON.stringify(a.body));
+  assert.equal(a.body.mgmt_no, 'T-01'); assert.equal(a.body.next_due, '2027-11-30', '2026-12-01 + 1 year - 1 day'); assert.equal(a.body.history.length, 2);
+  assert.equal((await admin('POST', '/api/instruments', { ...t01, request_id: rid() })).status, 400, 'duplicate management number');
+  const b = (await admin('POST', '/api/instruments', { ...t01, mgmt_no: 'B-01', name: '전자저울', cycle_months: 6, last_cal: '2026-01-31' })).body;
+  assert.equal(b.next_due, '2026-07-30');
+  const c = (await admin('POST', '/api/instruments', { ...t01, mgmt_no: 'C-01', name: '파티클 카운터', last_cal: '2025-11-01' })).body;
+  assert.equal((await prod('GET', '/api/instruments')).body.can_manage, false);
+  assert.equal((await admin('POST', '/api/instruments/calibrate', { items: [{ id: a.body.id, revision: a.body.revision }], done_date: today, result: '부적합' })).status, 400, 'nonconforming needs a note');
+  assert.equal((await admin('POST', '/api/instruments/calibrate', { items: [{ id: a.body.id, revision: a.body.revision }], done_date: '2099-01-01', result: '적합' })).status, 400, 'no future date');
+  const batch = await admin('POST', '/api/instruments/calibrate', { items: [{ id: c.id, revision: c.revision }, { id: b.id, revision: b.revision }], done_date: '2026-11-02', result: '적합', agency: 'KTC' });
+  assert.equal(batch.status, 200, JSON.stringify(batch.body)); const byNo = Object.fromEntries(batch.body.rows.map(r => [r.mgmt_no, r]));
+  assert.equal(byNo['C-01'].next_due, '2027-11-01'); assert.equal(byNo['B-01'].next_due, '2027-05-01'); assert.equal(byNo['B-01'].cal_agency, 'KTC'); assert.equal(byNo['C-01'].history.at(-1).due, '2026-10-31');
+  assert.equal((await admin('POST', '/api/instruments/calibrate', { items: [{ id: b.id, revision: b.revision }], done_date: today, result: '적합' })).status, 409, 'stale revision');
+  const bad = await admin('POST', '/api/instruments/calibrate', { items: [{ id: b.id, revision: byNo['B-01'].revision }], done_date: '2026-11-03', result: '부적합', note: '편차 0.5g 초과, 지난 측정 재검토' });
+  assert.equal(bad.body.rows[0].status, 'out'); assert.deepEqual(bad.body.rows[0].history.at(-1).status, ['in_use', 'out']);
+  const ok2 = await admin('POST', '/api/instruments/calibrate', { items: [{ id: b.id, revision: bad.body.rows[0].revision }], done_date: '2026-11-04', result: '조정 후 적합', next_due: '2027-03-01' });
+  assert.equal(ok2.body.rows[0].status, 'in_use'); assert.equal(ok2.body.rows[0].next_due, '2027-03-01', 'single item can set next due');
 });

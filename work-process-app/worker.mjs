@@ -506,7 +506,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -3533,7 +3533,7 @@ route('GET', '/api/dev-roadmap', async ({ query }) => {
     FROM requests r LEFT JOIN dev_plans p ON p.request_id=r.id WHERE ${where.join(' AND ')} ORDER BY COALESCE(NULLIF(p.target_date,''), r.due_date, '9999') , r.id LIMIT 500`).all(...args);
   const steps = new Map(); for (const st of await db.prepare(`SELECT * FROM dev_plan_steps ${query.id ? 'WHERE request_id=? ' : ''}ORDER BY request_id, sort, id`).all(...(query.id ? [Number(query.id)] : []))) { if (!steps.has(st.request_id)) steps.set(st.request_id, []); steps.get(st.request_id).push(st); }
   const ana = new Map(); // 15.286 연결된 연구 분석(단계·결과)
-  for (const a of await db.prepare(`SELECT id, req_no, title, category, status, result_note, requester_name, created_at, updated_at, CAST(json_extract(data,'$.dev_request_id') AS INTEGER) AS dev_id, COALESCE(json_extract(data,'$.dev_step'),'') AS dev_step, COALESCE(json_extract(data,'$.analysis_date'),'') AS analysis_date, (SELECT m.result FROM inspection_measurements m WHERE m.request_id=requests.id) AS judge FROM requests WHERE type='rnd_analysis' AND status<>'rejected' AND json_extract(data,'$.dev_request_id') IS NOT NULL ${query.id ? "AND json_extract(data,'$.dev_request_id')=?" : ''} ORDER BY id`).all(...(query.id ? [Number(query.id)] : []))) { if (!ana.has(a.dev_id)) ana.set(a.dev_id, []); ana.get(a.dev_id).push(a); }
+  for (const a of await db.prepare(`SELECT id, req_no, title, category, status, result_note, requester_name, created_at, updated_at, CAST(json_extract(data,'$.dev_request_id') AS INTEGER) AS dev_id, COALESCE(json_extract(data,'$.dev_step'),'') AS dev_step, COALESCE(json_extract(data,'$.analysis_date'),'') AS analysis_date, (SELECT m.result FROM inspection_measurements m WHERE m.request_id=requests.id) AS judge, inspection_snapshot AS snap, (SELECT m.values_json FROM inspection_measurements m WHERE m.request_id=requests.id) AS mvals, COALESCE(json_extract(data,'$.memo'),'') AS memo FROM requests WHERE type='rnd_analysis' AND status<>'rejected' AND json_extract(data,'$.dev_request_id') IS NOT NULL ${query.id ? "AND json_extract(data,'$.dev_request_id')=?" : ''} ORDER BY id`).all(...(query.id ? [Number(query.id)] : []))) { const short = rndShort(a.snap, a.mvals, a.memo); if (short) a.result_note = short; delete a.snap; delete a.mvals; delete a.memo; if (!ana.has(a.dev_id)) ana.set(a.dev_id, []); ana.get(a.dev_id).push(a); } // 15.299 짧은 요약
   return { rows: rows.map(r => ({ ...r, term: r.term || '', progress: r.progress || 0, steps: steps.get(r.id) || [], analyses: ana.get(r.id) || [] })) };
 });
 // 15.277 담당자(개발·영업): 개발 담당·개발 승인권자·영업·관리자가 지정. 바뀌면 소통 내역에 [담당자] 한 줄을 같이 남김.
@@ -3677,7 +3677,7 @@ function rndMeasure(itemsIn, valuesIn, samplesIn) { // 15.293 samplesIn: [{lot, 
     return { key: 'i' + i, name: reqStr(o.name, `${i + 1}번째 측정 항목`, 100), unit: str(o.unit, 30), min, max, count }; });
   const srcs = Array.isArray(samplesIn) && samplesIn.length ? samplesIn : [{ lot: '', values: valuesIn }];
   if (srcs.length > 20) throw bad('시료는 20개까지입니다.');
-  let filled = 0, missing = false, failed = false; const summary = [];
+  let filled = 0, missing = false, failed = false; const summary = [], fails = []; let judgedN = 0, passN = 0;
   const rows = srcs.map((src, n) => { const vals = src && typeof src.values === 'object' && src.values ? src.values : {}, values = {};
     for (const it of items) { const list = (Array.isArray(vals[it.key]) ? vals[it.key] : []).slice(0, it.count); while (list.length < it.count) list.push(null); values[it.key] = list.map(v => num(v, `${it.name} 측정값`)); }
     return { lot: str(src?.lot, 100) || (srcs.length > 1 ? `시료 ${n + 1}` : ''), values }; });
@@ -3687,11 +3687,17 @@ function rndMeasure(itemsIn, valuesIn, samplesIn) { // 15.293 samplesIn: [{lot, 
     const avg = got.length ? Math.round(got.reduce((t, v) => t + v, 0) / got.length * 1000) / 1000 : null;
     const spec = it.min !== null && it.max !== null ? `${it.min}~${it.max}` : it.min !== null ? `≥${it.min}` : it.max !== null ? `≤${it.max}` : '';
     if (avg !== null) summary.push(`${it.name} ${got.length > 1 ? '평균 ' : ''}${avg}${it.unit ? ' ' + it.unit : ''}${spec ? ` (${spec}) ${bad1 ? '불합격' : '합격'}` : ''}`);
+    // 15.299 요약은 불합격 항목만(어느 시료인지 함께), 불합격이 없으면 「전 항목 합격」
+    if (spec && got.length) { judgedN++; if (!bad1) passN++; }
+    if (bad1) { const out = v => v !== null && ((it.min !== null && v < it.min) || (it.max !== null && v > it.max)); const who = rows.length > 1 ? rows.filter(r => r.values[it.key].some(out)).map(r => r.lot) : [];
+      fails.push(`${it.name} ${got.length > 1 ? '평균 ' : ''}${avg}${it.unit ? ' ' + it.unit : ''} (${spec})${who.length ? ` [${who.join(', ')}]` : ''}`); }
   }
   if (!filled) throw bad('측정값을 하나 이상 넣으세요.');
   const judged = items.some(it => it.min !== null || it.max !== null);
   const result = failed ? 'fail' : missing ? 'pending' : 'pass';
-  return { snapshot: { kind: '연구분석', items }, rows, result, judged, summary: (rows.length > 1 ? `시료 ${rows.length}개 · ` : '') + summary.join(' · ') + (judged ? ` → ${failed ? '불합격' : missing ? '측정 중' : '합격'}` : '') };
+  const head = rows.length > 1 ? `시료 ${rows.length}개 · ` : '';
+  const short = !judged ? `규격 없이 기록 · ${summary.join(' · ')}` : failed ? `불합격 ${fails.length}항목: ${fails.join(' · ')}` : missing ? `측정 중 · 합격 ${passN}/${items.filter(it => it.min !== null || it.max !== null).length}항목 (빈 칸 있음)` : `전 항목 합격 (${judgedN}항목)`;
+  return { snapshot: { kind: '연구분석', items }, rows, result, judged, summary: head + short, detail: head + summary.join(' · ') };
 }
 const isResearcher = user => hasRole(user, 'dev') || hasRole(user, 'dev_approver');
 async function createRndData(user, body, devId) {
@@ -3743,6 +3749,192 @@ async function rndSpecWrite(prior, specs) {
   if (!changed.changes) throw new HttpError(409, '다른 사람이 검사규격을 바꿨습니다. 다시 열어 주세요.');
   return JSON.parse(value);
 }
+// 15.302 연구소 지식재산권 관리: 보유 권리와 갱신(연차료·존속기간 갱신) 기한. 보기는 연구소 메뉴를 볼 수 있는 사람, 등록·수정·갱신·삭제는 연구원·관리자.
+const IP_KINDS = ['특허', '실용신안', '디자인', '상표', '저작권', '반도체 배치설계', '영업비밀', '기타'];
+const IP_STATUS = { prep: '출원 준비', filed: '출원중', exam: '심사중', registered: '등록완료', rejected: '거절(불허)', abandoned: '포기·취하', expired: '소멸(만료)' };
+function ipBody(body) {
+  const o = body && typeof body === 'object' ? body : {};
+  if (!IP_KINDS.includes(o.kind)) throw bad('구분을 고르세요.');
+  if (!Object.keys(IP_STATUS).includes(o.status)) throw bad('상태를 고르세요.');
+  const d = (v, label) => v === '' || v == null ? null : dateStr(v, label);
+  const f = { kind: o.kind, country: str(o.country, 30) || 'KR', title: reqStr(o.title, '지식재산권명', 200), reg_no: str(o.reg_no, 60), app_no: str(o.app_no, 60),
+    app_date: d(o.app_date, '출원일'), reg_date: d(o.reg_date, '등록일'), expire_date: d(o.expire_date, '유효기간(만료일)'), next_due: d(o.next_due, '다음 기한'), due_kind: str(o.due_kind, 30),
+    status: o.status, holder: str(o.holder, 100), owner_name: str(o.owner_name, 50), product: str(o.product, 200), agent: str(o.agent, 100), note: str(o.note, 1000) };
+  if (f.app_date && f.reg_date && f.reg_date < f.app_date) throw bad('등록일이 출원일보다 빠릅니다.');
+  if (f.reg_date && f.expire_date && f.expire_date < f.reg_date) throw bad('유효기간(만료일)이 등록일보다 빠릅니다.');
+  if (f.status === 'registered' && !f.reg_no) throw bad('등록완료는 등록번호를 넣으세요.');
+  return f;
+}
+const ipRow = r => ({ ...r, history: JSON.parse(r.history || '[]'), status_label: IP_STATUS[r.status] || r.status });
+const requireIpManager = user => { if (!isResearcher(user)) throw new HttpError(403, '지식재산권은 연구원(개발·개발책임자)·관리자만 등록·수정합니다.'); };
+const IP_COLS = ['kind', 'country', 'title', 'reg_no', 'app_no', 'app_date', 'reg_date', 'expire_date', 'next_due', 'due_kind', 'status', 'holder', 'owner_name', 'product', 'agent', 'note'];
+route('GET', '/api/ip-rights', async ({ user }) => ({ rows: (await db.prepare('SELECT * FROM ip_rights ORDER BY CASE WHEN next_due IS NULL THEN 1 ELSE 0 END, next_due, id DESC LIMIT 2000').all()).map(ipRow), kinds: IP_KINDS, status: IP_STATUS, can_manage: isResearcher(user), today: today() }));
+route('POST', '/api/ip-rights', async ({ user, body }) => {
+  requireIpManager(user); const f = ipBody(body), key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM ip_rights WHERE request_id=?').get(key); if (old) return ipRow(old); }
+  if (f.reg_no && await db.prepare('SELECT 1 FROM ip_rights WHERE kind=? AND country=? AND reg_no=?').get(f.kind, f.country, f.reg_no)) throw bad(`이미 등록된 ${f.kind} 등록번호입니다: ${f.reg_no}`);
+  const r = await db.prepare(`INSERT INTO ip_rights(${IP_COLS.join(',')},history,request_id,created_by) VALUES(${IP_COLS.map(() => '?').join(',')},?,?,?)`).run(...IP_COLS.map(k => f[k]), JSON.stringify([{ at: now(), by: user.name, what: '등록' }]), key, user.name);
+  return ipRow(await mustGet('ip_rights', r.lastInsertRowid));
+});
+route('PUT', '/api/ip-rights/:id', async ({ user, params, body }) => {
+  requireIpManager(user); const prior = await mustGet('ip_rights', params.id), f = ipBody(body);
+  if (Number(body.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  if (f.reg_no && await db.prepare('SELECT 1 FROM ip_rights WHERE kind=? AND country=? AND reg_no=? AND id<>?').get(f.kind, f.country, f.reg_no, prior.id)) throw bad(`이미 등록된 ${f.kind} 등록번호입니다: ${f.reg_no}`);
+  const changed = IP_COLS.filter(k => (prior[k] ?? null) !== (f[k] ?? null)); if (!changed.length) return ipRow(prior);
+  const hist = [...JSON.parse(prior.history || '[]'), { at: now(), by: user.name, what: '수정', fields: changed, ...(prior.status !== f.status ? { status: [prior.status, f.status] } : {}) }].slice(-100);
+  const r = await db.prepare(`UPDATE ip_rights SET ${IP_COLS.map(k => k + '=?').join(',')},history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`).run(...IP_COLS.map(k => f[k]), JSON.stringify(hist), user.name, prior.id, prior.revision);
+  if (!r.changes) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  return ipRow(await mustGet('ip_rights', prior.id));
+});
+// 갱신 처리: 연차료 납부·존속기간 갱신을 마쳤을 때 다음 기한(·만료일)을 넘기고 이력에 남긴다.
+route('POST', '/api/ip-rights/:id/renew', async ({ user, params, body }) => {
+  requireIpManager(user); const prior = await mustGet('ip_rights', params.id);
+  if (Number(body.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  if (prior.status !== 'registered') throw bad('등록완료된 권리만 갱신 처리합니다.');
+  const done = dateStr(body.done_date || today(), '처리일'), next = body.next_due ? dateStr(body.next_due, '다음 기한') : null, exp = body.expire_date ? dateStr(body.expire_date, '유효기간(만료일)') : prior.expire_date;
+  if (next && prior.next_due && next <= prior.next_due) throw bad('다음 기한은 지금 기한보다 뒤여야 합니다.');
+  if (next && exp && next > exp) throw bad('다음 기한이 유효기간(만료일)보다 뒤입니다.');
+  const hist = [...JSON.parse(prior.history || '[]'), { at: now(), by: user.name, what: '갱신', done, due: prior.next_due, next, kind: str(body.due_kind, 30) || prior.due_kind, ...(exp !== prior.expire_date ? { expire: [prior.expire_date, exp] } : {}), note: str(body.note, 300) }].slice(-100);
+  const r = await db.prepare("UPDATE ip_rights SET next_due=?,expire_date=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?").run(next, exp, JSON.stringify(hist), user.name, prior.id, prior.revision);
+  if (!r.changes) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  return ipRow(await mustGet('ip_rights', prior.id));
+});
+route('DELETE', '/api/ip-rights/:id', async ({ user, params, query }) => {
+  requireIpManager(user); const prior = await mustGet('ip_rights', params.id);
+  if (Number(query.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  await db.prepare('DELETE FROM ip_rights WHERE id=? AND revision=?').run(prior.id, prior.revision); return { ok: true };
+});
+// 15.303 품질 › 인증서 관리: ISO·GRS 등 인증의 유효기간과 다음 심사(사후·갱신) 일정. 보기는 품질 메뉴를 볼 수 있는 사람, 등록·수정·심사 처리·삭제는 품질(담당·책임자)·관리자.
+const CERT_KINDS = ['ISO 9001', 'ISO 14001', 'ISO 45001', 'IATF 16949', 'GRS', 'RCS', 'OEKO-TEX STANDARD 100', 'FSC', 'KC', 'ISO 14644(클린룸)', '기타'];
+const CERT_STATUS = { prep: '준비·신청', valid: '유효', suspended: '정지', expired: '만료', withdrawn: '취소·반납' };
+const CERT_COLS = ['kind', 'cert_no', 'title', 'scope', 'body', 'site', 'first_date', 'issue_date', 'expire_date', 'next_audit', 'audit_kind', 'status', 'owner_name', 'note'];
+function certBody(o0) {
+  const o = o0 && typeof o0 === 'object' ? o0 : {};
+  if (!CERT_KINDS.includes(o.kind)) throw bad('인증 종류를 고르세요.');
+  if (!Object.keys(CERT_STATUS).includes(o.status)) throw bad('상태를 고르세요.');
+  const d = (v, label) => v === '' || v == null ? null : dateStr(v, label);
+  const f = { kind: o.kind, cert_no: str(o.cert_no, 80), title: str(o.title, 200), scope: str(o.scope, 500), body: str(o.body, 100), site: str(o.site, 100),
+    first_date: d(o.first_date, '최초 인증일'), issue_date: d(o.issue_date, '발행일'), expire_date: d(o.expire_date, '유효기간(만료일)'), next_audit: d(o.next_audit, '다음 심사일'), audit_kind: str(o.audit_kind, 30),
+    status: o.status, owner_name: str(o.owner_name, 50), note: str(o.note, 1000) };
+  if (f.kind === '기타' && !f.title) throw bad('기타 인증은 인증명을 넣으세요.');
+  if (f.first_date && f.issue_date && f.issue_date < f.first_date) throw bad('발행일이 최초 인증일보다 빠릅니다.');
+  if (f.issue_date && f.expire_date && f.expire_date <= f.issue_date) throw bad('유효기간(만료일)은 발행일 뒤여야 합니다.');
+  if (f.status === 'valid' && !f.cert_no) throw bad('유효한 인증은 인증번호를 넣으세요.');
+  return f;
+}
+const certRow = r => ({ ...r, history: JSON.parse(r.history || '[]'), status_label: CERT_STATUS[r.status] || r.status });
+const requireCertManager = user => { if (!hasRole(user, 'quality')) throw new HttpError(403, '인증서는 품질 담당·품질책임자·관리자만 등록·수정합니다.'); };
+route('GET', '/api/certs', async ({ user }) => ({ rows: (await db.prepare('SELECT * FROM certifications ORDER BY CASE WHEN next_audit IS NULL THEN 1 ELSE 0 END, next_audit, id DESC LIMIT 1000').all()).map(certRow), can_manage: hasRole(user, 'quality'), today: today() }));
+route('POST', '/api/certs', async ({ user, body }) => {
+  requireCertManager(user); const f = certBody(body), key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM certifications WHERE request_id=?').get(key); if (old) return certRow(old); }
+  if (f.cert_no && await db.prepare('SELECT 1 FROM certifications WHERE kind=? AND cert_no=?').get(f.kind, f.cert_no)) throw bad(`이미 등록된 ${f.kind} 인증번호입니다: ${f.cert_no}`);
+  const r = await db.prepare(`INSERT INTO certifications(${CERT_COLS.join(',')},history,request_id,created_by) VALUES(${CERT_COLS.map(() => '?').join(',')},?,?,?)`).run(...CERT_COLS.map(k => f[k]), JSON.stringify([{ at: now(), by: user.name, what: '등록' }]), key, user.name);
+  return certRow(await mustGet('certifications', r.lastInsertRowid));
+});
+route('PUT', '/api/certs/:id', async ({ user, params, body }) => {
+  requireCertManager(user); const prior = await mustGet('certifications', params.id), f = certBody(body);
+  if (Number(body.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  if (f.cert_no && await db.prepare('SELECT 1 FROM certifications WHERE kind=? AND cert_no=? AND id<>?').get(f.kind, f.cert_no, prior.id)) throw bad(`이미 등록된 ${f.kind} 인증번호입니다: ${f.cert_no}`);
+  const changed = CERT_COLS.filter(k => (prior[k] ?? null) !== (f[k] ?? null)); if (!changed.length) return certRow(prior);
+  const hist = [...JSON.parse(prior.history || '[]'), { at: now(), by: user.name, what: '수정', fields: changed, ...(prior.status !== f.status ? { status: [prior.status, f.status] } : {}) }].slice(-100);
+  const r = await db.prepare(`UPDATE certifications SET ${CERT_COLS.map(k => k + '=?').join(',')},history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`).run(...CERT_COLS.map(k => f[k]), JSON.stringify(hist), user.name, prior.id, prior.revision);
+  if (!r.changes) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  return certRow(await mustGet('certifications', prior.id));
+});
+// 심사 완료 처리: 사후심사는 다음 심사일을 넘기고, 갱신심사는 새 발행일·만료일까지 바꾸며 이력에 남긴다(결과: 적합·조건부·부적합).
+route('POST', '/api/certs/:id/audit', async ({ user, params, body }) => {
+  requireCertManager(user); const prior = await mustGet('certifications', params.id);
+  if (Number(body.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  if (!['valid', 'suspended'].includes(prior.status)) throw bad('유효·정지 상태의 인증만 심사 처리합니다.');
+  const done = dateStr(body.done_date || today(), '심사일'), result = ['적합', '조건부 적합', '부적합'].includes(body.result) ? body.result : '적합';
+  const next = body.next_audit ? dateStr(body.next_audit, '다음 심사일') : null, issue = body.issue_date ? dateStr(body.issue_date, '새 발행일') : prior.issue_date, exp = body.expire_date ? dateStr(body.expire_date, '새 유효기간') : prior.expire_date;
+  if (next && next <= done) throw bad('다음 심사일은 심사일 뒤여야 합니다.');
+  if (issue && exp && exp <= issue) throw bad('유효기간(만료일)은 발행일 뒤여야 합니다.');
+  const status = result === '부적합' ? 'suspended' : prior.status === 'suspended' ? 'valid' : prior.status;
+  const hist = [...JSON.parse(prior.history || '[]'), { at: now(), by: user.name, what: '심사', done, kind: str(body.audit_kind, 30) || prior.audit_kind, result, due: prior.next_audit, next, ...(issue !== prior.issue_date ? { issue: [prior.issue_date, issue] } : {}), ...(exp !== prior.expire_date ? { expire: [prior.expire_date, exp] } : {}), ...(status !== prior.status ? { status: [prior.status, status] } : {}), note: str(body.note, 300) }].slice(-100);
+  const r = await db.prepare("UPDATE certifications SET next_audit=?,audit_kind=?,issue_date=?,expire_date=?,status=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?")
+    .run(next, str(body.next_kind, 30), issue, exp, status, JSON.stringify(hist), user.name, prior.id, prior.revision);
+  if (!r.changes) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  return certRow(await mustGet('certifications', prior.id));
+});
+route('DELETE', '/api/certs/:id', async ({ user, params, query }) => {
+  requireCertManager(user); const prior = await mustGet('certifications', params.id);
+  if (Number(query.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  await db.prepare('DELETE FROM certifications WHERE id=? AND revision=?').run(prior.id, prior.revision); return { ok: true };
+});
+// 15.304 품질 › 검교정 관리(계측기 대장). 다음 교정일 = 교정일 + 주기(개월) − 1일(예: 2026-12-01, 12개월 → 2027-11-30).
+// 보기는 품질 메뉴를 볼 수 있는 사람, 등록·수정·교정 처리·삭제는 품질 담당·품질책임자·관리자.
+const INST_STATUS = { in_use: '사용 중', at_cal: '교정 중', out: '사용중지', spare: '예비', disposed: '폐기' };
+const INST_CAL = { external: '외부 교정(KOLAS 등)', internal: '자체 교정', check: '일상 점검' };
+const INST_RESULT = ['적합', '조정 후 적합', '부적합'];
+const INST_COLS = ['mgmt_no', 'name', 'model', 'maker', 'serial_no', 'spec', 'location', 'location_detail', 'dept', 'owner_name', 'purchase_date', 'cycle_months', 'cal_type', 'cal_agency', 'last_cal', 'next_due', 'cert_no', 'last_result', 'status', 'note'];
+function calNextDue(done, months) { if (!done || !months) return null; const [y, m, d] = done.split('-').map(Number); const t = new Date(Date.UTC(y, m - 1 + months, d)); if (t.getUTCDate() !== d) t.setUTCDate(0); t.setUTCDate(t.getUTCDate() - 1); return t.toISOString().slice(0, 10); }
+function instBody(o0) {
+  const o = o0 && typeof o0 === 'object' ? o0 : {};
+  if (!Object.keys(INST_STATUS).includes(o.status)) throw bad('상태를 고르세요.');
+  if (!Object.keys(INST_CAL).includes(o.cal_type)) throw bad('교정 방식을 고르세요.');
+  const months = Number(o.cycle_months); if (!Number.isInteger(months) || months < 1 || months > 120) throw bad('교정 주기는 1~120개월입니다.');
+  if (o.last_result && !INST_RESULT.includes(o.last_result)) throw bad('결과를 다시 고르세요.');
+  const d = (v, label) => v === '' || v == null ? null : dateStr(v, label);
+  const f = { mgmt_no: reqStr(o.mgmt_no, '관리번호', 50).toUpperCase(), name: reqStr(o.name, '장비명', 100), model: str(o.model, 100), maker: str(o.maker, 100), serial_no: str(o.serial_no, 100), spec: str(o.spec, 200),
+    location: str(o.location, 100), location_detail: str(o.location_detail, 100), dept: str(o.dept, 50), owner_name: str(o.owner_name, 50), purchase_date: d(o.purchase_date, '구입일'), cycle_months: months,
+    cal_type: o.cal_type, cal_agency: str(o.cal_agency, 100), last_cal: d(o.last_cal, '직전 교정일'), next_due: d(o.next_due, '다음 교정일'), cert_no: str(o.cert_no, 80), last_result: o.last_result || '', status: o.status, note: str(o.note, 1000) };
+  if (!f.next_due && f.last_cal) f.next_due = calNextDue(f.last_cal, months);
+  if (f.last_cal && f.next_due && f.next_due <= f.last_cal) throw bad('다음 교정일은 직전 교정일 뒤여야 합니다.');
+  return f;
+}
+const instRow = r => ({ ...r, history: JSON.parse(r.history || '[]'), status_label: INST_STATUS[r.status] || r.status, cal_label: INST_CAL[r.cal_type] || r.cal_type });
+const requireInstManager = user => { if (!hasRole(user, 'quality')) throw new HttpError(403, '계측기·검교정은 품질 담당·품질책임자·관리자만 등록·수정합니다.'); };
+route('GET', '/api/instruments', async ({ user }) => ({ rows: (await db.prepare("SELECT * FROM instruments ORDER BY CASE WHEN status='disposed' THEN 1 ELSE 0 END, CASE WHEN next_due IS NULL THEN 1 ELSE 0 END, next_due, mgmt_no LIMIT 3000").all()).map(instRow), can_manage: hasRole(user, 'quality'), today: today() }));
+route('POST', '/api/instruments', async ({ user, body }) => {
+  requireInstManager(user); const f = instBody(body), key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM instruments WHERE request_id=?').get(key); if (old) return instRow(old); }
+  if (await db.prepare('SELECT 1 FROM instruments WHERE mgmt_no=?').get(f.mgmt_no)) throw bad(`이미 있는 관리번호입니다: ${f.mgmt_no}`);
+  const hist = [{ at: now(), by: user.name, what: '등록' }, ...(f.last_cal ? [{ at: now(), by: user.name, what: '교정', done: f.last_cal, result: f.last_result || '', agency: f.cal_agency, cert: f.cert_no, next: f.next_due, note: '등록 때 입력한 직전 교정' }] : [])];
+  const r = await db.prepare(`INSERT INTO instruments(${INST_COLS.join(',')},history,request_id,created_by) VALUES(${INST_COLS.map(() => '?').join(',')},?,?,?)`).run(...INST_COLS.map(k => f[k]), JSON.stringify(hist), key, user.name);
+  return instRow(await mustGet('instruments', r.lastInsertRowid));
+});
+route('PUT', '/api/instruments/:id', async ({ user, params, body }) => {
+  requireInstManager(user); const prior = await mustGet('instruments', params.id), f = instBody(body);
+  if (Number(body.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  if (await db.prepare('SELECT 1 FROM instruments WHERE mgmt_no=? AND id<>?').get(f.mgmt_no, prior.id)) throw bad(`이미 있는 관리번호입니다: ${f.mgmt_no}`);
+  const changed = INST_COLS.filter(k => (prior[k] ?? null) !== (f[k] ?? null)); if (!changed.length) return instRow(prior);
+  const hist = [...JSON.parse(prior.history || '[]'), { at: now(), by: user.name, what: '수정', fields: changed, ...(prior.status !== f.status ? { status: [prior.status, f.status] } : {}), ...(prior.location !== f.location ? { moved: [prior.location, f.location] } : {}) }].slice(-200);
+  const r = await db.prepare(`UPDATE instruments SET ${INST_COLS.map(k => k + '=?').join(',')},history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`).run(...INST_COLS.map(k => f[k]), JSON.stringify(hist), user.name, prior.id, prior.revision);
+  if (!r.changes) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  return instRow(await mustGet('instruments', prior.id));
+});
+// 교정 처리(한 대 또는 여러 대 한꺼번에): 교정일·결과·교정기관·성적서 번호 → 직전 교정일·다음 교정일(교정일 + 주기 − 1일, 한 대일 때는 직접 지정 가능)·상태 갱신, 이력에 남김.
+// 부적합이면 사용중지(영향 검토 메모), 적합·조정 후 적합이면 교정 중·사용중지였던 장비를 사용 중으로.
+route('POST', '/api/instruments/calibrate', async ({ user, body }) => {
+  requireInstManager(user);
+  const items = Array.isArray(body.items) ? body.items : []; if (!items.length || items.length > 200) throw bad('교정 처리할 계측기를 1~200대 고르세요.');
+  const done = dateStr(body.done_date || today(), '교정일'); if (done > today()) throw bad('아직 지나지 않은 날짜로는 교정 처리할 수 없습니다.');
+  if (!INST_RESULT.includes(body.result)) throw bad('결과를 고르세요.'); const result = body.result;
+  const agency = str(body.agency, 100), cert = str(body.cert_no, 80), note = str(body.note, 300), cost = body.cost === '' || body.cost == null ? null : Number(body.cost);
+  if (cost !== null && (!Number.isFinite(cost) || cost < 0)) throw bad('비용은 0 이상 숫자로 넣으세요.');
+  if (result === '부적합' && !note) throw bad('부적합이면 조치·영향 검토 내용을 메모에 적으세요.');
+  const cmds = [];
+  for (const it of items) {
+    const prior = await mustGet('instruments', Number(it?.id) || 0); if (Number(it.revision) !== prior.revision) throw new HttpError(409, `${prior.mgmt_no}: 다른 사람이 먼저 고쳤습니다. 다시 불러오세요.`);
+    if (prior.status === 'disposed') throw bad(`${prior.mgmt_no}: 폐기된 계측기입니다.`);
+    if (prior.last_cal && done < prior.last_cal) throw bad(`${prior.mgmt_no}: 교정일이 직전 교정일(${prior.last_cal})보다 빠릅니다.`);
+    const next = items.length === 1 && body.next_due ? dateStr(body.next_due, '다음 교정일') : calNextDue(done, prior.cycle_months);
+    if (next <= done) throw bad('다음 교정일은 교정일 뒤여야 합니다.');
+    const status = result === '부적합' ? 'out' : ['at_cal', 'out'].includes(prior.status) ? 'in_use' : prior.status;
+    const hist = [...JSON.parse(prior.history || '[]'), { at: now(), by: user.name, what: '교정', done, result, agency: agency || prior.cal_agency, cert: items.length === 1 ? cert : '', cost: items.length === 1 ? cost : null, prev: prior.last_cal, due: prior.next_due, next, ...(status !== prior.status ? { status: [prior.status, status] } : {}), note }].slice(-200);
+    cmds.push({ sql: "UPDATE instruments SET last_cal=?,next_due=?,last_result=?,cal_agency=?,cert_no=?,status=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?",
+      args: [done, next, result, agency || prior.cal_agency, items.length === 1 ? cert : '', status, JSON.stringify(hist), user.name, prior.id, prior.revision] });
+  }
+  const res = await db.batch(cmds); if (res.some(x => !(x.meta?.changes ?? x.changes))) throw new HttpError(409, '그 사이 다른 사람이 고친 계측기가 있습니다. 다시 불러와 확인하세요.');
+  return { done: cmds.length, rows: (await db.prepare(`SELECT * FROM instruments WHERE id IN (${items.map(() => '?').join(',')})`).all(...items.map(i => Number(i.id)))).map(instRow) };
+});
+route('DELETE', '/api/instruments/:id', async ({ user, params, query }) => {
+  requireInstManager(user); const prior = await mustGet('instruments', params.id);
+  if (Number(query.revision) !== prior.revision) throw new HttpError(409, '다른 사람이 먼저 고쳤습니다. 다시 열어 주세요.');
+  await db.prepare('DELETE FROM instruments WHERE id=? AND revision=?').run(prior.id, prior.revision); return { ok: true };
+});
 route('GET', '/api/rnd-specs', async ({ user }) => { const { raw, ...lib } = await rndSpecLibrary(); return { ...lib, can_manage: isResearcher(user) }; });
 route('PUT', '/api/rnd-specs', async ({ user, body }) => {
   if (!isResearcher(user)) throw new HttpError(403, '연구소 검사규격은 연구원(개발·개발책임자)만 설정합니다.');
@@ -3760,10 +3952,19 @@ route('DELETE', '/api/rnd-specs/:id', async ({ user, params, query }) => {
   const id = Number(params.id); if (!prior.specs.some(x => x.id === id)) throw new HttpError(404, '검사규격을 찾을 수 없습니다.');
   return { ...(await rndSpecWrite(prior, prior.specs.filter(x => x.id !== id))), can_manage: true };
 });
+// 15.299 저장된 측정값(규격 스냅숏 + 값)으로 짧은 요약: 불합격 항목만, 없으면 「전 항목 합격」. 예전 긴 결과 글도 화면에서는 이것으로.
+function rndShort(snapshot, valuesJson, memo = '') {
+  try { const spec = typeof snapshot === 'string' ? JSON.parse(snapshot) : snapshot, rows = typeof valuesJson === 'string' ? JSON.parse(valuesJson) : valuesJson;
+    if (!spec?.items?.length || !rows?.length) return '';
+    const sum = rndMeasure(spec.items, null, rows.map(x => ({ lot: x.lot, values: Object.fromEntries(spec.items.map((it, i) => ['i' + i, x.values?.[it.key || 'i' + i] || []])) }))).summary;
+    return sum + (memo ? ` / 의견: ${memo}` : ''); } catch { return ''; }
+}
 route('GET', '/api/requests/:id/rnd-measure', async ({ params }) => {
   const r = await getRequest(params.id); if (r.type !== 'rnd_analysis') throw bad('연구 분석만 볼 수 있습니다.');
   const m = await db.prepare('SELECT * FROM inspection_measurements WHERE request_id=?').get(r.id);
-  return { spec: r.inspection_snapshot ? JSON.parse(r.inspection_snapshot) : null, measurement: m ? { ...m, rows: JSON.parse(m.values_json) } : null, memo: JSON.parse(r.data || '{}').memo || '' };
+  const spec = r.inspection_snapshot ? JSON.parse(r.inspection_snapshot) : null, rows = m ? JSON.parse(m.values_json) : null;
+  const summary = rndShort(spec, rows); // 15.299
+  return { spec, measurement: m ? { ...m, rows } : null, memo: JSON.parse(r.data || '{}').memo || '', summary };
 });
 route('PUT', '/api/requests/:id/rnd-measure', async ({ user, params, body }) => {
   if (!isResearcher(user)) throw new HttpError(403, '측정값은 연구원(개발·개발책임자)만 고칩니다.');
@@ -6622,7 +6823,10 @@ async function orderDetail(order) {
   const ordered = lines.reduce((t, l) => t + l.qty, 0), billed = lines.reduce((t, l) => t + Math.min(l.qty, l.billed_qty + l.shipped_unbilled), 0);
   const state = order.status !== 'open' ? order.status : billed <= 0 ? 'waiting' : billed + 0.000001 >= ordered ? 'done' : 'partial';
   const purchase_requests = await db.prepare(`SELECT pr.id, pr.doc_no, pr.doc_date, pr.status, pr.author_name, (SELECT COUNT(*) FROM purchase_request_items i WHERE i.request_id=pr.id) AS items, (SELECT COUNT(*) FROM purchase_request_items i WHERE i.request_id=pr.id AND i.po_id IS NOT NULL) AS ordered FROM purchase_requests pr WHERE pr.sales_order_id=? ORDER BY pr.id`).all(order.id); // 15.284
-  return { ...order, lines, bills, state, purchase_requests, amount: lines.reduce((t, l) => t + (l.unit_price == null ? 0 : billTrunc(l.qty * l.unit_price)), 0) };
+  const mrRows = await db.prepare('SELECT * FROM production_requests WHERE sales_order_id=? ORDER BY id').all(order.id); // 15.299 이 수주에서 만든 생산의뢰(진행 상태는 목록과 같은 계산)
+  const mrLinesAll = mrRows.length ? await mrLineProgress(mrRows.map(r => r.id)) : [];
+  const production_requests = mrRows.map(r => { const ls = mrLinesAll.filter(l => l.request_id === r.id); return { id: r.id, req_no: r.req_no, order_date: r.order_date, author_name: r.author_name, shipped: !!r.shipped, items: ls.length, status: mrState(r, ls).status }; });
+  return { ...order, lines, bills, state, purchase_requests, production_requests, amount: lines.reduce((t, l) => t + (l.unit_price == null ? 0 : billTrunc(l.qty * l.unit_price)), 0) };
 }
 route('GET', '/api/sales-orders', async ({ user, query }) => {
   requireSales(user);
@@ -6769,8 +6973,18 @@ route('POST', '/api/ship-instructions/ship', async ({ user, body }) => {
   }
   try { await db.batch(cmds); }
   catch (error) { if (isGuardError(error)) throw new HttpError(409, '그 사이 출하지시나 매출전표가 바뀌었습니다. 새로 불러오세요.'); throw error; }
+  await mrAutoShip(user, date).catch(() => {}); // 15.299
   return { shipped: ids.length, partial };
 });
+// 15.299 수주에서 만든 생산의뢰(sales_order_id): 그 수주의 모든 줄이 출하되면 생산의뢰를 자동으로 「출고」 표시(출고일 = 마지막 출하일).
+// 손으로 표시·취소하는 기존 기능은 그대로. 이미 출고 표시된 의뢰는 건드리지 않는다.
+async function mrAutoShip(user, date) {
+  const rows = await db.prepare(`SELECT r.id FROM production_requests r WHERE r.shipped=0 AND r.sales_order_id IS NOT NULL
+    AND EXISTS(SELECT 1 FROM sales_order_lines ol WHERE ol.order_id=r.sales_order_id)
+    AND NOT EXISTS(SELECT 1 FROM sales_order_lines ol WHERE ol.order_id=r.sales_order_id AND ${ORDER_SHIPPED} + 0.000001 < ol.qty)`).all();
+  for (const r of rows) await db.prepare("UPDATE production_requests SET shipped=1,shipped_date=?,shipped_by=?,revision=revision+1,updated_at=datetime('now','+9 hours') WHERE id=? AND shipped=0").run(date, `${user.name} (수주 출하 완료 자동)`, r.id);
+  return rows.length;
+}
 // 15.245 출하지시 한 줄을 여러 LOT로 출하: 상세 내역(LOT · 납품일자 · 담당자 · 납품수량 · 비고)마다 출하 1건.
 // 지시·전표 줄을 LOT별로 나누고(첫 LOT은 원래 줄, 나머지는 같은 전표의 새 줄 + 새 지시), 남는 수량은 새 줄로 출하 대기에 남는다.
 // 공급가액·세액은 수량 비율로 나누고 끝 줄에 나머지를 몰아 전표 합계는 그대로. 한 batch로 처리(중간 실패 시 모두 되돌림).
@@ -6827,6 +7041,7 @@ route('POST', '/api/ship-instructions/:id/ship-lots', async ({ user, params, bod
   if (segs.length > 1) cmds.push(docChange('sales_bill', bill.id, `출하 LOT별 나눔: ${ins.item} ${stockRound(Q)} → ${parts.map(p => `${p.lot || 'LOT 없음'} ${p.qty}`).join(' + ')}${rest > 0.000001 ? ` + ${rest}(출하 대기)` : ''}`, user));
   try { await db.batch(cmds); }
   catch (error) { if (isGuardError(error)) throw new HttpError(409, '그 사이 출하지시나 매출전표가 바뀌었습니다. 새로 불러오세요.'); throw error; }
+  await mrAutoShip(user, parts.reduce((m, x) => (x.date || x.ship_date || '') > m ? (x.date || x.ship_date) : m, '') || today()).catch(() => {}); // 15.299
   return { shipped: parts.length, rest };
 });
 // 15.208 출하지시 수량 나누기(묶음 15.154와 같은 방식): 지시·전표 줄을 q와 나머지로 나눈다. 나머지는 같은 전표의 새 줄 + 새 출하지시(대기, 묶음 없음).
@@ -6964,12 +7179,13 @@ route('POST', '/api/production-requests', async ({ user, body }) => {
   const prior = await savedByRequestId('production_requests', requestId, user, '생산의뢰');
   if (prior) return { ...await mrDetail(prior, user), duplicate: true };
   const head = mrHead(body), lines = await mrLines(body.lines);
+  let so = null; if (body.sales_order_id !== undefined && body.sales_order_id !== null && body.sales_order_id !== '') { if (!/^[1-9]\d*$/.test(String(body.sales_order_id))) throw bad('연결할 수주를 다시 고르세요.'); so = await db.prepare('SELECT id, order_no FROM sales_orders WHERE id=?').get(Number(body.sales_order_id)); if (!so) throw bad('연결할 수주를 찾을 수 없습니다.'); } // 15.299 수주 → 생산의뢰
   const prefix = 'MR-' + head.order_date.slice(2).replace(/-/g, '') + '-';
   // 줄은 의뢰를 request_id로 찾아 붙인다. 화면이 보내지 않은 경우에도 서버 토큰으로 채운다.
   const token = requestId || 'srv:' + crypto.randomUUID();
   try {
     await db.batch([
-      { sql: `INSERT INTO production_requests(req_no,order_date,customer,order_no,ship_text,ship_date,spec,note,author_id,author_name,author_department,request_id) VALUES(${nextDocNo('production_requests', 'req_no')},?,?,?,?,?,?,?,?,?,?,?)`, args: [prefix, prefix, prefix, head.order_date, head.customer, head.order_no, head.ship_text, head.ship_date, head.spec, head.note, user.id, user.name, user.department || '', token] },
+      { sql: `INSERT INTO production_requests(req_no,order_date,customer,order_no,ship_text,ship_date,spec,note,author_id,author_name,author_department,request_id,sales_order_id,sales_order_no) VALUES(${nextDocNo('production_requests', 'req_no')},?,?,?,?,?,?,?,?,?,?,?,?,?)`, args: [prefix, prefix, prefix, head.order_date, head.customer, head.order_no, head.ship_text, head.ship_date, head.spec, head.note, user.id, user.name, user.department || '', token, so ? so.id : null, so ? so.order_no : ''] },
       ...lines.map(l => ({ sql: 'INSERT INTO production_request_lines(request_id,line_no,bom_id,product_code,item,spec,unit,qty) SELECT id,?,?,?,?,?,?,? FROM production_requests WHERE request_id=?', args: [l.line_no, l.bom_id, l.product_code, l.item, l.spec, l.unit, l.qty, token] })),
     ]);
   } catch (error) {
