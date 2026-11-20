@@ -6787,8 +6787,18 @@ route('POST', '/api/ship-instructions/ship', async ({ user, body }) => {
   }
   try { await db.batch(cmds); }
   catch (error) { if (isGuardError(error)) throw new HttpError(409, '그 사이 출하지시나 매출전표가 바뀌었습니다. 새로 불러오세요.'); throw error; }
+  await mrAutoShip(user, date).catch(() => {}); // 15.299
   return { shipped: ids.length, partial };
 });
+// 15.299 수주에서 만든 생산의뢰(sales_order_id): 그 수주의 모든 줄이 출하되면 생산의뢰를 자동으로 「출고」 표시(출고일 = 마지막 출하일).
+// 손으로 표시·취소하는 기존 기능은 그대로. 이미 출고 표시된 의뢰는 건드리지 않는다.
+async function mrAutoShip(user, date) {
+  const rows = await db.prepare(`SELECT r.id FROM production_requests r WHERE r.shipped=0 AND r.sales_order_id IS NOT NULL
+    AND EXISTS(SELECT 1 FROM sales_order_lines ol WHERE ol.order_id=r.sales_order_id)
+    AND NOT EXISTS(SELECT 1 FROM sales_order_lines ol WHERE ol.order_id=r.sales_order_id AND ${ORDER_SHIPPED} + 0.000001 < ol.qty)`).all();
+  for (const r of rows) await db.prepare("UPDATE production_requests SET shipped=1,shipped_date=?,shipped_by=?,revision=revision+1,updated_at=datetime('now','+9 hours') WHERE id=? AND shipped=0").run(date, `${user.name} (수주 출하 완료 자동)`, r.id);
+  return rows.length;
+}
 // 15.245 출하지시 한 줄을 여러 LOT로 출하: 상세 내역(LOT · 납품일자 · 담당자 · 납품수량 · 비고)마다 출하 1건.
 // 지시·전표 줄을 LOT별로 나누고(첫 LOT은 원래 줄, 나머지는 같은 전표의 새 줄 + 새 지시), 남는 수량은 새 줄로 출하 대기에 남는다.
 // 공급가액·세액은 수량 비율로 나누고 끝 줄에 나머지를 몰아 전표 합계는 그대로. 한 batch로 처리(중간 실패 시 모두 되돌림).
@@ -6845,6 +6855,7 @@ route('POST', '/api/ship-instructions/:id/ship-lots', async ({ user, params, bod
   if (segs.length > 1) cmds.push(docChange('sales_bill', bill.id, `출하 LOT별 나눔: ${ins.item} ${stockRound(Q)} → ${parts.map(p => `${p.lot || 'LOT 없음'} ${p.qty}`).join(' + ')}${rest > 0.000001 ? ` + ${rest}(출하 대기)` : ''}`, user));
   try { await db.batch(cmds); }
   catch (error) { if (isGuardError(error)) throw new HttpError(409, '그 사이 출하지시나 매출전표가 바뀌었습니다. 새로 불러오세요.'); throw error; }
+  await mrAutoShip(user, parts.reduce((m, x) => (x.date || x.ship_date || '') > m ? (x.date || x.ship_date) : m, '') || today()).catch(() => {}); // 15.299
   return { shipped: parts.length, rest };
 });
 // 15.208 출하지시 수량 나누기(묶음 15.154와 같은 방식): 지시·전표 줄을 q와 나머지로 나눈다. 나머지는 같은 전표의 새 줄 + 새 출하지시(대기, 묶음 없음).

@@ -696,3 +696,20 @@ test('15.299 production request made from a sales order keeps the order link; th
   const d = (await admin('GET', `/api/sales-orders/${so.id}`)).body;
   assert.deepEqual(d.production_requests.map(x => [x.id, x.req_no, x.items]), [[mr.body.id, mr.body.req_no, 1]]);
 });
+
+test('15.299 production request linked to a sales order is marked shipped automatically once the whole order ships', async () => {
+  await admin('POST', '/api/vendors', { name: '자동출고고객', is_sales: true, is_purchase: true });
+  const g = (await admin('POST', '/api/boms', { product: '자동출고 와이퍼', product_code: 'AS-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'BOX', materials: [] })).body;
+  const rc = await admin('POST', '/api/receipts', { receipt_date: today, vendor: '자동출고고객', request_id: rid(), lines: [{ bom_id: g.id, lot: 'AS-LOT', qty: 100 }] }); assert.equal(rc.status, 200, JSON.stringify(rc.body));
+  const so = (await admin('POST', '/api/sales-orders', { customer: '자동출고고객', order_date: today, request_id: rid(), lines: [{ bom_id: g.id, qty: 30, unit_price: 1000 }] })).body;
+  const mr = (await admin('POST', '/api/production-requests', { customer: '자동출고고객', order_date: today, request_id: rid(), sales_order_id: so.id, lines: [{ bom_id: g.id, item: g.product, qty: 30, unit: 'BOX' }] })).body;
+  const other = (await admin('POST', '/api/production-requests', { customer: '자동출고고객', order_date: today, request_id: rid(), lines: [{ bom_id: g.id, item: g.product, qty: 5, unit: 'BOX' }] })).body;
+  const bill = async qty => admin('POST', '/api/sales-bills', { customer: '자동출고고객', bill_date: today, request_id: rid(), lines: [{ source_type: 'order', order_line_id: so.lines[0].id, qty }] });
+  const ship = async () => { const ins = (await admin('GET', '/api/ship-instructions')).body.rows.filter(i => i.order_no === so.order_no && i.status !== 'shipped'); return admin('POST', '/api/ship-instructions/ship', { ids: ins.map(i => i.id), ship_date: today, lots: Object.fromEntries(ins.map(i => [i.id, 'AS-LOT'])) }); };
+  assert.equal((await bill(20)).status, 200); assert.equal((await ship()).status, 200);
+  assert.equal((await admin('GET', `/api/production-requests/${mr.id}`)).body.shipped, false, 'part shipped: not yet');
+  assert.equal((await bill(10)).status, 200); const s2 = await ship(); assert.equal(s2.status, 200, JSON.stringify(s2.body));
+  const after = (await admin('GET', `/api/production-requests/${mr.id}`)).body;
+  assert.equal(after.shipped, true); assert.equal(after.shipped_date, today); assert.match(after.shipped_by, /수주 출하 완료 자동/);
+  assert.equal((await admin('GET', `/api/production-requests/${other.id}`)).body.shipped, false, 'unlinked request untouched');
+});
