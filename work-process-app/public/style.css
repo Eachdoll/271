@@ -3728,3 +3728,23 @@ tr.book-memo > td { background: var(--bg); font-style: italic; }
 @media (max-width: 700px) { .dr-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } .dr-kpi { padding: 8px 10px; } .dr-kpi b { font-size: 19px; } .dr-map { --lw: 150px; } .dr-owners, .dr-l2 { display: none; } .dr-bar-top .dr-legend { display: none; } }
 .dr-step, .dr-step span, .dr-mline, .dr-wk, .dr-today, .dr-av { font-style: normal; }
 .dr-cap { margin-left: 6px; }
+
+/* 15.282 의뢰서 창: 요점 + 더보기 */
+.rq-key { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; margin: 8px 0 10px; border-top: 1px solid var(--line); }
+.rq-kv { display: grid; grid-template-columns: 96px 1fr; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--line); align-items: baseline; min-width: 0; }
+.rq-kv.full { grid-column: 1 / -1; }
+.rq-kv > span { color: var(--muted); font-size: 13px; }
+.rq-kv > b { font-weight: 600; word-break: break-word; }
+.rq-more { margin: 4px 0 8px; }
+.rq-more > summary { cursor: pointer; padding: 8px 10px; border-radius: 8px; background: var(--ns-panel, #f1f3f5); color: var(--accent); font-weight: 600; list-style: none; }
+.rq-more > summary::-webkit-details-marker { display: none; }
+.rq-more > summary::before { content: '▸ '; } .rq-more[open] > summary::before { content: '▾ '; }
+.rq-more[open] > summary { margin-bottom: 8px; }
+@media (max-width: 700px) { .rq-key { grid-template-columns: 1fr; } .rq-kv { grid-template-columns: 84px 1fr; } }
+@media print { .rq-more > summary { display: none; } }
+
+/* 15.283 반제품 없는 품목: 투입 자재 LOT 고르기 */
+.fm-grid .fm-h th { background: var(--ns-panel, #f1f3f5); text-align: left; }
+.fm-grid tr.fm-fail td { color: var(--muted); }
+.fm-grid input[type=number] { width: 110px; text-align: right; }
+[data-fa-mats].on { border-color: var(--accent); color: var(--accent); }
