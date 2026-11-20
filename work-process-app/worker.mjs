@@ -584,6 +584,14 @@ function freightMap(value) {
   }
   return out;
 }
+// 15.267 거래처 상세 칸(누구나 고칠 수 있는 일반 정보). 보내지 않은 칸은 그대로.
+const VENDOR_EXTRA = { name_en: 100, corp_no: 20, tel: 30, fax: 30, addr: 200, homepage: 200, memo: 1000, tax_contact: 50, tax_dept: 50, tax_phone: 30, contact_title: 50, contact_mobile: 30, contact_email: 100, bank_name: 50, bank_account: 50, bank_holder: 50 };
+function vendorExtra(body, row = {}) {
+  const out = {};
+  for (const [k, n] of Object.entries(VENDOR_EXTRA)) out[k] = body[k] === undefined ? row[k] ?? '' : str(body[k], n);
+  if (out.contact_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(out.contact_email)) throw bad('담당자 이메일 형식을 확인하세요.');
+  return out;
+}
 function vendorFields(body) { return [reqStr(body.name, '거래처 이름', 100), str(body.contact_name, 50), str(body.phone, 30)]; }
 const repName = v => str(v, 50); // 15.224 영업담당자(사용자 이름 또는 직접 입력)
 // 체크 값: true/false(화면), 1/0, '1'/'on', ['1'](폼 배열). 보내지 않으면 undefined(고치기에서는 기존 값 유지).
@@ -594,12 +602,16 @@ function vendorFlag(value) {
 }
 route('POST', '/api/vendors', async ({ user, body }) => {
   const [name, contact, phone] = vendorFields(body);
+  const extra = vendorExtra(body); // 15.267 저장 전에 형식 확인
+  const tax = vendorTaxValues(body); if (tax && TAX_VENDOR_FIELDS.some(k => k !== 'tax_reverse' && tax[k]) && !hasRole(user, 'sales') && !hasRole(user, 'purchase')) throw new HttpError(403, '사업자 정보는 영업·구매 담당자나 관리자가 넣습니다. 사업자 칸을 비우고 등록하세요.'); // 15.266
   if (await db.prepare('SELECT 1 FROM vendors WHERE name_key=?').get(nameKey(name))) throw new HttpError(409, '이미 등록된 거래처입니다. 목록에서 수정하세요.');
   const code = vendorCode(body.code);
   if (code && await db.prepare('SELECT 1 FROM vendors WHERE code=?').get(code)) throw new HttpError(409, `거래처코드 ${code}는 이미 쓰고 있습니다.`);
   let r;
   try { r = await db.prepare(`INSERT INTO vendors(name,name_key,contact_name,phone,created_by,is_purchase,is_sales,freight_terms,sales_rep,code) VALUES(?,?,?,?,?,?,?,?,?,${code ? '?' : VENDOR_AUTO_CODE})`).run(name, nameKey(name), contact, phone, user.name, vendorFlag(body.is_purchase) || 0, vendorFlag(body.is_sales) || 0, JSON.stringify(freightTerms(body.freight_terms) || []), repName(body.sales_rep), ...(code ? [code] : [])); }
   catch (error) { if (/UNIQUE/i.test(String(error && error.message))) throw new HttpError(409, '그 사이 같은 이름이나 코드의 거래처가 등록되었습니다. 새로 불러오세요.'); throw error; }
+  if (tax) await db.prepare(`UPDATE vendors SET ${TAX_VENDOR_FIELDS.map(k => `${k}=?`).join(',')} WHERE id=?`).run(...TAX_VENDOR_FIELDS.map(k => tax[k]), r.lastInsertRowid); // 15.266
+  { const x = extra, keys = Object.keys(x).filter(k => x[k]); if (keys.length) await db.prepare(`UPDATE vendors SET ${keys.map(k => `${k}=?`).join(',')} WHERE id=?`).run(...keys.map(k => x[k]), r.lastInsertRowid); } // 15.267
   return decodeVendor(await mustGet('vendors', r.lastInsertRowid));
 });
 route('PUT', '/api/vendors/:id', async ({ user, params, body }) => {
@@ -614,7 +626,10 @@ route('PUT', '/api/vendors/:id', async ({ user, params, body }) => {
   // 15.101 이름을 바꾸면 그 이름으로 저장된 문서(수주·전표·출하지시·세금계산서 초안·발주·출하·마감 키)도 따라 바꾼다.
   // 문서는 거래처 이름 글자를 들고 있어 그대로 두면 수주 잔량·전표 없는 출하·마감 확인이 새 이름과 맞지 않는다.
   const rep = body.sales_rep === undefined ? row.sales_rep || '' : repName(body.sales_rep); // 15.224
+  const tax = vendorTaxValues(body, row); if (vendorTaxChanged(tax, row) && !hasRole(user, 'sales') && !hasRole(user, 'purchase')) throw new HttpError(403, '사업자 정보는 영업·구매 담당자나 관리자가 고칩니다.'); // 15.266
   const cmds = [{ sql: 'UPDATE vendors SET name=?,name_key=?,contact_name=?,phone=?,is_purchase=?,is_sales=?,freight_terms=?,code=?,sales_rep=?,updated_by=?,updated_at=? WHERE id=?', args: [name, nameKey(name), contact, phone, purchase, sales, terms === undefined ? row.freight_terms : JSON.stringify(terms), code || '', rep, user.name, now(), row.id] }];
+  { const x = vendorExtra(body, row), keys = Object.keys(x).filter(k => x[k] !== (row[k] ?? '')); if (keys.length) cmds.push({ sql: `UPDATE vendors SET ${keys.map(k => `${k}=?`).join(',')} WHERE id=?`, args: [...keys.map(k => x[k]), row.id] }); } // 15.267
+  if (vendorTaxChanged(tax, row)) cmds.push({ sql: `UPDATE vendors SET ${TAX_VENDOR_FIELDS.map(k => `${k}=?`).join(',')} WHERE id=?`, args: [...TAX_VENDOR_FIELDS.map(k => tax[k]), row.id] }); // 15.266 사업자 정보도 같은 저장에서
   if ((code || '') !== (row.code || '')) cmds.push({ sql: "UPDATE sales_orders SET customer_code=? WHERE status='open' AND REPLACE(LOWER(customer),' ','')=?", args: [code || '', row.name_key] }); // 15.104 열린 수주만 새 코드로(끝난 수주는 당시 코드)
   if (nameKey(name) !== row.name_key || name !== row.name) {
     const k = row.name_key;
@@ -1200,7 +1215,7 @@ route('DELETE', '/api/warehouses/:id', async ({ user, params }) => {
   const row = await mustGet('warehouses', params.id);
   const lots = (await db.prepare('SELECT COUNT(*) c FROM po_receipt_lots WHERE warehouse=?').get(row.name)).c;
   const others = (await db.prepare('SELECT COUNT(*) c FROM other_receipts WHERE warehouse=?').get(row.name)).c;
-  const moves = (await db.prepare('SELECT COUNT(*) c FROM stock_transfers WHERE to_warehouse=?').get(row.name)).c;
+  const moves = (await db.prepare('SELECT COUNT(*) c FROM stock_transfers WHERE to_warehouse=?').get(row.name)).c + (await db.prepare('SELECT COUNT(*) c FROM stock_adjustments WHERE warehouse=?').get(row.name)).c; // 15.266 조정 기록도
   if (lots || others || moves) throw new HttpError(409, `${row.name}: 입고·이동 기록 ${lots + others + moves}건이 이 창고에 있어 지울 수 없습니다. 「사용」을 끄면 입력 화면에서만 빠집니다.`);
   const r = await db.prepare('DELETE FROM warehouses WHERE id=? AND NOT EXISTS(SELECT 1 FROM po_receipt_lots WHERE warehouse=?) AND NOT EXISTS(SELECT 1 FROM other_receipts WHERE warehouse=?) AND NOT EXISTS(SELECT 1 FROM stock_transfers WHERE to_warehouse=?)').run(row.id, row.name, row.name, row.name);
   if (!r.changes) throw new HttpError(409, '그 사이 이 창고로 입고가 기록되어 지울 수 없습니다.');
@@ -1208,22 +1223,37 @@ route('DELETE', '/api/warehouses/:id', async ({ user, params }) => {
 });
 route('PUT', '/api/warehouses/:id', async ({ user, params, body }) => {
   if (!canAdjustStock(user)) throw new HttpError(403, '창고는 물류팀장·관리자가 고칩니다.');
-  const row = await mustGet('warehouses', params.id), f = warehouseFields({ name: row.name, locations: row.locations, sort: row.sort, ...body });
+  const row = await mustGet('warehouses', params.id);
+  // 15.266 위치 이름 바꾸기: [{ from, to }] — 기록이 있는 위치도 바꿀 수 있고, 그 위치의 입고·이동·조정 기록도 함께 바뀐다
+  const renames = (Array.isArray(body.rename_locations) ? body.rename_locations : []).map(x => ({ from: str(x?.from, 50), to: str(x?.to, 50) })).filter(x => x.from && x.to && x.from !== x.to);
+  if (renames.length > 50) throw bad('위치 이름은 한 번에 50개까지 바꿀 수 있습니다.');
+  let locs = body.locations === undefined ? row.locations : body.locations;
+  if (renames.length) { const cur = String(locs || '').split(/[,\n]/).map(x => x.trim()).filter(Boolean); for (const r of renames) { if (!cur.includes(r.from)) throw bad(`${row.name}: 「${r.from}」 위치가 없습니다.`); if (cur.includes(r.to)) throw bad(`${row.name}: 「${r.to}」 위치가 이미 있습니다.`); cur[cur.indexOf(r.from)] = r.to; } locs = cur.join(','); }
+  const f = warehouseFields({ name: row.name, sort: row.sort, ...body, locations: locs });
   const clash = await db.prepare('SELECT id FROM warehouses WHERE name=?').get(f.name); if (clash && clash.id !== row.id) throw new HttpError(409, '같은 이름의 창고가 있습니다.');
   const active = body.active === undefined ? row.active : body.active ? 1 : 0;
   { // 15.209 입고·이동 기록이 있는 위치는 목록에서 지우지 못함(그 위치 재고가 「없는 위치」가 됨)
-    const keep = new Set(f.locations ? f.locations.split(',') : []), gone = (row.locations ? row.locations.split(',') : []).filter(x => !keep.has(x));
+    const keep = new Set(f.locations ? f.locations.split(',') : []), moved = new Set(renames.map(r => r.from)), gone = (row.locations ? row.locations.split(',') : []).filter(x => !keep.has(x) && !moved.has(x));
     for (const loc of gone) {
       const used = await db.prepare("SELECT (SELECT COUNT(*) FROM po_receipt_lots WHERE warehouse=? AND location=?) + (SELECT COUNT(*) FROM other_receipts WHERE warehouse=? AND location=?) + (SELECT COUNT(*) FROM stock_transfers WHERE to_warehouse=? AND to_location=? AND status='confirmed') AS n").get(row.name, loc, row.name, loc, row.name, loc);
       if (used.n) throw new HttpError(409, `${row.name} ${loc}: 입고·이동 기록 ${used.n}건이 있는 위치라 지울 수 없습니다. 재고를 다른 위치로 옮긴 뒤 지우세요.`);
     }
   }
-  // 이름을 바꾸면 기록에 남은 창고 이름도 함께 바꾼다(위치는 그대로).
-  try { await db.batch([
-    { sql: 'UPDATE warehouses SET name=?,locations=?,sort=?,active=? WHERE id=?', args: [f.name, f.locations, f.sort, active, row.id] },
-    { sql: 'UPDATE po_receipt_lots SET warehouse=? WHERE warehouse=?', args: [f.name, row.name] },
-    { sql: 'UPDATE other_receipts SET warehouse=? WHERE warehouse=?', args: [f.name, row.name] },
-  ]); } catch (error) { if (/UNIQUE/i.test(String(error && error.message))) throw new HttpError(409, '같은 이름의 창고가 있습니다.'); throw error; }
+  // 이름을 바꾸면 기록에 남은 창고 이름도 함께 바꾼다. 15.266 이동(도착·출발 위치 글자)·재고 조정도 함께, 위치 이름 바꾸기도 함께.
+  const W = row.name, N = f.name, cmds = [
+    { sql: 'UPDATE warehouses SET name=?,locations=?,sort=?,active=? WHERE id=?', args: [N, f.locations, f.sort, active, row.id] },
+    { sql: 'UPDATE po_receipt_lots SET warehouse=? WHERE warehouse=?', args: [N, W] },
+    { sql: 'UPDATE other_receipts SET warehouse=? WHERE warehouse=?', args: [N, W] },
+    { sql: "UPDATE stock_transfers SET to_warehouse=?, to_place=TRIM(? || ' ' || COALESCE(to_location,'')) WHERE to_warehouse=?", args: [N, N, W] },
+    { sql: "UPDATE stock_transfers SET from_place=? || substr(from_place, length(?) + 1) WHERE from_place=? OR substr(from_place, 1, length(?) + 1)=? || ' '", args: [N, W, W, W, W] },
+    { sql: 'UPDATE stock_adjustments SET warehouse=? WHERE warehouse=?', args: [N, W] }];
+  for (const r of renames) cmds.push(
+    { sql: 'UPDATE po_receipt_lots SET location=? WHERE warehouse=? AND location=?', args: [r.to, N, r.from] },
+    { sql: 'UPDATE other_receipts SET location=? WHERE warehouse=? AND location=?', args: [r.to, N, r.from] },
+    { sql: "UPDATE stock_transfers SET to_location=?, to_place=TRIM(to_warehouse || ' ' || ?) WHERE to_warehouse=? AND to_location=?", args: [r.to, r.to, N, r.from] },
+    { sql: "UPDATE stock_transfers SET from_place=TRIM(? || ' ' || ?) WHERE from_place=TRIM(? || ' ' || ?)", args: [N, r.to, N, r.from] },
+    { sql: 'UPDATE stock_adjustments SET location=? WHERE warehouse=? AND location=?', args: [r.to, N, r.from] });
+  try { await db.batch(cmds); } catch (error) { if (/UNIQUE/i.test(String(error && error.message))) throw new HttpError(409, '같은 이름의 창고가 있습니다.'); throw error; }
   return mustGet('warehouses', row.id);
 });
 
@@ -1518,6 +1548,12 @@ route('POST', '/api/purchase-payments', async ({ user, body }) => {
   const amount = num(body.amount, '금액'); if (!(amount > 0)) throw bad('금액은 0보다 커야 합니다.');
   if (await closedPeriod(vendor, date)) throw bad(`${vendor}의 ${date.slice(0, 7)} 매입은 마감되었습니다. 마감 취소(관리자) 뒤에 등록하세요.`);
   await ensureVendor(vendor, user, 'purchase');
+  const noteInfo = kind === 'payment' ? await paymentNoteInfo(body.note_info, 'purchase', vendor, date, billTrunc(amount)) : null; // 15.268 어음이면 어음 관리에도
+  if (noteInfo) { requirePayments(user);
+    try { await db.batch([{ sql: 'INSERT INTO purchase_payments(pay_date,vendor,kind,amount,method,note,created_by,created_by_id,request_id) VALUES(?,?,?,?,?,?,?,?,?)', args: [date, vendor, kind, billTrunc(amount), str(body.method, 50) || `어음 ${noteInfo.note_no}`, str(body.note, 200), user.name, user.id, token] }, ...paymentNoteCmds(noteInfo, 'purchase', 'purchase_payments', token, user)]); }
+    catch (error) { if (isGuardError(error)) throw new HttpError(409, `${NOTE_KIND[noteInfo.kind]} ${noteInfo.note_no}는 이미 등록되어 있습니다.`); const saved = await db.prepare('SELECT * FROM purchase_payments WHERE request_id=?').get(token); if (saved && saved.created_by_id === user.id) return { ...saved, duplicate: true }; throw error; }
+    return { ...await db.prepare('SELECT * FROM purchase_payments WHERE request_id=?').get(token), bill_note: await db.prepare('SELECT * FROM bill_notes WHERE request_id=?').get('pay:' + token) };
+  }
   try { await db.prepare('INSERT INTO purchase_payments(pay_date,vendor,kind,amount,method,note,created_by,created_by_id,request_id) VALUES(?,?,?,?,?,?,?,?,?)').run(date, vendor, kind, billTrunc(amount), str(body.method, 50), str(body.note, 200), user.name, user.id, token); }
   catch (error) { const saved = await db.prepare('SELECT * FROM purchase_payments WHERE request_id=?').get(token); if (saved && saved.created_by_id === user.id) return { ...saved, duplicate: true }; throw error; }
   return db.prepare('SELECT * FROM purchase_payments WHERE request_id=?').get(token);
@@ -1529,8 +1565,11 @@ route('POST', '/api/purchase-payments/:id/cancel', async ({ user, params, body }
   const ret = await db.prepare("SELECT return_no FROM stock_returns WHERE side='out' AND payment_id=? AND status='confirmed'").get(row.id); if (ret) throw bad(`반출 ${ret.return_no}의 현금 환불입니다. 반출 목록에서 그 반출을 취소하세요.`); // 15.141
   if (await closedPeriod(row.vendor, row.pay_date)) throw bad(`${row.vendor}의 ${row.pay_date.slice(0, 7)} 매입은 마감되었습니다. 마감 취소(관리자) 뒤에 취소하세요.`);
   const reason = reqStr(body.reason, '취소 사유', 200);
+  const linked = await db.prepare("SELECT * FROM bill_notes WHERE payment_side='purchase' AND payment_id=? AND status<>'cancelled'").get(row.id); // 15.268
+  if (linked?.status === 'collected') throw bad(`이 지급의 어음 ${linked.note_no}는 만기회수 처리되었습니다. 어음 관리에서 미처리로 되돌린 뒤 취소하세요.`);
   const r = await db.prepare("UPDATE purchase_payments SET status='cancelled',cancelled_at=?,cancelled_by=?,cancel_reason=? WHERE id=? AND status='confirmed'").run(now(), user.name, reason, row.id);
   if (!r.changes) throw new HttpError(409, '이미 처리된 지급입니다.');
+  if (linked) await db.batch([{ sql: "UPDATE bill_notes SET status='cancelled',updated_by=?,updated_at=? WHERE id=? AND status<>'cancelled'", args: [user.name, now(), linked.id] }, docChange('note', linked.id, `지급 취소로 함께 삭제 · ${reason}`, user)]);
   return mustGet('purchase_payments', row.id);
 });
 route('GET', '/api/purchase-ledger', async ({ user, query }) => {
@@ -1652,6 +1691,18 @@ async function noteFields(body, old = {}) {
   const partner = reqStr(body.partner ?? old.partner, '거래처', 100), v = await vendorByName(partner);
   return { kind, issue_date: issue, note_no: noteNo, partner: v?.name || partner, amount: billTrunc(amount), due_date: due, bank: str(body.bank ?? old.bank, 50), memo: str(body.memo ?? old.memo, 300) };
 }
+// 15.268 입금·지급과 함께 들어온 어음(body.note_info): 받을어음(입금)·지급어음(지급). 금액·거래처·발행일은 입금과 같게.
+const NOTE_TYPES = ['자수어음', '타수어음', '전자어음', '약속어음', '당좌수표', '가계수표'];
+async function paymentNoteInfo(info, side, party, date, amount) {
+  if (!info || typeof info !== 'object') return null;
+  const n = await noteFields({ kind: side === 'sales' ? 'receivable' : 'payable', issue_date: info.issue_date || date, due_date: info.due_date, note_no: info.note_no, partner: str(info.partner, 100) || party, amount: Number(info.amount) > 0 ? info.amount : amount, bank: info.bank, memo: info.memo }); // 15.269 발행금액·거래처는 따로 줄 수 있음(기본은 입금과 같게)
+  const type = str(info.note_type, 20); if (type && !NOTE_TYPES.includes(type)) throw bad('어음 종류를 다시 고르세요.');
+  if (await noteDup(n)) throw new HttpError(409, `${NOTE_KIND[n.kind]} ${n.note_no}는 이미 등록되어 있습니다.`);
+  return { ...n, note_type: type, endorser: str(info.endorser, 100), storage: str(info.storage, 100) };
+}
+const paymentNoteCmds = (n, side, table, token, user) => [
+  { sql: `INSERT INTO bill_notes(kind,issue_date,note_no,partner,amount,due_date,bank,memo,created_by,created_by_id,request_id,payment_side,payment_id,note_type,endorser,storage) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,(SELECT id FROM ${table} WHERE request_id=?),?,?,? WHERE NOT EXISTS(SELECT 1 FROM bill_notes WHERE kind=? AND note_no=? AND status<>'cancelled')`,
+    args: [n.kind, n.issue_date, n.note_no, n.partner, n.amount, n.due_date, n.bank, n.memo, user.name, user.id, 'pay:' + token, side, token, n.note_type, n.endorser, n.storage, n.kind, n.note_no] }, RC_GUARD];
 const noteDup = (n, id = 0) => db.prepare("SELECT 1 FROM bill_notes WHERE kind=? AND note_no=? AND status<>'cancelled' AND id<>?").get(n.kind, n.note_no, id);
 route('GET', '/api/notes', async ({ user, query }) => {
   requirePayments(user);
@@ -1699,7 +1750,7 @@ route('POST', '/api/notes/:id/:action', async ({ user, params, body }) => {
   let sql, args, summary;
   if (action === 'collect') { if (n.status !== 'open') throw bad('미처리 어음만 만기회수로 처리할 수 있습니다.'); const d = dateStr(body.date || today(), '처리일자'); sql = "UPDATE bill_notes SET status='collected',processed_date=?,updated_by=?,updated_at=? WHERE id=? AND status='open'"; args = [d, user.name, now(), n.id]; summary = `만기회수 ${d}`; }
   else if (action === 'reopen') { if (n.status !== 'collected') throw bad('만기회수한 어음만 미처리로 되돌릴 수 있습니다.'); sql = "UPDATE bill_notes SET status='open',processed_date=NULL,updated_by=?,updated_at=? WHERE id=? AND status='collected'"; args = [user.name, now(), n.id]; summary = '미처리로 되돌림'; }
-  else if (action === 'cancel') { if (n.status === 'cancelled') throw bad('이미 삭제된 어음입니다.'); sql = "UPDATE bill_notes SET status='cancelled',updated_by=?,updated_at=? WHERE id=? AND status<>'cancelled'"; args = [user.name, now(), n.id]; summary = '삭제'; }
+  else if (action === 'cancel') { if (n.status === 'cancelled') throw bad('이미 삭제된 어음입니다.'); if (n.payment_id && await db.prepare(`SELECT 1 FROM ${n.payment_side === 'purchase' ? 'purchase_payments' : 'sales_payments'} WHERE id=? AND status='confirmed'`).get(n.payment_id)) throw bad(`거래처 장부의 ${n.payment_side === 'purchase' ? '지급' : '입금'}으로 들어온 어음입니다. 장부(또는 ${n.payment_side === 'purchase' ? '지급확인' : '입금확인'})에서 그 ${n.payment_side === 'purchase' ? '지급' : '입금'}을 취소하면 함께 삭제됩니다.`); sql = "UPDATE bill_notes SET status='cancelled',updated_by=?,updated_at=? WHERE id=? AND status<>'cancelled'"; args = [user.name, now(), n.id]; summary = '삭제'; }
   else throw new HttpError(404, '없는 동작입니다.');
   await db.batch([{ sql, args }, RC_GUARD, docChange('note', n.id, summary, user)]).catch(error => { if (isGuardError(error)) throw new HttpError(409, '그 사이 어음 상태가 바뀌었습니다. 새로 불러오세요.'); throw error; });
   return mustGet('bill_notes', n.id);
@@ -2078,6 +2129,12 @@ route('POST', '/api/sales-payments', async ({ user, body }) => {
   const amount = num(body.amount, '금액'); if (!(amount > 0)) throw bad('금액은 0보다 커야 합니다.');
   if (await salesClosed(customer, date)) throw bad(closedMessage(customer, date, '등록하세요'));
   await ensureVendor(customer, user, 'sales');
+  const noteInfo = kind === 'payment' ? await paymentNoteInfo(body.note_info, 'sales', customer, date, billTrunc(amount)) : null; // 15.268 어음이면 어음 관리에도
+  if (noteInfo) { requirePayments(user);
+    try { await db.batch([{ sql: 'INSERT INTO sales_payments(pay_date,customer,kind,amount,method,note,created_by,created_by_id,request_id) VALUES(?,?,?,?,?,?,?,?,?)', args: [date, customer, kind, billTrunc(amount), str(body.method, 50) || `어음 ${noteInfo.note_no}`, str(body.note, 200), user.name, user.id, token] }, ...paymentNoteCmds(noteInfo, 'sales', 'sales_payments', token, user)]); }
+    catch (error) { if (isGuardError(error)) throw new HttpError(409, `${NOTE_KIND[noteInfo.kind]} ${noteInfo.note_no}는 이미 등록되어 있습니다.`); const saved = await db.prepare('SELECT * FROM sales_payments WHERE request_id=?').get(token); if (saved && saved.created_by_id === user.id) return { ...saved, duplicate: true }; throw error; }
+    return { ...await db.prepare('SELECT * FROM sales_payments WHERE request_id=?').get(token), bill_note: await db.prepare('SELECT * FROM bill_notes WHERE request_id=?').get('pay:' + token) };
+  }
   try { await db.prepare('INSERT INTO sales_payments(pay_date,customer,kind,amount,method,note,created_by,created_by_id,request_id) VALUES(?,?,?,?,?,?,?,?,?)').run(date, customer, kind, billTrunc(amount), str(body.method, 50), str(body.note, 200), user.name, user.id, token); }
   catch (error) { const saved = await db.prepare('SELECT * FROM sales_payments WHERE request_id=?').get(token); if (saved && saved.created_by_id === user.id) return { ...saved, duplicate: true }; throw error; }
   return db.prepare('SELECT * FROM sales_payments WHERE request_id=?').get(token);
@@ -2089,8 +2146,11 @@ route('POST', '/api/sales-payments/:id/cancel', async ({ user, params, body }) =
   const ret = await db.prepare("SELECT return_no FROM stock_returns WHERE side='in' AND payment_id=? AND status='confirmed'").get(row.id); if (ret) throw bad(`반입 ${ret.return_no}의 현금 환불입니다. 반입 목록에서 그 반입을 취소하세요.`); // 15.141
   if (await salesClosed(row.customer, row.pay_date)) throw bad(closedMessage(row.customer, row.pay_date, '취소하세요'));
   const reason = reqStr(body.reason, '취소 사유', 200);
+  const linked = await db.prepare("SELECT * FROM bill_notes WHERE payment_side='sales' AND payment_id=? AND status<>'cancelled'").get(row.id); // 15.268
+  if (linked?.status === 'collected') throw bad(`이 입금의 어음 ${linked.note_no}는 만기회수 처리되었습니다. 어음 관리에서 미처리로 되돌린 뒤 취소하세요.`);
   const r = await db.prepare("UPDATE sales_payments SET status='cancelled',cancelled_at=?,cancelled_by=?,cancel_reason=? WHERE id=? AND status='confirmed'").run(now(), user.name, reason, row.id);
   if (!r.changes) throw new HttpError(409, '이미 처리된 입금입니다.');
+  if (linked) await db.batch([{ sql: "UPDATE bill_notes SET status='cancelled',updated_by=?,updated_at=? WHERE id=? AND status<>'cancelled'", args: [user.name, now(), linked.id] }, docChange('note', linked.id, `입금 취소로 함께 삭제 · ${reason}`, user)]);
   return mustGet('sales_payments', row.id);
 });
 // 기간별 거래보고(거래처 원장): 기초잔액 + 기간 안의 매출(전표 줄)·입금·기초 미수금, 줄마다 잔액. 거래처가 없으면 거래처별 요약.
@@ -2416,6 +2476,50 @@ const BOOK = {
   sales: { bills: 'sales_bills', col: 'customer', key: customerKey, pays: 'sales_payments', link: 'tax_invoice_bills', inv: 'tax_invoices', live: "i.status<>'cancelled'", lines: 'sales_bill_lines', need: requireSales },
   purchase: { bills: 'purchase_bills', col: 'vendor', key: billVendorKey, pays: 'purchase_payments', link: 'purchase_tax_invoice_bills', inv: 'purchase_tax_invoices', live: "i.status='received'", lines: 'purchase_bill_lines', need: requirePurchase },
 };
+// 15.271 거래처 장부 「추가」: 매출/매입 조정 전표(세금계산서와 1원 차이 맞추기 등 — 금액 음수 가능)·메모
+route('POST', '/api/book-entries', async ({ user, body }) => {
+  const side = body.side === 'purchase' ? 'purchase' : 'sales', c = BOOK[side]; c.need(user);
+  const kind = body.kind === 'memo' ? 'memo' : 'bill';
+  const token = String(body.request_id || ''); if (!/^[a-zA-Z0-9-]{16,80}$/.test(token)) throw bad('등록 요청 번호를 확인하세요.');
+  const party = reqStr(body.party, '거래처', 100), date = dateStr(body.date, '거래일자'); if (date > today()) throw bad('거래일자는 오늘 이전으로 넣으세요.');
+  if (kind === 'memo') {
+    const old = await db.prepare('SELECT * FROM book_memos WHERE request_id=?').get(token); if (old) return { ...old, duplicate: true };
+    const text = reqStr(body.text, '메모', 500);
+    await db.prepare('INSERT INTO book_memos(side,party,party_key,memo_date,text,created_by,created_by_id,request_id) VALUES(?,?,?,?,?,?,?,?)').run(side, party, nameKey(party), date, text, user.name, user.id, token);
+    return db.prepare('SELECT * FROM book_memos WHERE request_id=?').get(token);
+  }
+  const prior = await db.prepare(`SELECT * FROM ${c.bills} WHERE request_id=?`).get(token); if (prior) return { ...prior, duplicate: true };
+  const item = str(body.item, 200) || '장부 조정', note = str(body.note, 200);
+  const signed = (v, label) => { if (v === '' || v == null) throw bad(`${label}을(를) 입력하세요.`); const n = Number(v); if (!Number.isFinite(n)) throw bad(`${label}을(를) 숫자로 넣으세요.`); return n; }; // 조정은 − 가능
+  const supply = signed(body.supply, '공급가액'), vat = body.vat === undefined || body.vat === '' || body.vat === null ? Math.trunc(supply * 0.1) : signed(body.vat, '부가세');
+  if (!Number.isInteger(supply) || !Number.isInteger(vat)) throw bad('금액은 원 단위(정수)로 넣으세요.');
+  if (!supply && !vat) throw bad('공급가액이나 부가세를 넣으세요(줄일 때는 −).');
+  if (Math.abs(supply) > 1e11 || Math.abs(vat) > 1e10) throw bad('금액이 너무 큽니다.');
+  const total = supply + vat, taxType = body.tax_type === 'zero' ? 'zero' : 'taxable';
+  if (taxType === 'zero' && vat) throw bad('영세 전표는 부가세가 0이어야 합니다.');
+  const ymd = date.slice(2).replace(/-/g, ''), prefix = `${side === 'sales' ? 'SB' : 'PB'}-${ymd}-`, BID = `(SELECT id FROM ${c.bills} WHERE request_id=?)`, memo = `장부 조정${note ? ' · ' + note : ''}`;
+  if (side === 'sales') {
+    if (await salesClosed(party, date)) throw bad(closedMessage(party, date, '등록하세요'));
+    await ensureVendor(party, user, 'sales');
+    await db.batch([
+      { sql: `INSERT INTO sales_bills(bill_no,bill_date,customer,tax_type,supply_total,vat_total,total,note,created_by,created_by_id,request_id) VALUES(${nextDocNo('sales_bills', 'bill_no')},?,?,?,?,?,?,?,?,?,?)`, args: [prefix, prefix, prefix, date, party, taxType, supply, vat, total, memo, user.name, user.id, token] },
+      { sql: `INSERT INTO sales_bill_lines(bill_id,item_category,source_type,source_id,item,spec,unit,product_code,lot,ship_date,qty,unit_price,supply,vat,note) VALUES(${BID},'','manual',NULL,?,'','','','',?,1,?,?,?,?)`, args: [token, item, date, supply, supply, vat, '장부 조정'] }]);
+  } else {
+    if (await closedPeriod(party, date)) throw bad(`${party}의 ${date.slice(0, 7)} 매입은 마감되었습니다. 마감 취소(관리자) 뒤에 등록하세요.`);
+    await ensureVendor(party, user, 'purchase');
+    // 매입전표 줄은 입고 줄을 가리키므로 조정 줄은 겹치지 않는 음수 번호(반출 줄과 같은 방식)
+    await db.batch([
+      { sql: `INSERT INTO purchase_bills(bill_no,bill_date,vendor,tax_type,supply_total,vat_total,total,note,created_by,created_by_id,request_id) VALUES(${nextDocNo('purchase_bills', 'bill_no')},?,?,?,?,?,?,?,?,?,?)`, args: [prefix, prefix, prefix, date, party, taxType, supply, vat, total, memo, user.name, user.id, token] },
+      { sql: `INSERT INTO purchase_bill_lines(bill_id,item_category,source_type,source_id,po_id,req_no,item,spec,unit,product_code,lot,received_date,qty,unit_price,supply,note) VALUES(${BID},'','other',?,NULL,'',?,'','','','',?,1,?,?,?)`, args: [token, -(Date.now() * 100 + 99), item, date, supply, supply, '장부 조정'] }]);
+  }
+  return db.prepare(`SELECT * FROM ${c.bills} WHERE request_id=?`).get(token);
+});
+route('POST', '/api/book-memos/:id/delete', async ({ user, params }) => {
+  const m = await mustGet('book_memos', params.id); BOOK[m.side].need(user);
+  if (m.status !== 'active') throw new HttpError(409, '이미 지운 메모입니다.');
+  await db.prepare("UPDATE book_memos SET status='deleted',deleted_at=?,deleted_by=? WHERE id=? AND status='active'").run(now(), user.name, m.id);
+  return { ok: true };
+});
 route('GET', '/api/partner-book', async ({ user, query }) => {
   const side = query.side === 'purchase' ? 'purchase' : 'sales', c = BOOK[side]; c.need(user);
   const from = dateStr(query.from, '시작일'), to = dateStr(query.to, '종료일'); if (from > to) throw bad('시작일이 종료일보다 늦습니다.');
@@ -2440,7 +2544,9 @@ route('GET', '/api/partner-book', async ({ user, query }) => {
     FROM ${c.bills} b WHERE b.status='confirmed' AND b.bill_date BETWEEN ? AND ? AND ${c.key('b.' + c.col)}=? ORDER BY b.bill_date, b.id LIMIT 5001`).all(from, to, nameKey(party));
   const pays = await db.prepare(`SELECT id, pay_date AS date, kind, amount, method, note FROM ${c.pays} WHERE status='confirmed' AND pay_date BETWEEN ? AND ? AND ${K}=? ORDER BY pay_date, id LIMIT 5001`).all(from, to, nameKey(party));
   if (bills.length > 5000 || pays.length > 5000) throw bad('줄이 너무 많습니다. 기간을 좁히세요.');
+  const memos = await db.prepare("SELECT id, memo_date AS date, text, created_by FROM book_memos WHERE side=? AND party_key=? AND status='active' AND memo_date BETWEEN ? AND ? ORDER BY memo_date, id LIMIT 2000").all(side, nameKey(party), from, to); // 15.271
   const rows = [
+    ...memos.map(m => ({ kind: 'memo', date: m.date, order: 3, id: m.id, label: m.text, note: m.created_by, supply: 0, vat: 0, total: 0, paid: 0 })),
     ...pays.map(p => ({ kind: p.kind, date: p.date, order: p.kind === 'opening' ? -1 : 2, id: p.id, label: p.kind === 'opening' ? (side === 'sales' ? '기초 미수금' : '기초 미지급') : (side === 'sales' ? '입금' : '지급') + (p.method ? ` · ${p.method}` : ''), note: p.note, total: p.kind === 'opening' ? p.amount : 0, paid: p.kind === 'payment' ? p.amount : 0 })),
     ...bills.map(b => { const [invoice_no, invoice_status, invoice_id, approval_no] = b.invoice ? b.invoice.split('|') : []; return { kind: 'bill', date: b.date, order: 1, id: b.id, bill_no: b.bill_no, label: b.first_item ? `${b.first_item}${b.line_count > 1 ? ` 외 ${b.line_count - 1}건` : ''}` : '', note: b.note, supply: b.supply, vat: b.vat, total: b.total, paid: 0, invoice_no: invoice_no || '', invoice_status: invoice_status || '', invoice_id: invoice_id ? Number(invoice_id) : null, approval_no: approval_no || '' }; }),
   ].sort((a, b) => stockCompare(a.date, b.date) || a.order - b.order || a.id - b.id);
@@ -2550,6 +2656,15 @@ route('PUT', '/api/tax-company', async ({ user, body }) => {
   return v;
 });
 // 거래처 사업자 정보(세금계산서용)
+// 15.266 사업자 정보 값(거래처 등록·수정 한 번에 쓰려고 함수로). 본문에 사업자 칸이 하나도 없으면 null.
+function vendorTaxValues(body, row = {}) {
+  if (!TAX_VENDOR_FIELDS.some(k => body[k] !== undefined)) return null;
+  const pick = (k, f) => body[k] === undefined ? row[k] ?? '' : f(body[k]);
+  return { biz_no: pick('biz_no', bizNoField), biz_name: pick('biz_name', x => str(x, 100)), ceo: pick('ceo', x => str(x, 50)), address: pick('address', x => str(x, 200)), biz_type: pick('biz_type', x => str(x, 100)), biz_item: pick('biz_item', x => str(x, 100)),
+    tax_email: pick('tax_email', x => taxEmail(x, '세금계산서 이메일 1')), tax_email2: pick('tax_email2', x => taxEmail(x, '세금계산서 이메일 2')),
+    tax_reverse: body.tax_reverse === undefined ? row.tax_reverse || 0 : (body.tax_reverse === true || body.tax_reverse === 1 || body.tax_reverse === '1' || (Array.isArray(body.tax_reverse) && body.tax_reverse.length)) ? 1 : 0 };
+}
+const vendorTaxChanged = (v, row) => v && TAX_VENDOR_FIELDS.some(k => String(v[k] ?? '') !== String(row[k] ?? ''));
 route('PUT', '/api/vendors/:id/tax-info', async ({ user, params, body }) => {
   if (!hasRole(user, 'sales') && !hasRole(user, 'purchase')) throw new HttpError(403, '사업자 정보는 영업·구매 담당자나 관리자가 고칩니다.');
   const row = await mustGet('vendors', params.id);
@@ -4244,6 +4359,7 @@ route('GET', '/api/inventory/lot-history', async ({ query }) => {
     q(`SELECT a.production_date AS d, 'in' AS kind, '생산' AS src, a.work_order AS doc, '' AS party, a.qty, '' AS place, a.note FROM production_actuals a JOIN schedules s ON s.id=a.schedule_id WHERE TRIM(s.product)=TRIM(?) AND a.lot=? AND a.voided_at IS NULL`, item, lot),
     q(`SELECT a.production_date AS d, 'out' AS kind, '생산 투입' AS src, a.work_order AS doc, s.product AS party, i.qty, '' AS place, a.lot AS note FROM production_lot_inputs i JOIN production_actuals a ON a.id=i.actual_id JOIN schedules s ON s.id=a.schedule_id WHERE TRIM(i.item)=TRIM(?) AND i.lot=? AND a.voided_at IS NULL`, item, lot),
     q(`SELECT r.work_date AS d, 'out' AS kind, CASE WHEN r.work_status='progress' THEN '커팅 투입(작업중)' ELSE '커팅 투입' END AS src, r.lot AS doc, r.unit_name AS party, CASE WHEN r.work_status='progress' THEN 0 ELSE i.qty END AS qty, '' AS place, CASE WHEN i.piece_nos<>'' THEN '절 ' || i.piece_nos WHEN i.pieces IS NOT NULL THEN i.pieces || '절' ELSE '' END AS note FROM semi_lot_inputs i JOIN semi_records r ON r.id=i.record_id WHERE TRIM(i.item)=TRIM(?) AND i.lot=?`, item, lot),
+    q(`SELECT adj_date AS d, CASE WHEN qty>0 THEN 'in' ELSE 'out' END AS kind, CASE kind WHEN 'count' THEN '재고 실사' WHEN 'opening' THEN '기초재고' ELSE '재고 조정' END AS src, '' AS doc, created_by AS party, ABS(qty) AS qty, TRIM(warehouse || ' ' || location) AS place, reason || CASE WHEN counted_qty IS NOT NULL THEN ' (센 수량 ' || printf('%g', counted_qty) || ')' ELSE '' END AS note FROM stock_adjustments WHERE TRIM(item)=TRIM(?) AND lot=?`, item, lot), // 15.265
     q(`SELECT transfer_date AS d, 'move' AS kind, '이동' AS src, '' AS doc, from_place AS party, qty, to_place AS place, note FROM stock_transfers WHERE TRIM(item)=TRIM(?) AND lot=? AND status='confirmed'`, item, lot),
   ]);
   const KO = { in: 0, out: 1, move: 2 }, rows = parts.flat().sort((a, b) => stockCompare(a.d, b.d) || KO[a.kind] - KO[b.kind] || stockCompare(a.src, b.src) || stockCompare(String(a.doc || ''), String(b.doc || '')));
@@ -5423,10 +5539,11 @@ route('POST', '/api/pallets/:id/ship', async ({ user, params, body }) => {
 });
 // 15.230 창고·위치별 재고: LOT마다 위치별 잔량(위치가 적힌 입고 + 이동 들어옴 − 나감, 출고·생산 투입·반출은 먼저 들어온 위치부터 뺌).
 // LOT별 재고와 같은 원천을 쓰고 위치 없이 들어온 것(생산·반입·예전 발주)은 「위치 미지정」. ?warehouse=창고, ?q=품목·LOT·위치
-route('GET', '/api/inventory/places', async ({ query }) => {
+route('GET', '/api/inventory/places', async ({ query }) => inventoryPlaces(query));
+async function inventoryPlaces(query) {
   const asof = stockAsOf(query.asof), q = str(query.q, 200).toLowerCase(), whF = str(query.warehouse, 50);
   const LOT = "CASE WHEN l.lot='' THEN '(LOT 미지정)' ELSE l.lot END";
-  const [a, b, c, d, e, f, g, h, t, w] = await db.batch([
+  const [a, b, c, d, e, f, g, h, t, w, adj, cutIn] = await db.batch([
     { sql: `SELECT TRIM(p.item) AS item, TRIM(p.unit) AS unit, ${LOT} AS lot, l.warehouse AS wh, l.location AS loc, l.qty, l.received_date AS d, p.product_code AS code FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id WHERE l.voided_at IS NULL AND p.recv_status IN ('ok','mismatch') AND l.received_date<=?`, args: [asof] },
     { sql: `SELECT TRIM(item) AS item, TRIM(unit) AS unit, lot, '' AS wh, '' AS loc, recv_qty AS qty, COALESCE(substr(recv_at,1,10), due_date) AS d, product_code AS code FROM purchase_orders WHERE lot<>'' AND recv_status IN ('ok','mismatch') AND recv_qty IS NOT NULL AND NOT EXISTS(SELECT 1 FROM po_receipt_lots l WHERE l.po_id=purchase_orders.id AND l.voided_at IS NULL) AND COALESCE(substr(recv_at,1,10), due_date)<=?`, args: [asof] },
     { sql: `SELECT TRIM(item) AS item, TRIM(COALESCE(NULLIF(unit,''), json_extract(bom_snapshot,'$.unit'), '')) AS unit, lot, warehouse AS wh, location AS loc, qty, received_date AS d, COALESCE(json_extract(bom_snapshot,'$.product_code'),'') AS code FROM other_receipts WHERE lot<>'' AND received_date<=?`, args: [asof] },
@@ -5437,8 +5554,10 @@ route('GET', '/api/inventory/places', async ({ query }) => {
     { sql: `SELECT TRIM(l.item) AS item, l.lot AS lot, SUM(l.qty) AS q FROM stock_return_lines l JOIN stock_returns r ON r.id=l.return_id WHERE l.lot<>'' AND r.status='confirmed' AND r.process IN ('stock_amount','stock') AND r.side<>'in' AND r.return_date<=? GROUP BY TRIM(l.item), l.lot`, args: [asof] },
     { sql: `SELECT item, lot, from_place, to_place, to_warehouse, to_location, qty, transfer_date AS d FROM stock_transfers WHERE status='confirmed' AND transfer_date<=? ORDER BY transfer_date, id`, args: [asof] },
     { sql: 'SELECT name, locations, sort FROM warehouses ORDER BY sort, name', args: [] },
+    { sql: "SELECT TRIM(item) AS item, TRIM(unit) AS unit, lot, warehouse AS wh, location AS loc, qty, adj_date AS d, '' AS code FROM stock_adjustments WHERE lot<>'' AND (warehouse<>'' OR qty>0) AND adj_date<=?", args: [asof] }, // 15.265 LOT·위치 조정(+/−), 위치 없는 감소는 아래 outs로
+    { sql: "SELECT TRIM(i.item) AS item, i.lot AS lot, SUM(i.qty) AS q FROM semi_lot_inputs i JOIN semi_records r ON r.id=i.record_id WHERE r.work_date<=? GROUP BY TRIM(i.item), i.lot UNION ALL SELECT TRIM(item), lot, SUM(-qty) FROM stock_adjustments WHERE lot<>'' AND warehouse='' AND qty<0 AND adj_date<=? GROUP BY TRIM(item), lot", args: [asof, asof] }, // 15.265 커팅 투입·위치 없는 LOT 감소도 빠지게(먼저 들어온 위치부터)
   ]);
-  const ins = [...a.results, ...b.results, ...c.results, ...d.results, ...e.results];
+  const ins = [...a.results, ...b.results, ...c.results, ...d.results, ...e.results, ...adj.results];
   if (ins.length > 50000) throw bad('기록이 너무 많습니다. 기준일이나 검색으로 범위를 좁히세요.');
   const lots = new Map(), placeOf = new Map(); // 위치 글자 → [창고, 위치]
   const key = (item, lot) => item + '\u0001' + lot;
@@ -5449,7 +5568,7 @@ route('GET', '/api/inventory/places', async ({ query }) => {
   };
   for (const r of ins) { const wh = String(r.wh || '').trim(), loc = String(r.loc || '').trim(), place = `${wh} ${loc}`.trim(); if (place) placeOf.set(place, [wh, loc]); at(key(r.item, r.lot), r.item, r.unit, r.lot, place, wh, loc, r.d, r.code).qty += Number(r.qty) || 0; }
   for (const r of t.results) { placeOf.set(r.to_place, [r.to_warehouse, r.to_location]); const k = key(String(r.item).trim(), r.lot); if (!lots.has(k)) continue; const L = lots.get(k); const fr = placeOf.get(r.from_place) || [r.from_place.split(' ')[0] || '', r.from_place.split(' ').slice(1).join(' ')]; at(k, L.item, L.unit, L.lot, r.from_place, fr[0], fr[1], r.d).qty -= r.qty; at(k, L.item, L.unit, L.lot, r.to_place, r.to_warehouse, r.to_location, r.d).qty += r.qty; }
-  const outs = new Map(); for (const r of [...f.results, ...g.results, ...h.results]) { const k = key(r.item, r.lot); outs.set(k, (outs.get(k) || 0) + (Number(r.q) || 0)); }
+  const outs = new Map(); for (const r of [...f.results, ...g.results, ...h.results, ...cutIn.results]) { const k = key(r.item, r.lot); outs.set(k, (outs.get(k) || 0) + (Number(r.q) || 0)); }
   const rows = [];
   for (const [k, L] of lots) {
     let out = outs.get(k) || 0; const ps = [...L.places.values()].sort((x, y) => stockCompare(x.first, y.first) || stockCompare(x.place, y.place));
@@ -5462,7 +5581,7 @@ route('GET', '/api/inventory/places', async ({ query }) => {
   out.sort((x, y) => (!x.warehouse) - (!y.warehouse) || (order.get(x.warehouse) ?? 999) - (order.get(y.warehouse) ?? 999) || stockCompare(x.warehouse, y.warehouse) || stockCompare(x.location, y.location) || stockCompare(x.item, y.item) || stockCompare(x.first_date, y.first_date));
   const warehouses = w.results.map(x => ({ name: x.name, locations: x.locations ? x.locations.split(',') : [] }));
   return { asof, rows: out.slice(0, 3000), more: out.length > 3000, warehouses };
-});
+}
 async function lotStockReport(query) {
   const asof = stockAsOf(query.asof), q = str(query.q, 200);
   const like = q ? '%' + q.replace(/[\\%_]/g, m => '\\' + m) + '%' : null;
@@ -5482,6 +5601,7 @@ async function lotStockReport(query) {
     wrap(`SELECT TRIM(i.item) AS item, TRIM(i.unit) AS unit, i.lot AS lot, 'out' AS kind, i.qty AS qty, a.production_date AS d, '' AS place FROM production_lot_inputs i JOIN production_actuals a ON a.id=i.actual_id WHERE a.voided_at IS NULL`),
     wrap(`SELECT TRIM(i.item) AS item, TRIM(i.unit) AS unit, i.lot AS lot, 'out' AS kind, i.qty AS qty, r.work_date AS d, '' AS place FROM semi_lot_inputs i JOIN semi_records r ON r.id=i.record_id`), // 15.249 커팅·융착에 투입한 원자재 LOT
     wrap(`SELECT item, unit, lot, 'move' AS kind, 0 AS qty, transfer_date AS d, to_place AS place FROM stock_transfers WHERE status='confirmed'`), // 15.114 이동한 위치
+    wrap(`SELECT TRIM(item) AS item, TRIM(unit) AS unit, lot, CASE WHEN qty>0 THEN 'in' ELSE 'out' END AS kind, ABS(qty) AS qty, adj_date AS d, TRIM(warehouse || ' ' || location) AS place FROM stock_adjustments WHERE lot<>''`), // 15.265 LOT 재고 조정
   ]);
   const map = new Map(); let truncated = false;
   for (const result of results) {
@@ -5518,6 +5638,8 @@ route('POST', '/api/inventory/adjustments', async ({ user, body }) => {
   const kind = String(body.kind || ''); if (!['opening', 'count', 'adjust'].includes(kind)) throw bad('조정 종류를 선택하세요.');
   const date = dateStr(body.adj_date || today(), '기준일'); if (date > today()) throw bad('기준일은 오늘 이전으로 선택하세요.');
   const reason = reqStr(body.reason, '사유', 500);
+  const lot = str(body.lot, 100); let warehouse = lot ? str(body.warehouse, 50) : '', location = warehouse ? str(body.location, 50) : ''; // 15.265
+  if (lot && !warehouse) { const at = new Set((await inventoryPlaces({ asof: date, q: lot })).rows.filter(r => r.item === item.trim() && r.lot === lot && r.qty > 0).map(r => (r.warehouse || '') + '\u0001' + (r.location || ''))); if (at.size === 1 && ![...at][0].startsWith('\u0001')) [warehouse, location] = [...at][0].split('\u0001'); } // 한 곳에만 있으면 그 위치로
   const key = body.request_id === undefined ? randomHex(16) : String(body.request_id);
   if (!/^[a-zA-Z0-9-]{16,80}$/.test(key)) throw bad('요청 번호를 확인하세요.');
   const old = await db.prepare('SELECT * FROM stock_adjustments WHERE request_id=?').get(key);
@@ -5526,12 +5648,17 @@ route('POST', '/api/inventory/adjustments', async ({ user, body }) => {
   if (kind === 'count') {
     // A stock count records the difference between what was counted and what the records say on that date.
     counted = num(body.counted_qty, '실사 수량');
-    qty = stockRound(counted - await stockQuantity(item, unit, body.spec === undefined || body.by_item ? null : spec, date));
+    if (lot) { // 15.265 LOT(위치) 실사: 그 LOT·위치 잔량과의 차이
+      const now = warehouse ? stockRound((await inventoryPlaces({ asof: date, q: lot })).rows.filter(r => r.item === item.trim() && r.lot === lot && r.warehouse === warehouse && (r.location || '') === location).reduce((t, r) => t + r.qty, 0))
+        : ((await lotStockReport({ q: lot, asof: date })).rows.find(r => r.item === item.trim() && r.lot === lot)?.balance ?? 0);
+      qty = stockRound(counted - now);
+    } else qty = stockRound(counted - await stockQuantity(item, unit, body.spec === undefined || body.by_item ? null : spec, date));
+    if (qty === 0) throw bad('센 수량이 장부와 같습니다. 조정할 것이 없습니다.');
   } else {
     qty = Number(body.qty); if (body.qty === '' || body.qty == null || !Number.isFinite(qty) || qty === 0) throw bad('조정 수량을 입력하세요. (감소는 음수)');
     if (kind === 'opening' && qty < 0) throw bad('기초재고는 0보다 커야 합니다.');
   }
-  let r; try { r = await db.prepare('INSERT INTO stock_adjustments(adj_date,item,spec,unit,qty,kind,counted_qty,reason,request_id,created_by_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(date, item, spec, unit, qty, kind, counted, reason, key, user.id, user.name); }
+  let r; try { r = await db.prepare('INSERT INTO stock_adjustments(adj_date,item,spec,unit,qty,kind,counted_qty,reason,request_id,created_by_id,created_by,lot,warehouse,location) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(date, item, spec, unit, qty, kind, counted, reason, key, user.id, user.name, lot, warehouse, location); }
   catch (error) { if (/UNIQUE/i.test(String(error && error.message))) { const again = await db.prepare('SELECT * FROM stock_adjustments WHERE request_id=?').get(key); if (again && again.created_by_id === user.id) return again; throw new HttpError(409, '이미 사용된 요청 번호입니다.'); } throw error; } // 15.209
   return db.prepare('SELECT * FROM stock_adjustments WHERE id=?').get(r.lastInsertRowid);
 });

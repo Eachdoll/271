@@ -629,12 +629,57 @@ async function pagePartnerBook(main, side = 'sales') {
         : '<div class="empty">그 기간에 거래가 없습니다.</div>';
       return;
     }
-    head.innerHTML = sumLine([[S.who, `<b>${esc(data.party)}</b>`], ['기간', `${esc(data.from)} ~ ${esc(data.to)}`], ['기초 잔액', `${won(data.opening)}원`], ['전표 합계', `${won(t.total - data.rows.filter(r => r.kind === 'opening').reduce((s, r) => s + r.total, 0))}원`], [S.pay, `${won(t.paid)}원`], ['기말 잔액', `<b>${won(t.balance)}원</b>`], [side === 'sales' ? '계산서 미발행' : '계산서 미수취', `<span class="${t.uninvoiced ? 'red-text' : ''}">${won(t.uninvoiced)}원</span>`]]);
+    head.innerHTML = sumLine([[S.who, `<b>${esc(data.party)}</b>`], ['기간', `${esc(data.from)} ~ ${esc(data.to)}`], ['기초 잔액', `${won(data.opening)}원`], ['전표 합계', `${won(t.total - data.rows.filter(r => r.kind === 'opening').reduce((s, r) => s + r.total, 0))}원`], [S.pay, `${won(t.paid)}원`], ['기말 잔액', `<b>${won(t.balance)}원</b>`], [side === 'sales' ? '계산서 미발행' : '계산서 미수취', `<span class="${t.uninvoiced ? 'red-text' : ''}">${won(t.uninvoiced)}원</span>`]]) + '<button type="button" class="btn primary small book-add-btn" data-book-add title="매출·매입·반입·반출·입금·출금·메모 중 골라 장부에 추가">＋ 추가</button>';
     box.innerHTML = `<div class="table-wrap"><table class="grid book-grid"><thead><tr><th>전표 일자</th><th>전표번호</th><th>내용</th><th class="r">공급가액</th><th class="r">부가세</th><th class="r">합계</th><th class="r">${S.pay}</th><th class="r">잔액</th><th>세금계산서</th><th>비고</th></tr></thead>
-      <tbody><tr class="book-open"><td colspan="7">기초 잔액 (${esc(data.from)} 이전)</td><td class="r"><b>${won(data.opening)}</b></td><td colspan="2"></td></tr>${data.rows.map(r => `<tr class="${r.kind === 'bill' ? '' : 'book-pay'}"><td class="nowrap">${esc(r.date)}</td><td>${r.kind === 'bill' ? `<button type="button" class="link-btn" data-book-bill="${r.id}">${esc(r.bill_no)}</button>` : ''}</td><td>${esc(r.label)}</td>
-        <td class="r">${r.kind === 'bill' ? won(r.supply) : ''}</td><td class="r">${r.kind === 'bill' ? won(r.vat) : ''}</td><td class="r">${r.total ? won(r.total) : ''}</td><td class="r">${r.paid ? won(r.paid) : ''}</td><td class="r"><b>${won(r.balance)}</b></td><td>${invCell(r)}</td><td class="small">${esc(r.note || '')}${r.kind !== 'bill' ? ` <button type="button" class="btn small" data-book-paycancel="${r.id}" title="이 ${r.kind === 'opening' ? '기초 잔액' : S.pay}을 취소">취소</button>` : ''}</td></tr>`).join('')}</tbody>
+      <tbody><tr class="book-open"><td colspan="7">기초 잔액 (${esc(data.from)} 이전)</td><td class="r"><b>${won(data.opening)}</b></td><td colspan="2"></td></tr>${data.rows.map(r => `<tr class="${r.kind === 'bill' ? '' : r.kind === 'memo' ? 'book-memo' : 'book-pay'}"><td class="nowrap">${esc(r.date)}</td><td>${r.kind === 'bill' ? `<button type="button" class="link-btn" data-book-bill="${r.id}">${esc(r.bill_no)}</button>` : r.kind === 'memo' ? '<span class="chip">메모</span>' : ''}</td><td>${esc(r.label)}</td>
+        <td class="r">${r.kind === 'bill' ? won(r.supply) : ''}</td><td class="r">${r.kind === 'bill' ? won(r.vat) : ''}</td><td class="r">${r.total ? won(r.total) : ''}</td><td class="r">${r.paid ? won(r.paid) : ''}</td><td class="r"><b>${won(r.balance)}</b></td><td>${invCell(r)}</td><td class="small">${esc(r.note || '')}${r.kind === 'memo' ? ` <button type="button" class="btn small" data-book-memodel="${r.id}" title="이 메모 지우기">지우기</button>` : r.kind !== 'bill' ? ` <button type="button" class="btn small" data-book-paycancel="${r.id}" title="이 ${r.kind === 'opening' ? '기초 잔액' : S.pay}을 취소">취소</button>` : ''}</td></tr>`).join('')}</tbody>
       <tfoot><tr><th colspan="3">합계</th><td class="r">${won(t.supply)}</td><td class="r">${won(t.vat)}</td><td class="r">${won(t.total)}</td><td class="r">${won(t.paid)}</td><td class="r"><b>${won(t.balance)}</b></td><td colspan="2"></td></tr></tfoot></table></div>`;
   };
+  // 15.271 장부 「+ 추가」: 거래구분(매출·매입·반입·반출·입금·출금·메모)을 골라 바로 작성. 매출·매입은 조정 전표(1원 맞추기 등, − 가능)
+  const KINDS = [['sales', '매출'], ['purchase', '매입'], ['in', '반입'], ['out', '반출'], ['pay_in', '입금'], ['pay_out', '출금'], ['memo', '메모']];
+  const addEntry = async () => {
+    if (!data?.party) return toast(`${S.who}를 먼저 고르세요.`, 'err');
+    const token = crypto.randomUUID(), def = side === 'sales' ? 'sales' : 'purchase';
+    const v = await promptBox(`장부 거래 추가 · ${data.party}`, `<div class="form-grid book-add">
+      <label>거래일자<input type="date" name="date" required value="${todayStr()}" max="${todayStr()}"></label>
+      <label>거래구분<select name="kind" data-ba-kind>${KINDS.map(([k, l]) => `<option value="${k}"${k === def ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+      <div class="span2 small muted" data-ba-help></div>
+      <label data-ba="bill" class="span2">적요<input name="item" maxlength="200" value="장부 조정" placeholder="예) 세금계산서 1원 차이 조정"></label>
+      <label data-ba="bill">과세구분<select name="tax_type"><option value="taxable">과세(10%)</option><option value="zero">영세(0%)</option></select></label>
+      <label data-ba="bill">공급가액 <span class="hint">(줄일 때는 −)</span><input type="number" name="supply" step="1" inputmode="numeric" placeholder="예) 1 또는 -1"></label>
+      <label data-ba="bill">부가세 <span class="hint">(자동 10%, 고칠 수 있음)</span><input type="number" name="vat" step="1" inputmode="numeric"></label>
+      <div data-ba="bill" class="book-add-total"><span>합계</span><b data-ba-total>0</b></div>
+      <label data-ba="pay">금액<input type="number" name="amount" min="1" step="1" inputmode="numeric"></label>
+      <label data-ba="pay">계좌·방법<input name="method" maxlength="50" placeholder="예) 기업은행 · 현금"></label>
+      <label data-ba="memo" class="span2">메모<textarea name="text" rows="3" maxlength="500" placeholder="예) 11월 세금계산서 1원 차이 — 거래처 확인 완료"></textarea></label>
+      <label data-ba="bill pay" class="span2">비고<input name="note" maxlength="200"></label></div>`, { wide: true, onOpen: el => {
+        const f = el.querySelector('form'), kindSel = f.elements.kind; let vatTouched = false;
+        const help = { sales: '매출 조정 전표를 만듭니다(매출 장부·세금계산서 대조에 들어감).', purchase: '매입 조정 전표를 만듭니다(매입 장부·받은 세금계산서 대조에 들어감).', in: '반입은 품목·수량이 필요해 「반입 입력」 화면에서 작성합니다(거래처를 채워 엽니다).', out: '반출은 품목·수량이 필요해 「반출 입력」 화면에서 작성합니다(거래처를 채워 엽니다).', pay_in: '받은 돈(매출 장부의 입금). 어음은 장부의 입금 줄에서 「어음」으로 넣으세요.', pay_out: '준 돈(매입 장부의 지급). 어음은 매입 장부의 지급 줄에서 넣으세요.', memo: '금액 없이 장부에 메모를 남깁니다.' };
+        const sync = () => { const k = kindSel.value, grp = ['sales', 'purchase'].includes(k) ? 'bill' : ['pay_in', 'pay_out'].includes(k) ? 'pay' : k === 'memo' ? 'memo' : 'none';
+          for (const x of f.querySelectorAll('[data-ba]')) { const on = x.dataset.ba.split(' ').includes(grp); x.hidden = !on; for (const i of x.querySelectorAll('input, textarea')) i.required = on && ['supply', 'amount', 'text'].includes(i.name); }
+          const other = (side === 'sales' && ['purchase', 'out', 'pay_out'].includes(k)) || (side === 'purchase' && ['sales', 'in', 'pay_in'].includes(k));
+          f.querySelector('[data-ba-help]').textContent = help[k] + (other ? ` ※ ${side === 'sales' ? '매입' : '매출'} 장부에 기록됩니다.` : ''); total(); };
+        const total = () => { const s = Number(f.elements.supply.value) || 0; if (!vatTouched) f.elements.vat.value = f.elements.tax_type.value === 'zero' || !f.elements.supply.value ? '' : Math.trunc(s * 0.1); f.querySelector('[data-ba-total]').textContent = fmtNum(s + (Number(f.elements.vat.value) || 0)); };
+        kindSel.onchange = sync; f.elements.supply.oninput = total; f.elements.tax_type.onchange = total; f.elements.vat.oninput = () => { vatTouched = f.elements.vat.value !== ''; total(); };
+        sync(); setTimeout(() => f.elements.supply.focus(), 30);
+      }, submit: async v => {
+        const k = v.kind;
+        if (k === 'in' || k === 'out') { try { sessionStorage.setItem('wpa:ret-party', data.party); } catch { /* 편의 */ } location.hash = k === 'in' ? '#/sales/returns/new' : '#/purchase/returns/new'; return { nav: true }; }
+        if (k === 'sales' || k === 'purchase') return api('POST', '/api/book-entries', { side: k, kind: 'bill', party: data.party, date: v.date, item: v.item, tax_type: v.tax_type, supply: v.supply, vat: v.vat, note: v.note, request_id: token });
+        if (k === 'pay_in') return api('POST', '/api/sales-payments', { customer: data.party, pay_date: v.date, kind: 'payment', amount: Number(v.amount), method: v.method, note: v.note, request_id: token });
+        if (k === 'pay_out') return api('POST', '/api/purchase-payments', { vendor: data.party, pay_date: v.date, kind: 'payment', amount: Number(v.amount), method: v.method, note: v.note, request_id: token });
+        return api('POST', '/api/book-entries', { side, kind: 'memo', party: data.party, date: v.date, text: v.text, request_id: token });
+      } });
+    if (!v || v.nav) return;
+    const k = v.kind ?? '', label = r => r.bill_no ? `전표 ${r.bill_no}` : r.text ? '메모' : '입금·지급';
+    const otherSide = v.bill_no ? (v.bill_no.startsWith('SB') ? 'sales' : 'purchase') !== side : v.customer ? side !== 'sales' : v.vendor ? side !== 'purchase' : false;
+    toast(`${data.party} · ${label(v)}을(를) 넣었습니다.${otherSide ? ` (${side === 'sales' ? '매입' : '매출'} 장부에 기록)` : ''}`); void k;
+    await load();
+  };
+  main.addEventListener('click', async e => {
+    if (e.target.closest('[data-book-add]')) { addEntry().catch(fail); return; }
+    const md = e.target.closest('[data-book-memodel]'); if (md) { if (!await confirmBox('이 메모를 지울까요?')) return; try { await api('POST', `/api/book-memos/${md.dataset.bookMemodel}/delete`); toast('메모를 지웠습니다.'); await load(); } catch (error) { fail(error); } }
+  });
   // 15.145 장부에서 바로 입금(매출)·지급(매입) 넣기 — 입금확인·지급확인과 같은 기록
   const P = PAY_SIDE[side]; let payToken = crypto.randomUUID(), payBusy = false;
   const drawPay = () => {
@@ -647,21 +692,43 @@ async function pagePartnerBook(main, side = 'sales') {
       <th>날짜</th><td><input type="date" name="pay_date" required value="${todayStr()}" max="${todayStr()}" aria-label="${esc(P.verb)}일"></td>
       <th>구분</th><td><select name="kind" aria-label="구분"><option value="payment">${esc(P.kinds.payment)}</option><option value="opening">${esc(P.kinds.opening)}</option></select></td>
       <th>금액</th><td><input type="number" name="amount" min="1" step="1" inputmode="numeric" required aria-label="금액" placeholder="원"></td>
+      <th>결제수단</th><td><select name="how" aria-label="결제수단" data-book-how><option value="bank">통장(계좌)</option><option value="cash">현금</option><option value="card">카드</option><option value="note">어음</option></select></td>
       <th>계좌·방법</th><td><input name="method" maxlength="50" list="bookPayMethods" aria-label="계좌·방법" placeholder="예) 기업은행"><datalist id="bookPayMethods"></datalist></td>
       <th>비고</th><td><input name="note" maxlength="200" aria-label="비고"></td>
-      <td><button class="btn primary" data-book-paysave>${esc(P.verb)} 저장</button></td></tr></tbody></table>
+      <td><button class="btn primary" data-book-paysave>${esc(P.verb)} 저장</button></td></tr>
+      <tr data-book-note hidden><th>${side === 'sales' ? '받을어음' : '지급어음'}</th><td colspan="12"><div class="book-note-grid">
+        <label>어음번호<input name="note_no" maxlength="50" placeholder="예) 자가12345678"></label>
+        <label>발행일자<input type="date" name="issue_date" value="${todayStr()}"></label>
+        <label>만기일자<input type="date" name="due_date"></label>
+        <label>발행금액<input type="number" name="note_amount" min="1" step="1" inputmode="numeric" placeholder="입금 금액과 같음"></label>
+        <label>거래처<input name="note_partner" maxlength="100" value="${esc(data.party)}"></label>
+        <label>발행은행<input name="bank" maxlength="50" list="noteBanksBook" placeholder="예) 하나은행"></label>
+        <label class="book-note-memo">적요<input name="note_memo" maxlength="300" placeholder="예) 외상매출금 회수"></label>
+        <datalist id="noteBanksBook">${['하나은행', '기업은행', '우리은행', '국민은행', '신한은행', '농협은행', '산업은행', 'SC제일은행', '씨티은행', '수협은행', '대구은행', '부산은행'].map(b => `<option value="${b}">`).join('')}</datalist>
+      </div><p class="small muted">저장하면 이 ${esc(P.verb)}과 함께 「어음 관리」(${side === 'sales' ? '받을어음' : '지급어음'})에 자동으로 등록됩니다. 발행금액·거래처는 ${esc(P.verb)}과 같게 채워지며 다르면 고치세요. ${esc(P.verb)}을 취소하면 어음도 함께 삭제됩니다.</p></td></tr></tbody></table>
       <p class="small muted">${side === 'sales' ? '받은 돈' : '준 돈'}을 넣으면 아래 장부의 잔액에서 바로 빠집니다(「${esc(P.title)}」 화면과 같은 기록). ${esc(P.kinds.opening)}은 프로그램을 쓰기 전부터 남아 있던 금액을 한 번만 넣습니다.</p></form>`;
     api('GET', `${P.api}?` + new URLSearchParams({ [P.party]: data.party })).then(r => { const ms = [...new Set((r.rows || []).map(x => x.method).filter(Boolean))].slice(0, 20); const dl = $('#bookPayMethods', main); if (dl) dl.innerHTML = ms.map(m => `<option value="${esc(m)}">`).join(''); }).catch(() => {});
+    const how = $('[data-book-how]', main), noteRow = $('[data-book-note]', main);
+    const syncHow = () => { const on = how.value === 'note'; noteRow.hidden = !on; for (const k of ['note_no', 'issue_date', 'due_date', 'note_amount', 'note_partner']) $(`#bookPayForm [name=${k}]`, main).required = on; /* 어음일 때만 필수 */ $('#bookPayForm [name=method]', main).placeholder = { bank: '예) 기업은행', cash: '현금', card: '예) 법인카드', note: '비우면 「어음 번호」' }[how.value]; if (on) $('#bookPayForm [name=note_no]', main).focus(); };
+    const amt = $('#bookPayForm [name=amount]', main), nAmt = $('#bookPayForm [name=note_amount]', main); let nAmtTouched = false; // 15.269 발행금액 = 입금 금액(직접 고치면 그 값)
+    amt.addEventListener('input', () => { if (!nAmtTouched) nAmt.value = amt.value; }); nAmt.addEventListener('input', () => { nAmtTouched = nAmt.value !== ''; });
+    how.onchange = syncHow; // 15.268 어음이면 어음 칸 → 어음 관리에 자동 등록
     $('#bookPayForm', main).onsubmit = async e => {
       e.preventDefault(); if (payBusy) return;
       const f = e.target, v = formObj(f), amount = Number(v.amount);
+      const isNote = v.how === 'note' && v.kind === 'payment';
+      if (isNote && !v.note_no) { f.elements.note_no.focus(); return toast('어음번호를 넣으세요.', 'err'); }
+      if (isNote && !v.due_date) { f.elements.due_date.focus(); return toast('만기일자를 넣으세요.', 'err'); }
+      if (isNote && !(Number(v.note_amount || v.amount) > 0)) { f.elements.note_amount.focus(); return toast('발행금액을 넣으세요.', 'err'); }
+      if (isNote && !String(v.note_partner || '').trim()) { f.elements.note_partner.focus(); return toast('어음 거래처를 넣으세요.', 'err'); }
+      if (v.how !== 'bank' && v.how !== 'note' && !v.method) v.method = v.how === 'cash' ? '현금' : '카드';
       if (!v.pay_date) { f.elements.pay_date.focus(); return toast('날짜를 넣으세요.', 'err'); }
       if (!(amount > 0)) { f.elements.amount.focus(); return toast('금액을 넣으세요.', 'err'); }
       payBusy = true; const btn = $('[data-book-paysave]', f); btn.disabled = true;
       try {
-        await api('POST', P.api, { [P.party]: data.party, pay_date: v.pay_date, kind: v.kind, amount, method: v.method, note: v.note, request_id: payToken });
-        payToken = crypto.randomUUID(); toast(`${data.party} ${won(amount)}원 ${v.kind === 'opening' ? P.kinds.opening : P.verb}을 넣었습니다.`);
-        f.elements.amount.value = ''; f.elements.note.value = '';
+        const r = await api('POST', P.api, { [P.party]: data.party, pay_date: v.pay_date, kind: v.kind, amount, method: v.method, note: v.note, request_id: payToken, ...(isNote ? { note_info: { note_no: v.note_no, issue_date: v.issue_date || v.pay_date, due_date: v.due_date, amount: Number(v.note_amount || v.amount), partner: String(v.note_partner || data.party).trim(), bank: v.bank, memo: v.note_memo } } : {}) });
+        payToken = crypto.randomUUID(); toast(`${data.party} ${won(amount)}원 ${v.kind === 'opening' ? P.kinds.opening : P.verb}을 넣었습니다.${r.bill_note ? ` 어음 ${r.bill_note.note_no}를 어음 관리에 등록했습니다.` : ''}`);
+        f.elements.amount.value = ''; f.elements.note.value = ''; for (const k of ['note_no', 'due_date', 'note_amount', 'note_memo']) if (f.elements[k]) f.elements[k].value = ''; nAmtTouched = false;
         if (v.pay_date < form.elements.from.value || v.pay_date > form.elements.to.value) toast('넣은 날짜가 조회 기간 밖이라 아래 장부에는 보이지 않습니다. 기간을 바꿔 보세요.');
         await load();
       } catch (error) { fail(error); } finally { payBusy = false; btn.disabled = false; }
@@ -704,7 +771,7 @@ async function noteDialog(kind, note = null, done = null) {
       <label>발행금액 *<input type="number" name="amount" required min="1" step="1" value="${n.amount ?? ''}" inputmode="numeric"></label>
       <label>만기일자 *<input type="date" name="due_date" required value="${esc(n.due_date)}"></label>
       <label>발행은행<input name="bank" maxlength="50" value="${esc(n.bank)}" placeholder="예) 하나은행" list="noteBanks"></label>
-      <label class="span2">비고<input name="memo" maxlength="300" value="${esc(n.memo)}"></label>
+      <label class="span2">적요<input name="memo" maxlength="300" value="${esc(n.memo)}"></label>
     </div><datalist id="noteBanks">${['하나은행', '기업은행', '우리은행', '국민은행', '신한은행', '농협은행', '산업은행', 'SC제일은행', '씨티은행', '수협은행', '대구은행', '부산은행'].map(b => `<option value="${b}">`).join('')}</datalist>
     ${note ? `<div class="small muted" data-note-hist></div>` : ''}`, { wide: true, onOpen: el => {
       bindPartnerPicker($('[name=partner]', el), null, {}).catch(() => {});
@@ -731,7 +798,7 @@ async function pageNotes(main) {
   const load = async () => {
     const data = await api('GET', '/api/notes?' + new URLSearchParams(formObj(form))); if (!main.isConnected) return; rows = data.rows;
     $('#noteList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid note-grid"><thead><tr><th>발행일자</th><th>어음번호</th><th>거래처</th><th class="r">발행금액</th><th>만기일자</th><th>발행은행</th><th>처리구분</th><th>처리일자</th><th>비고</th><th></th></tr></thead>
-      <tbody>${rows.map(r => `<tr class="note-row ${r.status === 'open' && r.due_date < todayStr() ? 'row-red' : ''}" data-note-edit="${r.id}" tabindex="0" title="눌러서 고치기"><td class="nowrap">${esc(r.issue_date)}</td><td class="nowrap">${esc(r.note_no)}</td><td>${esc(r.partner)}</td><td class="r"><b>${won(r.amount)}</b></td>
+      <tbody>${rows.map(r => `<tr class="note-row ${r.status === 'open' && r.due_date < todayStr() ? 'row-red' : ''}" data-note-edit="${r.id}" tabindex="0" title="눌러서 고치기"><td class="nowrap">${esc(r.issue_date)}</td><td class="nowrap">${esc(r.note_no)}${r.note_type ? ` <span class="small muted">${esc(r.note_type)}</span>` : ''}${r.payment_id ? ` <span class="chip" title="거래처 장부 ${r.payment_side === 'purchase' ? '지급' : '입금'}에서 자동 등록">장부 ${r.payment_side === 'purchase' ? '지급' : '입금'}</span>` : ''}${r.endorser || r.storage ? `<div class="small muted">${esc([r.endorser && '배서 ' + r.endorser, r.storage && '보관 ' + r.storage].filter(Boolean).join(' · '))}</div>` : ''}</td><td>${esc(r.partner)}</td><td class="r"><b>${won(r.amount)}</b></td>
         <td class="nowrap">${esc(r.due_date)} ${dday(r)}</td><td>${esc(r.bank || '')}</td><td>${(([t, c]) => `<span class="chip ${c}">${t}</span>`)(NOTE_STATE[r.status] || NOTE_STATE.open)}</td><td class="nowrap">${esc(r.processed_date || '')}</td><td class="small">${esc(r.memo || '')}</td>
         <td class="nowrap">${r.status === 'open' ? `<button type="button" class="btn small primary" data-note-collect="${r.id}">만기회수</button>` : `<button type="button" class="btn small" data-note-reopen="${r.id}">미처리로</button>`} <button type="button" class="btn small danger" data-note-del="${r.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>`
       : `<div class="empty">조건에 맞는 ${kind() === 'payable' ? '지급어음' : '받을어음'}이 없습니다.</div>`;

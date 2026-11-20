@@ -61,6 +61,7 @@ async function pageTaxMake(main) {
   };
   const load = async () => { data = await api('GET', '/api/tax-invoices/candidates?' + new URLSearchParams(formObj(form))); if (main.isConnected) draw(); };
   $$('[data-tax-mode]', main).forEach(b => b.onclick = () => { mode = b.dataset.taxMode; $$('[data-tax-mode]', main).forEach(x => x.classList.toggle('on', x === b)); draw(); });
+  rememberList(form); // 15.264 기간·검색어 등 보던 조건 유지(다른 탭 갔다 와도)
   rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
   form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
   box.addEventListener('change', e => { if (e.target.dataset.taxPick !== undefined) sum(); });
@@ -140,6 +141,7 @@ async function pageTaxList(main) {
     const heads = $$('#taxList thead th', main).map(th => th.textContent.trim()); $$('#taxList tbody tr', main).forEach(tr => [...tr.children].forEach((td, i) => { td.dataset.label = i === 0 ? '' : heads[i] || ''; }));
   };
   const picked = () => $$('[data-tax-pick]:checked', main).map(x => Number(x.dataset.taxPick));
+  rememberList(form); // 15.264 기간·검색어 등 보던 조건 유지(다른 탭 갔다 와도)
   rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
   form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
   $('.tax-more-toggle', main).onclick = e => { const a = e.currentTarget.parentElement, on = a.classList.toggle('show-more'); e.currentTarget.setAttribute('aria-expanded', String(on)); e.currentTarget.textContent = on ? '접기 ▴' : '더보기 ▾'; }; // 15.219
@@ -210,6 +212,7 @@ async function pagePurchaseTax(main) {
     $$('tr[data-ptax-open]', main).forEach(tr => { tr.onclick = e => { if (e.target.closest('input, button, a, label, select')) return; purchaseTaxView(Number(tr.dataset.ptaxOpen), () => load()).catch(fail); }; tr.onkeydown = e => { if (e.key === 'Enter' && e.target === tr) tr.click(); }; }); // 15.164 줄을 누르면 창
     $$('[data-ptax-cancel]', main).forEach(b => b.onclick = async () => { const v = await promptBox('매입 세금계산서 취소', '<label>사유<input name="reason" maxlength="200" placeholder="예) 잘못 등록 · 수정 계산서로 다시 받음"></label>'); if (!v) return; try { await api('POST', `/api/purchase-tax-invoices/${b.dataset.ptaxCancel}/cancel`, v); toast('취소했습니다. 담겼던 전표는 다시 담을 수 있습니다.'); load().catch(fail); } catch (error) { fail(error); } });
   };
+  rememberList(form); // 15.264 기간·검색어 등 보던 조건 유지(다른 탭 갔다 와도)
   rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
   form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
   $('[data-xlsx]', form).onclick = () => { if (!rows.length) return toast('내려받을 계산서가 없습니다.', 'err'); const v = formObj(form);

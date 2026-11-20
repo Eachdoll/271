@@ -609,6 +609,7 @@ async function pageReturnEntry(main, side = 'in', editId = null) {
     const src = await api('GET', '/api/returns/sources?' + new URLSearchParams({ side, party: editing.party, months: 24 })).catch(() => ({ rows: [] }));
     lines = editing.lines.map(l => { const s0 = l.source_id ? src.rows.find(x => x.id === l.source_id) : null; return { source_id: l.source_id || undefined, bom_id: l.bom_id || undefined, item: l.item, product_code: l.product_code, spec: l.spec, unit: l.unit, qty: l.qty, unit_price: l.unit_price, reason: l.reason, lot: l.lot, left: l.source_id ? (s0 ? s0.left + l.qty : l.qty) : null, source_bill_no: s0?.bill_no || l.source_bill_no || '', source_date: s0?.date || l.source_date || '' }; });
   }
+  if (!editId) { try { const pre = sessionStorage.getItem('wpa:ret-party'); if (pre) { partyIn.value = pre; sessionStorage.removeItem('wpa:ret-party'); } } catch { /* 편의 */ } } // 15.271 장부 「추가 › 반입·반출」에서 넘어온 거래처
   bindPartnerPicker(partyIn, $('[data-partner-hint]', form), { type: S.type }).catch(() => {});
   const amountOn = () => ['stock_amount', 'amount'].includes(form.elements.process.value);
   const syncSettle = () => { $$('[name=settle]', form).forEach(x => { x.disabled = !amountOn(); }); $('.ret-settle-box', form).classList.toggle('off', !amountOn()); totals(); };

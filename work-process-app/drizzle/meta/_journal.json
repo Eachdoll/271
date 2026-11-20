@@ -498,6 +498,34 @@
       "when": 1798023213000,
       "tag": "0070_lot_concession",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "6",
+      "when": 1798109613000,
+      "tag": "0071_adjust_lot_place",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "6",
+      "when": 1798196013000,
+      "tag": "0072_vendor_details",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "6",
+      "when": 1798282413000,
+      "tag": "0073_note_payment_link",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "6",
+      "when": 1798368813000,
+      "tag": "0074_book_memos",
+      "breakpoints": true
     }
   ]
 }

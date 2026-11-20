@@ -343,3 +343,118 @@ test('15.262 purchase stock: price and incoming POs for purchase only; purchase 
   assert.equal((await buyer('GET', '/api/purchase/stock-extra')).status, 200);
   assert.equal((await buyer('PUT', '/api/inventory/levels', { item: '리뷰원단', unit: 'yd', min_qty: 10 })).status, 200);
 });
+
+test('15.265 stock adjustment by LOT and location: count and +/- change LOT, place and item stock; cutting usage leaves the place', async () => {
+  const g = (await admin('POST', '/api/boms', { product: '조정상품', product_code: 'AJ-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  await admin('POST', '/api/warehouses', { name: '조정창고', locations: 'A,B' });
+  await admin('POST', '/api/receipts', { receipt_date: today, vendor: '조정상사', request_id: rid(), lines: [{ bom_id: g.id, lot: 'AJ-L', qty: 30, warehouse: '조정창고', location: 'A' }] });
+  const lotBal = async () => (await prod('GET', '/api/inventory/lots?q=AJ-L')).body.rows.find(r => r.lot === 'AJ-L').balance;
+  const placeQty = async loc => (await prod('GET', '/api/inventory/places?q=AJ-L')).body.rows.filter(r => r.lot === 'AJ-L' && r.location === loc).reduce((t, r) => t + r.qty, 0);
+  const itemStock = async () => (await prod('GET', '/api/inventory?q=' + encodeURIComponent('조정상품'))).body.rows.find(r => r.item === '조정상품').stock;
+  assert.equal((await prod('POST', '/api/inventory/adjustments', { item: '조정상품', unit: 'EA', lot: 'AJ-L', kind: 'adjust', qty: -1, reason: 'x', request_id: rid() })).status, 403, 'logistics lead/admin only');
+  // 위치 실사: A에서 센 수량 27 → −3
+  const c = await admin('POST', '/api/inventory/adjustments', { item: '조정상품', unit: 'EA', lot: 'AJ-L', warehouse: '조정창고', location: 'A', kind: 'count', counted_qty: 27, by_item: true, reason: '실사', request_id: rid() });
+  assert.equal(c.status, 200, JSON.stringify(c.body)); assert.equal(c.body.qty, -3);
+  assert.equal(await lotBal(), 27); assert.equal(await placeQty('A'), 27); assert.equal(await itemStock(), 27);
+  // LOT 증감 +5(위치 없이)
+  assert.equal((await admin('POST', '/api/inventory/adjustments', { item: '조정상품', unit: 'EA', lot: 'AJ-L', kind: 'adjust', qty: 5, reason: '찾음', request_id: rid() })).status, 200);
+  assert.equal(await lotBal(), 32); assert.equal(await itemStock(), 32);
+  assert.equal((await admin('POST', '/api/inventory/adjustments', { item: '조정상품', unit: 'EA', lot: 'AJ-L', warehouse: '조정창고', location: 'A', kind: 'count', counted_qty: 32, by_item: true, reason: '같음', request_id: rid() })).status, 400, 'no difference');
+  assert.equal(await placeQty('A'), 32, 'LOT in one place: change without a location lands there');
+  const h = (await prod('GET', '/api/inventory/lot-history?' + new URLSearchParams({ item: '조정상품', lot: 'AJ-L' }))).body.rows.map(r => [r.src, r.kind, r.qty]);
+  assert.deepEqual(h.filter(r => /실사|조정/.test(r[0])).sort(), [['재고 실사', 'out', 3], ['재고 조정', 'in', 5]]);
+  // 커팅 투입은 창고·위치 수량에서도 빠짐
+  const raw = (await admin('POST', '/api/boms', { product: '위치원단', product_code: 'WC-R', item_category: '원자재', kind: 'finished', base_qty: 1, unit: 'yd', materials: [] })).body;
+  const semi = (await admin('POST', '/api/boms', { product: '위치반', product_code: 'WCS', item_category: '반제품', kind: 'semi', semi_type: '천와이퍼', base_qty: 1, unit: '매', materials: [{ item: '위치원단', item_category: '원자재', qty: 0.01, unit: 'yd' }] })).body;
+  await admin('POST', '/api/receipts', { receipt_date: today, vendor: '조정상사', request_id: rid(), lines: [{ bom_id: raw.id, lot: 'WC-L', qty: 50, pieces: 2, warehouse: '조정창고', location: 'B' }] });
+  const line = (await prod('GET', '/api/production-units?kind=line')).body[0];
+  assert.equal((await prod('POST', '/api/semi-batches', { process: 'cut', common: { work_date: today, unit_id: line.id }, request_id: rid(), items: [{ entry_mode: 'code', bom_id: semi.id, product_group: 'wiper', product_type: '천와이퍼', start_time: '08:00', end_time: '09:00', qty: 1000, inputs: [{ item: '위치원단', lot: 'WC-L', piece_nos: [1] }] }] })).status, 200);
+  assert.equal((await prod('GET', '/api/inventory/places?q=WC-L')).body.rows.filter(r => r.lot === 'WC-L').reduce((t, r) => t + r.qty, 0), 40);
+});
+
+test('15.266 warehouse and location renames carry through receipts, moves and adjustments; vendor saved with business info at once', async () => {
+  const w1 = (await admin('POST', '/api/warehouses', { name: '연동1동', locations: 'A,B' })).body;
+  const g = (await admin('POST', '/api/boms', { product: '연동상품', product_code: 'LK-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  await admin('POST', '/api/receipts', { receipt_date: today, vendor: '연동상사', request_id: rid(), lines: [{ bom_id: g.id, lot: 'LK-L', qty: 20, warehouse: '연동1동', location: 'A' }] });
+  assert.equal((await admin('POST', '/api/stock-transfers', { item: '연동상품', unit: 'EA', lot: 'LK-L', qty: 5, from_place: '연동1동 A', to_warehouse: '연동1동', to_location: 'B', request_id: rid() })).status, 200);
+  assert.equal((await admin('POST', '/api/inventory/adjustments', { item: '연동상품', unit: 'EA', lot: 'LK-L', warehouse: '연동1동', location: 'B', kind: 'adjust', qty: 2, reason: 'x', request_id: rid() })).status, 200);
+  const places = async () => Object.fromEntries((await prod('GET', '/api/inventory/places?q=LK-L')).body.rows.filter(r => r.lot === 'LK-L').map(r => [`${r.warehouse} ${r.location}`, r.qty]));
+  assert.deepEqual(await places(), { '연동1동 A': 15, '연동1동 B': 7 });
+  // 창고 이름 + 위치 이름 바꾸기 → 위치별 재고가 새 이름으로 그대로
+  const up = await admin('PUT', `/api/warehouses/${w1.id}`, { name: '연동2동', rename_locations: [{ from: 'B', to: 'B구역' }] });
+  assert.equal(up.status, 200, JSON.stringify(up.body)); assert.equal(up.body.locations, 'A,B구역');
+  assert.deepEqual(await places(), { '연동2동 A': 15, '연동2동 B구역': 7 });
+  assert.equal((await admin('PUT', `/api/warehouses/${w1.id}`, { rename_locations: [{ from: 'A', to: 'B구역' }] })).status, 400, 'name already there');
+  // 거래처: 기본 + 사업자 정보 한 번에
+  const v = await admin('POST', '/api/vendors', { name: '한번상사', is_purchase: true, biz_no: '123-45-67890', ceo: '김대표', address: '서울', biz_type: '도소매', biz_item: '부자재', tax_email: 'a@b.co', tax_reverse: 1 });
+  assert.equal(v.status, 200, JSON.stringify(v.body)); assert.equal(v.body.biz_no, '123-45-67890'); assert.equal(v.body.ceo, '김대표'); assert.equal(v.body.tax_reverse, 1);
+  const e = await admin('PUT', `/api/vendors/${v.body.id}`, { name: '한번상사', contact_name: '이담당', ceo: '박대표', tax_reverse: 0 });
+  assert.equal(e.status, 200); assert.equal(e.body.ceo, '박대표'); assert.equal(e.body.tax_reverse, 0); assert.equal(e.body.biz_no, '123-45-67890'); assert.equal(e.body.contact_name, '이담당');
+  assert.equal((await prod('POST', '/api/vendors', { name: '권한상사', biz_no: '123-45-67891' })).status, 403, 'business info needs sales/purchase');
+  assert.equal((await prod('POST', '/api/vendors', { name: '권한상사' })).status, 200, 'without business info is fine');
+});
+
+test('15.267 vendor keeps system name apart from tax-invoice business name, plus contact, bank and other details', async () => {
+  const v = await admin('POST', '/api/vendors', { name: 'O&M Halyard(할야드)', biz_name: 'O&M Halyard Singapore Pte Ltd', ceo: 'Kim', name_en: 'O&M Halyard', tel: '+65 6305 6360', fax: '+65 6305 6376', addr: '101 Thomson Road', tax_contact: '회계담당', tax_dept: '재무팀', tax_phone: '02-1', contact_title: '과장', contact_mobile: '010-1', contact_email: 'buyer@om.co', bank_name: 'DBS', bank_account: '123', bank_holder: 'O&M', memo: '태국 글러브' });
+  assert.equal(v.status, 200, JSON.stringify(v.body));
+  assert.equal(v.body.name, 'O&M Halyard(할야드)'); assert.equal(v.body.biz_name, 'O&M Halyard Singapore Pte Ltd');
+  for (const [k, x] of Object.entries({ name_en: 'O&M Halyard', tel: '+65 6305 6360', fax: '+65 6305 6376', addr: '101 Thomson Road', tax_contact: '회계담당', tax_dept: '재무팀', contact_title: '과장', contact_email: 'buyer@om.co', bank_name: 'DBS', bank_holder: 'O&M', memo: '태국 글러브' })) assert.equal(v.body[k], x, k);
+  const e = await prod('PUT', `/api/vendors/${v.body.id}`, { name: 'O&M Halyard(할야드)', memo: '메모 바꿈', bank_account: '999' });
+  assert.equal(e.status, 200, JSON.stringify(e.body)); assert.equal(e.body.memo, '메모 바꿈'); assert.equal(e.body.bank_account, '999'); assert.equal(e.body.tel, '+65 6305 6360', 'untouched fields kept');
+  assert.equal((await admin('POST', '/api/vendors', { name: '메일틀림', contact_email: 'nope' })).status, 400);
+  assert.equal((await admin('GET', '/api/vendors?q=' + encodeURIComponent('메일틀림'))).body.length, 0, 'nothing saved on a bad email');
+});
+
+test('15.268 a note payment from the partner book registers the note; cancelling the payment removes it', async () => {
+  await admin('POST', '/api/vendors', { name: '어음거래처', is_sales: true, is_purchase: true });
+  const pay = b => admin('POST', '/api/sales-payments', { customer: '어음거래처', pay_date: today, kind: 'payment', amount: 9981400, method: '', note: '외상매출금 입금', request_id: rid(), ...b });
+  assert.equal((await pay({ note_info: { note_no: 'N-1' } })).status, 400, 'due date needed');
+  const r = await pay({ note_info: { note_no: 'N-1', note_type: '자수어음', issue_date: today, due_date: '2027-02-20', bank: '하나은행', endorser: '어음거래처', storage: '금고' } });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.method, '어음 N-1'); assert.equal(r.body.bill_note.kind, 'receivable'); assert.equal(r.body.bill_note.amount, 9981400); assert.equal(r.body.bill_note.payment_id, r.body.id);
+  const notes = (await admin('GET', '/api/notes?kind=receivable')).body; const list = Array.isArray(notes) ? notes : notes.rows;
+  const n = list.find(x => x.note_no === 'N-1'); assert.ok(n); assert.equal(n.note_type, '자수어음'); assert.equal(n.storage, '금고');
+  // 같은 어음번호 → 409, 입금도 안 생김
+  const before = sqlite.prepare('SELECT COUNT(*) c FROM sales_payments').get().c;
+  assert.equal((await pay({ note_info: { note_no: 'N-1', due_date: '2027-02-20' } })).status, 409);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) c FROM sales_payments').get().c, before);
+  // 어음 관리에서 바로 지우기는 막힘, 입금 취소하면 함께 삭제
+  assert.equal((await admin('POST', `/api/notes/${n.id}/cancel`, {})).status, 400);
+  assert.equal((await admin('POST', `/api/sales-payments/${r.body.id}/cancel`, { reason: '잘못' })).status, 200);
+  assert.equal(sqlite.prepare('SELECT status FROM bill_notes WHERE id=?').get(n.id).status, 'cancelled');
+  // 지급어음
+  const p = await admin('POST', '/api/purchase-payments', { vendor: '어음거래처', pay_date: today, kind: 'payment', amount: 500000, request_id: rid(), note_info: { note_no: 'P-1', due_date: '2027-01-31' } });
+  assert.equal(p.status, 200, JSON.stringify(p.body)); assert.equal(p.body.bill_note.kind, 'payable');
+  // 만기회수한 어음의 지급은 취소 막힘
+  assert.equal((await admin('POST', `/api/notes/${p.body.bill_note.id}/collect`, { date: today })).status, 200);
+  assert.equal((await admin('POST', `/api/purchase-payments/${p.body.id}/cancel`, { reason: 'x' })).status, 400);
+});
+
+test('15.269 note from the book can carry its own amount and partner', async () => {
+  await admin('POST', '/api/vendors', { name: '어음다른', is_sales: true });
+  const r = await admin('POST', '/api/sales-payments', { customer: '어음다른', pay_date: today, kind: 'payment', amount: 1000000, request_id: rid(), note_info: { note_no: 'D-1', issue_date: today, due_date: '2027-03-31', amount: 1000000, partner: '발행회사', bank: '기업은행', memo: '외상매출금 회수' } });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.bill_note.partner, '발행회사'); assert.equal(r.body.bill_note.memo, '외상매출금 회수'); assert.equal(r.body.bill_note.amount, 1000000);
+});
+
+test('15.271 partner book add: 1-won sales/purchase adjustment bills (negative allowed) and memos show in the book', async () => {
+  await admin('POST', '/api/vendors', { name: '조정거래처', is_sales: true, is_purchase: true });
+  const add = b => admin('POST', '/api/book-entries', { party: '조정거래처', date: today, request_id: rid(), ...b });
+  assert.equal((await add({ side: 'sales', kind: 'bill', supply: 0, vat: 0 })).status, 400);
+  const s1 = await add({ side: 'sales', kind: 'bill', item: '세금계산서 1원 차이', supply: 1, vat: 0, note: '11월분' });
+  assert.equal(s1.status, 200, JSON.stringify(s1.body)); assert.match(s1.body.bill_no, /^SB-/); assert.equal(s1.body.total, 1);
+  const s2 = await add({ side: 'sales', kind: 'bill', supply: -1, vat: 0 }); assert.equal(s2.status, 200, JSON.stringify(s2.body)); assert.equal(s2.body.total, -1);
+  const p1 = await add({ side: 'purchase', kind: 'bill', supply: 10, vat: 1 }); assert.equal(p1.status, 200, JSON.stringify(p1.body)); assert.match(p1.body.bill_no, /^PB-/); assert.equal(p1.body.total, 11);
+  const m = await add({ side: 'sales', kind: 'memo', text: '1원 차이 거래처 확인' }); assert.equal(m.status, 200);
+  const book = (await admin('GET', '/api/partner-book?' + new URLSearchParams({ side: 'sales', party: '조정거래처', from: today, to: today }))).body;
+  assert.deepEqual(book.rows.map(r => [r.kind, r.total]).sort(), [['bill', -1], ['bill', 1], ['memo', 0]].sort());
+  assert.equal(book.totals.balance, 0);
+  const pb = (await admin('GET', '/api/partner-book?' + new URLSearchParams({ side: 'purchase', party: '조정거래처', from: today, to: today }))).body;
+  assert.equal(pb.totals.total, 11);
+  // 매입전표 상세가 조정 줄로도 열림
+  assert.equal((await admin('GET', `/api/purchase-bills/${p1.body.id}`)).status, 200);
+  // 메모 지우기
+  assert.equal((await admin('POST', `/api/book-memos/${m.body.id}/delete`, {})).status, 200);
+  assert.equal((await admin('GET', '/api/partner-book?' + new URLSearchParams({ side: 'sales', party: '조정거래처', from: today, to: today }))).body.rows.filter(r => r.kind === 'memo').length, 0);
+  assert.equal((await prod('POST', '/api/book-entries', { side: 'sales', kind: 'memo', party: '조정거래처', date: today, text: 'x', request_id: rid() })).status, 403);
+});
