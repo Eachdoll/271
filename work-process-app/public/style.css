@@ -3528,3 +3528,5 @@ tr.lot-tk-sub > td { background: #fffbe6 !important; box-shadow: inset 3px 0 0 #
 /* 15.268 장부 입금·지급 어음 칸 */
 .book-note-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
 .book-note-grid label { display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+
+.book-note-grid .book-note-memo { grid-column: span 2; }

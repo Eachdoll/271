@@ -653,18 +653,20 @@ async function pagePartnerBook(main, side = 'sales') {
       <td><button class="btn primary" data-book-paysave>${esc(P.verb)} 저장</button></td></tr>
       <tr data-book-note hidden><th>${side === 'sales' ? '받을어음' : '지급어음'}</th><td colspan="12"><div class="book-note-grid">
         <label>어음번호<input name="note_no" maxlength="50" placeholder="예) 자가12345678"></label>
-        <label>어음종류<select name="note_type">${['자수어음', '타수어음', '전자어음', '약속어음', '당좌수표', '가계수표'].map(t => `<option>${t}</option>`).join('')}</select></label>
         <label>발행일자<input type="date" name="issue_date" value="${todayStr()}"></label>
         <label>만기일자<input type="date" name="due_date"></label>
+        <label>발행금액<input type="number" name="note_amount" min="1" step="1" inputmode="numeric" placeholder="입금 금액과 같음"></label>
+        <label>거래처<input name="note_partner" maxlength="100" value="${esc(data.party)}"></label>
         <label>발행은행<input name="bank" maxlength="50" list="noteBanksBook" placeholder="예) 하나은행"></label>
-        <label>배서인<input name="endorser" maxlength="100" placeholder="비우면 거래처"></label>
-        <label>보관장소<input name="storage" maxlength="100" placeholder="예) 경리 금고"></label>
+        <label class="book-note-memo">적요<input name="note_memo" maxlength="300" placeholder="예) 외상매출금 회수"></label>
         <datalist id="noteBanksBook">${['하나은행', '기업은행', '우리은행', '국민은행', '신한은행', '농협은행', '산업은행', 'SC제일은행', '씨티은행', '수협은행', '대구은행', '부산은행'].map(b => `<option value="${b}">`).join('')}</datalist>
-      </div><p class="small muted">저장하면 이 ${esc(P.verb)}과 함께 「어음 관리」(${side === 'sales' ? '받을어음' : '지급어음'})에 자동으로 등록됩니다. 금액·거래처는 ${esc(P.verb)}과 같습니다. ${esc(P.verb)}을 취소하면 어음도 함께 삭제됩니다.</p></td></tr></tbody></table>
+      </div><p class="small muted">저장하면 이 ${esc(P.verb)}과 함께 「어음 관리」(${side === 'sales' ? '받을어음' : '지급어음'})에 자동으로 등록됩니다. 발행금액·거래처는 ${esc(P.verb)}과 같게 채워지며 다르면 고치세요. ${esc(P.verb)}을 취소하면 어음도 함께 삭제됩니다.</p></td></tr></tbody></table>
       <p class="small muted">${side === 'sales' ? '받은 돈' : '준 돈'}을 넣으면 아래 장부의 잔액에서 바로 빠집니다(「${esc(P.title)}」 화면과 같은 기록). ${esc(P.kinds.opening)}은 프로그램을 쓰기 전부터 남아 있던 금액을 한 번만 넣습니다.</p></form>`;
     api('GET', `${P.api}?` + new URLSearchParams({ [P.party]: data.party })).then(r => { const ms = [...new Set((r.rows || []).map(x => x.method).filter(Boolean))].slice(0, 20); const dl = $('#bookPayMethods', main); if (dl) dl.innerHTML = ms.map(m => `<option value="${esc(m)}">`).join(''); }).catch(() => {});
     const how = $('[data-book-how]', main), noteRow = $('[data-book-note]', main);
-    const syncHow = () => { const on = how.value === 'note'; noteRow.hidden = !on; for (const k of ['note_no', 'due_date']) $(`#bookPayForm [name=${k}]`, main).required = on; /* 어음일 때만 필수 */ $('#bookPayForm [name=method]', main).placeholder = { bank: '예) 기업은행', cash: '현금', card: '예) 법인카드', note: '비우면 「어음 번호」' }[how.value]; if (on) $('#bookPayForm [name=note_no]', main).focus(); };
+    const syncHow = () => { const on = how.value === 'note'; noteRow.hidden = !on; for (const k of ['note_no', 'issue_date', 'due_date', 'note_amount', 'note_partner']) $(`#bookPayForm [name=${k}]`, main).required = on; /* 어음일 때만 필수 */ $('#bookPayForm [name=method]', main).placeholder = { bank: '예) 기업은행', cash: '현금', card: '예) 법인카드', note: '비우면 「어음 번호」' }[how.value]; if (on) $('#bookPayForm [name=note_no]', main).focus(); };
+    const amt = $('#bookPayForm [name=amount]', main), nAmt = $('#bookPayForm [name=note_amount]', main); let nAmtTouched = false; // 15.269 발행금액 = 입금 금액(직접 고치면 그 값)
+    amt.addEventListener('input', () => { if (!nAmtTouched) nAmt.value = amt.value; }); nAmt.addEventListener('input', () => { nAmtTouched = nAmt.value !== ''; });
     how.onchange = syncHow; // 15.268 어음이면 어음 칸 → 어음 관리에 자동 등록
     $('#bookPayForm', main).onsubmit = async e => {
       e.preventDefault(); if (payBusy) return;
@@ -672,14 +674,16 @@ async function pagePartnerBook(main, side = 'sales') {
       const isNote = v.how === 'note' && v.kind === 'payment';
       if (isNote && !v.note_no) { f.elements.note_no.focus(); return toast('어음번호를 넣으세요.', 'err'); }
       if (isNote && !v.due_date) { f.elements.due_date.focus(); return toast('만기일자를 넣으세요.', 'err'); }
+      if (isNote && !(Number(v.note_amount || v.amount) > 0)) { f.elements.note_amount.focus(); return toast('발행금액을 넣으세요.', 'err'); }
+      if (isNote && !String(v.note_partner || '').trim()) { f.elements.note_partner.focus(); return toast('어음 거래처를 넣으세요.', 'err'); }
       if (v.how !== 'bank' && v.how !== 'note' && !v.method) v.method = v.how === 'cash' ? '현금' : '카드';
       if (!v.pay_date) { f.elements.pay_date.focus(); return toast('날짜를 넣으세요.', 'err'); }
       if (!(amount > 0)) { f.elements.amount.focus(); return toast('금액을 넣으세요.', 'err'); }
       payBusy = true; const btn = $('[data-book-paysave]', f); btn.disabled = true;
       try {
-        const r = await api('POST', P.api, { [P.party]: data.party, pay_date: v.pay_date, kind: v.kind, amount, method: v.method, note: v.note, request_id: payToken, ...(isNote ? { note_info: { note_no: v.note_no, note_type: v.note_type, issue_date: v.issue_date || v.pay_date, due_date: v.due_date, bank: v.bank, endorser: v.endorser || data.party, storage: v.storage, memo: v.note } } : {}) });
+        const r = await api('POST', P.api, { [P.party]: data.party, pay_date: v.pay_date, kind: v.kind, amount, method: v.method, note: v.note, request_id: payToken, ...(isNote ? { note_info: { note_no: v.note_no, issue_date: v.issue_date || v.pay_date, due_date: v.due_date, amount: Number(v.note_amount || v.amount), partner: String(v.note_partner || data.party).trim(), bank: v.bank, memo: v.note_memo } } : {}) });
         payToken = crypto.randomUUID(); toast(`${data.party} ${won(amount)}원 ${v.kind === 'opening' ? P.kinds.opening : P.verb}을 넣었습니다.${r.bill_note ? ` 어음 ${r.bill_note.note_no}를 어음 관리에 등록했습니다.` : ''}`);
-        f.elements.amount.value = ''; f.elements.note.value = ''; for (const k of ['note_no', 'due_date', 'endorser']) if (f.elements[k]) f.elements[k].value = '';
+        f.elements.amount.value = ''; f.elements.note.value = ''; for (const k of ['note_no', 'due_date', 'note_amount', 'note_memo']) if (f.elements[k]) f.elements[k].value = ''; nAmtTouched = false;
         if (v.pay_date < form.elements.from.value || v.pay_date > form.elements.to.value) toast('넣은 날짜가 조회 기간 밖이라 아래 장부에는 보이지 않습니다. 기간을 바꿔 보세요.');
         await load();
       } catch (error) { fail(error); } finally { payBusy = false; btn.disabled = false; }
@@ -722,7 +726,7 @@ async function noteDialog(kind, note = null, done = null) {
       <label>발행금액 *<input type="number" name="amount" required min="1" step="1" value="${n.amount ?? ''}" inputmode="numeric"></label>
       <label>만기일자 *<input type="date" name="due_date" required value="${esc(n.due_date)}"></label>
       <label>발행은행<input name="bank" maxlength="50" value="${esc(n.bank)}" placeholder="예) 하나은행" list="noteBanks"></label>
-      <label class="span2">비고<input name="memo" maxlength="300" value="${esc(n.memo)}"></label>
+      <label class="span2">적요<input name="memo" maxlength="300" value="${esc(n.memo)}"></label>
     </div><datalist id="noteBanks">${['하나은행', '기업은행', '우리은행', '국민은행', '신한은행', '농협은행', '산업은행', 'SC제일은행', '씨티은행', '수협은행', '대구은행', '부산은행'].map(b => `<option value="${b}">`).join('')}</datalist>
     ${note ? `<div class="small muted" data-note-hist></div>` : ''}`, { wide: true, onOpen: el => {
       bindPartnerPicker($('[name=partner]', el), null, {}).catch(() => {});

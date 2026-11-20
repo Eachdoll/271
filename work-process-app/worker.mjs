@@ -1695,7 +1695,7 @@ async function noteFields(body, old = {}) {
 const NOTE_TYPES = ['자수어음', '타수어음', '전자어음', '약속어음', '당좌수표', '가계수표'];
 async function paymentNoteInfo(info, side, party, date, amount) {
   if (!info || typeof info !== 'object') return null;
-  const n = await noteFields({ kind: side === 'sales' ? 'receivable' : 'payable', issue_date: info.issue_date || date, due_date: info.due_date, note_no: info.note_no, partner: party, amount, bank: info.bank, memo: info.memo });
+  const n = await noteFields({ kind: side === 'sales' ? 'receivable' : 'payable', issue_date: info.issue_date || date, due_date: info.due_date, note_no: info.note_no, partner: str(info.partner, 100) || party, amount: Number(info.amount) > 0 ? info.amount : amount, bank: info.bank, memo: info.memo }); // 15.269 발행금액·거래처는 따로 줄 수 있음(기본은 입금과 같게)
   const type = str(info.note_type, 20); if (type && !NOTE_TYPES.includes(type)) throw bad('어음 종류를 다시 고르세요.');
   if (await noteDup(n)) throw new HttpError(409, `${NOTE_KIND[n.kind]} ${n.note_no}는 이미 등록되어 있습니다.`);
   return { ...n, note_type: type, endorser: str(info.endorser, 100), storage: str(info.storage, 100) };

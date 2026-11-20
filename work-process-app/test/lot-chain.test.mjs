@@ -429,3 +429,10 @@ test('15.268 a note payment from the partner book registers the note; cancelling
   assert.equal((await admin('POST', `/api/notes/${p.body.bill_note.id}/collect`, { date: today })).status, 200);
   assert.equal((await admin('POST', `/api/purchase-payments/${p.body.id}/cancel`, { reason: 'x' })).status, 400);
 });
+
+test('15.269 note from the book can carry its own amount and partner', async () => {
+  await admin('POST', '/api/vendors', { name: '어음다른', is_sales: true });
+  const r = await admin('POST', '/api/sales-payments', { customer: '어음다른', pay_date: today, kind: 'payment', amount: 1000000, request_id: rid(), note_info: { note_no: 'D-1', issue_date: today, due_date: '2027-03-31', amount: 1000000, partner: '발행회사', bank: '기업은행', memo: '외상매출금 회수' } });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.bill_note.partner, '발행회사'); assert.equal(r.body.bill_note.memo, '외상매출금 회수'); assert.equal(r.body.bill_note.amount, 1000000);
+});
