@@ -781,3 +781,41 @@ test('15.304 calibration: instrument register, next due = calibrated + cycle - 1
   const ok2 = await admin('POST', '/api/instruments/calibrate', { items: [{ id: b.id, revision: bad.body.rows[0].revision }], done_date: '2026-11-04', result: '조정 후 적합', next_due: '2027-03-01' });
   assert.equal(ok2.body.rows[0].status, 'in_use'); assert.equal(ok2.body.rows[0].next_due, '2027-03-01', 'single item can set next due');
 });
+
+test('15.305 quality analysis requests take measurements in the grid; COA per LOT from passing measurements (approve, reissue, void); CAPA steps', async () => {
+  // 분석의뢰(의뢰검사): 접수 전에는 측정값 불가, 접수 뒤 항목·기준·데이터를 바로 넣음
+  const q = (await admin('POST', '/api/requests', { type: 'analysis', title: 'CF707 와이퍼', category: '의뢰검사', data: { lot: '있음', lot_etc: 'COA-LOT-1', items: ['파티클'] } })).body;
+  const items = [{ name: '파티클', unit: 'ea', max: 150, count: 2 }, { name: '흡수속도', unit: '초', min: 0, max: 60, count: 1 }];
+  assert.equal((await admin('PUT', `/api/requests/${q.id}/rnd-measure`, { spec_items: items, samples: [{ lot: 'S1', values: { i0: [90, 110], i1: [40] } }] })).status, 400, 'needs intake first');
+  assert.equal((await prod('PUT', `/api/requests/${q.id}/rnd-measure`, { spec_items: items, values: { i0: [1, 1] } })).status, 403);
+  const ap = await admin('POST', `/api/requests/${q.id}/approve`); q.req_no = ap.body.req_no || (await admin('GET', '/api/requests?type=analysis')).body.find(x => x.id === q.id)?.req_no; assert.match(q.req_no || '', /^Q-/, JSON.stringify(ap.body).slice(0, 200));
+  const fail1 = await admin('PUT', `/api/requests/${q.id}/rnd-measure`, { spec_items: items, samples: [{ lot: 'S1', values: { i0: [90, 210], i1: [40] } }] });
+  assert.equal(fail1.status, 200, JSON.stringify(fail1.body)); assert.match(fail1.body.result_note, /^불합격 1항목: 파티클/);
+  // 불합격이면 COA 발행 안 됨
+  assert.match((await admin('POST', '/api/coas', { lot: 'COA-LOT-1' })).body.error, /합격이 아닙니다/);
+  assert.match((await admin('POST', '/api/coas', { lot: 'NO-SUCH' })).body.error, /측정 기록/);
+  await admin('PUT', `/api/requests/${q.id}/rnd-measure`, { spec_items: items, samples: [{ lot: 'S1', values: { i0: [90, 110], i1: [40] } }], reason: '재측정' });
+  const src = (await admin('GET', '/api/coa/source?lot=COA-LOT-1')).body;
+  assert.equal(src.candidates.length, 1); assert.deepEqual(src.source.items.map(i => [i.name, i.spec, i.avg, i.judge]), [['파티클', '≤ 150', 100, '적합'], ['흡수속도', '0 ~ 60', 40, '적합']]);
+  assert.equal((await prod('POST', '/api/coas', { lot: 'COA-LOT-1' })).status, 403);
+  const c = await admin('POST', '/api/coas', { lot: 'COA-LOT-1', customer: '삼성', mfg_date: '2026-01-10', lang: 'en', request_id: rid() });
+  assert.equal(c.status, 200, JSON.stringify(c.body)); assert.match(c.body.coa_no, new RegExp(`^COA-${ymd}-01$`)); assert.equal(c.body.status, 'draft'); assert.equal(c.body.items.length, 2); assert.equal(c.body.source_no, q.req_no);
+  const ok = await admin('POST', `/api/coas/${c.body.id}/approve`, { revision: c.body.revision }); assert.equal(ok.body.status, 'approved'); assert.equal(ok.body.approved_by, '관리자');
+  const re = await admin('PUT', `/api/coas/${c.body.id}`, { customer: '삼성전자', revision: ok.body.revision }); assert.equal(re.status, 200);
+  assert.equal(re.body.status, 'draft'); assert.equal(re.body.rev, 1, 'reissue raises Rev'); assert.equal(re.body.history.at(-1).prev.customer, '삼성');
+  assert.equal((await admin('POST', `/api/coas/${c.body.id}/void`, { revision: re.body.revision })).status, 400, 'void needs a reason');
+  assert.equal((await admin('POST', `/api/coas/${c.body.id}/void`, { revision: re.body.revision, reason: '고객사 오기' })).body.status, 'void');
+  // CAPA: 분석의뢰에서 등록 → 단계마다 필요한 내용
+  const n = await admin('POST', '/api/ncs', { source_type: 'analysis', source_id: q.id, title: '파티클 초과', request_id: rid() });
+  assert.equal(n.status, 200, JSON.stringify(n.body)); assert.equal(n.body.source_no, q.req_no); assert.equal(n.body.lot, 'COA-LOT-1'); assert.match(n.body.nc_no, new RegExp(`^NC-${ymd}-01$`));
+  assert.equal((await prod('POST', '/api/ncs', { title: 'x' })).status, 403);
+  assert.match((await admin('PUT', `/api/ncs/${n.body.id}`, { status: 'action', revision: n.body.revision })).body.error, /원인분석/);
+  const a1 = await admin('PUT', `/api/ncs/${n.body.id}`, { status: 'action', cause_json: { why1: '필터 교체 지연', root: 'PM 주기 누락' }, revision: n.body.revision }); assert.equal(a1.body.status, 'action');
+  assert.match((await admin('PUT', `/api/ncs/${n.body.id}`, { status: 'verify', revision: a1.body.revision })).body.error, /시정조치/);
+  const a2 = await admin('PUT', `/api/ncs/${n.body.id}`, { status: 'verify', corrective: '필터 교체 주기 PM 등록', revision: a1.body.revision });
+  assert.match((await admin('PUT', `/api/ncs/${n.body.id}`, { status: 'closed', revision: a2.body.revision })).body.error, /유효/);
+  const done = await admin('PUT', `/api/ncs/${n.body.id}`, { status: 'closed', verify_result: '유효', verify_date: today, revision: a2.body.revision });
+  assert.equal(done.status, 200, JSON.stringify(done.body)); assert.equal(done.body.status, 'closed'); assert.equal(done.body.closed_by, '관리자');
+  assert.equal((await admin('PUT', `/api/ncs/${n.body.id}`, { title: '고침', revision: done.body.revision })).status, 400, 'closed is locked');
+  assert.equal((await admin('GET', `/api/ncs?source_type=analysis&source_id=${q.id}`)).body.rows.length, 1);
+});

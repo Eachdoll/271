@@ -383,7 +383,7 @@ function rndMeasureTable(spec, m) {
 async function rndMeasureEdit(r, after) {
   const cur = await api('GET', `/api/requests/${r.id}/rnd-measure`); let root = null;
   const v = await promptBox(`측정값 ${cur.measurement ? '수정' : '입력'} · ${r.req_no || ''} ${r.title}`, `${rndMeasureHtml()}<label>종합 의견 <span class="hint">(선택)</span><textarea name="result_note" rows="2" maxlength="1000">${esc(cur.memo || '')}</textarea></label>${cur.measurement ? '<label>수정 사유 *<input name="reason" required maxlength="300" placeholder="예) 재측정 값으로 정정"></label>' : ''}`, { wide: true,
-    onOpen: el => { root = el; el.classList.add('insp-modal'); bindRndMeasure(el, cur.spec ? { items: cur.spec.items, rows: cur.measurement?.rows || [] } : null).catch(fail); },
+    onOpen: el => { root = el; el.classList.add('insp-modal'); bindRndMeasure(el, cur.spec ? { items: cur.spec.items, rows: cur.measurement?.rows || [] } : (r.data?.items || []).length ? { items: [...r.data.items.filter(x => x && x !== '기타'), ...(r.data.items_etc ? [r.data.items_etc] : [])].slice(0, 30).map(name => ({ name, unit: '', min: '', max: '', count: 1 })), rows: [] } : null).catch(fail); /* 15.305 품질 분석의뢰: 의뢰 항목을 미리 채움 */ },
     submit: async val => api('PUT', `/api/requests/${r.id}/rnd-measure`, { ...val, ...readRndMeasure(root) }) });
   if (v) { toast('측정값을 저장했습니다.'); await after?.(); }
 }
@@ -1087,6 +1087,179 @@ async function pageCalibration(main) {
     if (e.target.closest('[data-cal-hist]')) return history(find('data-cal-hist'));
   });
   main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-cal-row]'); if (tr && data.can_manage && !e.target.closest('button, input')) editor(data.rows.find(x => x.id === Number(tr.dataset.calRow))).catch(fail); });
+  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  await load();
+}
+
+// ── 15.305 품질 1단계: COA 발행(LOT별 성적서) · 부적합·CAPA ──
+const COA_STATUS_LABEL = { draft: '작성(승인 대기)', approved: '승인(발행)', void: '무효' };
+const COA_STATUS_CHIP = { draft: 'yellow', approved: 'green', void: '' };
+const COA_T = {
+  ko: { title: '시험성적서 (COA)', no: '발행번호', item: '품목명', code: '품목코드', lot: 'LOT No.', customer: '고객사', mfg: '제조일', exp: '유효기간', qty: '수량', ship: '출하일', test: '시험 항목', unit: '단위', spec: '규격', method: '시험방법', result: '결과', judge: '판정', overall: '종합 판정', pass: '적합', note: '비고', approved: '승인', issued: '발행일', source: '근거 기록' },
+  en: { title: 'Certificate of Analysis', no: 'COA No.', item: 'Product', code: 'Product Code', lot: 'Lot No.', customer: 'Customer', mfg: 'Mfg. Date', exp: 'Expiry Date', qty: 'Quantity', ship: 'Ship Date', test: 'Test Item', unit: 'Unit', spec: 'Specification', method: 'Method', result: 'Result', judge: 'Judgement', overall: 'Overall', pass: 'Pass', note: 'Remarks', approved: 'Approved by', issued: 'Issue Date', source: 'Source record' },
+};
+const coaJudgeEn = j => ({ '적합': 'Pass', '부적합': 'Fail', '기록': 'Report' }[j] || j);
+// 성적서 본문(인쇄·미리보기 공용)
+function coaSheet(c, company = {}) {
+  const t = COA_T[c.lang === 'en' ? 'en' : 'ko'], en = c.lang === 'en', jd = j => en ? coaJudgeEn(j) : j;
+  const head = [[t.item, c.item], [t.code, c.product_code], [t.lot, c.lot], [t.customer, c.customer], [t.mfg, c.mfg_date], [t.exp, c.exp_date], [t.qty, c.qty == null ? '' : `${fmtNum(c.qty)} ${c.unit || ''}`], [t.ship, c.ship_date]].filter(([, v]) => v);
+  return `<div class="coa-sheet${c.status === 'void' ? ' coa-void' : ''}">
+    <div class="coa-top"><div><b class="coa-company">${esc(company.biz_name || '')}</b><div class="small">${esc(company.address || '')}${company.phone ? ` · ${esc(company.phone)}` : ''}</div></div><div class="coa-no">${t.no} <b>${esc(c.coa_no)}</b>${c.rev ? ` Rev.${c.rev}` : ''}</div></div>
+    <h2 class="coa-title">${t.title}</h2>
+    <table class="coa-head">${head.map(([k, v], i) => `${i % 2 ? '' : '<tr>'}<th>${k}</th><td>${esc(String(v))}</td>${i % 2 ? '</tr>' : ''}`).join('')}${head.length % 2 ? '<th></th><td></td></tr>' : ''}</table>
+    <table class="coa-items"><thead><tr><th>No.</th><th>${t.test}</th><th>${t.unit}</th><th>${t.spec}</th>${c.items.some(i => i.method) ? `<th>${t.method}</th>` : ''}<th>${t.result}</th><th>${t.judge}</th></tr></thead>
+      <tbody>${c.items.map((i, n) => `<tr><td class="c">${n + 1}</td><td>${esc(i.name)}</td><td class="c">${esc(i.unit)}</td><td class="c">${esc(i.spec)}</td>${c.items.some(x => x.method) ? `<td>${esc(i.method || '')}</td>` : ''}<td class="r">${i.avg == null ? '—' : fmtNum(i.avg)}</td><td class="c">${esc(jd(i.judge))}</td></tr>`).join('')}</tbody></table>
+    <p class="coa-overall">${t.overall}: <b>${en ? 'PASS' : '적합'}</b></p>
+    ${c.note ? `<p class="small">${t.note}: ${esc(c.note)}</p>` : ''}
+    <div class="coa-sign"><div>${t.issued}: ${esc(String(c.approved_at || c.created_at || '').slice(0, 10))}</div><div>${t.approved}: <b>${c.status === 'approved' ? esc(c.approved_by) : '—'}</b>${c.status === 'approved' ? '' : ` <span class="small">(${en ? 'not approved' : '승인 전'})</span>`}</div></div>
+    <p class="small muted coa-src">${t.source}: ${esc(c.source_no || '')}</p>
+    ${c.status === 'void' ? `<div class="coa-void-mark">VOID · ${esc(c.void_reason || '')}</div>` : ''}
+  </div>`;
+}
+async function coaOpen(id, after) {
+  const c = await api('GET', `/api/coas/${id}`), me = ME || {}, canApprove = me.is_admin || (me.roles || []).includes('quality_approver'), canManage = hasRole('quality');
+  const m = modal(`${coaSheet(c, c.company)}<div class="actions"><button class="btn" data-coa-print>인쇄 · PDF</button><button class="btn" data-coa-hist>이력</button>${canManage && c.status !== 'void' ? `<button class="btn" data-coa-edit>${c.status === 'approved' ? '고쳐서 재발행' : '고치기'}</button>` : ''}${canManage && c.status !== 'void' ? '<button class="btn danger" data-coa-void>무효</button>' : ''}${canApprove && c.status === 'draft' ? '<button class="btn primary" data-coa-ok>승인</button>' : ''}</div>`, { wide: true });
+  m.el.classList.add('coa-modal');
+  $('[data-coa-print]', m.el).onclick = () => { document.body.classList.add('printing'); window.print(); document.body.classList.remove('printing'); };
+  $('[data-coa-hist]', m.el).onclick = () => modal(`<h3>이력 · ${esc(c.coa_no)}</h3><div class="table-wrap"><table class="grid"><thead><tr><th>일시</th><th>담당</th><th>내용</th></tr></thead><tbody>${[...c.history].reverse().map(h => `<tr><td class="nowrap">${esc(String(h.at || '').slice(0, 16))}</td><td>${esc(h.by || '')}</td><td>${esc(h.what || '')}${h.rev != null ? ` Rev.${h.rev}` : ''}${h.source ? ` · ${esc(h.source)}` : ''}${h.reason ? ` · ${esc(h.reason)}` : ''}${h.prev ? ` · 이전 Rev.${h.prev.rev} 승인 ${esc(h.prev.approved_by || '')}` : ''}</td></tr>`).join('')}</tbody></table></div>`, { wide: true });
+  $('[data-coa-ok]', m.el)?.addEventListener('click', async () => { try { await api('POST', `/api/coas/${c.id}/approve`, { revision: c.revision }); toast('승인했습니다. 이제 인쇄해 보낼 수 있습니다.'); m.close(); await after?.(); await coaOpen(c.id, after); } catch (e) { fail(e); } });
+  $('[data-coa-void]', m.el)?.addEventListener('click', async () => { const v = await promptBox(`COA 무효 · ${c.coa_no}`, '<label>무효 사유 *<input name="reason" required maxlength="300" placeholder="예) LOT 오기재 · 새 COA로 다시 발행"></label>'); if (!v) return; try { await api('POST', `/api/coas/${c.id}/void`, { ...v, revision: c.revision }); toast('무효 처리했습니다.'); m.close(); await after?.(); } catch (e) { fail(e); } });
+  $('[data-coa-edit]', m.el)?.addEventListener('click', async () => { m.close(); await coaEdit(c, after); });
+}
+const coaHeadFields = (v, src) => `<div class="form-grid">
+  <label>고객사<input name="customer" maxlength="100" list="coaCust" value="${esc(v.customer || '')}"><datalist id="coaCust">${(src?.header?.customers || []).map(x => `<option value="${esc(x.customer)}">`).join('')}</datalist></label>
+  <label>품목명<input name="item" maxlength="200" value="${esc(v.item || '')}"></label><label>품목코드<input name="product_code" maxlength="80" value="${esc(v.product_code || '')}"></label>
+  <label>제조일<input type="date" name="mfg_date" value="${esc(v.mfg_date || '')}"></label><label>유효기간 <span class="hint">(기본 제조일 + 24개월)</span><input type="date" name="exp_date" value="${esc(v.exp_date || '')}"></label><label>출하일<input type="date" name="ship_date" value="${esc(v.ship_date || '')}"></label>
+  <label>수량<input type="number" step="any" name="qty" value="${v.qty ?? ''}"></label><label>단위<input name="unit" maxlength="20" value="${esc(v.unit || '')}"></label>
+  <label>언어<select name="lang"><option value="ko"${v.lang !== 'en' ? ' selected' : ''}>국문</option><option value="en"${v.lang === 'en' ? ' selected' : ''}>영문</option></select></label>
+  <label class="span3">비고<input name="note" maxlength="500" value="${esc(v.note || '')}"></label></div>`;
+async function coaNew(lot0 = '') {
+  const lot = lot0 || (await promptBox('COA 작성 · LOT', '<label>LOT *<input name="lot" required maxlength="100" placeholder="예) 261120_CF_P1" autocomplete="off"></label><p class="small muted">출하검사(없으면 공정·의뢰검사·연구 분석) 측정값이 합격인 LOT만 발행됩니다.</p>'))?.lot?.trim();
+  if (!lot) return;
+  const src = await api('GET', '/api/coa/source?' + new URLSearchParams({ lot }));
+  if (!src.candidates.length) return toast(`LOT ${lot}의 측정 기록이 없습니다. 출하검사나 분석의뢰에 측정값을 먼저 넣으세요.`, 'err');
+  const first = src.header.customers[0] || {}, mfg = src.header.mfg_date, exp = mfg ? calNext(mfg, 24) : '';
+  const v0 = { ...src.header, customer: first.customer || '', ship_date: first.ship_date || '', exp_date: exp, lang: 'ko' };
+  const prev = s0 => `<div class="table-wrap"><table class="grid"><thead><tr><th>시험 항목</th><th>단위</th><th>규격</th><th class="r">결과(평균)</th><th>판정</th></tr></thead><tbody>${(s0?.items || []).map(i => `<tr${i.judge === '부적합' ? ' class="rm-fail-row"' : ''}><td>${esc(i.name)}</td><td>${esc(i.unit)}</td><td>${esc(i.spec)}</td><td class="r">${i.avg == null ? '—' : fmtNum(i.avg)}</td><td>${esc(i.judge)}</td></tr>`).join('')}</tbody></table></div>`;
+  const v = await promptBox(`COA 작성 · LOT ${lot}`, `${src.coas.length ? `<p class="small">이 LOT의 COA: ${src.coas.map(x => `<b>${esc(x.coa_no)}</b> ${COA_STATUS_LABEL[x.status] || x.status}`).join(' · ')}</p>` : ''}
+    <label>근거 측정 기록 *<select name="source_request_id" data-coa-src>${src.candidates.map(c => `<option value="${c.id}"${c.id === src.source?.id ? ' selected' : ''}>${esc(c.req_no)} · ${esc(c.category)} · ${c.result === 'pass' ? '합격' : c.result === 'fail' ? '불합격' : '측정 중'}</option>`).join('')}</select></label>
+    <div data-coa-prev>${prev(src.source)}</div>${coaHeadFields(v0, src)}`, { wide: true,
+    onOpen: el => { $('[data-coa-src]', el).onchange = async e => { try { const s2 = await api('GET', '/api/coa/source?' + new URLSearchParams({ lot, source: e.target.value })); $('[data-coa-prev]', el).innerHTML = prev(s2.source); } catch (er) { fail(er); } }; },
+    submit: async vals => api('POST', '/api/coas', { ...vals, lot, request_id: crypto.randomUUID() }) });
+  if (!v) return; toast(`${v.coa_no}을(를) 만들었습니다. 품질책임자가 승인하면 발행됩니다.`);
+  document.querySelector('#main')?.coaReload?.(); await coaOpen(v.id, () => document.querySelector('#main')?.coaReload?.());
+}
+async function coaEdit(c, after) {
+  const v = await promptBox(`${c.status === 'approved' ? 'COA 재발행' : 'COA 고치기'} · ${c.coa_no}`, `${c.status === 'approved' ? `<p class="small">승인된 COA를 고치면 <b>Rev.${c.rev + 1}</b> 작성 상태로 돌아가고, 다시 승인해야 발행됩니다. 이전 판은 이력에 남습니다.</p>` : ''}${coaHeadFields(c)}<label class="inline"><input type="checkbox" name="refresh" value="1"> 측정값 다시 가져오기(근거 기록이 고쳐졌을 때)</label>`, { wide: true,
+    submit: async vals => api('PUT', `/api/coas/${c.id}`, { ...vals, refresh: !!vals.refresh, revision: c.revision }) });
+  if (!v) return; toast('저장했습니다.'); await after?.(); await coaOpen(c.id, after);
+}
+async function pageCoa(main) {
+  main.innerHTML = `<h1>COA 발행 <span class="dept">품질</span></h1>
+  <p class="muted">완제품·상품 <b>LOT마다 시험성적서(COA)</b>를 만듭니다. 그 LOT의 출하검사(없으면 공정·의뢰검사) 측정값을 그대로 옮기고, 품질책임자가 승인하면 발행(인쇄·PDF)됩니다. 승인 뒤 고치면 Rev가 올라 다시 승인합니다. 출하검사 창의 「COA 발행」으로도 바로 만들 수 있습니다.</p>
+  <div class="ip-tiles" id="coaTiles"></div>
+  <form class="toolbar list-filters" data-read-only id="coaFilters"><label class="lf-sel">상태<select name="status"><option value="">전체</option>${Object.entries(COA_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="list-search">찾기<input type="search" name="q" placeholder="발행번호·LOT·품목·고객사"></label><span class="grow"></span><span id="coaTools" class="ip-tools"></span></form>
+  <div id="coaList"></div>`;
+  const form = $('#coaFilters', main); let data = { rows: [] };
+  const load = async () => { const v = formObj(form); data = await api('GET', '/api/coas?' + new URLSearchParams(Object.entries(v).filter(([, x]) => x))); if (main.isConnected) draw(); };
+  main.coaReload = () => load().catch(fail);
+  const draw = () => {
+    const rows = data.rows;
+    $('#coaTiles', main).innerHTML = [['전체', rows.length, ''], ['승인 대기', rows.filter(r => r.status === 'draft').length, rows.some(r => r.status === 'draft') ? 'yellow' : ''], ['발행', rows.filter(r => r.status === 'approved').length, 'green'], ['무효', rows.filter(r => r.status === 'void').length, '']].map(([l, n, c], i) => `<button type="button" class="ip-tile ${c}" data-coa-tile="${i}"><span>${l}</span><b>${n}</b></button>`).join('');
+    $('#coaTools', main).innerHTML = data.can_manage ? '<button type="button" class="btn primary" id="coaNewBtn">＋ LOT로 COA 작성</button>' : '';
+    $('#coaList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>발행번호</th><th>LOT</th><th>품목</th><th>고객사</th><th>제조일</th><th>유효기간</th><th>근거</th><th>상태</th><th>승인</th><th></th></tr></thead><tbody>${rows.map(r => `<tr data-coa-row="${r.id}"${r.status === 'void' ? ' class="row-off"' : ''}><td class="nowrap" data-card-primary><b>${esc(r.coa_no)}</b>${r.rev ? ` <span class="chip">Rev.${r.rev}</span>` : ''}</td><td class="nowrap">${esc(r.lot)}</td><td>${esc(r.item)}${r.product_code ? `<div class="small muted">${esc(r.product_code)}</div>` : ''}</td><td>${esc(r.customer)}</td><td class="nowrap">${esc(r.mfg_date || '')}</td><td class="nowrap">${esc(r.exp_date || '')}</td><td class="small">${esc(r.source_no)}</td><td><span class="chip ${COA_STATUS_CHIP[r.status] || ''}">${esc(COA_STATUS_LABEL[r.status] || r.status)}</span></td><td class="small">${esc(r.approved_by || '')}${r.approved_at ? `<div class="muted">${esc(String(r.approved_at).slice(0, 10))}</div>` : ''}</td><td><button type="button" class="btn small" data-coa-open="${r.id}">열기</button></td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="empty">COA가 없습니다. 「＋ LOT로 COA 작성」에 출하검사 합격 LOT를 넣으면 측정값으로 성적서를 만듭니다.</div>';
+  };
+  main.addEventListener('click', e => {
+    const t = e.target.closest('[data-coa-tile]'); if (t) { form.elements.status.value = ['', 'draft', 'approved', 'void'].at(Number(t.dataset.coaTile)); load().catch(fail); return; }
+    if (e.target.closest('#coaNewBtn')) return coaNew().catch(fail);
+    const o = e.target.closest('[data-coa-open]') || (e.type === 'click' && null); if (o) coaOpen(Number(o.dataset.coaOpen), load).catch(fail);
+  });
+  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-coa-row]'); if (tr) coaOpen(Number(tr.dataset.coaRow), load).catch(fail); });
+  form.addEventListener('change', () => load().catch(fail)); let tm = null; form.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(() => load().catch(fail), 250); }); form.onsubmit = e => e.preventDefault();
+  await load();
+}
+
+// 부적합·CAPA
+const NC_STATUS_LABEL = { open: '등록', analysis: '원인분석', action: '조치', verify: '유효성검증', closed: '종결', void: '취소' };
+const NC_STATUS_CHIP = { open: 'yellow', analysis: 'yellow', action: 'yellow', verify: 'yellow', closed: 'green', void: '' };
+const NC_FLOW = ['open', 'analysis', 'action', 'verify', 'closed'];
+const NC_SOURCE_LABEL = { iqc: '수입검사', oqc: '출하검사', analysis: '분석', process: '공정 이상', voc: '고객 불만(VOC)', audit: '심사 지적', other: '기타' };
+const NC_GRADE_LABEL = { critical: '치명', major: '중대', minor: '경미' };
+async function ncNew(pre = {}) {
+  const due = (() => { const d = new Date(Date.parse(todayStr()) + 30 * 86400000); return d.toISOString().slice(0, 10); })();
+  const v = await promptBox('부적합·CAPA 등록', `${pre.source_no ? `<p class="small">출처 <b>${esc(NC_SOURCE_LABEL[pre.source_type] || '')} ${esc(pre.source_no)}</b>에서 등록합니다.</p>` : ''}<div class="form-grid">
+    ${pre.source_no ? '' : `<label>출처<select name="source_type">${Object.entries(NC_SOURCE_LABEL).map(([k, l]) => `<option value="${k}"${pre.source_type === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`}
+    <label>유형<select name="kind">${['OOS', 'OOT', '공정 이상', '고객 불만', '심사 지적', '기타'].map(k => `<option${(pre.kind || 'OOS') === k ? ' selected' : ''}>${k}</option>`).join('')}</select></label>
+    <label>등급<select name="grade">${Object.entries(NC_GRADE_LABEL).map(([k, l]) => `<option value="${k}"${k === 'minor' ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+    <label class="span3">부적합 내용(제목) *<input name="title" required maxlength="200" value="${esc(pre.title || '')}"></label>
+    <label class="span3">상세<textarea name="detail" rows="2" maxlength="2000" placeholder="무엇이 규격·기준을 벗어났는지(측정값·수량·발견 경위)"></textarea></label>
+    <label>품목<input name="item" maxlength="200" value="${esc(pre.item || '')}"></label><label>LOT<input name="lot" maxlength="100" value="${esc(pre.lot || '')}"></label><label>수량<input type="number" step="any" name="qty"></label>
+    <label>발생일 *<input type="date" name="found_date" required value="${todayStr()}"></label><label>담당자<input name="owner_name" maxlength="50" value="${esc(ME?.name || '')}"></label><label>조치 기한 <span class="hint">(기본 30일)</span><input type="date" name="due_date" value="${due}"></label>
+    <label class="span3">즉시 조치(격리·선별 등)<input name="containment" maxlength="1000" placeholder="예) 해당 LOT 출하 보류·격리, 재고 전수 선별"></label></div>`, { wide: true,
+    submit: async vals => api('POST', '/api/ncs', { ...pre, ...vals, request_id: crypto.randomUUID() }) });
+  if (!v) return null; toast(`${v.nc_no}을(를) 등록했습니다. 원인분석부터 진행하세요.`); document.querySelector('#main')?.ncReload?.(); await ncOpen(v.id); return v;
+}
+async function ncOpen(id) {
+  const list = await api('GET', '/api/ncs'), n = list.rows.find(x => x.id === id); if (!n) return toast('찾을 수 없습니다.', 'err');
+  const can = list.can_manage, closed = ['closed', 'void'].includes(n.status), ro = !can || closed, dis = ro ? ' disabled' : '', c = n.cause || {};
+  const next = NC_FLOW.at(NC_FLOW.indexOf(n.status) + 1), stepper = NC_FLOW.map((s, i) => `<span class="nc-step${s === n.status ? ' on' : NC_FLOW.indexOf(n.status) > i || n.status === 'closed' ? ' done' : ''}">${i + 1}. ${NC_STATUS_LABEL[s]}</span>`).join('<span class="nc-arrow">→</span>');
+  const f = (name, label, val, attrs = '') => `<label>${label}<input name="${name}" value="${esc(val ?? '')}"${attrs}${dis}></label>`;
+  const ta = (name, label, val, span = 'span3') => `<label class="${span}">${label}<textarea name="${name}" rows="2" maxlength="1000"${dis}>${esc(val || '')}</textarea></label>`;
+  const m = modal(`<h3>${esc(n.nc_no)} · ${esc(n.title)} <span class="chip ${NC_STATUS_CHIP[n.status] || ''}">${esc(n.status_label)}</span></h3>
+    <div class="nc-stepper">${stepper}</div>
+    <p class="small muted">출처 ${esc(n.source_label)}${n.source_no ? ` · <b>${esc(n.source_no)}</b>` : ''} · 등록 ${esc(n.created_by)} ${esc(String(n.created_at).slice(0, 10))}${n.closed_by ? ` · 종결 ${esc(n.closed_by)} ${esc(String(n.closed_at || '').slice(0, 10))}` : ''}</p>
+    <form class="stack" data-nc-form>
+      <fieldset class="vendor-sec"><legend>부적합 내용</legend><div class="form-grid">
+        <label>유형<select name="kind"${dis}>${['OOS', 'OOT', '공정 이상', '고객 불만', '심사 지적', '기타'].map(k => `<option${n.kind === k ? ' selected' : ''}>${k}</option>`).join('')}</select></label>
+        <label>등급<select name="grade"${dis}>${Object.entries(NC_GRADE_LABEL).map(([k, l]) => `<option value="${k}"${n.grade === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        ${f('found_date', '발생일', n.found_date, " type='date'")}
+        <label class="span3">제목<input name="title" required maxlength="200" value="${esc(n.title)}"${dis}></label>${ta('detail', '상세', n.detail)}
+        ${f('item', '품목', n.item)}${f('lot', 'LOT', n.lot)}${f('qty', '수량', n.qty, " type='number' step='any'")}
+        ${f('owner_name', '담당자', n.owner_name)}${f('due_date', '조치 기한', n.due_date, " type='date'")}${ta('containment', '즉시 조치(격리·선별)', n.containment, 'span2')}
+      </div></fieldset>
+      <fieldset class="vendor-sec"><legend>원인분석 <span class="hint">(5Why 또는 4M — 하나 이상)</span></legend><div class="form-grid">
+        ${['why1', 'why2', 'why3', 'why4', 'why5'].map((k, i) => `<label class="span3">Why ${i + 1}<input data-cause="${k}" maxlength="300" value="${esc(c[k] || '')}"${dis}></label>`).join('')}
+        ${[['man', '사람'], ['machine', '설비'], ['material', '자재'], ['method', '방법'], ['env', '환경']].map(([k, l]) => `<label>${l}<input data-cause="${k}" maxlength="300" value="${esc(c[k] || '')}"${dis}></label>`).join('')}
+        <label class="span3">근본 원인<input data-cause="root" maxlength="300" value="${esc(c.root || '')}"${dis}></label></div></fieldset>
+      <fieldset class="vendor-sec"><legend>조치</legend><div class="form-grid">${ta('correction', '시정(이번 건 처리: 재작업·폐기·특채 등)', n.correction)}${ta('corrective', '시정조치(재발 방지)', n.corrective)}${ta('preventive', '예방조치(다른 품목·공정에도)', n.preventive)}${f('action_date', '조치 완료일', n.action_date, " type='date'")}</div></fieldset>
+      <fieldset class="vendor-sec"><legend>유효성검증</legend><div class="form-grid">${f('verify_date', '검증일', n.verify_date, " type='date'")}<label>결과<select name="verify_result"${dis}><option value="">—</option><option${n.verify_result === '유효' ? ' selected' : ''}>유효</option><option${n.verify_result === '효과 없음' ? ' selected' : ''}>효과 없음</option></select></label>${ta('verify_note', '검증 내용(재발 여부·확인 데이터)', n.verify_note, 'span3')}</div></fieldset>
+      <div class="actions"><button type="button" class="btn" data-nc-hist>이력</button>${can && !closed ? '<button type="button" class="btn danger" data-nc-void>취소</button><span class="grow"></span><button class="btn">저장</button>' : ''}${can && !closed && next && next !== 'closed' ? `<button type="button" class="btn primary" data-nc-next="${next}">저장하고 「${NC_STATUS_LABEL[next]}」로 →</button>` : ''}${list.can_close && n.status === 'verify' ? '<button type="button" class="btn primary" data-nc-next="closed">종결</button>' : ''}${list.can_close && closed ? '<button type="button" class="btn" data-nc-reopen>다시 열기</button>' : ''}</div>
+    </form>`, { wide: true });
+  const form = $('[data-nc-form]', m.el);
+  const body = () => { const v = formObj(form); v.cause_json = Object.fromEntries($$('[data-cause]', form).map(i => [i.dataset.cause, i.value.trim()]).filter(([, x]) => x)); return { ...v, revision: n.revision }; };
+  const save = async (status, extra = {}) => { try { await api('PUT', `/api/ncs/${n.id}`, { ...body(), ...(status ? { status } : {}), ...extra }); toast(status ? `「${NC_STATUS_LABEL[status]}」 단계로 넘겼습니다.` : '저장했습니다.'); m.close(); document.querySelector('#main')?.ncReload?.(); await ncOpen(n.id); } catch (e) { fail(e); } };
+  form.onsubmit = e => { e.preventDefault(); save(null); };
+  $('[data-nc-next]', m.el)?.addEventListener('click', e => save(e.currentTarget.dataset.ncNext));
+  $('[data-nc-void]', m.el)?.addEventListener('click', async () => { const v = await promptBox('부적합 취소', '<label>취소 사유 *<input name="reason" required maxlength="300" placeholder="예) 측정 오류로 확인 — 실제 부적합 아님"></label>'); if (v) save('void', v); });
+  $('[data-nc-reopen]', m.el)?.addEventListener('click', async () => { const v = await promptBox('다시 열기', '<label>사유 *<input name="reason" required maxlength="300"></label>'); if (v) save('verify', v); });
+  $('[data-nc-hist]', m.el).onclick = () => modal(`<h3>이력 · ${esc(n.nc_no)}</h3><div class="table-wrap"><table class="grid"><thead><tr><th>일시</th><th>담당</th><th>내용</th></tr></thead><tbody>${[...n.history].reverse().map(h => `<tr><td class="nowrap">${esc(String(h.at || '').slice(0, 16))}</td><td>${esc(h.by || '')}</td><td>${esc(h.what || '')}${h.status ? ` · ${esc(NC_STATUS_LABEL[h.status[0]] || '')} → ${esc(NC_STATUS_LABEL[h.status[1]] || '')}` : ''}${(h.fields || []).length ? ` · ${h.fields.length}칸` : ''}${h.reason ? ` · ${esc(h.reason)}` : ''}${h.source ? ` · 출처 ${esc(h.source)}` : ''}</td></tr>`).join('')}</tbody></table></div>`, { wide: true });
+}
+async function pageNcs(main) {
+  main.innerHTML = `<h1>부적합·CAPA <span class="dept">품질</span></h1>
+  <p class="muted">수입·출하검사 불합격, 분석 불합격, 공정 이상, 고객 불만(VOC), 심사 지적을 한곳에 모아 <b>등록 → 원인분석 → 조치 → 유효성검증 → 종결</b>로 관리합니다. 검사·분석·VOC 창의 「CAPA 등록」으로도 바로 등록됩니다. 종결은 유효성검증이 「유효」일 때 품질책임자가 합니다.</p>
+  <div class="ip-tiles" id="ncTiles"></div>
+  <form class="toolbar list-filters" data-read-only id="ncFilters"><label class="lf-sel">단계<select name="st"><option value="live">진행 중(종결·취소 빼고)</option><option value="">전체</option>${Object.entries(NC_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">출처<select name="src"><option value="">전체</option>${Object.entries(NC_SOURCE_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="list-search">찾기<input type="search" name="q" placeholder="번호·내용·품목·LOT·출처 번호·담당"></label><span class="grow"></span><span id="ncTools" class="ip-tools"></span></form>
+  <div id="ncList"></div>`;
+  const form = $('#ncFilters', main); let data = { rows: [], today: todayStr() };
+  const load = async () => { data = await api('GET', '/api/ncs'); if (main.isConnected) draw(); };
+  main.ncReload = () => load().catch(fail);
+  const live = r => !['closed', 'void'].includes(r.status), over = r => live(r) && r.due_date && r.due_date < data.today;
+  const draw = () => {
+    const v = formObj(form), q = (v.q || '').trim().toLowerCase(), all = data.rows;
+    $('#ncTiles', main).innerHTML = [['진행 중', all.filter(live).length, ''], ['기한 지남', all.filter(over).length, all.some(over) ? 'red' : ''], ['원인분석', all.filter(r => r.status === 'analysis').length, ''], ['조치', all.filter(r => r.status === 'action').length, ''], ['유효성검증', all.filter(r => r.status === 'verify').length, ''], ['종결', all.filter(r => r.status === 'closed').length, 'green']].map(([l, n, c], i) => `<button type="button" class="ip-tile ${c}" data-nc-tile="${i}"><span>${l}</span><b>${n}</b></button>`).join('');
+    $('#ncTools', main).innerHTML = data.can_manage ? '<button type="button" class="btn primary" id="ncNewBtn">＋ 부적합 등록</button>' : '';
+    const rows = all.filter(r => (v.st === 'live' ? live(r) : !v.st || r.status === v.st) && (!v.src || r.source_type === v.src) && (!q || [r.nc_no, r.title, r.item, r.lot, r.source_no, r.owner_name].join(' ').toLowerCase().includes(q)));
+    $('#ncList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>번호</th><th>출처</th><th>유형 · 등급</th><th>부적합 내용</th><th>품목 · LOT</th><th>발생일</th><th>담당</th><th>조치 기한</th><th>단계</th><th></th></tr></thead><tbody>${rows.map(r => { const d = r.due_date && live(r) ? ipDday(r.due_date, data.today) : null, cls = d === null ? '' : d < 0 ? 'over' : d <= 7 ? 'soon' : '';
+      return `<tr data-nc-row="${r.id}" class="${cls ? 'ip-' + cls : ''}${r.status === 'void' ? ' row-off' : ''}"><td class="nowrap" data-card-primary><b>${esc(r.nc_no)}</b></td><td>${esc(r.source_label)}${r.source_no ? `<div class="small muted">${esc(r.source_no)}</div>` : ''}</td><td class="nowrap">${esc(r.kind)} <span class="chip ${r.grade === 'critical' ? 'red' : r.grade === 'major' ? 'yellow' : ''}">${esc(r.grade_label)}</span></td><td><b>${esc(r.title)}</b></td><td>${esc(r.item)}${r.lot ? `<div class="small muted">${esc(r.lot)}</div>` : ''}</td><td class="nowrap">${esc(r.found_date)}</td><td>${esc(r.owner_name)}</td><td class="nowrap">${esc(r.due_date || '')}${d !== null ? ` <span class="ip-dd ${cls}">${d < 0 ? `D+${-d}` : d === 0 ? 'D-DAY' : `D-${d}`}</span>` : ''}</td><td><span class="chip ${NC_STATUS_CHIP[r.status] || ''}">${esc(r.status_label)}</span></td><td><button type="button" class="btn small" data-nc-open="${r.id}">열기</button></td></tr>`; }).join('')}</tbody></table></div>`
+      : `<div class="empty">${all.length ? '조건에 맞는 부적합이 없습니다.' : '등록된 부적합이 없습니다. 검사·분석·VOC 창의 「CAPA 등록」이나 「＋ 부적합 등록」으로 시작합니다.'}</div>`;
+  };
+  main.addEventListener('click', e => {
+    const t = e.target.closest('[data-nc-tile]'); if (t) { form.elements.st.value = ['live', 'live', 'analysis', 'action', 'verify', 'closed'].at(Number(t.dataset.ncTile)); draw(); if (t.dataset.ncTile === '1') { const rows = data.rows.filter(over); $('#ncList', main).querySelectorAll('[data-nc-row]').forEach(tr => { tr.hidden = !rows.some(r => r.id === Number(tr.dataset.ncRow)); }); } return; }
+    if (e.target.closest('#ncNewBtn')) return ncNew().catch(fail);
+    const o = e.target.closest('[data-nc-open]'); if (o) ncOpen(Number(o.dataset.ncOpen)).catch(fail);
+  });
+  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-nc-row]'); if (tr) ncOpen(Number(tr.dataset.ncRow)).catch(fail); });
   form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }

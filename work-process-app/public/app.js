@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.304';
+const APP_VERSION = '15.305';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -380,12 +380,10 @@ const NAV = [
     { sub: '거래처별 장부', items: [['#/sales/book', '매출 거래처별 장부'], ['#/purchase/book', '매입 거래처별 장부']] },
     { sub: '대금', items: [['#/purchase/payments', '입금확인'], ['#/purchase/disbursements', '지급확인'], ['#/purchase/notes', '어음 관리'], ['#/sales/aging', '채권 연령표'], ['#/purchase/aging', '채무 연령표']] },
   ] },
+  // 15.305 품질 메뉴를 품질보증(QA)·품질관리(QC) 묶음으로(개발지침서 3장). 품질경영(QM)은 4단계에서 메뉴가 생기면 추가.
   { group: '품질', items: [
-    ['#/quality/inspections', '수입·출하 검사 이력'],
-    ['#/quality/list', '분석 관리'],
-    ['#/quality/voc/list', 'VOC 관리'],
-    ['#/quality/certs', '인증서 관리'], // 15.303 ISO·GRS 등 인증 갱신 관리
-    ['#/quality/calibration', '검교정 관리'], // 15.304 계측기 대장·교정 일정
+    { sub: '품질보증(QA)', items: [['#/quality/capa', '부적합·CAPA'], ['#/quality/voc/list', 'VOC 관리'], ['#/quality/certs', '인증서 관리'], ['#/quality/calibration', '검교정 관리']] },
+    { sub: '품질관리(QC)', items: [['#/quality/inspections', '수입·출하 검사 이력'], ['#/quality/list', '분석 관리'], ['#/quality/coa', 'COA 발행']] },
   ] },
   { group: '연구소', items: [['#/dev/list', '개발 관리'], ['#/dev/schedule', '스케줄 관리'], ['#/dev/analysis', '연구 분석 관리'], ['#/dev/specs', '검사규격 항목설정'], ['#/dev/ip', '지식재산권 관리']] }, // 15.302 지식재산권 // 15.276 · 15.285 · 15.295 메뉴 이름 개발 → 연구소, 연구소 검사규격
   { group: '생산', items: [
@@ -586,6 +584,8 @@ const PAGES = {
   '#/quality/specs': pageInspectionSpecs,
   '#/quality/certs': main => pageCerts(main), // 15.303
   '#/quality/calibration': main => pageCalibration(main), // 15.304
+  '#/quality/coa': main => pageCoa(main), // 15.305 LOT별 COA
+  '#/quality/capa': main => pageNcs(main), // 15.305 부적합·CAPA
   '#/quality/request': () => pageIntake('analysis'),
   '#/quality/list': () => pageWorkList('analysis'),
   '#/quality/voc/request': () => pageIntake('voc'),
@@ -2335,7 +2335,7 @@ function requestDetail(type, r, reload) {
       ${type === 'rnd_analysis' ? `<div class="rq-kv full"><span>연결 개발건</span><b>${r.data?.dev_request_id ? `${esc(r.data.dev_title || '')}${r.data.dev_step ? ` · 단계 「${esc(r.data.dev_step)}」` : ''}` : '<span class="muted">연결 안 됨</span>'}</b></div>` : ''}
       ${type === 'voc' && r.data?.lot ? `<div class="rq-kv full"><span>LOT 연결</span><b><button type="button" class="link-btn" data-lt-open="${esc(r.data.lot)}">${esc(r.data.lot)} · LOT 연결 조회 →</button></b></div>` : ''}
     </div>
-    ${type === 'rnd_analysis' ? '<div class="rq-meas" data-rnd-meas></div>' : ''}
+    ${type === 'rnd_analysis' || (type === 'analysis' && !['수입검사', '출하검사'].includes(r.category)) ? '<div class="rq-meas" data-rnd-meas></div>' : ''}
     <details class="rq-more"><summary>더보기 · 상세 내용 <span class="small muted">(${filled}개 항목${r.source_type ? ' · 입고 출처' : ''}${['development','sample','sample_goods','rnd_analysis'].includes(type) ? ' · 사진' : ''}${r.approver_name ? ' · 접수 기록' : ''})</span></summary>
     <table class="kv">
       ${r.source_type ? `<tr><th>입고 출처</th><td><a href="${r.source_type === 'purchase_order' ? '#/logistics/receive' : '#/logistics/other'}">${r.source_type === 'purchase_order' ? '발주입고' : '기타입고'} #${esc(r.source_id)}</a>${r.data.purchase_req_no ? ' · 구매의뢰번호 ' + esc(r.data.purchase_req_no) : ''}</td></tr>
@@ -2358,11 +2358,14 @@ function requestDetail(type, r, reload) {
       ${approver && r.status === 'pending' ? '<button class="btn red" data-a="reject">반려</button><button class="btn primary" data-a="approve">승인</button>' : ''}
       ${approver && r.status === 'rejected' ? '<button class="btn primary" data-a="approve">승인</button>' : ''}
       ${type === 'rnd_analysis' && (hasRole('dev') || hasRole('dev_approver')) ? '<button class="btn primary" data-a="measure">측정값 수정</button>' : ''}
+      ${type === 'analysis' && !['수입검사', '출하검사'].includes(r.category) && hasRole('quality') && ['waiting', 'progress', 'done'].includes(r.status) ? '<button class="btn primary" data-a="measure">측정값 입력</button>' : ''}
+      ${type === 'analysis' && r.category === '출하검사' && (r.lot || r.data?.lot_etc) && hasRole('quality') ? '<button class="btn" data-a="coa" title="이 LOT의 COA(성적서) 발행">COA 발행</button>' : ''}
+      ${['analysis', 'voc'].includes(type) && hasRole('quality') && r.status !== 'pending' ? '<button class="btn" data-a="capa" title="부적합·CAPA로 등록(원인분석·조치·검증)">CAPA 등록</button>' : ''}
       ${type === 'rnd_analysis' && (mgr || mine || hasRole('dev_approver')) ? '<button class="btn" data-a="devlink">개발건 연결</button>' : ''}
       ${mgr && ['waiting', 'progress', 'done'].includes(r.status) ? `<button class="btn" data-a="status">${type === 'rnd_analysis' ? '상태·의견' : '상태/결과 변경'}</button>` : ''}
     </div>`, { wide: true });
   if (['development','sample','sample_goods','voc','rnd_analysis'].includes(type)) renderAttachmentPreview($('[data-request-photos]', m.el), 'request', r.id);
-  if (type === 'rnd_analysis') api('GET', `/api/requests/${r.id}/rnd-measure`).then(x => { const b = $('[data-rnd-meas]', m.el); if (b) b.innerHTML = x.spec ? `<h4>측정값</h4>${rndMeasureTable(x.spec, x.measurement)}${x.memo ? `<p><span class="muted">종합 의견</span> ${esc(x.memo)}</p>` : ''}` : '';
+  if (type === 'rnd_analysis' || (type === 'analysis' && !['수입검사', '출하검사'].includes(r.category))) api('GET', `/api/requests/${r.id}/rnd-measure`).then(x => { /* 15.305 품질 분석의뢰도 */ const b = $('[data-rnd-meas]', m.el); if (b) b.innerHTML = x.spec ? `<h4>측정값</h4>${rndMeasureTable(x.spec, x.measurement)}${x.memo ? `<p><span class="muted">종합 의견</span> ${esc(x.memo)}</p>` : ''}` : '';
     const rb = $('[data-rq-result]', m.el); if (rb && x.summary) { rb.innerHTML = `${/^(시료 \d+개 · )?불합격/.test(x.summary) ? '<span class="chip red">불합격</span> ' : /전 항목 합격/.test(x.summary) ? '<span class="chip green">합격</span> ' : ''}${esc(x.summary.replace(/^(시료 \d+개 · )?불합격 \d+항목: /, '$1').replace(/^(시료 \d+개 · )?전 항목 합격/, '$1전 항목 합격'))}${x.memo ? ` <span class="muted">/ 의견:</span> ${esc(x.memo)}` : ''}`; } // 15.299 측정값에서 짧은 요약(불합격 항목만)
   }).catch(() => {}); // 15.292
   else if (r.source_type) renderAttachmentPreview($('[data-request-photos]', m.el), r.source_type, r.source_id);
@@ -2370,7 +2373,9 @@ function requestDetail(type, r, reload) {
     try {
       if (a === 'inspection') { m.close(); await openInspection(r.id, reload); return; }
       if (a === 'devlink') { m.close(); await rndDevLinkBox(r, reload); return; } // 15.286
-      if (a === 'measure') { m.close(); await rndMeasureEdit(r, reload); return; } // 15.292
+      if (a === 'measure') { m.close(); await rndMeasureEdit(r, reload); return; } // 15.292 · 15.305 품질 분석의뢰도 같은 그리드
+      if (a === 'coa') { m.close(); location.hash = '#/quality/coa'; setTimeout(() => coaNew(r.lot || r.data?.lot_etc).catch(fail), 400); return; } // 15.305
+      if (a === 'capa') { await ncNew({ source_type: type === 'voc' ? 'voc' : r.category === '수입검사' ? 'iqc' : r.category === '출하검사' ? 'oqc' : 'analysis', source_id: r.id, source_no: r.req_no, title: `${r.title}${type === 'voc' ? ' 고객 불만' : ' 부적합'}`, item: r.title, lot: r.lot || r.data?.lot_etc || (['있음', '없음'].includes(r.data?.lot) ? '' : r.data?.lot || ''), kind: type === 'voc' ? '고객 불만' : 'OOS' }); return; } // 15.305
       if (a === 'photos') { await openAttachments('request', r.id, r.title, { editable: (mine && ['pending','rejected'].includes(r.status)) || mgr }); return; }
       if (a === 'print') { const more = $('.rq-more', m.el), was = more?.open; if (more) more.open = true; document.body.classList.add('printing'); window.print(); document.body.classList.remove('printing'); if (more) more.open = was; return; } // 15.282 인쇄는 상세까지
       if (a === 'approve') { await api('POST', `/api/requests/${r.id}/approve`); toast(`승인했습니다. ${cfg.listTitle || cfg.label + '리스트'}에 등록됨`); }
