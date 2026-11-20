@@ -3748,3 +3748,9 @@ tr.book-memo > td { background: var(--bg); font-style: italic; }
 .fm-grid tr.fm-fail td { color: var(--muted); }
 .fm-grid input[type=number] { width: 110px; text-align: right; }
 [data-fa-mats].on { border-color: var(--accent); color: var(--accent); }
+
+/* 15.284 수주 ↔ 구매의뢰 연결 */
+.so-prs { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.so-pr { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; text-align: left; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 7px 10px; cursor: pointer; }
+.so-pr:hover { border-color: var(--accent); }
+.pr-from-order { background: var(--accent-soft); border-radius: 8px; padding: 8px 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

@@ -139,7 +139,10 @@ function salesOrderSheet(order, after = null, { onClose = null } = {}) {
       <tbody>${order.lines.map(l => `<tr><td data-card-primary><b>${esc(l.item)}</b>${l.product_code ? `<div class="small muted">${esc(l.product_code)}</div>` : ''}${l.note ? `<div class="small muted">${esc(l.note)}</div>` : ''}</td><td>${esc(l.spec || '')}</td><td class="r">${fmtNum(l.qty)}</td><td class="r">${fmtNum(l.billed_qty)}</td><td class="r">${fmtNum(l.shipped_qty)}</td><td class="r">${l.pending_qty ? fmtNum(l.pending_qty) : ''}</td><td class="r"><b>${fmtNum(l.remaining)}</b></td><td>${esc(l.unit || '')}</td><td class="r">${l.unit_price == null ? '' : fmtNum(l.unit_price)}</td><td>${esc(l.due_date || '')}</td></tr>`).join('')}</tbody></table></div>
     <h4>매출전표 내역</h4>
     ${hasBills ? `<div class="table-wrap"><table class="grid so-bills"><thead><tr><th>전표번호</th><th>전표 일자</th><th>품목</th><th class="r">수량</th><th class="r">공급가액</th><th>출하</th><th></th></tr></thead><tbody>${order.bills.map(b => { const l = order.lines.find(x => x.id === b.order_line_id); return `<tr><td data-card-primary><b>${esc(b.bill_no)}</b></td><td>${esc(b.bill_date)}</td><td>${esc(l?.item || '')}</td><td class="r">${fmtNum(b.qty)}</td><td class="r">${won(b.supply)}</td><td>${shipChip(b.ship_status)}</td><td><button type="button" class="btn small" data-so-bill="${b.bill_id}">전표 보기</button></td></tr>`; }).join('')}</tbody></table></div>` : '<p class="muted small">아직 잡은 매출전표가 없습니다.</p>'}
+    <h4>구매의뢰 <span class="small muted">(이 수주에서 만든 구매의뢰서)</span></h4>
+    ${(order.purchase_requests || []).length ? `<div class="so-prs">${order.purchase_requests.map(p => `<button type="button" class="so-pr" data-so-pr="${p.id}"><b>${esc(p.doc_no)}</b> <span class="chip ${PR_STATUS_CHIP[p.status] || ''}">${PR_STATUS[p.status] || esc(p.status)}</span> <span class="small muted">${esc(p.doc_date)} · ${esc(p.author_name)} · 품목 ${p.items}${p.status === 'approved' ? ` · 발주 ${p.ordered}/${p.items}` : ''}</span></button>`).join('')}</div>` : '<p class="small muted">아직 없습니다. 「구매의뢰 만들기」를 누르면 이 수주 품목으로 구매의뢰서를 채워 엽니다.</p>'}
     <div class="actions"><button class="btn" data-close>닫기</button>
+      ${open ? '<button class="btn" data-so-pr-new title="이 수주 품목(잔량)·판매단가·고객사로 구매의뢰서를 채워 엽니다">구매의뢰 만들기</button>' : ''}
       ${open ? `<button class="btn" data-so-edit>고치기${hasBills ? ' <span class="small muted">(품목 추가·수량)</span>' : ''}</button>` : ''}${open && !hasBills ? '<button class="btn danger" data-so-status="cancelled">수주 취소</button>' : ''}
       ${open && hasBills && left > 0 ? '<button class="btn" data-so-status="closed">잔량 마감</button>' : ''}
       ${!open ? '<button class="btn" data-so-status="open">다시 열기</button>' : ''}
@@ -148,6 +151,13 @@ function salesOrderSheet(order, after = null, { onClose = null } = {}) {
   $('.so-detail', m.el)?.closest('.table-wrap')?.insertAdjacentHTML('afterend', sumLine([['수주', esc(unitTotals(order.lines, l => l.qty, l => l.unit))], ['전표', esc(unitTotals(order.lines, l => l.billed_qty, l => l.unit))], ['출하', esc(unitTotals(order.lines, l => l.shipped_qty, l => l.unit))], ['잔량', esc(unitTotals(order.lines, l => l.remaining, l => l.unit))], ['수주 금액', esc(`${won(order.amount)}원`)]]));
   $('.so-bills', m.el)?.closest('.table-wrap')?.insertAdjacentHTML('afterend', sumLine([['합계', esc(`${order.bills.length}건`)], ['수량', esc(unitTotals(order.bills, b => b.qty, b => unitOf(b.order_line_id)))], ['공급가액', esc(`${won(order.bills.reduce((t, b) => t + b.supply, 0))}원`)]]));
   $('[data-close]', m.el).onclick = m.close;
+  // 15.284 수주 → 구매의뢰: 품목(잔량, 없으면 수주 수량)·판매단가·사용고객사·입고요청일(납기)을 채워 구매의뢰 작성으로
+  $('[data-so-pr-new]', m.el)?.addEventListener('click', () => {
+    const lines = order.lines.filter(l => (l.remaining || l.qty) > 0).map(l => ({ bom_id: l.bom_id || '', item: l.item, product_code: l.product_code || '', spec: l.spec || '', unit: l.unit || '', qty: l.remaining > 0 ? l.remaining : l.qty, sale_price: l.unit_price ?? '', customer: order.customer, due_text: l.due_date || order.due_date || '' }));
+    try { sessionStorage.setItem('wpa:pr-from-order', JSON.stringify({ id: order.id, no: order.order_no, customer: order.customer, lines })); } catch { /* 편의 기능 */ }
+    m.close(); location.hash = '#/sales/pr/new';
+  });
+  $$('[data-so-pr]', m.el).forEach(b => b.onclick = () => prOpen(Number(b.dataset.soPr), async () => { await after?.(); }).catch(fail));
   $('[data-so-edit]', m.el)?.addEventListener('click', () => { try { sessionStorage.setItem('wpa:so-edit', String(order.id)); } catch { /* 편의 기능 */ } m.close(); location.hash = '#/sales/orders/edit'; });
   $('[data-so-bill-new]', m.el)?.addEventListener('click', () => {
     try { sessionStorage.setItem('wpa:sbill-customer', order.customer); sessionStorage.setItem('wpa:sbill-order', String(order.id)); } catch { /* 편의 기능 */ }

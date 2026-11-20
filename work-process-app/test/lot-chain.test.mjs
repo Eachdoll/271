@@ -548,3 +548,22 @@ test('15.283 product without a semi step (부직포와이퍼): work-in-progress 
   const semiFin = sqlite.prepare("SELECT id FROM schedules WHERE bom_snapshot LIKE '%반제품%' LIMIT 1").get();
   if (semiFin) assert.equal((await prod('POST', `/api/schedules/${semiFin.id}/actuals`, { production_date: today, qty: '', work_status: 'progress', request_id: rid() })).status, 400);
 });
+
+test('15.284 purchase request made from a sales order keeps the order link; the order lists its purchase requests', async () => {
+  const v = await admin('POST', '/api/vendors', { name: 'SO고객', type: 'sales' });
+  const g = (await admin('POST', '/api/boms', { product: '니트릴 글러브', product_code: 'NG-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'BOX', materials: [] })).body;
+  const so = await admin('POST', '/api/sales-orders', { customer: 'SO고객', order_date: today, request_id: rid(), lines: [{ bom_id: g.id, qty: 50, unit_price: 12000 }] });
+  assert.equal(so.status, 200, JSON.stringify([v.body, so.body]));
+  const approver = (await admin('GET', '/api/directory')).body.find(x => x.name === '생산');
+  const base = { doc_date: today, title: '', approvers: [approver.id], items: [{ item: '니트릴 글러브', unit: 'BOX', qty: 50, sale_price: 12000, customer: 'SO고객' }] };
+  assert.equal((await admin('POST', '/api/purchase-requests', { ...base, request_id: rid(), sales_order_id: 999999 })).status, 400);
+  const pr = await admin('POST', '/api/purchase-requests', { ...base, request_id: rid(), sales_order_id: so.body.id });
+  assert.equal(pr.status, 200, JSON.stringify(pr.body));
+  assert.equal(pr.body.sales_order_id, so.body.id); assert.equal(pr.body.sales_order_no, so.body.order_no);
+  const detail = (await admin('GET', '/api/sales-orders/' + so.body.id)).body;
+  assert.deepEqual(detail.purchase_requests.map(p => [p.doc_no, p.status, p.items]), [[pr.body.doc_no, 'pending', 1]]);
+  const found = (await admin('GET', '/api/purchase-requests?q=' + encodeURIComponent(so.body.order_no))).body;
+  assert.ok(found.some(p => p.id === pr.body.id), 'search by order number');
+  const plain = await admin('POST', '/api/purchase-requests', { ...base, request_id: rid() });
+  assert.equal(plain.body.sales_order_id, null); assert.equal(plain.body.sales_order_no, '');
+});

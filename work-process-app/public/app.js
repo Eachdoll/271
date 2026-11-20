@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.283';
+const APP_VERSION = '15.284';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -2307,7 +2307,7 @@ function requestDetail(type, r, reload) {
       ${r.result_note ? `<div class="rq-kv full"><span>결과/메모</span><b>${esc(r.result_note)}</b></div>` : ''}
       ${type === 'voc' && r.data?.lot ? `<div class="rq-kv full"><span>LOT 연결</span><b><button type="button" class="link-btn" data-lt-open="${esc(r.data.lot)}">${esc(r.data.lot)} · LOT 연결 조회 →</button></b></div>` : ''}
     </div>
-    <details class="rq-more"><summary>더보기 · 상세 내용 <span class="small muted">(${filled}개 항목${r.source_type ? ' · 입고 출처' : ''}${r.approver_name ? ' · 접수 기록' : ''})</span></summary>
+    <details class="rq-more"><summary>더보기 · 상세 내용 <span class="small muted">(${filled}개 항목${r.source_type ? ' · 입고 출처' : ''}${['development','sample','sample_goods'].includes(type) ? ' · 사진' : ''}${r.approver_name ? ' · 접수 기록' : ''})</span></summary>
     <table class="kv">
       ${r.source_type ? `<tr><th>입고 출처</th><td><a href="${r.source_type === 'purchase_order' ? '#/logistics/receive' : '#/logistics/other'}">${r.source_type === 'purchase_order' ? '발주입고' : '기타입고'} #${esc(r.source_id)}</a>${r.data.purchase_req_no ? ' · 구매의뢰번호 ' + esc(r.data.purchase_req_no) : ''}</td></tr>
       <tr><th>입고일 / 분류</th><td>${esc(r.data.received_date || '')} / ${esc(r.data.item_category || '미분류')}</td></tr>
@@ -2316,9 +2316,9 @@ function requestDetail(type, r, reload) {
       ${r.approver_name ? `<tr><th>${r.status === 'rejected' ? '반려자' : '접수자'}</th><td>${esc(r.approver_name)}${r.approved_at ? ' · ' + esc(r.approved_at.slice(0, 16)) : ''}</td></tr>` : ''}
       ${rows}
     </table>
-    ${r.source_type && !['development','sample','sample_goods','voc'].includes(type) ? '<h4>첨부 사진 · 기록</h4><div data-request-photos></div>' : ''}
+    ${type !== 'voc' && (r.source_type || ['development','sample','sample_goods'].includes(type)) ? '<h4>첨부 사진 · 기록</h4><div data-request-photos></div>' : ''}
     </details>
-    ${['development','sample','sample_goods','voc'].includes(type) ? '<h4>첨부 사진 · 기록</h4><div data-request-photos></div>' : ''}
+    ${type === 'voc' ? '<h4>첨부 사진 · 기록</h4><div data-request-photos></div>' : ''}
     </div>
     <div class="actions wrap">
       <button class="btn" data-a="print">인쇄</button>${commentButton("request", r.id, r.title)}
