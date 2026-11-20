@@ -3546,3 +3546,8 @@ tr.lot-tk-sub > td { background: #fffbe6 !important; box-shadow: inset 3px 0 0 #
 .book-add-btn { margin-left: 10px; }
 .book-add-total { display: flex; flex-direction: column; justify-content: flex-end; } .book-add-total span { font-size: 13px; color: var(--muted); } .book-add-total b { font-size: 20px; }
 tr.book-memo > td { background: var(--bg); font-style: italic; }
+
+/* 15.274 거래처 팝업·담당자 목록 */
+.modal.vendor-modal { width: min(1100px, 96vw); }
+.vendor-contacts input { width: 100%; min-width: 80px; }
+.vendor-bar { justify-content: flex-start; margin: 4px 0 10px; }

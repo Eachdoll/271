@@ -526,6 +526,13 @@
       "when": 1798368813000,
       "tag": "0074_book_memos",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "6",
+      "when": 1798455213000,
+      "tag": "0075_vendor_contacts",
+      "breakpoints": true
     }
   ]
 }

@@ -549,14 +549,27 @@ async function catalogItem(user, { bom_id, item, unit, item_category }) {
 }
 route('GET', '/api/vendors', async ({ query }) => {
   const where = [], args = [];
-  applyListKeyword(where, args, query.q, ['name', 'code', 'contact_name', 'phone']);
+  applyListKeyword(where, args, query.q, ['name', 'code', 'contact_name', 'phone', 'biz_name', "(SELECT group_concat(c.name || ' ' || c.site || ' ' || c.phone || ' ' || c.mobile || ' ' || c.email, ' ') FROM vendor_contacts c WHERE c.vendor_id=vendors.id)"]); // 15.274 담당자 목록도 검색
   if (query.type) {
     if (query.type === 'none') where.push('is_purchase=0 AND is_sales=0');
     else if (VENDOR_TYPES[query.type]) where.push(query.only === '1' ? `${VENDOR_TYPES[query.type]}=1` : `(${VENDOR_TYPES[query.type]}=1 OR (is_purchase=0 AND is_sales=0))`);
     else throw bad('거래처 구분을 확인하세요.');
   }
-  return (await db.prepare(`SELECT * FROM vendors ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY name LIMIT 1000`).all(...args)).map(decodeVendor);
+  const rows = (await db.prepare(`SELECT * FROM vendors ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY name LIMIT 1000`).all(...args)).map(decodeVendor);
+  const contacts = new Map(); for (const c of await db.prepare('SELECT * FROM vendor_contacts ORDER BY vendor_id, sort, id').all()) { if (!contacts.has(c.vendor_id)) contacts.set(c.vendor_id, []); contacts.get(c.vendor_id).push(c); } // 15.274
+  return rows.map(v => ({ ...v, contacts: contacts.get(v.id) || [] }));
 });
+// 15.274 담당자 목록(최대 30명): 이름 필수, 사업장·부서/직위/전화/휴대폰/이메일/용도/메모. 보내면 통째로 바꿈.
+function vendorContacts(list) {
+  if (list === undefined) return undefined;
+  if (!Array.isArray(list) || list.length > 30) throw bad('담당자는 30명까지 넣을 수 있습니다.');
+  return list.map((c, i) => { const x = c && typeof c === 'object' ? c : {}, name = str(x.name, 50); if (!name) return null;
+    const email = str(x.email, 100); if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw bad(`담당자 ${i + 1}번(${name}) 이메일 형식을 확인하세요.`);
+    return { name, site: str(x.site, 50), title: str(x.title, 50), phone: str(x.phone, 30), mobile: str(x.mobile, 30), email, role: str(x.role, 50), note: str(x.note, 200), sort: i };
+  }).filter(Boolean);
+}
+const contactCmds = (vendorRef, list) => [{ sql: `DELETE FROM vendor_contacts WHERE vendor_id=${vendorRef.sql}`, args: vendorRef.args },
+  ...list.map(c => ({ sql: `INSERT INTO vendor_contacts(vendor_id,name,site,title,phone,mobile,email,role,note,sort) VALUES(${vendorRef.sql},?,?,?,?,?,?,?,?,?)`, args: [...vendorRef.args, c.name, c.site, c.title, c.phone, c.mobile, c.email, c.role, c.note, c.sort] }))];
 // 매입처 기본 운송비 조건(15.69): 최대 10줄. when: always(항상)·gte(발주 금액이 amount 이상)·lt(미만), fee: 운송비, per: order(1건당)·line(품목당), note: 착불 등.
 function freightTerms(list) {
   if (list === undefined) return undefined;
@@ -602,7 +615,7 @@ function vendorFlag(value) {
 }
 route('POST', '/api/vendors', async ({ user, body }) => {
   const [name, contact, phone] = vendorFields(body);
-  const extra = vendorExtra(body); // 15.267 저장 전에 형식 확인
+  const extra = vendorExtra(body), contacts = vendorContacts(body.contacts); // 15.267 저장 전에 형식 확인 · 15.274 담당자 목록
   const tax = vendorTaxValues(body); if (tax && TAX_VENDOR_FIELDS.some(k => k !== 'tax_reverse' && tax[k]) && !hasRole(user, 'sales') && !hasRole(user, 'purchase')) throw new HttpError(403, '사업자 정보는 영업·구매 담당자나 관리자가 넣습니다. 사업자 칸을 비우고 등록하세요.'); // 15.266
   if (await db.prepare('SELECT 1 FROM vendors WHERE name_key=?').get(nameKey(name))) throw new HttpError(409, '이미 등록된 거래처입니다. 목록에서 수정하세요.');
   const code = vendorCode(body.code);
@@ -611,6 +624,7 @@ route('POST', '/api/vendors', async ({ user, body }) => {
   try { r = await db.prepare(`INSERT INTO vendors(name,name_key,contact_name,phone,created_by,is_purchase,is_sales,freight_terms,sales_rep,code) VALUES(?,?,?,?,?,?,?,?,?,${code ? '?' : VENDOR_AUTO_CODE})`).run(name, nameKey(name), contact, phone, user.name, vendorFlag(body.is_purchase) || 0, vendorFlag(body.is_sales) || 0, JSON.stringify(freightTerms(body.freight_terms) || []), repName(body.sales_rep), ...(code ? [code] : [])); }
   catch (error) { if (/UNIQUE/i.test(String(error && error.message))) throw new HttpError(409, '그 사이 같은 이름이나 코드의 거래처가 등록되었습니다. 새로 불러오세요.'); throw error; }
   if (tax) await db.prepare(`UPDATE vendors SET ${TAX_VENDOR_FIELDS.map(k => `${k}=?`).join(',')} WHERE id=?`).run(...TAX_VENDOR_FIELDS.map(k => tax[k]), r.lastInsertRowid); // 15.266
+  if (contacts?.length) await db.batch(contactCmds({ sql: '?', args: [r.lastInsertRowid] }, contacts)); // 15.274
   { const x = extra, keys = Object.keys(x).filter(k => x[k]); if (keys.length) await db.prepare(`UPDATE vendors SET ${keys.map(k => `${k}=?`).join(',')} WHERE id=?`).run(...keys.map(k => x[k]), r.lastInsertRowid); } // 15.267
   return decodeVendor(await mustGet('vendors', r.lastInsertRowid));
 });
@@ -628,6 +642,7 @@ route('PUT', '/api/vendors/:id', async ({ user, params, body }) => {
   const rep = body.sales_rep === undefined ? row.sales_rep || '' : repName(body.sales_rep); // 15.224
   const tax = vendorTaxValues(body, row); if (vendorTaxChanged(tax, row) && !hasRole(user, 'sales') && !hasRole(user, 'purchase')) throw new HttpError(403, '사업자 정보는 영업·구매 담당자나 관리자가 고칩니다.'); // 15.266
   const cmds = [{ sql: 'UPDATE vendors SET name=?,name_key=?,contact_name=?,phone=?,is_purchase=?,is_sales=?,freight_terms=?,code=?,sales_rep=?,updated_by=?,updated_at=? WHERE id=?', args: [name, nameKey(name), contact, phone, purchase, sales, terms === undefined ? row.freight_terms : JSON.stringify(terms), code || '', rep, user.name, now(), row.id] }];
+  { const list = vendorContacts(body.contacts); if (list) cmds.push(...contactCmds({ sql: '?', args: [row.id] }, list)); } // 15.274 담당자 목록 통째로
   { const x = vendorExtra(body, row), keys = Object.keys(x).filter(k => x[k] !== (row[k] ?? '')); if (keys.length) cmds.push({ sql: `UPDATE vendors SET ${keys.map(k => `${k}=?`).join(',')} WHERE id=?`, args: [...keys.map(k => x[k]), row.id] }); } // 15.267
   if (vendorTaxChanged(tax, row)) cmds.push({ sql: `UPDATE vendors SET ${TAX_VENDOR_FIELDS.map(k => `${k}=?`).join(',')} WHERE id=?`, args: [...TAX_VENDOR_FIELDS.map(k => tax[k]), row.id] }); // 15.266 사업자 정보도 같은 저장에서
   if ((code || '') !== (row.code || '')) cmds.push({ sql: "UPDATE sales_orders SET customer_code=? WHERE status='open' AND REPLACE(LOWER(customer),' ','')=?", args: [code || '', row.name_key] }); // 15.104 열린 수주만 새 코드로(끝난 수주는 당시 코드)
@@ -653,7 +668,7 @@ route('DELETE', '/api/vendors/:id', async ({ user, params }) => {
     const n = (await db.prepare(`SELECT COUNT(*) c FROM ${table} WHERE ${customerKey(col)}=?`).get(key)).c; if (n) uses.push(`${label} ${n}건`);
   }
   if (uses.length) throw new HttpError(409, `${row.name}은(는) ${uses.join(', ')}에 쓰인 거래처라 삭제할 수 없습니다. 이름·연락처를 고쳐 쓰세요.`);
-  await db.prepare('DELETE FROM vendors WHERE id=?').run(row.id); return { ok: true }; // past orders keep the vendor name they were saved with
+  await db.batch([{ sql: 'DELETE FROM vendor_contacts WHERE vendor_id=?', args: [row.id] }, { sql: 'DELETE FROM vendors WHERE id=?', args: [row.id] }]); return { ok: true }; // 15.274 그 거래처의 담당자 목록도 // past orders keep the vendor name they were saved with
 });
 // What we most recently bought from this vendor, newest first, one line per item/size/unit.
 route('GET', '/api/vendors/recent-items', async ({ query }) => {

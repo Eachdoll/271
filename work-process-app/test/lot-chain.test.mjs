@@ -458,3 +458,18 @@ test('15.271 partner book add: 1-won sales/purchase adjustment bills (negative a
   assert.equal((await admin('GET', '/api/partner-book?' + new URLSearchParams({ side: 'sales', party: '조정거래처', from: today, to: today }))).body.rows.filter(r => r.kind === 'memo').length, 0);
   assert.equal((await prod('POST', '/api/book-entries', { side: 'sales', kind: 'memo', party: '조정거래처', date: today, text: 'x', request_id: rid() })).status, 403);
 });
+
+test('15.274 vendor contacts list: several contacts per site/role, replaced on edit, searchable', async () => {
+  const v = await admin('POST', '/api/vendors', { name: '한솔아이원스', is_sales: true, contacts: [{ name: '백소민 선임', site: '본사', phone: '010-3767-5512', role: '발주' }, { name: '김윤수', site: '안성', email: 'yskim@hansol.com', role: '납품' }, { name: '', site: '빈줄' }] });
+  assert.equal(v.status, 200, JSON.stringify(v.body));
+  let row = (await admin('GET', '/api/vendors?q=' + encodeURIComponent('한솔'))).body[0];
+  assert.deepEqual(row.contacts.map(c => [c.name, c.site, c.role]), [['백소민 선임', '본사', '발주'], ['김윤수', '안성', '납품']]);
+  assert.equal((await admin('GET', '/api/vendors?q=yskim')).body[0]?.name, '한솔아이원스', 'contact email is searchable');
+  const e = await prod('PUT', `/api/vendors/${v.body.id}`, { name: '한솔아이원스', contacts: [{ name: '성하경', site: '본사', role: '세금계산서', email: 'hagyeong@hansol.com' }] });
+  assert.equal(e.status, 200);
+  row = (await admin('GET', '/api/vendors?q=' + encodeURIComponent('한솔'))).body[0];
+  assert.deepEqual(row.contacts.map(c => c.name), ['성하경']);
+  assert.equal((await admin('PUT', `/api/vendors/${v.body.id}`, { name: '한솔아이원스' })).status, 200);
+  assert.equal((await admin('GET', '/api/vendors?q=' + encodeURIComponent('한솔'))).body[0].contacts.length, 1, 'edit without contacts keeps them');
+  assert.equal((await admin('PUT', `/api/vendors/${v.body.id}`, { name: '한솔아이원스', contacts: [{ name: 'x', email: 'bad' }] })).status, 400);
+});
