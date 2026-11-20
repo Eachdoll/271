@@ -212,7 +212,7 @@ function enhanceMultiForms() {
   for (const [selector,entity] of configs) { const form = $(selector); if (form && !form.dataset.multiInstalled) (LT_ENTITIES.includes(entity) ? installLineTable(form,entity) : installMultiItems(form,entity)).catch(fail); }
   const form = $('#reqNewBox .req-form');
   if (form && !form.dataset.multiInstalled) {
-    const type = location.hash.includes('/purchase/sample') ? 'sample_goods' : location.hash.includes('/voc/') ? 'voc' : location.hash.includes('/quality/') ? 'analysis' : location.hash.includes('/dev/') ? 'development' : 'sample';
+    const type = location.hash.includes('/purchase/sample') ? 'sample_goods' : location.hash.includes('/voc/') ? 'voc' : location.hash.includes('/quality/') ? 'analysis' : location.hash.includes('/dev/analysis') ? 'rnd_analysis' : location.hash.includes('/dev/') ? 'development' : 'sample';
     installMultiItems(form,'request',type).catch(fail);
   }
 }

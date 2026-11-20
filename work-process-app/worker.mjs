@@ -15,8 +15,10 @@ async function setSetting(k, v) { (await db.prepare('INSERT INTO settings(key,va
 
 // ───────────────────────── 공통 ─────────────────────────
 const ROLES = ['operator', 'purchase', 'quality', 'quality_approver', 'dev', 'dev_approver', 'production', 'production_approver', 'logistics', 'logistics_approver', 'sales'];
-const REQUEST_TYPES = { voc: 'quality', analysis: 'quality', development: 'dev', sample: 'production', sample_goods: 'purchase' };
-const REQUEST_PREFIX = { voc: 'V', analysis: 'Q', development: 'D', sample: 'S', sample_goods: 'G' };
+const REQUEST_TYPES = { voc: 'quality', analysis: 'quality', development: 'dev', sample: 'production', sample_goods: 'purchase', rnd_analysis: 'dev' }; // 15.285 rnd_analysis: 연구팀 분석의뢰
+const REQUEST_PREFIX = { voc: 'V', analysis: 'Q', development: 'D', sample: 'S', sample_goods: 'G', rnd_analysis: 'RA' };
+const RND_CATEGORIES = ['의뢰분석', '시제품분석', '원료분석', '경쟁사분석', '기타']; // 15.285
+const analysisLike = t => t === 'analysis' || t === 'rnd_analysis';
 const ANALYSIS_CATEGORIES = ['수입검사', '의뢰검사', '출하검사', '공정검사'];
 const WORK_STATUSES = ['waiting', 'progress', 'done'];
 // 15.87 임가공: 외주 가공(세탁·커팅 등) 품목. 발주로만 받고(기타입고 불가) 세부 분류는 쓰지 않는다(item_category_nodes CHECK).
@@ -185,10 +187,10 @@ function operatorRequestAllowed(method, path) {
   return (method === 'PUT' && path === '/api/me/password') || (method === 'POST' && (['/api/auth/logout', '/api/auth/login', '/api/semi-batches'].includes(path) || /^\/api\/schedules\/[1-9]\d*\/actuals$/.test(path) || /^\/api\/(?:operator\/semi-records|actuals)\/[1-9]\d*\/complete$/.test(path)));
 }
 function isRequestApprover(user, type) {
-  return hasRole(user, { voc: 'quality_approver', analysis: 'quality_approver', development: 'dev_approver', sample: 'production', sample_goods: 'purchase' }[type]);
+  return hasRole(user, { voc: 'quality_approver', analysis: 'quality_approver', development: 'dev_approver', sample: 'production', sample_goods: 'purchase', rnd_analysis: 'dev_approver' }[type]);
 }
 function requireRequestApprover(user, type) {
-  const label = { voc: '품질팀장(품질책임자)', analysis: '품질책임자', development: '개발책임자', sample: '생산담당자', sample_goods: '구매담당자' }[type];
+  const label = { voc: '품질팀장(품질책임자)', analysis: '품질책임자', development: '개발책임자', sample: '생산담당자', sample_goods: '구매담당자', rnd_analysis: '연구책임자(개발책임자)' }[type];
   if (!isRequestApprover(user, type)) throw new HttpError(403, `${label}(승인권자)만 승인·반려할 수 있습니다. 관리자에게 책임자 지정을 요청하세요.`);
 }
 function requireRole(user, role, label) { if (!hasRole(user, role)) throw new HttpError(403, `${label} 담당자만 할 수 있습니다. (관리자에게 권한 요청)`); }
@@ -426,6 +428,7 @@ route('GET', '/api/approval-managers', async () => {
   return {
     analysis: users.filter(u => (u.roles || '').split(',').includes('quality_approver')).map(u => ({ id: u.id, name: u.name })),
     development: users.filter(u => (u.roles || '').split(',').includes('dev_approver')).map(u => ({ id: u.id, name: u.name })),
+    rnd_analysis: users.filter(u => (u.roles || '').split(',').includes('dev_approver')).map(u => ({ id: u.id, name: u.name })), // 15.285
   };
 });
 route('GET', '/api/admin/users', async ({ user }) => { requireAdmin(user); const departments = await db.prepare('SELECT id,name,parent_id,menus FROM org_departments').all(); const out = []; for (const u of await db.prepare('SELECT * FROM users ORDER BY id').all()) out.push({ ...publicUser(u), menus_base: await baseMenus(u, departments), menus_effective: await effectiveMenus(u, departments) }); return out; }); // 15.175 메뉴 보기 표: 설정값·실제 보임
@@ -3497,11 +3500,12 @@ function requestFields(type, b) {
     f.data = { ...data, qty, lot: str(data.lot, 100), unit: str(data.unit, 20), extra: reqStr(data.extra, 'VOC 내용', 2000) };
   }
   if (type === 'development') f.target_price = reqStr(b.target_price, '타겟단가', 100);
+  if (type === 'rnd_analysis') { f.category = str(b.category, 20); if (!RND_CATEGORIES.includes(f.category)) throw bad('분석 구분을 선택하세요.'); if (data.item_category) f.data.item_category = itemCategory(data.item_category); } // 15.285
   return f;
 }
 function decodeRequest(r) { return { ...r, data: JSON.parse(r.data || '{}') }; }
 async function getRequest(id) { const r = (await db.prepare('SELECT * FROM requests WHERE id=?').get(id)); if (!r) throw new HttpError(404, '의뢰를 찾을 수 없습니다.'); return r; }
-function roleLabel(type) { return { voc: '품질', analysis: '품질', development: '연구소', sample: '생산', sample_goods: '구매' }[type]; }
+function roleLabel(type) { return { voc: '품질', analysis: '품질', development: '연구소', sample: '생산', sample_goods: '구매', rnd_analysis: '연구소' }[type]; }
 
 // 15.276 개발 스케줄 관리(로드맵): 개발 의뢰 + 계획(구분·기간·진행률·현재·다음) + 공정표
 const DEV_TERMS = ['', 'short', 'mid', 'long'], DEV_STEP = ['todo', 'doing', 'done'];
@@ -3509,7 +3513,7 @@ route('GET', '/api/dev-roadmap', async ({ query }) => {
   const where = ["r.type='development'"], args = [];
   // 15.277 id 하나만(개발리스트 더블클릭 팝업): 상태와 상관없이
   if (query.id) { if (!/^[1-9]\d*$/.test(String(query.id))) throw bad('항목 번호가 올바르지 않습니다.'); where.push('r.id=?'); args.push(Number(query.id)); }
-  else { where.push("r.status<>'rejected'"); if (query.done !== '1') where.push("r.status<>'done'"); }
+  else { where.push("r.status NOT IN ('rejected','pending')"); if (query.done !== '1') where.push("r.status<>'done'"); } // 15.285 접수대기는 스케줄에 안 나옴
   const rows = await db.prepare(`SELECT r.id, r.req_no, r.title, r.customer, r.status, r.due_date, r.target_price, r.requester_name, r.created_at, p.term, p.start_date, p.target_date, p.progress, p.current_stage, p.next_step, p.next_date, p.note, p.updated_by, p.updated_at,
       p.dev_owner_id, COALESCE(p.dev_owner_name,'') AS dev_owner_name, p.sales_owner_id, COALESCE(p.sales_owner_name,'') AS sales_owner_name,
       (SELECT COUNT(*) FROM progress_comments c WHERE c.entity_type='request' AND c.entity_id=r.id AND c.content<>'(삭제됨)') AS comment_count,
@@ -3560,7 +3564,7 @@ route('GET', '/api/requests', async ({ query }) => {
   if (query.scope === 'intake') where.push("status IN ('pending','rejected')");
   else if (query.scope === 'list') where.push("status IN ('waiting','progress','done')");
   if (query.status) { if (!['pending','rejected','waiting','progress','done'].includes(query.status)) throw bad('의뢰 상태를 확인하세요.'); where.push('status=?'); args.push(query.status); }
-  if (query.category) { if (type !== 'analysis' || !ANALYSIS_CATEGORIES.includes(query.category)) throw bad('검사 구분을 확인하세요.'); where.push('category=?'); args.push(query.category); }
+  if (query.category) { if (!(type === 'analysis' ? ANALYSIS_CATEGORIES : type === 'rnd_analysis' ? RND_CATEGORIES : []).includes(query.category)) throw bad('검사 구분을 확인하세요.'); where.push('category=?'); args.push(query.category); }
   applyListDates(where, args, query, 'substr(created_at,1,10)');
   applyListKeyword(where, args, query.q, ['req_no','title','spec','lot','customer','requester_name','result_note',"json_extract(data,'$.extra')", "json_extract(data,'$.purpose')", "json_extract(data,'$.lot_etc')", "json_extract(data,'$.lot')"]);
   // 15.78 수입·출하 검사 판정(측정값이 저장된 경우 pass/fail/pending)을 목록에 함께 준다.
@@ -3588,10 +3592,10 @@ route('PUT', '/api/requests/:id', async ({ user, params, body }) => {
   if(r.inspection_snapshot && (f.title!==r.title || f.category!==r.category || (f.data.item_category||'')!==(priorData.item_category||''))) throw bad('검사규격이 적용된 의뢰의 품명·검사 구분·카테고리는 변경할 수 없습니다.');
   const meta = lineMeta({ spec: r.source_type ? r.spec || priorData.spec || '' : body.spec ?? body.data?.spec ?? r.spec,
     unit: r.source_type ? r.unit || priorData.unit || '' : body.unit ?? body.data?.unit ?? (r.unit || priorData.unit || ''),
-    lot: (r.source_type ? undefined : body.lot ?? (r.type === 'analysis' ? body.data?.lot_etc : body.data?.lot)) ?? (r.lot || priorData.lot_etc || (r.type === 'voc' ? priorData.lot : '') || '') }, r);
+    lot: (r.source_type ? undefined : body.lot ?? (analysisLike(r.type) ? body.data?.lot_etc : body.data?.lot)) ?? (r.lot || priorData.lot_etc || (r.type === 'voc' ? priorData.lot : '') || '') }, r);
   let lineQty = r.qty;
   if (!r.source_type && (r.qty !== null || r.type === 'voc')) {
-    const supplied = r.type === 'analysis' ? f.data.sample_qty : ['sample', 'sample_goods'].includes(r.type) ? f.data.req_qty : f.data.qty;
+    const supplied = analysisLike(r.type) ? f.data.sample_qty : ['sample', 'sample_goods'].includes(r.type) ? f.data.req_qty : f.data.qty;
     if (supplied !== undefined && supplied !== '') { lineQty = num(supplied,'품목 수량'); if (lineQty <= 0) throw bad('품목 수량은 0보다 커야 합니다.'); }
     if (lineQty !== null) f.data.qty = lineQty;
   }
@@ -4349,7 +4353,7 @@ route('POST', '/api/batches/:entity', async ({ user, params, body }) => {
         const type = String(b.type || ''); if (!Object.hasOwn(REQUEST_TYPES, type)) throw bad('의뢰 종류를 확인하세요.');
         const qty = num(b.qty, '수량'); if (qty <= 0) throw bad('수량은 0보다 커야 합니다.');
         const data = { ...(b.data || {}), qty, spec: meta.spec, unit: meta.unit };
-        if (type === 'analysis') { data.sample_qty = String(qty); data.lot = meta.lot ? '있음' : '없음'; data.lot_etc = meta.lot; }
+        if (analysisLike(type)) { data.sample_qty = String(qty); data.lot = meta.lot ? '있음' : '없음'; data.lot_etc = meta.lot; }
         else { data.lot = meta.lot; if (['sample', 'sample_goods'].includes(type)) data.req_qty = String(qty); }
         const f = requestFields(type, { ...b, title: b.title || b.item, data });
         record = { type, inspection_snapshot: type==='analysis'?await inspectionSnapshot(f):'', title: f.title, customer: f.customer, due_date: f.due_date, category: f.category, target_price: f.target_price, data: JSON.stringify(f.data), qty, requester_id: user.id, requester_name: user.name };
@@ -4483,7 +4487,7 @@ route('PUT', '/api/items/:entity/:id', async ({ user, params, body }) => {
   if (params.entity === 'laundry') { set.push('item=?'); args.push(reqStr(body.item ?? row.item,'옷 종류',200)); }
   if (params.entity === 'request') {
     const data = JSON.parse(row.data || '{}'); data.spec = meta.spec; data.unit = meta.unit;
-    if (row.type === 'analysis') { data.lot = meta.lot ? '있음' : '없음'; data.lot_etc = meta.lot; } else data.lot = meta.lot;
+    if (analysisLike(row.type)) { data.lot = meta.lot ? '있음' : '없음'; data.lot_etc = meta.lot; } else data.lot = meta.lot;
     set.push('data=?'); args.push(JSON.stringify(data));
   }
   await db.prepare(`UPDATE ${BATCH_TABLES[params.entity]} SET ${set.join(',')} WHERE id=?`).run(...args,row.id);

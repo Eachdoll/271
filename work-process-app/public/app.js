@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.284';
+const APP_VERSION = '15.285';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -118,7 +118,7 @@ window.addEventListener('hashchange', hideToast);
 const fail = (e) => toast(e.message || String(e), 'err');
 const userHasRole = (user, r) => user.roles.includes(r) || (['quality','dev'].includes(r) && user.roles.includes(r + '_approver'));
 const hasRole = (r) => ME && (ME.is_admin || userHasRole(ME, r));
-const canApproveRequest = (type) => hasRole({ voc: 'quality_approver', analysis: 'quality_approver', development: 'dev_approver', sample: 'production', sample_goods: 'purchase' }[type]);
+const canApproveRequest = (type) => hasRole({ voc: 'quality_approver', analysis: 'quality_approver', development: 'dev_approver', sample: 'production', sample_goods: 'purchase', rnd_analysis: 'dev_approver' }[type]);
 function formObj(form) {
   const o = {};
   for (const el of form.elements) {
@@ -384,7 +384,7 @@ const NAV = [
     ['#/quality/list', '분석 관리'],
     ['#/quality/voc/list', 'VOC 관리'],
   ] },
-  { group: '개발', items: [['#/dev/list', '개발 관리'], ['#/dev/schedule', '스케줄 관리']] }, // 15.276
+  { group: '개발', items: [['#/dev/list', '개발 관리'], ['#/dev/schedule', '스케줄 관리'], ['#/dev/analysis', '연구 분석 관리']] }, // 15.276 · 15.285
   { group: '생산', items: [
     { sub: '샘플(제품)', items: [['#/prod/list', '제품 샘플리스트']] },
     ['#/prod/orders', '생산의뢰 접수'],
@@ -575,6 +575,8 @@ const PAGES = {
   '#/quality/voc/list': () => pageWorkList('voc'),
   '#/dev/request': () => pageIntake('development'),
   '#/dev/list': () => pageWorkList('development'),
+  '#/dev/analysis': () => pageWorkList('rnd_analysis'), // 15.285 연구팀 분석 관리
+  '#/dev/analysis/request': () => pageIntake('rnd_analysis'),
   '#/dev/schedule': main => pageDevRoadmap(main), // 15.276 개발 스케줄 관리(로드맵)
   '#/prod/request': () => { location.replace('#/sales/sample/product'); }, // 15.183 영업으로 옮김(예전 즐겨찾기)
   '#/sales/sample/product': () => pageIntake('sample'), // 15.183 제품 샘플의뢰(영업)
@@ -710,8 +712,9 @@ const MANAGE = {
   '#/quality/list': { title: '분석 관리', tabs: [['#/quality/request', '분석의뢰'], ['#/quality/list', '분석리스트']] },
   '#/quality/voc/list': { title: 'VOC 관리', tabs: [['#/quality/voc/request', 'VOC 접수'], ['#/quality/voc/list', 'VOC 처리목록']] },
   '#/dev/list': { title: '개발 관리', tabs: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
+  '#/dev/analysis': { title: '연구 분석 관리', tabs: [['#/dev/analysis/request', '분석의뢰'], ['#/dev/analysis', '분석리스트']] }, // 15.285
 };
-const ROUTE_ALIAS = { '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/calendar': '#/sales/bills', '#/logistics/qr': '#/logistics/lots', '#/logistics/pallets': '#/logistics/lots', '#/logistics/scan': '#/logistics/lots', '#/sales/reps': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users', '#/logistics/receipt/new': '#/logistics/receive', '#/logistics/receipt/other': '#/logistics/receive', '#/logistics/receipts': '#/logistics/receive', '#/logistics/ship/new': '#/logistics/ship', '#/purchase/laundry/new': '#/purchase/laundry', '#/prod/semi/new': '#/prod/semi', '#/prod/semi/cut/new': '#/prod/semi/cut', '#/prod/semi/wash/new': '#/prod/semi/wash', '#/quality/request': '#/quality/list', '#/quality/voc/request': '#/quality/voc/list', '#/dev/request': '#/dev/list' };
+const ROUTE_ALIAS = { '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/calendar': '#/sales/bills', '#/logistics/qr': '#/logistics/lots', '#/logistics/pallets': '#/logistics/lots', '#/logistics/scan': '#/logistics/lots', '#/sales/reps': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users', '#/logistics/receipt/new': '#/logistics/receive', '#/logistics/receipt/other': '#/logistics/receive', '#/logistics/receipts': '#/logistics/receive', '#/logistics/ship/new': '#/logistics/ship', '#/purchase/laundry/new': '#/purchase/laundry', '#/prod/semi/new': '#/prod/semi', '#/prod/semi/cut/new': '#/prod/semi/cut', '#/prod/semi/wash/new': '#/prod/semi/wash', '#/quality/request': '#/quality/list', '#/quality/voc/request': '#/quality/voc/list', '#/dev/request': '#/dev/list', '#/dev/analysis/request': '#/dev/analysis' };
 const navRoute = r => ROUTE_ALIAS[String(r || '#/').split('?')[0]] || String(r || '#/').split('?')[0];
 const TAB_ON = { '#/logistics/receipt/other': '#/logistics/receipt/new' }; // 15.234 기타입고도 「입고 입력」 탭에 불
 function managedTabs(main, route) {
@@ -1749,7 +1752,7 @@ async function pageHome(main) {
   <div class="table-wrap"><table class="grid keep-table progress-table">
     <caption class="sr-only">의뢰 종류별 진행 현황 (건수)</caption>
     <thead><tr><th scope="col">구분</th><th scope="col">접수대기</th><th scope="col">대기</th><th scope="col">진행</th><th scope="col">완료</th></tr></thead>
-    <tbody>${['analysis', 'development', 'sample', 'sample_goods', 'voc'].map((t) => `<tr><th scope="row"><a href="${REQ[t].list}">${REQ[t].label}의뢰</a></th><td>${num(r[t].pending)}</td><td>${num(r[t].waiting)}</td><td>${num(r[t].progress)}</td><td>${num(r[t].done)}</td></tr>`).join('')}</tbody>
+    <tbody>${['analysis', 'rnd_analysis', 'development', 'sample', 'sample_goods', 'voc'].filter(t => r[t]).map((t) => `<tr><th scope="row"><a href="${REQ[t].list}">${REQ[t].label}의뢰</a></th><td>${num(r[t].pending)}</td><td>${num(r[t].waiting)}</td><td>${num(r[t].progress)}</td><td>${num(r[t].done)}</td></tr>`).join('')}</tbody>
   </table></div></section>
   <section class="dash-section" aria-labelledby="dashFlows">
   <details class="dash-flows" data-flows><summary><h2 id="dashFlows">업무 흐름</h2><span class="small muted">부서별 처리 순서 안내</span></summary>
@@ -2291,7 +2294,7 @@ function requestDetail(type, r, reload) {
   const cfg = REQ[type]; const mgr = hasRole(cfg.role); const approver = canApproveRequest(type);
   const mine = r.requester_id === ME.id;
   // 15.282 의뢰서 창: 요점(핵심 칸·의뢰 항목·의뢰자·결과)만 먼저, 나머지는 「더보기」
-  const KEY_EXTRA = { analysis: ['items'], voc: ['qty', 'lot'] }, isKey = f => f.core || (KEY_EXTRA[type] || []).includes(f.k);
+  const KEY_EXTRA = { analysis: ['items'], rnd_analysis: ['items'], voc: ['qty', 'lot'] }, isKey = f => f.core || (KEY_EXTRA[type] || []).includes(f.k);
   const kv = (label, html) => `<div class="rq-kv"><span>${esc(label)}</span><b>${html}</b></div>`;
   const keyRows = cfg.fields.filter(isKey).map(f => [f, esc(fieldValue(f, r))]).filter(([, v]) => v).map(([f, v]) => kv(f.label, v)).join('');
   const moreFields = cfg.fields.filter(f => !isKey(f));
@@ -2383,7 +2386,7 @@ function bindSpecHint(form) {
 }
 async function pageIntake(type) {
   const cfg = REQ[type]; const main = $('#main'); const mgr = canApproveRequest(type);
-  const managers = ['analysis','development','voc'].includes(type) ? (await api('GET', '/api/approval-managers'))[type === 'voc' ? 'analysis' : type] : null;
+  const managers = ['analysis','development','voc','rnd_analysis'].includes(type) ? (await api('GET', '/api/approval-managers'))[type === 'voc' ? 'analysis' : type] : null;
   main.innerHTML = `
   <h1>${cfg.intakeTitle || cfg.label + '의뢰'} <span class="dept">${cfg.approve ? '영업' : cfg.dept}</span></h1>
   <p class="muted">누구나 의뢰할 수 있습니다. 접수대기 목록에 올라가고, <b>${cfg.mgr}</b>가 승인하면 <a href="${cfg.list}">${cfg.listTitle || cfg.label + '리스트'}</a>에 올라갑니다.
@@ -2403,9 +2406,9 @@ async function pageIntake(type) {
     if (version !== queryVersion || !main.isConnected) return;
     listCount(filterForm, rows.length);
     $('#intakeList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid click">
-      <thead><tr><th>상태</th><th>${cfg.titleLabel}</th>${type === 'analysis' ? '<th>검사구분</th>' : ''}${type === 'development' ? '<th>타겟단가</th>' : ''}<th>고객사</th>${type === 'voc' ? '<th>수량</th><th>LOT</th>' : ''}<th>완료희망일</th><th>입력자(의뢰자)</th><th>의뢰일</th>${mgr ? '<th></th>' : ''}</tr></thead>
+      <thead><tr><th>상태</th><th>${cfg.titleLabel}</th>${type === 'analysis' ? '<th>검사구분</th>' : type === 'rnd_analysis' ? '<th>분석구분</th>' : ''}${type === 'development' ? '<th>타겟단가</th>' : ''}<th>고객사</th>${type === 'voc' ? '<th>수량</th><th>LOT</th>' : ''}<th>완료희망일</th><th>입력자(의뢰자)</th><th>의뢰일</th>${mgr ? '<th></th>' : ''}</tr></thead>
       <tbody>${rows.map((r) => `<tr data-id="${r.id}">
-        <td>${statusChip(r.status)} ${commentButton("request", r.id, r.title)}</td><td><b>${esc(r.title)}</b>${lineInfo(r)}</td>${type === 'analysis' ? `<td>${esc(r.category)}</td>` : ''}${type === 'development' ? `<td>${esc(r.target_price)}</td>` : ''}
+        <td>${statusChip(r.status)} ${commentButton("request", r.id, r.title)}</td><td><b>${esc(r.title)}</b>${lineInfo(r)}</td>${type === 'analysis' || type === 'rnd_analysis' ? `<td>${esc(r.category)}</td>` : ''}${type === 'development' ? `<td>${esc(r.target_price)}</td>` : ''}
         <td>${esc(r.customer)}</td>${type === 'voc' ? `<td>${fmtNum(r.data.qty)} ${esc(r.data.unit)}</td><td>${esc(r.data.lot || '미확인')}</td>` : ''}<td>${esc(r.due_date || '')}</td><td>${esc(r.requester_name)}</td><td class="small muted">${esc(r.created_at.slice(0, 10))}</td>
         ${mgr ? `<td class="nowrap">${r.status === 'pending' ? `<button class="btn small primary" data-ok="${r.id}">승인</button>` : ''}</td>` : ''}</tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">접수대기 중인 의뢰가 없습니다.</div>';
@@ -2447,9 +2450,10 @@ async function pageWorkList(type) {
   let status = ''; let category = ''; let qc = ''; // qc: 15.78 판정 칩
   main.innerHTML = `
   <h1>${cfg.listTitle || cfg.label + '리스트'} <span class="dept">${cfg.dept}</span></h1>
-  <p class="muted">${type === 'analysis' ? '승인된 분석의뢰와 입고에서 자동 등록된 수입검사 목록입니다.' : `승인된 ${cfg.label}의뢰 목록입니다.`} ${mgr ? '상태 칸에서 바로 대기/진행/완료를 바꿀 수 있습니다.' : `상태 변경은 ${cfg.mgr}가 합니다.`} 행을 누르면 의뢰서를 봅니다. 표 제목을 끌어 다른 제목 위에 놓으면 열 순서가 바뀌고 내 계정에 저장됩니다(다른 기기에서도 같음, ⚙에서 숨김·초기화).</p>
+  <p class="muted">${type === 'analysis' ? '승인된 분석의뢰와 입고에서 자동 등록된 수입검사 목록입니다.' : type === 'rnd_analysis' ? '연구팀에 들어온 분석의뢰(연구책임자가 승인한 것) 목록입니다.' : `승인된 ${cfg.label}의뢰 목록입니다.`} ${mgr ? '상태 칸에서 바로 대기/진행/완료를 바꿀 수 있습니다.' : `상태 변경은 ${cfg.mgr}가 합니다.`} 행을 누르면 의뢰서를 봅니다. 표 제목을 끌어 다른 제목 위에 놓으면 열 순서가 바뀌고 내 계정에 저장됩니다(다른 기기에서도 같음, ⚙에서 숨김·초기화).</p>
   <div class="toolbar seg-groups">
     <div class="seg-box"><span class="seg-label">상태</span><div class="seg" id="stSeg" role="group" aria-label="상태">${['', 'waiting', 'progress', 'done'].map((s) => `<button data-s="${s}" class="${s === status ? 'on' : ''}">${s ? STATUS[s] : '전체'}</button>`).join('')}</div></div>
+    ${type === 'rnd_analysis' ? `<div class="seg-box"><span class="seg-label">분석구분</span><div class="seg" id="catSeg" role="group" aria-label="분석구분">${['', ...cfg.fields.find(f => f.k === 'category').opts].map((c) => `<button data-c="${c}" class="${c === category ? 'on' : ''}">${c || '전체'}</button>`).join('')}</div></div>` : ''}
     ${type === 'analysis' ? `<div class="seg-box"><span class="seg-label">검사구분</span><div class="seg" id="catSeg" role="group" aria-label="검사구분">${['', '수입검사', '의뢰검사', '출하검사', '공정검사'].map((c) => `<button data-c="${c}" class="${c === category ? 'on' : ''}">${c || '전체 검사'}</button>`).join('')}</div></div>
     <div class="seg-box"><span class="seg-label">판정</span><div class="seg" id="qcSeg" role="group" aria-label="판정">${[['', '전체 판정'], ['pass', '합격'], ['fail', '불합격'], ['pending', '검사 대기']].map(([v, l]) => `<button type="button" data-qc="${v}" class="${v === '' ? 'on' : ''}" aria-pressed="${v === ''}">${l}</button>`).join('')}</div></div>` : ''}
   </div>
@@ -2470,9 +2474,9 @@ async function pageWorkList(type) {
     $('#workCounts').innerHTML = ['waiting', 'progress', 'done'].map((s) => `${statusChip(s)} ${all.filter((r) => r.status === s).length}`).join(' &nbsp; ');
     const t = todayStr();
     $('#workList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid click wl-oneline" data-allow-reorder>
-      <thead><tr><th>접수번호</th>${type === 'analysis' ? '<th>검사구분</th>' : ''}<th>${cfg.titleLabel}</th>${type === 'development' ? '<th>타겟단가</th>' : ''}<th>고객사</th>${type === 'voc' ? '<th>수량</th><th>LOT</th>' : ''}<th>입력자(의뢰자)</th>${type === 'development' ? '<th>개발 담당</th><th>영업 담당</th>' : ''}<th>완료희망일</th>${type === 'analysis' ? '<th>판정</th>' : ''}<th>상태</th></tr></thead>
+      <thead><tr><th>접수번호</th>${type === 'analysis' ? '<th>검사구분</th>' : type === 'rnd_analysis' ? '<th>분석구분</th>' : ''}<th>${cfg.titleLabel}</th>${type === 'development' ? '<th>타겟단가</th>' : ''}<th>고객사</th>${type === 'voc' ? '<th>수량</th><th>LOT</th>' : ''}<th>입력자(의뢰자)</th>${type === 'development' ? '<th>개발 담당</th><th>영업 담당</th>' : ''}<th>완료희망일</th>${type === 'analysis' ? '<th>판정</th>' : ''}<th>상태</th></tr></thead>
       <tbody>${rows.map((r) => `<tr data-id="${r.id}" class="${type === 'analysis' && qcOf(r) === 'exempt' ? 'row-exempt' : type === 'analysis' && qcOf(r) === 'fail' ? 'row-red' : r.status === 'done' ? 'row-done' : ''}">
-        <td class="nowrap">${esc(r.req_no)}</td>${type === 'analysis' ? `<td><span class="chip">${esc(r.category)}</span></td>` : ''}
+        <td class="nowrap">${esc(r.req_no)}</td>${type === 'analysis' || type === 'rnd_analysis' ? `<td><span class="chip">${esc(r.category)}</span></td>` : ''}
         <td class="wl-title" title="${esc([r.title, r.source_type ? `${r.source_type === 'purchase_order' ? '발주입고' : '기타입고'} · ${r.data.item_category || '미분류'} · 입고 ${r.data.received_qty ?? ''}` : '', r.result_note || ''].filter(Boolean).join('\n'))}"><b>${esc(r.title)}</b>${lineInfo(r)}${r.source_type ? `<div class="small muted">${r.source_type === 'purchase_order' ? '발주입고' : '기타입고'} · ${esc(r.data.item_category || '미분류')} · 입고 ${fmtNum(r.data.received_qty)}${r.data.coa_requested ? ' · COA 요청' : ''}</div>` : ''}${r.result_note ? `<div class="small muted">${esc(r.result_note)}</div>` : ''}</td>${type === 'development' ? `<td>${esc(r.target_price)}</td>` : ''}
         <td>${esc(r.customer)}</td>${type === 'voc' ? `<td>${fmtNum(r.data.qty)} ${esc(r.data.unit)}</td><td>${esc(r.data.lot || '미확인')}</td>` : ''}<td>${esc(r.requester_name)}</td>${type === 'development' ? `<td>${esc(r.dev_owner_name || '')}</td><td>${esc(r.sales_owner_name || '')}</td>` : ''}
         <td class="${r.status !== 'done' && r.due_date && r.due_date < t ? 'overdue' : ''}">${esc(r.due_date || '')}</td>

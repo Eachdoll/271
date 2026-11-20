@@ -477,7 +477,7 @@ test('15.274 vendor contacts list: several contacts per site/role, replaced on e
 test('15.276 development roadmap: term, dates, progress, current/next and process steps per development request', async () => {
   const dev = await admin('POST', '/api/requests', { type: 'development', title: '저분진 와이퍼 9인치', customer: '삼성SDI', due_date: '2027-03-31', target_price: '100', data: { extra: 'x' } });
   assert.equal(dev.status, 200, JSON.stringify(dev.body));
-  const id = dev.body.id;
+  const id = dev.body.id; await admin('POST', `/api/requests/${id}/approve`); // 15.285 접수대기는 스케줄에 안 나옴
   let row = (await admin('GET', '/api/dev-roadmap')).body.rows.find(r => r.id === id); assert.ok(row); assert.equal(row.term, '');
   assert.equal((await admin('PUT', `/api/dev-roadmap/${id}`, { term: 'x' })).status, 400);
   assert.equal((await admin('PUT', `/api/dev-roadmap/${id}`, { term: 'mid', start_date: '2026-12-01', target_date: '2026-11-01' })).status, 400, 'target before start');
@@ -566,4 +566,22 @@ test('15.284 purchase request made from a sales order keeps the order link; the 
   assert.ok(found.some(p => p.id === pr.body.id), 'search by order number');
   const plain = await admin('POST', '/api/purchase-requests', { ...base, request_id: rid() });
   assert.equal(plain.body.sales_order_id, null); assert.equal(plain.body.sales_order_no, '');
+});
+
+test('15.285 research-team analysis requests (rnd_analysis) and pending development requests stay off the schedule', async () => {
+  assert.equal((await admin('POST', '/api/requests', { type: 'rnd_analysis', title: '경쟁사 와이퍼', customer: '자체', category: '수입검사', data: {} })).status, 400, 'quality categories are not research categories');
+  const r = await admin('POST', '/api/requests', { type: 'rnd_analysis', title: '경쟁사 와이퍼', customer: '자체', category: '경쟁사분석', data: { items: ['파티클'], sample_qty: '2' } });
+  assert.equal(r.status, 200, JSON.stringify(r.body)); assert.equal(r.body.status, 'pending');
+  assert.equal((await prod('POST', `/api/requests/${r.body.id}/approve`)).status, 403, 'only the research approver');
+  const ok = await admin('POST', `/api/requests/${r.body.id}/approve`);
+  assert.equal(ok.status, 200); assert.match(ok.body.req_no, /^RA-\d{6}-01$/);
+  const list = (await admin('GET', '/api/requests?type=rnd_analysis&scope=list&category=' + encodeURIComponent('경쟁사분석'))).body;
+  assert.deepEqual(list.map(x => x.id), [r.body.id]);
+  assert.ok(!(await admin('GET', '/api/requests?type=analysis&scope=list')).body.some(x => x.id === r.body.id), 'separate from quality analysis');
+  const mgr = (await admin('GET', '/api/approval-managers')).body; assert.ok(Array.isArray(mgr.rnd_analysis));
+  // 개발 스케줄: 접수대기(승인 전) 의뢰는 안 나옴
+  const dev = await admin('POST', '/api/requests', { type: 'development', title: '접수대기 과제', customer: 'X', due_date: '2027-01-31', target_price: '1', data: { extra: 'x' } });
+  assert.ok(!(await admin('GET', '/api/dev-roadmap')).body.rows.some(x => x.id === dev.body.id), 'pending not on the roadmap');
+  await admin('POST', `/api/requests/${dev.body.id}/approve`);
+  assert.ok((await admin('GET', '/api/dev-roadmap')).body.rows.some(x => x.id === dev.body.id), 'approved shows');
 });
