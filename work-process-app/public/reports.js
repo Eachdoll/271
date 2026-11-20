@@ -211,7 +211,7 @@ async function devPlanEditor(r, done) {
       <label>구분<select name="term">${DEV_TERM.map(([k, l]) => `<option value="${k}"${(r.term || '') === k ? ' selected' : ''}>${k ? l : '선택'}</option>`).join('')}</select></label>
       <label>시작일<input type="date" name="start_date" value="${esc(r.start_date || '')}"></label>
       <label>완료예정일<input type="date" name="target_date" value="${esc(r.target_date || r.due_date || '')}"></label>
-      <label>진행률 (%)<input type="number" name="progress" min="0" max="100" step="5" value="${r.progress || 0}"></label>
+      <label>진행률 (%)<span class="dev-prog"><input type="range" data-prog-range min="0" max="100" step="5" value="${r.progress || 0}" aria-label="진행률 막대"><input type="number" name="progress" min="0" max="100" step="5" value="${r.progress || 0}"></span></label>
       <label class="span2">현재 진행현황<input name="current_stage" maxlength="300" value="${esc(r.current_stage || '')}" placeholder="예) 1차 샘플 고객 평가 중"></label>
       <label>다음 진행예정<input name="next_step" maxlength="300" value="${esc(r.next_step || '')}" placeholder="예) 2차 샘플 제작"></label>
       <label>다음 예정일<input type="date" name="next_date" value="${esc(r.next_date || '')}"></label>
@@ -219,9 +219,24 @@ async function devPlanEditor(r, done) {
     </div>
     <fieldset class="vendor-sec"><legend>공정표 <span class="hint">(단계별 기간·상태 — 로드맵 막대 안에 표시)</span></legend>
       <div class="table-wrap"><table class="grid keep-table dev-steps" data-no-sort data-no-filter data-keep-cols><thead><tr><th>공정</th><th>시작</th><th>종료</th><th>상태</th><th>메모</th><th></th></tr></thead><tbody data-steps>${(r.steps?.length ? r.steps : [{}]).map(stepRow).join('')}</tbody></table></div>
-      <div class="actions" style="justify-content:flex-start"><button type="button" class="btn small" data-step-add>＋ 공정 추가</button></div></fieldset>`, { wide: true,
+      <div class="actions" style="justify-content:flex-start"><button type="button" class="btn small" data-step-add>＋ 공정 추가</button><button type="button" class="btn small" data-step-tpl title="시작일~완료예정일 사이에 고르게 나눠 넣습니다">기본 공정 넣기</button><span class="grow"></span><button type="button" class="btn small" data-step-prog title="완료 공정 = 100%, 진행 중 = 절반으로 계산">공정으로 진행률 계산</button><button type="button" class="btn small" data-step-now title="진행 중 공정 → 현재, 다음 예정 공정 → 다음·다음 예정일">공정에서 현재·다음 채우기</button></div></fieldset>`, { wide: true,
     onOpen: el => { root = el; el.classList.add('vendor-modal'); if (!canEdit) el.querySelectorAll('input, select').forEach(i => { i.disabled = true; });
-      el.addEventListener('click', e => { if (e.target.closest('[data-step-add]')) { const b = el.querySelector('[data-steps]'); b.insertAdjacentHTML('beforeend', stepRow()); b.lastElementChild.querySelector('input').focus(); }
+      // 15.281 진행률 막대 ↔ 숫자, 기본 공정·진행률 계산·현재/다음 채우기
+      const prog = el.querySelector('[name=progress]'), range = el.querySelector('[data-prog-range]');
+      range.oninput = () => { prog.value = range.value; }; prog.oninput = () => { range.value = prog.value; };
+      const plusDay = (d, n) => { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+      const stepsNow = () => [...el.querySelectorAll('[data-step]')].map(tr => Object.fromEntries([...tr.querySelectorAll('[data-s]')].map(i => [i.dataset.s, i.value.trim()]))).filter(x => x.name);
+      el.addEventListener('click', e => {
+        if (e.target.closest('[data-step-tpl]')) {
+          const f = el.querySelector('[name=start_date]'), t = el.querySelector('[name=target_date]'); if (!f.value) f.value = todayStr(); if (!t.value || t.value <= f.value) t.value = plusDay(f.value, 90);
+          const names = ['자료 조사 · 사양 확정', '1차 샘플 제작', '고객 평가', '2차 샘플 · 보완', '양산 준비 · 이관'], total = devDays(f.value, t.value) + 1, b = el.querySelector('[data-steps]');
+          const fill = () => { b.innerHTML = names.map((name, i) => stepRow({ name, start_date: plusDay(f.value, Math.floor(total * i / names.length)), end_date: plusDay(f.value, Math.floor(total * (i + 1) / names.length) - 1), status: 'todo' })).join(''); };
+          if (stepsNow().length) confirmBox('지금 공정표를 기본 공정 5단계로 바꿀까요?').then(ok => { if (ok) fill(); }); else fill(); return;
+        }
+        if (e.target.closest('[data-step-prog]')) { const st = stepsNow(); if (!st.length) return toast('공정을 먼저 넣으세요.', 'err'); prog.value = range.value = Math.round((st.filter(x => x.status === 'done').length + st.filter(x => x.status === 'doing').length * 0.5) / st.length * 100); return; }
+        if (e.target.closest('[data-step-now]')) { const st = stepsNow(), cur = st.find(x => x.status === 'doing'), nx = st.find(x => x.status === 'todo'); if (!st.length) return toast('공정을 먼저 넣으세요.', 'err');
+          if (cur) el.querySelector('[name=current_stage]').value = cur.name; if (nx) { el.querySelector('[name=next_step]').value = nx.name; if (nx.start_date) el.querySelector('[name=next_date]').value = nx.start_date; } return; }
+        if (e.target.closest('[data-step-add]')) { const b = el.querySelector('[data-steps]'), last = b.lastElementChild, le = last?.querySelector('[data-s=end_date]')?.value; b.insertAdjacentHTML('beforeend', stepRow(le ? { start_date: plusDay(le, 1) } : {})); b.lastElementChild.querySelector('input').focus(); }
         const del = e.target.closest('[data-step-del]'); if (del) { const tr = del.closest('tr'); if (tr.parentElement.children.length > 1) tr.remove(); else tr.querySelectorAll('input').forEach(i => { i.value = ''; }); } }); },
     submit: async v => { if (!canEdit) throw new Error('개발 담당자만 고칠 수 있습니다.'); const steps = [...root.querySelectorAll('[data-step]')].map(tr => Object.fromEntries([...tr.querySelectorAll('[data-s]')].map(i => [i.dataset.s, i.value.trim()]))).filter(x => x.name); return api('PUT', `/api/dev-roadmap/${r.id}`, { ...v, steps }); } });
   if (saved) { toast('개발 스케줄을 저장했습니다.'); await done?.(); }
@@ -286,54 +301,95 @@ async function devCaseWindow(id, done) {
   await loadTalk();
   return m;
 }
+// 15.281 스케줄 관리(로드맵) 다시 그림: 요약 카드(눌러서 거르기) · 보기 범위(3개월/6개월/1년/전체, 가로 스크롤 · 왼쪽 제품 칸 고정 · 오늘로)
+// · 공정 이름이 보이는 큰 막대 · 현재/다음 설명 줄 · D-day 칩 · 담당자 · 정렬 · 구분 줄 접기 · ✎ 바로 일정 입력 · 현황표 접기.
+const DR_PREF = 'wpa:dr';
+const drPref = (patch) => { let p = {}; try { p = JSON.parse(localStorage.getItem(DR_PREF) || '{}') || {}; } catch { p = {}; } if (patch) { p = { ...p, ...patch }; try { localStorage.setItem(DR_PREF, JSON.stringify(p)); } catch { /* 편의 */ } } return p; };
 async function pageDevRoadmap(main) {
   let termSel = 'all'; try { termSel = localStorage.getItem('wpa:dev-term') ?? 'all'; } catch { /* 편의 */ }
+  if (!['all', 'short', 'mid', 'long', ''].includes(termSel)) termSel = 'all';
+  const pref = drPref(); let zoom = ['3m', '6m', '1y', 'all'].includes(pref.zoom) ? pref.zoom : '6m', sort = pref.sort || 'end', kpi = '', folded = new Set(pref.folded || []);
+  const canPlan = hasRole('dev') || hasRole('dev_approver');
   main.innerHTML = `<h1>스케줄 관리 <span class="dept">개발</span></h1>
-  <p class="muted">개발리스트의 제품마다 <b>구분(단기·중장기·장기)</b>, 공정표, 현재 진행현황·다음 진행예정·완료예정일을 넣으면 아래 로드맵에 표시됩니다. 줄을 누르면(더블클릭) 진행건 창이 열려 담당자 지정·스케줄 입력·소통(진행내용·영업 코멘트)을 할 수 있습니다.</p>
-  <form class="toolbar list-filters" id="drForm" data-read-only="true"><div class="seg" role="group" aria-label="구분" data-dr-terms>${[['all', '전체'], ...DEV_TERM.map(([k, l]) => [k, l])].map(([k, l]) => `<button type="button" data-dr-term="${k}">${l}</button>`).join('')}</div>
-    <label class="list-search">검색<input type="search" name="q" maxlength="100" placeholder="제품·거래처·의뢰번호"></label><label class="inline"><input type="checkbox" name="mine" value="1"> 내 담당만</label><label class="inline"><input type="checkbox" name="done" value="1"> 완료 포함</label><button type="submit" class="btn primary">조회</button></form>
-  <div class="dr-legend small"><span><i style="background:#2f9e44"></i>단기</span><span><i style="background:#1c7ed6"></i>중장기</span><span><i style="background:#7048e8"></i>장기</span><span class="dr-sep"></span>${Object.values(DEV_STEP_STATE).map(([l, c]) => `<span><i class="dr-step-i" style="background:${c}"></i>공정 ${l}</span>`).join('')}<span><b class="dr-next-i">◆</b> 다음 예정</span><span><i class="dr-today-i"></i> 오늘</span></div>
-  <div id="drMap"><p class="muted">불러오는 중…</p></div><div id="drTable"></div>`;
-  const form = $('#drForm', main); let rows = [];
+  <p class="muted">개발리스트의 제품마다 구분(단기·중장기·장기), 공정표, 현재 진행현황·다음 진행예정·완료예정일을 넣으면 로드맵에 표시됩니다. 줄을 누르면 진행건 창(담당자·소통), ✎는 일정 입력입니다.</p>
+  <div class="dr-kpis" id="drKpis"></div>
+  <form class="toolbar list-filters dr-tools" id="drForm" data-read-only="true">
+    <div class="seg" role="group" aria-label="구분" data-dr-terms>${[['all', '전체'], ...DEV_TERM.map(([k, l]) => [k, l])].map(([k, l]) => `<button type="button" data-dr-term="${k}">${l}</button>`).join('')}</div>
+    <label class="list-search">검색<input type="search" name="q" maxlength="100" placeholder="제품·거래처·의뢰번호·담당자"></label>
+    <label>정렬<select name="sort"><option value="end">완료예정 빠른 순</option><option value="next">다음 일정 빠른 순</option><option value="progress">진행률 낮은 순</option><option value="title">제품명 순</option></select></label>
+    <label class="inline"><input type="checkbox" name="mine" value="1"> 내 담당만</label><label class="inline"><input type="checkbox" name="done" value="1"> 완료 포함</label>
+    <button type="submit" class="btn primary">조회</button></form>
+  <div class="dr-bar-top"><div class="seg dr-zoom" role="group" aria-label="보기 범위">${[['3m', '3개월'], ['6m', '6개월'], ['1y', '1년'], ['all', '전체']].map(([k, l]) => `<button type="button" data-dr-zoom="${k}">${l}</button>`).join('')}</div><button type="button" class="btn small" data-dr-today>오늘로</button>
+    <div class="dr-legend small"><span><i style="background:#2f9e44"></i>단기</span><span><i style="background:#1c7ed6"></i>중장기</span><span><i style="background:#7048e8"></i>장기</span><span class="dr-sep"></span>${Object.values(DEV_STEP_STATE).map(([l, c]) => `<span><i class="dr-step-i" style="background:${c}"></i>공정 ${l}</span>`).join('')}<span><b class="dr-next-i">◆</b> 다음 예정</span><span><i class="dr-today-i"></i> 오늘</span></div></div>
+  <div id="drMap"><p class="muted">불러오는 중…</p></div>
+  <details class="dr-table-box" id="drTableBox"${pref.table === false ? '' : ' open'}><summary><h3 class="dr-h3">진행 현황표 <span class="small muted" id="drTableN"></span></h3></summary><div id="drTable"></div></details>`;
+  const form = $('#drForm', main); form.elements.sort.value = sort; let rows = [];
   const today = todayStr();
+  const endOf = r => r.target_date || r.due_date || '';
+  const startOf = r => r.start_date || r.steps.map(s => s.start_date).filter(Boolean).sort()[0] || '';
+  const isLate = r => { const e = endOf(r); return !!e && e < today && (r.progress || 0) < 100 && r.status !== 'done'; };
+  const dday = (d) => { if (!d) return ''; const n = devDays(today, d); return n === 0 ? 'D-day' : n > 0 ? `D-${n}` : `D+${-n}`; };
+  const ddClass = (r) => { const e = endOf(r); if (!e || r.status === 'done') return ''; const n = devDays(today, e); return n < 0 ? 'late' : n <= 14 ? 'soon' : ''; };
+  const KPIS = [['all', '진행 중', () => true], ['late', '지연', isLate], ['due30', '30일 내 완료예정', r => { const e = endOf(r); return !!e && r.status !== 'done' && devDays(today, e) >= 0 && devDays(today, e) <= 30; }], ['next7', '7일 내 다음 일정', r => !!r.next_date && devDays(today, r.next_date) >= 0 && devDays(today, r.next_date) <= 7], ['noplan', '일정 미입력', r => !startOf(r) || !endOf(r)]];
+  const base = () => { const q = (form.elements.q.value || '').trim().toLowerCase(), mine = form.elements.mine.checked;
+    return rows.filter(r => (termSel === 'all' || (r.term || '') === termSel) && (!mine || r.dev_owner_id === ME?.id || r.sales_owner_id === ME?.id) && (!q || `${r.title} ${r.customer} ${r.req_no} ${r.dev_owner_name} ${r.sales_owner_name}`.toLowerCase().includes(q))); };
+  const sorter = { end: (a, b) => (endOf(a) || '9999').localeCompare(endOf(b) || '9999'), next: (a, b) => (a.next_date || '9999').localeCompare(b.next_date || '9999'), progress: (a, b) => (a.progress || 0) - (b.progress || 0), title: (a, b) => a.title.localeCompare(b.title, 'ko') };
+  const addM = (d, m) => { const x = new Date(d.slice(0, 7) + '-01T00:00:00Z'); x.setUTCMonth(x.getUTCMonth() + m); return x.toISOString().slice(0, 10); };
   const draw = () => {
-    const q = (form.elements.q.value || '').trim().toLowerCase();
-    const mine = form.elements.mine.checked;
-    const list = rows.filter(r => (termSel === 'all' || (r.term || '') === termSel) && (!mine || r.dev_owner_id === ME?.id || r.sales_owner_id === ME?.id) && (!q || `${r.title} ${r.customer} ${r.req_no} ${r.dev_owner_name} ${r.sales_owner_name}`.toLowerCase().includes(q)));
+    const pool = base(), kf = KPIS.find(k => k[0] === kpi) || KPIS[0];
+    $('#drKpis', main).innerHTML = KPIS.map(([k, l, f]) => { const n = pool.filter(f).length; return `<button type="button" class="dr-kpi${k === kpi || (!kpi && k === 'all') ? ' on' : ''}${k === 'late' && n ? ' warn' : ''}" data-dr-kpi="${k}" aria-pressed="${k === kpi || (!kpi && k === 'all')}"><b>${n}</b><span>${l}</span></button>`; }).join('');
+    const list = pool.filter(kf[2]).sort(sorter[sort] || sorter.end);
     $$('[data-dr-term]', main).forEach(b => b.classList.toggle('on', b.dataset.drTerm === termSel));
-    // 기간: 계획 날짜들 + 오늘(앞 1달 · 뒤 3달), 달 단위로
-    const dates = list.flatMap(r => [r.start_date, r.target_date || r.due_date, r.next_date, ...r.steps.flatMap(s => [s.start_date, s.end_date])]).filter(Boolean);
-    const addM = (d, m) => { const x = new Date(d.slice(0, 7) + '-01T00:00:00Z'); x.setUTCMonth(x.getUTCMonth() + m); return x.toISOString().slice(0, 10); };
-    let from = [addM(today, -1), ...dates].sort()[0].slice(0, 7) + '-01', to = addM([addM(today, 3), ...dates].sort().at(-1), 1);
+    $$('[data-dr-zoom]', main).forEach(b => b.classList.toggle('on', b.dataset.drZoom === zoom));
+    // 기간: 계획 날짜 + 오늘. 보기 범위가 정해지면 한 달 폭을 고정하고 가로로 스크롤.
+    const dates = list.flatMap(r => [startOf(r), endOf(r), r.next_date, ...r.steps.flatMap(s => [s.start_date, s.end_date])]).filter(Boolean);
+    const span = { '3m': 3, '6m': 6, '1y': 12 }[zoom];
+    let from = [addM(today, -1), ...dates].sort()[0].slice(0, 7) + '-01', to = addM([addM(today, span || 3), ...dates].sort().at(-1), 1);
     if (devDays(from, to) > 365 * 4) to = addM(from, 48);
-    const span = devDays(from, to), pct = d => Math.max(0, Math.min(100, devDays(from, d) / span * 100));
     const months = []; for (let m = from; m < to; m = addM(m, 1)) months.push(m);
-    const head = `<div class="dr-months">${months.map(m => `<span style="left:${pct(m)}%;width:${pct(addM(m, 1)) - pct(m)}%"${m.slice(5, 7) === '01' ? ' class="dr-year"' : ''}>${m.slice(5, 7) === '01' || m === months[0] ? m.slice(2, 4) + '.' : ''}${Number(m.slice(5, 7))}월</span>`).join('')}</div>`;
+    const box = $('#drMap', main), avail = Math.max(480, (box.clientWidth || 1000) - (innerWidth <= 700 ? 150 : 320) - 4);
+    const monthPx = span ? Math.max(70, Math.floor(avail / span)) : Math.max(36, Math.floor(avail / months.length)), W = months.length * monthPx;
+    const days = devDays(from, to), px = d => Math.max(0, Math.min(W, devDays(from, d) / days * W)), pct = d => px(d) / W * 100;
+    const head = `<div class="dr-months">${months.map(m => `<span style="left:${pct(m)}%;width:${pct(addM(m, 1)) - pct(m)}%"${m.slice(5, 7) === '01' ? ' class="dr-year"' : ''}>${m.slice(5, 7) === '01' || m === months[0] ? `<em>${m.slice(0, 4)}</em>` : ''}${Number(m.slice(5, 7))}월</span>`).join('')}</div>`;
+    const weeks = monthPx >= 200 ? (() => { const out = []; let d = new Date(from + 'T00:00:00Z'); while (d.getUTCDay() !== 1) d.setUTCDate(d.getUTCDate() + 1); for (; d.toISOString().slice(0, 10) < to; d.setUTCDate(d.getUTCDate() + 7)) out.push(`<i class="dr-wk" style="left:${pct(d.toISOString().slice(0, 10))}%"></i>`); return out.join(''); })() : '';
+    const grid = `${months.map(m => `<i class="dr-mline" style="left:${pct(m)}%"></i>`).join('')}${weeks}`;
     const todayLine = `<i class="dr-today" style="left:${pct(today)}%"></i>`;
     const rowHtml = r => {
-      const [, , color] = DEV_TERM.find(t => t[0] === (r.term || '')) || DEV_TERM[3], end = r.target_date || r.due_date || '', start = r.start_date || (r.steps.map(s => s.start_date).filter(Boolean).sort()[0]) || '';
-      const late = end && end < today && (r.progress || 0) < 100 && r.status !== 'done', left = start && end ? pct(start) : 0, width = start && end ? Math.max(0.8, pct(end) - pct(start)) : 0;
-      const dd = end ? devDays(today, end) : null;
-      const bar = start && end ? `<div class="dr-bar${late ? ' late' : ''}" style="left:${left}%;width:${width}%;--c:${color}" title="${esc(`${start} ~ ${end} · 진행 ${r.progress || 0}%`)}"><b style="width:${r.progress || 0}%"></b><span>${r.progress || 0}%</span></div>`
-        : end ? `<div class="dr-pin" style="left:${pct(end)}%;--c:${color}" title="완료예정 ${esc(end)}">▼</div>` : '<span class="dr-empty">일정 미입력 — 눌러서 입력</span>';
-      const steps = r.steps.filter(s => s.start_date && s.end_date).map(s => `<i class="dr-step" style="left:${pct(s.start_date)}%;width:${Math.max(0.6, pct(s.end_date) - pct(s.start_date))}%;background:${DEV_STEP_STATE[s.status]?.[1] || '#adb5bd'}" title="${esc(`${s.name} · ${s.start_date}~${s.end_date} · ${DEV_STEP_STATE[s.status]?.[0] || ''}`)}"></i>`).join('');
+      const [, , color] = DEV_TERM.find(t => t[0] === (r.term || '')) || DEV_TERM[3], end = endOf(r), start = startOf(r), late = isLate(r);
+      const bar = start && end ? `<div class="dr-bar${late ? ' late' : ''}" style="left:${pct(start)}%;width:${Math.max(0.8, pct(end) - pct(start))}%;--c:${color}" title="${esc(`${start} ~ ${end} · 진행 ${r.progress || 0}%`)}"><b style="width:${r.progress || 0}%"></b><span>${r.progress || 0}%</span></div>`
+        : end ? `<div class="dr-pin" style="left:${pct(end)}%;--c:${color}" title="완료예정 ${esc(end)}">▼</div>` : `<button type="button" class="dr-empty" data-dr-edit="${r.id}" style="left:${pct(today)}%">＋ 일정 넣기</button>`;
+      const steps = r.steps.filter(s => s.start_date && s.end_date).map(s => { const w = Math.max(0.6, pct(s.end_date) - pct(s.start_date)), wpx = w / 100 * W; return `<i class="dr-step st-${s.status}" style="left:${pct(s.start_date)}%;width:${w}%;background:${DEV_STEP_STATE[s.status]?.[1] || '#adb5bd'}" title="${esc(`${s.name} · ${s.start_date}~${s.end_date} · ${DEV_STEP_STATE[s.status]?.[0] || ''}`)}">${wpx >= 46 ? `<span>${esc(s.name)}</span>` : ''}</i>`; }).join('');
       const next = r.next_date ? `<em class="dr-next" style="left:${pct(r.next_date)}%" title="${esc(`다음: ${r.next_step || ''} (${r.next_date})`)}">◆</em>` : '';
-      const owners = r.dev_owner_name || r.sales_owner_name ? `<div class="small dr-owners">${r.dev_owner_name ? `<span>개발 <b>${esc(r.dev_owner_name)}</b></span>` : ''}${r.sales_owner_name ? `<span>영업 <b>${esc(r.sales_owner_name)}</b></span>` : ''}</div>` : '<div class="small muted">담당자 미지정</div>';
-      return `<div class="dr-row" data-dr="${r.id}" tabindex="0" title="눌러서 진행건 열기(담당자·스케줄·소통)"><div class="dr-label"><b>${esc(r.title)}</b> ${r.status === 'done' ? '<span class="chip green">완료</span>' : late ? '<span class="chip red">지연</span>' : ''}${r.comment_count ? ` <span class="dr-talk" title="${esc(r.last_comment || '')}">💬 ${r.comment_count}</span>` : ''}<div class="small muted">${esc([r.customer, r.req_no].filter(Boolean).join(' · '))}${end ? ` · 완료예정 ${esc(end)}${dd != null && r.status !== 'done' ? ` (${dd >= 0 ? 'D-' + dd : 'D+' + -dd})` : ''}` : ''}</div>${r.current_stage || r.next_step ? `<div class="small dr-now">${r.current_stage ? `<span>현재 <b>${esc(r.current_stage)}</b></span>` : ''}${r.next_step ? `<span>다음 <b>${esc(r.next_step)}</b>${r.next_date ? ` ${esc(r.next_date.slice(5))}` : ''}</span>` : ''}</div>` : ''}${owners}</div>
-        <div class="dr-track">${todayLine}<div class="dr-steps">${steps}</div>${bar}${next}</div></div>`;
+      const capLeft = Math.max(start && end ? pct(start) : 0, pct(today)), cap = r.current_stage || r.next_step ? `<div class="dr-cap" style="left:min(${capLeft}%, calc(100% - 320px))">${r.current_stage ? `<span>현재 <b>${esc(r.current_stage)}</b></span>` : ''}${r.next_step ? `<span>다음 <b>${esc(r.next_step)}</b>${r.next_date ? ` ${esc(r.next_date.slice(5).replace('-', '/'))}` : ''}</span>` : ''}</div>` : '';
+      const dd = ddClass(r);
+      return `<div class="dr-row${late ? ' is-late' : ''}" data-dr="${r.id}" tabindex="0" title="눌러서 진행건 열기(담당자·스케줄·소통)">
+        <div class="dr-label"><div class="dr-l1"><b class="dr-title">${esc(r.title)}</b>${r.status === 'done' ? '<span class="chip green">완료</span>' : late ? '<span class="chip red">지연</span>' : ''}${end && r.status !== 'done' ? `<span class="dr-dd ${dd}">${dday(end)}</span>` : ''}${r.comment_count ? `<span class="dr-talk" title="${esc(r.last_comment || '')}">💬 ${r.comment_count}</span>` : ''}${canPlan ? `<button type="button" class="dr-edit" data-dr-edit="${r.id}" title="일정·공정표 입력" aria-label="${esc(r.title)} 일정 입력">✎</button>` : ''}</div>
+          <div class="small muted dr-l2">${esc([r.customer, r.req_no].filter(Boolean).join(' · '))}${end ? ` · 완료예정 ${esc(end)}` : ''}</div>
+          <div class="small dr-owners">${r.dev_owner_name ? `<span><i class="dr-av">개</i>${esc(r.dev_owner_name)}</span>` : ''}${r.sales_owner_name ? `<span><i class="dr-av s">영</i>${esc(r.sales_owner_name)}</span>` : ''}${!r.dev_owner_name && !r.sales_owner_name ? '<span class="muted">담당자 미지정</span>' : ''}</div>
+          ${r.current_stage || r.next_step ? `<div class="small dr-now">${r.current_stage ? `<span>현재 <b>${esc(r.current_stage)}</b></span>` : ''}${r.next_step ? `<span>다음 <b>${esc(r.next_step)}</b>${r.next_date ? ` ${esc(r.next_date.slice(5))}` : ''}</span>` : ''}</div>` : ''}</div>
+        <div class="dr-track" style="width:${W}px">${grid}${todayLine}<div class="dr-steps">${steps}</div>${bar}${next}${cap}</div></div>`;
     };
-    const lanes = DEV_TERM.map(([k, l, c]) => [l, c, list.filter(r => (r.term || '') === k)]).filter(([, , rs]) => rs.length);
-    $('#drMap', main).innerHTML = list.length ? `<div class="dr-map"><div class="dr-head"><div class="dr-label"></div><div class="dr-track">${head}${todayLine}</div></div>${lanes.map(([l, c, rs]) => `<div class="dr-lane" style="--c:${c}"><div class="dr-lane-h">${l} <span class="small muted">${rs.length}건</span></div>${rs.map(rowHtml).join('')}</div>`).join('')}</div>`
-      : '<div class="empty">조건에 맞는 개발 제품이 없습니다. 개발리스트에 진행 중인 의뢰가 있어야 합니다.</div>';
-    $('#drTable', main).innerHTML = list.length ? `<h3 class="dr-h3">진행 현황표</h3><div class="table-wrap"><table class="grid"><thead><tr><th>구분</th><th>제품</th><th>거래처</th><th>현재 진행현황</th><th>다음 진행예정</th><th>다음 예정일</th><th>완료예정일</th><th class="r">D-day</th><th class="r">진행률</th><th>공정</th><th>개발 담당</th><th>영업 담당</th><th>최근 소통</th></tr></thead><tbody>${list.map(r => { const end = r.target_date || r.due_date || '', dd = end ? devDays(today, end) : null, t = DEV_TERM.find(x => x[0] === (r.term || '')) || DEV_TERM[3]; return `<tr data-dr="${r.id}" style="cursor:pointer"><td><span class="chip" style="border-color:${t[2]};color:${t[2]}">${t[1]}</span></td><td><b>${esc(r.title)}</b><div class="small muted">${esc(r.req_no || '')}</div></td><td>${esc(r.customer || '')}</td><td>${esc(r.current_stage || '')}</td><td>${esc(r.next_step || '')}</td><td class="nowrap">${esc(r.next_date || '')}</td><td class="nowrap">${esc(end)}</td><td class="r${dd != null && dd < 0 && r.status !== 'done' ? ' red-text' : ''}">${dd == null || r.status === 'done' ? '' : dd >= 0 ? 'D-' + dd : 'D+' + -dd}</td><td class="r">${r.progress || 0}%</td><td class="small">${r.steps.length ? `${r.steps.filter(s => s.status === 'done').length}/${r.steps.length}` : ''}</td><td>${esc(r.dev_owner_name || '')}</td><td>${esc(r.sales_owner_name || '')}</td><td class="small muted dr-last">${r.comment_count ? `💬 ${r.comment_count} · ${esc(r.last_comment || '')}` : ''}</td></tr>`; }).join('')}</tbody></table></div>` : '';
+    const lanes = DEV_TERM.map(([k, l, c]) => [k, l, c, list.filter(r => (r.term || '') === k)]).filter(([, , , rs]) => rs.length);
+    box.innerHTML = list.length ? `<div class="dr-scroll"><div class="dr-map" style="--trackw:${W}px"><div class="dr-head"><div class="dr-label"><span class="small muted">제품 ${list.length}건</span></div><div class="dr-track" style="width:${W}px">${head}${grid}${todayLine}<b class="dr-today-tag" style="left:${pct(today)}%">오늘</b></div></div>${lanes.map(([k, l, c, rs]) => `<div class="dr-lane${folded.has(k || 'none') ? ' folded' : ''}" style="--c:${c}"><button type="button" class="dr-lane-h" data-dr-fold="${k || 'none'}" aria-expanded="${!folded.has(k || 'none')}">${l} <span class="small muted">${rs.length}건${rs.filter(isLate).length ? ` · 지연 ${rs.filter(isLate).length}` : ''}</span><span class="dr-fold-i">${folded.has(k || 'none') ? '▸' : '▾'}</span></button>${folded.has(k || 'none') ? '' : rs.map(rowHtml).join('')}</div>`).join('')}</div></div>`
+      : `<div class="empty">조건에 맞는 개발 제품이 없습니다.${kpi ? ' 위 요약 카드의 거르기를 「진행 중」으로 바꿔 보세요.' : ' 개발리스트에 진행 중인 의뢰가 있어야 합니다.'}</div>`;
+    const sc = $('.dr-scroll', box); if (sc) sc.scrollLeft = Math.max(0, px(today) - sc.clientWidth * 0.25 + 0);
+    $('#drTableN', main).textContent = `${list.length}건`;
+    $('#drTable', main).innerHTML = list.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>구분</th><th>제품</th><th>거래처</th><th>현재 진행현황</th><th>다음 진행예정</th><th>다음 예정일</th><th>완료예정일</th><th class="r">D-day</th><th class="r">진행률</th><th>공정</th><th>개발 담당</th><th>영업 담당</th><th>최근 소통</th></tr></thead><tbody>${list.map(r => { const end = endOf(r), t = DEV_TERM.find(x => x[0] === (r.term || '')) || DEV_TERM[3]; return `<tr data-dr="${r.id}" style="cursor:pointer"><td><span class="chip" style="border-color:${t[2]};color:${t[2]}">${t[1]}</span></td><td><b>${esc(r.title)}</b><div class="small muted">${esc(r.req_no || '')}</div></td><td>${esc(r.customer || '')}</td><td>${esc(r.current_stage || '')}</td><td>${esc(r.next_step || '')}</td><td class="nowrap">${esc(r.next_date || '')}</td><td class="nowrap">${esc(end)}</td><td class="r nowrap"><span class="dr-dd ${ddClass(r)}">${r.status === 'done' ? '' : dday(end)}</span></td><td class="r"><div class="dr-mini"><b style="width:${r.progress || 0}%"></b></div>${r.progress || 0}%</td><td class="small">${r.steps.length ? `${r.steps.filter(s => s.status === 'done').length}/${r.steps.length}` : ''}</td><td>${esc(r.dev_owner_name || '')}</td><td>${esc(r.sales_owner_name || '')}</td><td class="small muted dr-last">${r.comment_count ? `💬 ${r.comment_count} · ${esc(r.last_comment || '')}` : ''}</td></tr>`; }).join('')}</tbody></table></div>` : '';
   };
   const load = async () => { rows = (await api('GET', '/api/dev-roadmap?' + new URLSearchParams({ done: form.elements.done.checked ? '1' : '' }))).rows; if (main.isConnected) draw(); };
-  if (!['all', 'short', 'mid', 'long', ''].includes(termSel)) termSel = 'all';
   main.addEventListener('click', e => {
     const t = e.target.closest('[data-dr-term]'); if (t) { termSel = t.dataset.drTerm; try { localStorage.setItem('wpa:dev-term', termSel); } catch { /* 편의 */ } draw(); return; }
+    const z = e.target.closest('[data-dr-zoom]'); if (z) { zoom = z.dataset.drZoom; drPref({ zoom }); draw(); return; }
+    const k = e.target.closest('[data-dr-kpi]'); if (k) { kpi = k.dataset.drKpi === 'all' || kpi === k.dataset.drKpi ? '' : k.dataset.drKpi; draw(); return; }
+    const f = e.target.closest('[data-dr-fold]'); if (f) { const key = f.dataset.drFold; folded.has(key) ? folded.delete(key) : folded.add(key); drPref({ folded: [...folded] }); draw(); return; }
+    if (e.target.closest('[data-dr-today]')) { const sc = $('.dr-scroll', main), ti = $('.dr-head .dr-today', main); if (sc && ti) sc.scrollTo({ left: Math.max(0, ti.offsetLeft - sc.clientWidth * 0.25), behavior: 'smooth' }); return; }
+    const ed = e.target.closest('[data-dr-edit]'); if (ed) { const r = rows.find(x => x.id === Number(ed.dataset.drEdit)); if (r) devPlanEditor(r, load).catch(fail); return; }
     const row = e.target.closest('[data-dr]'); if (row && !$('.modal-wrap')) devCaseWindow(Number(row.dataset.dr), load).catch(fail);
   });
   main.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches?.('.dr-row')) e.target.click(); });
-  form.onsubmit = e => { e.preventDefault(); load().catch(fail); }; form.elements.done.onchange = () => load().catch(fail); form.elements.mine.onchange = () => draw(); form.elements.q.oninput = () => draw();
+  $('#drTableBox', main).addEventListener('toggle', e => drPref({ table: e.currentTarget.open }));
+  form.onsubmit = e => { e.preventDefault(); load().catch(fail); }; form.elements.done.onchange = () => load().catch(fail);
+  form.elements.mine.onchange = () => draw(); form.elements.q.oninput = () => draw(); form.elements.sort.onchange = () => { sort = form.elements.sort.value; drPref({ sort }); draw(); };
+  let rz = 0; const onResize = () => { if (!main.isConnected) { removeEventListener('resize', onResize); return; } clearTimeout(rz); rz = setTimeout(() => { if (rows.length) draw(); }, 200); }; addEventListener('resize', onResize);
   await load();
 }

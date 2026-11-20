@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.277';
+const APP_VERSION = '15.281';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -505,7 +505,7 @@ function helpDodge(main, details) {
 }
 function foldHelp(main) {
   for (const p of main.querySelectorAll(':scope > p.muted, :scope > section > p.muted, #receiptContent > p.muted')) {
-    if (p.textContent.trim().length < 80 || p.closest('details')) continue;
+    if (p.textContent.trim().length < (p.parentElement === main ? 20 : 80) || p.closest('details')) continue; // 15.279 화면 바로 아래 짧은 설명도 도움말로(화면마다 같은 모양)
     const details = document.createElement('details'); details.className = 'help';
     details.innerHTML = '<summary title="이 화면 설명">도움말</summary>'; p.replaceWith(details); details.append(p); // 15.180 오른쪽 위 단추
     if (details.parentElement === main) requestAnimationFrame(() => { const h1 = $('h1', main); if (h1 && details.isConnected) { details.style.top = `${h1.offsetTop}px`; helpDodge(main, details); } }); // 제목 줄 높이에(위치 표시와 겹치지 않게)
@@ -689,27 +689,27 @@ function refreshFavNav() {
 // 메뉴 강조·화면 탭·위치 표시는 관리 화면 하나로 묶는다(navRoute).
 const MANAGE = {
   '#/logistics/lots': { title: 'LOT·QR 관리', tabs: [['#/logistics/lots', 'LOT 관리'], ['#/logistics/qr', 'QR 일괄 발행'], ['#/logistics/pallets', '파렛트 묶음'], ['#/logistics/scan', 'QR 스캔']] }, // 15.231
-  '#/sales/bills': { title: '매출전표 관리', tabs: [['#/sales/bills', '전표 목록'], ['#/sales/bills/new', '전표 입력'], ['#/sales/calendar', '매출 달력'], ['#/sales/reps', '담당자별 현황']] },
-  '#/sales/tax': { title: '세금계산서 관리', tabs: [['#/sales/tax', '계산서 목록'], ['#/sales/tax/new', '계산서 만들기']] },
-  '#/sales/quotes': { title: '견적서 관리', tabs: [['#/sales/quotes', '견적서 목록'], ['#/sales/quotes/new', '견적서 작성']] },
-  '#/sales/orders': { title: '수주 관리', tabs: [['#/sales/orders', '수주 목록'], ['#/sales/orders/new', '수주 입력']] },
-  '#/sales/mr': { title: '생산의뢰 관리', tabs: [['#/sales/mr', '생산의뢰 목록'], ['#/sales/mr/new', '생산의뢰 작성']] },
-  '#/sales/pr': { title: '구매의뢰 관리', tabs: [['#/sales/pr', '구매의뢰 목록'], ['#/sales/pr/new', '구매의뢰 작성']] },
-  '#/purchase/po': { title: '발주 관리', tabs: [['#/purchase/po', '발주 목록'], ['#/purchase/po/new', '발주 입력']] },
-  '#/purchase/bills': { title: '매입전표 관리', tabs: [['#/purchase/bills', '전표 목록'], ['#/purchase/bills/new', '전표 입력']] },
+  '#/sales/bills': { title: '매출전표 관리', tabs: [['#/sales/bills/new', '전표 입력'], ['#/sales/bills', '전표 목록'], ['#/sales/calendar', '매출 달력'], ['#/sales/reps', '담당자별 현황']] },
+  '#/sales/tax': { title: '세금계산서 관리', tabs: [['#/sales/tax/new', '계산서 만들기'], ['#/sales/tax', '계산서 목록']] },
+  '#/sales/quotes': { title: '견적서 관리', tabs: [['#/sales/quotes/new', '견적서 작성'], ['#/sales/quotes', '견적서 목록']] },
+  '#/sales/orders': { title: '수주 관리', tabs: [['#/sales/orders/new', '수주 입력'], ['#/sales/orders', '수주 목록']] },
+  '#/sales/mr': { title: '생산의뢰 관리', tabs: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] },
+  '#/sales/pr': { title: '구매의뢰 관리', tabs: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] },
+  '#/purchase/po': { title: '발주 관리', tabs: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
+  '#/purchase/bills': { title: '매입전표 관리', tabs: [['#/purchase/bills/new', '전표 입력'], ['#/purchase/bills', '전표 목록']] },
   '#/sales/book': { title: '매출 거래처별 장부', tabs: [['#/sales/book', '전표별 장부'], ['#/sales/ledger', '품목 줄별 원장']] },
   '#/purchase/book': { title: '매입 거래처별 장부', tabs: [['#/purchase/book', '전표별 장부'], ['#/purchase/ledger', '품목 줄별 원장']] },
   '#/admin/users': { title: '회원 관리', tabs: [['#/admin/users', '회원 정보'], ['#/admin/users/roles', '사용 권한'], ['#/admin/users/menus', '메뉴 보기']] },
   // 15.213 입력·목록 메뉴 통일
-  '#/logistics/receive': { title: '입고 관리', tabs: [['#/logistics/receive', '입고목록'], ['#/logistics/receipt/new', '입고 입력'], ['#/logistics/receipts', '입고증 목록']] },
-  '#/logistics/ship': { title: '출하 관리', tabs: [['#/logistics/ship', '출하 목록'], ['#/logistics/ship/new', '출하 입력']] },
-  '#/purchase/laundry': { title: '불량·폐기 관리', tabs: [['#/purchase/laundry', '불량·폐기 목록'], ['#/purchase/laundry/new', '불량·폐기 입력']] },
-  '#/prod/semi': { title: '반제품 생산 관리', tabs: [['#/prod/semi', '생산일정'], ['#/prod/semi/new', '생산계획 입력']] },
-  '#/prod/semi/cut': { title: '커팅/융착 작업 관리', tabs: [['#/prod/semi/cut', '작업 기록'], ['#/prod/semi/cut/new', '작업 입력']] },
-  '#/prod/semi/wash': { title: '세탁(호기별) 작업 관리', tabs: [['#/prod/semi/wash', '작업 기록'], ['#/prod/semi/wash/new', '작업 입력']] },
-  '#/quality/list': { title: '분석 관리', tabs: [['#/quality/list', '분석리스트'], ['#/quality/request', '분석의뢰']] },
-  '#/quality/voc/list': { title: 'VOC 관리', tabs: [['#/quality/voc/list', 'VOC 처리목록'], ['#/quality/voc/request', 'VOC 접수']] },
-  '#/dev/list': { title: '개발 관리', tabs: [['#/dev/list', '개발리스트'], ['#/dev/request', '개발의뢰']] },
+  '#/logistics/receive': { title: '입고 관리', tabs: [['#/logistics/receipt/new', '입고 입력'], ['#/logistics/receive', '입고목록'], ['#/logistics/receipts', '입고증 목록']] },
+  '#/logistics/ship': { title: '출하 관리', tabs: [['#/logistics/ship/new', '출하 입력'], ['#/logistics/ship', '출하 목록']] },
+  '#/purchase/laundry': { title: '불량·폐기 관리', tabs: [['#/purchase/laundry/new', '불량·폐기 입력'], ['#/purchase/laundry', '불량·폐기 목록']] },
+  '#/prod/semi': { title: '반제품 생산 관리', tabs: [['#/prod/semi/new', '생산계획 입력'], ['#/prod/semi', '생산일정']] },
+  '#/prod/semi/cut': { title: '커팅/융착 작업 관리', tabs: [['#/prod/semi/cut/new', '작업 입력'], ['#/prod/semi/cut', '작업 기록']] },
+  '#/prod/semi/wash': { title: '세탁(호기별) 작업 관리', tabs: [['#/prod/semi/wash/new', '작업 입력'], ['#/prod/semi/wash', '작업 기록']] },
+  '#/quality/list': { title: '분석 관리', tabs: [['#/quality/request', '분석의뢰'], ['#/quality/list', '분석리스트']] },
+  '#/quality/voc/list': { title: 'VOC 관리', tabs: [['#/quality/voc/request', 'VOC 접수'], ['#/quality/voc/list', 'VOC 처리목록']] },
+  '#/dev/list': { title: '개발 관리', tabs: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
 };
 const ROUTE_ALIAS = { '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/calendar': '#/sales/bills', '#/logistics/qr': '#/logistics/lots', '#/logistics/pallets': '#/logistics/lots', '#/logistics/scan': '#/logistics/lots', '#/sales/reps': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users', '#/logistics/receipt/new': '#/logistics/receive', '#/logistics/receipt/other': '#/logistics/receive', '#/logistics/receipts': '#/logistics/receive', '#/logistics/ship/new': '#/logistics/ship', '#/purchase/laundry/new': '#/purchase/laundry', '#/prod/semi/new': '#/prod/semi', '#/prod/semi/cut/new': '#/prod/semi/cut', '#/prod/semi/wash/new': '#/prod/semi/wash', '#/quality/request': '#/quality/list', '#/quality/voc/request': '#/quality/voc/list', '#/dev/request': '#/dev/list' };
 const navRoute = r => ROUTE_ALIAS[String(r || '#/').split('?')[0]] || String(r || '#/').split('?')[0];
@@ -721,6 +721,34 @@ function managedTabs(main, route) {
   if (t) t.nodeValue = /수정|고치기/.test(t.nodeValue) ? `${m.title} · ${t.nodeValue.trim()} ` : m.title + ' '; else h1.prepend(m.title + ' '); // 15.178 고치는 중 표시 유지
   const anchor = h1.nextElementSibling?.matches('.tax-side, .class-tabs.tax-side') ? h1.nextElementSibling : h1; // 15.180 매출/매입 탭 아래 둘째 줄
   anchor.insertAdjacentHTML('afterend', `<nav class="manage-tabs${anchor !== h1 ? ' sub' : ''}" aria-label="${esc(m.title)}">${m.tabs.filter(([h]) => canSeeRoute(h)).map(([h, l]) => `<a href="${h}" class="${h === route ? 'on' : ''}"${h === route ? ' aria-current="page"' : ''}>${esc(l)}</a>`).join('')}</nav>`);
+}
+// 15.280 업무 흐름 안내(가이드 스테이터스): 이 화면이 어느 업무 흐름의 몇 번째 단계인지 제목 아래 한 줄로.
+// 지금 화면 단계만 색, 나머지는 회색(누르면 그 화면으로). 두 흐름에 걸친 화면은 위 칩으로 흐름을 바꿔 봄(이 기기에 기억).
+const PROCESS_FLOWS = [
+  { key: 'order', name: '주문 · 출하 · 매출', steps: [['#/sales/quotes', '견적'], ['#/sales/orders', '수주'], ['#/sales/mr', '생산의뢰'], ['#/prod/orders', '생산의뢰 접수'], ['#/prod/finished/plan', '생산계획'], ['#/prod/finished', '생산실적'], ['#/logistics/ship-orders', '출하지시'], ['#/logistics/ship', '출하'], ['#/sales/bills', '매출전표'], ['#/sales/tax', '세금계산서'], ['#/purchase/payments', '입금확인']] },
+  { key: 'buy', name: '구매 · 입고 · 매입', steps: [['#/sales/orders', '수주'], ['#/sales/pr', '구매의뢰'], ['#/purchase/po', '발주'], ['#/logistics/receive', '입고확인'], ['#/quality/inspections', '수입검사'], ['#/purchase/bills', '매입전표'], ['#/purchase/tax', '매입 세금계산서'], ['#/purchase/disbursements', '지급확인']] },
+  { key: 'semi', name: '반제품 · 포장 생산', steps: [['#/prod/semi', '반제품 계획'], ['#/prod/semi/cut', '커팅/융착'], ['#/prod/semi/wash', '세탁'], ['#/prod/finished', '포장(완제품 실적)'], ['#/logistics/ship', '출하']] },
+];
+const FLOW_KEY = 'wpa:flow', FLOW_FOLD = 'wpa:flow-fold';
+const flowStore = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } return null; };
+function processGuide(main, route) {
+  $('.proc-guide', main)?.remove();
+  const r = navRoute(TAB_ON[route] || route), flows = PROCESS_FLOWS.filter(f => f.steps.some(([h]) => h === r)); if (!flows.length) return;
+  const anchor = $('.manage-tabs', main) || $('h1', main); if (!anchor || anchor.closest('.modal')) return;
+  const box = document.createElement('nav'); box.className = 'proc-guide'; box.setAttribute('aria-label', '업무 흐름 안내');
+  const draw = () => {
+    const want = flowStore(FLOW_KEY), f = flows.find(x => x.key === want) || flows[0], at = f.steps.findIndex(([h]) => h === r), fold = flowStore(FLOW_FOLD) === '1';
+    box.classList.toggle('folded', fold);
+    box.innerHTML = `<div class="pg-head"><span class="pg-title">업무 흐름</span>${flows.length > 1 ? flows.map(x => `<button type="button" class="pg-flow${x === f ? ' on' : ''}" data-pg-flow="${x.key}" aria-pressed="${x === f}">${esc(x.name)}</button>`).join('') : `<span class="pg-flow on">${esc(f.name)}</span>`}<span class="pg-pos small">${at + 1} / ${f.steps.length} 단계 · <b>${esc(f.steps[at][1])}</b></span><button type="button" class="pg-fold" data-pg-fold aria-expanded="${!fold}" title="${fold ? '흐름 펼치기' : '흐름 접기'}">${fold ? '펼치기 ▾' : '접기 ▴'}</button></div>
+      <ol class="pg-steps">${f.steps.map(([h, l], i) => { const cls = i === at ? 'cur' : i < at ? 'before' : 'after', inner = `<span class="pg-no">${i + 1}</span><span class="pg-label">${esc(l)}</span>`;
+        return `<li class="pg-step ${cls}"${i === at ? ' aria-current="step"' : ''}>${i !== at && canSeeRoute(h) ? `<a href="${h}" title="${esc(l)} 화면으로">${inner}</a>` : `<span class="pg-in">${inner}</span>`}</li>`; }).join('')}</ol>`;
+    requestAnimationFrame(() => { const ol = $('.pg-steps', box), cur = $('.pg-step.cur', box); if (ol && cur && ol.scrollWidth > ol.clientWidth) ol.scrollLeft = Math.max(0, cur.offsetLeft - ol.clientWidth / 2 + cur.offsetWidth / 2); });
+  };
+  box.addEventListener('click', e => {
+    const fb = e.target.closest('[data-pg-flow]'); if (fb) { flowStore(FLOW_KEY, fb.dataset.pgFlow); draw(); return; }
+    if (e.target.closest('[data-pg-fold]')) { flowStore(FLOW_FOLD, flowStore(FLOW_FOLD) === '1' ? '0' : '1'); draw(); }
+  });
+  draw(); anchor.after(box);
 }
 // 15.213 메뉴 찾기: 화면 이름 일부를 치면 「부서 › 묶음 › 화면」 목록이 뜨고, Enter·누르면 그 화면으로.
 function bindNavFind() {
@@ -841,6 +869,7 @@ function pageTabs(main, route) {
   // 15.212 탭이 많아 가로로 넘치면 지금 화면 탭이 가운데 보이게
   requestAnimationFrame(() => { const on = bar.querySelector('.pt-tab.on'); if (on && bar.scrollWidth > bar.clientWidth) bar.scrollLeft = Math.max(0, on.offsetLeft - bar.clientWidth / 2 + on.offsetWidth / 2); });
   const code = path.replace(/^#\/?/, '').split('/').filter(Boolean).join('-').toUpperCase() || 'HOME'; // 15.180 화면 코드(문의할 때)
+  if (trail.length && h1 && !h1.querySelector('.dept') && !h1.closest('.modal')) h1.insertAdjacentHTML('beforeend', ` <span class="dept">${esc(trail[0])}</span>`); // 15.279 부서 표시를 모든 화면 제목에
   if (trail.length && h1) h1.insertAdjacentHTML('beforebegin', `<div class="crumbs" aria-label="위치"><a href="#/" aria-label="홈">⌂</a>${trail.map(t => ` <span>›</span> ${esc(t)}`).join('')}${ME?.is_admin ? ` <span class="screen-code" title="화면 코드 — 문의할 때 알려 주세요">[${esc(code)}]</span>` : ''}</div>`); // 15.213 화면 코드는 관리자만
   bar.addEventListener('click', e => {
     const x = e.target.closest('[data-tab-close]'), all = e.target.closest('[data-tab-clear]'); if (!x && !all) return;
@@ -864,7 +893,9 @@ async function render() {
   refreshNavBadges();
   const page = canSeeRoute(route) ? PAGES[location.hash || '#/'] || pageHome : pageNoMenu;
   try { await page($('#main')); if (page === pageHome || page === pageTasks) applyMenuAccess($('#main')); if (page !== pageNoMenu) favoriteTools($('#main'), route); applyView($('#main'), route); foldHelp($('#main')); erpEntryBar($('#main'), route); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  try { autoRememberLists($('#main')); } catch { /* 15.281 조회 조건 기억은 편의 기능 */ }
   try { managedTabs($('#main'), route.split('?')[0]); } catch { /* 15.213 */ }
+  try { processGuide($('#main'), route.split('?')[0]); } catch { /* 15.280 업무 흐름 안내는 편의 기능 */ }
   try { pageTabs($('#main'), route); } catch { /* 탭은 편의 기능 */ }
   uxAfterRender(route);
 }
@@ -1387,6 +1418,39 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'Escape') { setCell(null); return; } else return;
   if (next) { e.preventDefault(); setCell(next); }
 });
+// 15.278 표 안 입력칸: 방향키는 값 올리고 내리기 대신 칸 이동(엑셀처럼). 숫자칸은 ↑↓←→ 모두 이동,
+// 글자칸은 ↑↓ 이동 · ←→는 글자 맨 앞/끝에서만 이동. 화면별 자체 처리(preventDefault)·추천 목록·조합 중은 건드리지 않음.
+const GRID_NAV_SKIP = new Set(['checkbox', 'radio', 'range', 'file', 'button', 'submit', 'reset', 'hidden', 'color']);
+const gridNavTarget = el => el && !el.disabled && !el.hidden && el.offsetParent !== null && !(el.tagName === 'INPUT' && GRID_NAV_SKIP.has(el.type));
+const gridNavIn = td => td && [...td.querySelectorAll('input, select, textarea')].find(gridNavTarget);
+document.addEventListener('keydown', e => {
+  if (e.defaultPrevented || e.isComposing || e.keyCode === 229 || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+  const el = e.target; if (!(el instanceof HTMLInputElement) || GRID_NAV_SKIP.has(el.type) || el.closest('[data-no-arrow-nav]')) return;
+  const td = el.closest('td, th'), tr = td?.parentElement, table = tr?.closest('table'); if (!td || !table || td.closest('table') !== table) return;
+  const num = el.type === 'number', vertical = e.key === 'ArrowUp' || e.key === 'ArrowDown';
+  if (!num && vertical && el.list) return; // 고르기 목록(datalist)은 ↓로 펼침
+  if (!num && !vertical) { // 글자칸 ←→: 맨 앞/끝일 때만
+    let a = null, b = null; try { a = el.selectionStart; b = el.selectionEnd; } catch { /* date 등 */ }
+    if (a === null) { if (el.type === 'date' || el.type === 'time' || el.type === 'month') return; }
+    else if (a !== b || (e.key === 'ArrowLeft' ? a > 0 : b < el.value.length)) return;
+  } else if (!num && el.type !== 'text' && el.type !== 'search' && el.type !== 'tel' && el.type !== 'email' && el.type !== 'url' && el.type !== '') return; // 날짜칸 ↑↓는 날짜 고치기 그대로
+  let next = null;
+  if (vertical) {
+    const col = td.cellIndex, step = e.key === 'ArrowDown' ? 1 : -1, rows = [...table.rows]; let i = rows.indexOf(tr) + step;
+    for (; rows[i]; i += step) { const r = rows[i]; if (r.hidden || r.offsetParent === null) continue; next = gridNavIn(r.cells[col]); if (next) break; }
+  } else {
+    const cells = [...tr.cells], step = e.key === 'ArrowRight' ? 1 : -1;
+    // 같은 칸 안에 입력칸이 여러 개면 그 안에서 먼저
+    const inCell = [...td.querySelectorAll('input, select, textarea')].filter(gridNavTarget), k = inCell.indexOf(el);
+    next = inCell[k + step] || null;
+    for (let i = td.cellIndex + step; !next && cells[i]; i += step) { const list = [...cells[i].querySelectorAll('input, select, textarea')].filter(gridNavTarget); next = step > 0 ? list[0] : list.at(-1); }
+  }
+  if (num || next) e.preventDefault(); // 숫자칸은 끝 칸이어도 값이 바뀌지 않게
+  if (next) { next.focus(); try { next.select?.(); } catch { /* */ } }
+});
+// 표 안 숫자칸: 마우스 휠로 값이 바뀌지 않게(포커스된 숫자칸 위 휠은 화면 스크롤로)
+document.addEventListener('wheel', e => { const el = e.target; if (el instanceof HTMLInputElement && el.type === 'number' && el === document.activeElement && el.closest('td')) el.blur(); }, { passive: true });
 // 15.204 휴대폰 3줄 그리드(출하지시 15.202와 같은 모양을 여러 목록에): 칸 이름표 상자(as-cards) 대신
 // 1줄 = 제목(a) + 오른쪽 값(b), 2줄 = 짧은 정보(c, 이름표는 [머리글, 줄임말]일 때만), 3줄 = 입력·단추(d). 나머지 칸(x)은 휴대폰에서 숨김. PC 표는 그대로.
 const PHONE_GRID = [

@@ -153,3 +153,17 @@ async function reviewApproval(kind, id) {
     $('[data-review-confirm]', box.el).onclick = () => { resolve(true); box.close(); };
   });
 }
+// 15.281 조회 조건 기억을 모든 화면으로: 화면이 그려진 뒤 조회 줄(form.list-filters·form.toolbar) 중 아직 기억하지 않는 것도
+// rememberList로 묶는다. 저장해 둔 조건이 있어 값이 바뀌면 그 칸에 input·change를 보내고 조회를 다시 눌러 목록을 맞춘다.
+function autoRememberLists(main) {
+  if (!ME || !main) return;
+  for (const form of main.querySelectorAll('form.list-filters, form.toolbar')) {
+    if (form.dataset.viewRemembered || form.closest('.modal, .modal-wrap') || form.dataset.noRemember !== undefined) continue;
+    const before = new Map(uxFormRead(form));
+    rememberList(form);
+    const changed = uxControls(form).filter(input => { const k = uxControlKey(input), now = input.type === 'checkbox' || input.type === 'radio' ? input.checked : input.value; return before.has(k) && before.get(k) !== now; });
+    if (!changed.length) continue;
+    for (const input of changed) { input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true })); }
+    if (form.querySelector('[type=submit]') && form.checkValidity()) form.requestSubmit();
+  }
+}

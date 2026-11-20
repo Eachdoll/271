@@ -509,3 +509,26 @@ test('15.277 development owners (dev/sales) and the communication thread on a de
   assert.equal(list.dev_owner_name, me.name); assert.equal(list.comment_count, 2);
   assert.equal((await admin('GET', '/api/dev-roadmap?id=abc')).status, 400);
 });
+
+test('15.279 non-woven (부직포) bags need no washing; a plan can be closed short and reopened', async () => {
+  const nw = (await admin('POST', '/api/boms', { product: '부직포원단', product_code: 'NW-R', item_category: '원자재', kind: 'finished', base_qty: 1, unit: 'kg', materials: [] })).body;
+  await admin('POST', '/api/receipts', { receipt_date: today, vendor: '공급', request_id: rid(), lines: [{ bom_id: nw.id, lot: 'NW-L1', qty: 50 }] });
+  const semi = (await admin('POST', '/api/boms', { product: 'NW 반제품', product_code: 'NWS', item_category: '반제품', kind: 'semi', semi_type: '부직포와이퍼', base_qty: 1, unit: '매', materials: [{ item: '부직포원단', item_category: '원자재', qty: 0.01, unit: 'kg' }] })).body;
+  const line = (await admin('GET', '/api/production-units')).body.find(u => u.kind === 'line') || (await admin('POST', '/api/production-units', { kind: 'line', name: 'NW라인' })).body;
+  const c = await prod('POST', '/api/semi-batches', { process: 'cut', common: { work_date: today, unit_id: line.id }, items: [{ entry_mode: 'code', bom_id: semi.id, product_group: 'wiper', product_type: '부직포와이퍼', start_time: '08:00', end_time: '10:00', qty: 500, inputs: [{ item: '부직포원단', lot: 'NW-L1', qty: 5 }] }], request_id: rid() });
+  assert.equal(c.status, 200, JSON.stringify(c.body)); const bag = c.body.rows[0].lot;
+  assert.ok(!(await prod('GET', '/api/semi-bags?state=unwashed')).body.rows.some(r => r.lot === bag), 'non-woven is not waiting for washing');
+  const ready = (await prod('GET', '/api/semi-bags?state=washed')).body.rows.find(r => r.lot === bag);
+  assert.ok(ready, 'non-woven bag can be packed without washing'); assert.equal(ready.wash_free, 1);
+  const fin = (await admin('POST', '/api/boms', { product: 'NW 완제품', product_code: 'NWF', item_category: '제품', kind: 'finished', base_qty: 1, unit: 'BOX', materials: [{ item: 'NW 반제품', item_category: '반제품', qty: 100, unit: '매' }] })).body;
+  const plan = (await admin('POST', '/api/schedules', { kind: 'finished', period: 'day', start_date: today, qty: 10, bom_id: fin.id })).body;
+  const a = await prod('POST', `/api/schedules/${plan.id}/actuals`, { production_date: today, qty: 4, request_id: rid(), bags: [bag] });
+  assert.equal(a.status, 200, JSON.stringify(a.body));
+  assert.ok(!(await prod('GET', '/api/semi-wip')).body.some(r => /NW 반제품/.test(r.item)), 'non-woven not counted as waiting for washing');
+  // 계획 10 중 4만 → 완료 처리 · 다시 열기
+  const closed = await prod('PUT', `/api/schedules/${plan.id}`, { set_done: 1, reason: '원단 부족' });
+  assert.equal(closed.status, 200, JSON.stringify(closed.body)); assert.equal(closed.body.done, 1);
+  const log = (await prod('GET', `/api/comments/schedule/${plan.id}`)).body.rows.map(r => r.content);
+  assert.ok(log.some(x => /\[완료 처리\] 계획 10 중 4 생산 \(부족 6\) · 원단 부족/.test(x)), JSON.stringify(log));
+  assert.equal((await prod('PUT', `/api/schedules/${plan.id}`, { set_done: 0 })).body.done, 0);
+});

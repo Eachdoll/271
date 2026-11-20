@@ -4115,6 +4115,16 @@ route('PUT', '/api/schedules/:id', async ({ user, params, body }) => {
   const hasActuals = await db.prepare('SELECT 1 FROM production_actuals WHERE schedule_id=?').get(row.id);
   if (hasActuals && (['product','kind','bom_id','spec','unit'].some(key => body[key] !== undefined && String(body[key] ?? '') !== String(row[key] ?? '')))) throw bad('생산실적이 있는 일정의 품목·규격·단위·BOM은 변경할 수 없습니다.');
   if (body.toggle_done) { await db.prepare('UPDATE schedules SET done=1-done WHERE id=?').run(row.id); return decodeSchedule(await mustGet('schedules', row.id)); }
+  // 15.279 완료 처리: 계획보다 덜 만들어도 이 계획을 닫는다(set_done 1) · 다시 열기(set_done 0). 진행 코멘트에 기록.
+  if (body.set_done !== undefined) {
+    const v = Number(body.set_done) ? 1 : 0; if (v === row.done) return decodeSchedule(row);
+    if (v && await db.prepare("SELECT 1 FROM production_actuals WHERE schedule_id=? AND work_status='progress' AND voided_at IS NULL").get(row.id)) throw bad('작업중인 포장이 있습니다. 수량을 넣어 작업완료하거나 취소한 뒤 완료 처리하세요.');
+    const made = (await db.prepare('SELECT COALESCE(SUM(qty),0) AS q FROM production_actuals WHERE schedule_id=? AND voided_at IS NULL').get(row.id)).q;
+    const why = str(body.reason, 300);
+    await db.batch([{ sql: 'UPDATE schedules SET done=? WHERE id=?', args: [v, row.id] },
+      { sql: 'INSERT INTO progress_comments(entity_type,entity_id,content,author_id,author_name) VALUES(?,?,?,?,?)', args: ['schedule', row.id, v ? `[완료 처리] 계획 ${stockRound(row.qty)} 중 ${stockRound(made)} 생산${made < row.qty ? ` (부족 ${stockRound(row.qty - made)})` : ''}${why ? ' · ' + why : ''}` : `[완료 취소] 다시 실적 입력 가능${why ? ' · ' + why : ''}`, user.id, user.name] }]);
+    return decodeSchedule(await mustGet('schedules', row.id));
+  }
   const f = await schedFields({ ...body, kind: row.kind }, row);
   if (hasActuals && ['product','period','start_date','bom_id'].some(key => f[key] !== row[key])) throw bad('생산실적이 있는 일정의 품목·기간·BOM은 변경할 수 없습니다.');
   if (row.confirmed_at && row.confirmed_by !== '(기존 계획)' && ['product','period','start_date','bom_id','qty'].some(key => f[key] !== row[key])) throw bad('확정된 계획입니다. 「확정취소」 후 고치세요.'); // 15.199
@@ -4557,14 +4567,17 @@ async function nextFinishedLot(date, code) {
   const used = await db.prepare("SELECT MAX(CAST(substr(lot, length(?) + 1) AS INTEGER)) AS n FROM production_actuals WHERE substr(lot,1,length(?))=? AND length(lot)>length(?) AND substr(lot,length(?)+1) NOT GLOB '*[^0-9]*'").get(head, head, head, head, head);
   return head + (((used && used.n) || 0) + 1);
 }
-// 포장에 쓴 봉투: 세탁을 마친 봉투 LOT만(남은 봉투는 다음 포장에 다시 고를 수 있음).
+// 15.279 세탁 없는 봉투: 부직포(생산 종류 부직포와이퍼, 또는 품목명에 「부직포」)는 커팅·융착 작업완료면 바로 포장에 쓴다.
+const WASH_FREE_SQL = (c = 'c') => `(${c}.product_type='부직포와이퍼' OR ${c}.item_name LIKE '%부직포%' OR EXISTS(SELECT 1 FROM boms wf WHERE wf.id=${c}.bom_id AND wf.semi_type='부직포와이퍼'))`;
+const bagReadySql = (c = 'c') => `((${WASH_FREE_SQL(c)} AND ${c}.work_status='done') OR EXISTS(SELECT 1 FROM semi_records w WHERE w.process='wash' AND w.lot=${c}.lot AND w.work_status='done'))`;
+// 포장에 쓴 봉투: 세탁을 마친 봉투 LOT만(남은 봉투는 다음 포장에 다시 고를 수 있음). 세탁 없는 봉투(부직포)는 커팅 작업완료면 됨.
 async function packBags(raw) {
   const list = Array.isArray(raw) ? [...new Set(raw.map(x => str(typeof x === 'object' && x ? x.lot : x, 100)).filter(Boolean))] : [];
   if (list.length > 60) throw bad('봉투 LOT은 한 번에 60개까지 고를 수 있습니다.');
   const out = [];
   for (const lot of list) {
     const bag = await semiBagRecord(lot); if (!bag) throw bad(`봉투 LOT ${lot}을 찾을 수 없습니다.`);
-    if (!await db.prepare("SELECT 1 FROM semi_records WHERE process='wash' AND lot=? AND work_status='done' LIMIT 1").get(lot)) throw bad(`봉투 LOT ${lot}은 아직 세탁·건조를 마치지 않았습니다(기록 없음 또는 작업중). 세탁을 작업완료한 뒤 고르세요.`); // 15.255
+    if (!await db.prepare(`SELECT 1 FROM semi_records c WHERE c.id=? AND ${bagReadySql('c')}`).get(bag.id)) throw bad(bag.work_status === 'progress' ? `봉투 LOT ${lot}은 아직 커팅·융착 작업중입니다. 작업완료한 뒤 고르세요.` : `봉투 LOT ${lot}은 아직 세탁·건조를 마치지 않았습니다(기록 없음 또는 작업중). 세탁을 작업완료한 뒤 고르세요.`); // 15.255 · 15.279 부직포는 세탁 없음
     out.push({ lot, item: bag.item_name || '' });
   }
   return out;
@@ -4893,10 +4906,10 @@ route('GET', '/api/semi-bags', async ({ query }) => {
   applyListDates(where, args, query, 'c.work_date');
   const q = str(query.q, 100); if (q) { const like = '%' + q.replace(/[\\%_]/g, m => '\\' + m) + '%'; where.push("(c.lot LIKE ? ESCAPE '\\' OR c.item_name LIKE ? ESCAPE '\\' OR c.product_code LIKE ? ESCAPE '\\')"); args.push(like, like, like); }
   if (query.items) { const names = String(query.items).split('|').map(x => x.trim()).filter(Boolean).slice(0, 30); if (names.length) { where.push(`TRIM(c.item_name) IN (${names.map(() => '?').join(',')})`); args.push(...names); } }
-  if (state === 'unwashed') where.push("c.work_status='done' AND NOT EXISTS(SELECT 1 FROM semi_records w WHERE w.process='wash' AND w.lot=c.lot)"); // 15.255
-  if (state === 'washed') where.push("EXISTS(SELECT 1 FROM semi_records w WHERE w.process='wash' AND w.lot=c.lot AND w.work_status='done')");
+  if (state === 'unwashed') where.push(`c.work_status='done' AND NOT ${WASH_FREE_SQL('c')} AND NOT EXISTS(SELECT 1 FROM semi_records w WHERE w.process='wash' AND w.lot=c.lot)`); // 15.255 · 15.279 부직포는 세탁 대상 아님
+  if (state === 'washed') where.push(bagReadySql('c')); // 15.279 부직포는 커팅 작업완료면 포장 가능
   const rows = await db.prepare(`SELECT c.id, c.lot, c.work_date, c.unit_name, c.bom_id, c.item_name, c.product_code, c.product_group, c.product_type, c.qty, c.unit,
-      (SELECT COALESCE(SUM(w.qty + COALESCE(w.defect_qty,0)),0) FROM semi_records w WHERE w.process='wash' AND w.lot=c.lot AND w.work_status='done') AS washed_qty,
+      (SELECT COALESCE(SUM(w.qty + COALESCE(w.defect_qty,0)),0) FROM semi_records w WHERE w.process='wash' AND w.lot=c.lot AND w.work_status='done') AS washed_qty, CASE WHEN ${WASH_FREE_SQL('c')} THEN 1 ELSE 0 END AS wash_free,
       (SELECT MAX(w.work_date) FROM semi_records w WHERE w.process='wash' AND w.lot=c.lot) AS washed_date,
       (SELECT group_concat(DISTINCT a.lot) FROM pack_bag_links p JOIN production_actuals a ON a.id=p.actual_id AND a.voided_at IS NULL WHERE p.bag_lot=c.lot) AS packed_lots
     FROM semi_records c WHERE ${where.join(' AND ')} ORDER BY c.work_date DESC, c.id DESC LIMIT 501`).all(...args);
@@ -5282,7 +5295,7 @@ route('GET', '/api/semi-wip', async () => {
   const label = "COALESCE(NULLIF(item_name,''), CASE WHEN product_type='' THEN CASE product_group WHEN 'seamless' THEN '심리스글러브 (종류 미지정)' ELSE '와이퍼 (종류 미지정)' END WHEN product_group='seamless' THEN '심리스 ' || product_type ELSE product_type END)";
   const rows = await db.prepare(`SELECT ${label} AS item, spec, unit, SUM(CASE WHEN process='cut' THEN qty ELSE 0 END) AS cut_qty,
       SUM(CASE WHEN process='wash' THEN qty + defect_qty ELSE 0 END) AS washed_qty, MAX(work_date) AS last_date
-    FROM semi_records GROUP BY 1,2,3 ORDER BY 1,2,3 LIMIT 2000`).all();
+    FROM semi_records c WHERE NOT ${WASH_FREE_SQL('c')} GROUP BY 1,2,3 ORDER BY 1,2,3 LIMIT 2000`).all(); // 15.279 부직포는 세탁 없음
   return rows.map(r => ({ ...r, waiting_qty: Math.round((r.cut_qty - r.washed_qty) * 1e6) / 1e6 }));
 });
 route('GET', '/api/alerts', async ({ user }) => {
