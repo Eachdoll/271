@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.285';
+const APP_VERSION = '15.286';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -2308,6 +2308,7 @@ function requestDetail(type, r, reload) {
       ${kv('의뢰자', `${esc(r.requester_name)} <span class="muted small">${esc(r.created_at.slice(0, 10))}</span>`)}
       ${r.reject_reason ? `<div class="rq-kv full"><span>반려 사유</span><b class="red-text">${esc(r.reject_reason)}</b></div>` : ''}
       ${r.result_note ? `<div class="rq-kv full"><span>결과/메모</span><b>${esc(r.result_note)}</b></div>` : ''}
+      ${type === 'rnd_analysis' ? `<div class="rq-kv full"><span>연결 개발건</span><b>${r.data?.dev_request_id ? `${esc(r.data.dev_title || '')}${r.data.dev_step ? ` · 단계 「${esc(r.data.dev_step)}」` : ''}` : '<span class="muted">연결 안 됨</span>'}</b></div>` : ''}
       ${type === 'voc' && r.data?.lot ? `<div class="rq-kv full"><span>LOT 연결</span><b><button type="button" class="link-btn" data-lt-open="${esc(r.data.lot)}">${esc(r.data.lot)} · LOT 연결 조회 →</button></b></div>` : ''}
     </div>
     <details class="rq-more"><summary>더보기 · 상세 내용 <span class="small muted">(${filled}개 항목${r.source_type ? ' · 입고 출처' : ''}${['development','sample','sample_goods'].includes(type) ? ' · 사진' : ''}${r.approver_name ? ' · 접수 기록' : ''})</span></summary>
@@ -2331,19 +2332,21 @@ function requestDetail(type, r, reload) {
       ${(mine && ['pending', 'rejected'].includes(r.status)) || mgr ? '<button class="btn danger" data-a="del">삭제</button>' : ''}
       ${approver && r.status === 'pending' ? '<button class="btn red" data-a="reject">반려</button><button class="btn primary" data-a="approve">승인</button>' : ''}
       ${approver && r.status === 'rejected' ? '<button class="btn primary" data-a="approve">승인</button>' : ''}
-      ${mgr && ['waiting', 'progress', 'done'].includes(r.status) ? '<button class="btn" data-a="status">상태/결과 변경</button>' : ''}
+      ${type === 'rnd_analysis' && (mgr || mine || hasRole('dev_approver')) ? '<button class="btn" data-a="devlink">개발건 연결</button>' : ''}
+      ${mgr && ['waiting', 'progress', 'done'].includes(r.status) ? `<button class="btn${type === 'rnd_analysis' ? ' primary' : ''}" data-a="status">${type === 'rnd_analysis' ? '분석결과 입력' : '상태/결과 변경'}</button>` : ''}
     </div>`, { wide: true });
   if (['development','sample','sample_goods','voc'].includes(type)) renderAttachmentPreview($('[data-request-photos]', m.el), 'request', r.id);
   else if (r.source_type) renderAttachmentPreview($('[data-request-photos]', m.el), r.source_type, r.source_id);
   const act = async (a) => {
     try {
       if (a === 'inspection') { m.close(); await openInspection(r.id, reload); return; }
+      if (a === 'devlink') { m.close(); await rndDevLinkBox(r, reload); return; } // 15.286
       if (a === 'photos') { await openAttachments('request', r.id, r.title, { editable: (mine && ['pending','rejected'].includes(r.status)) || mgr }); return; }
       if (a === 'print') { const more = $('.rq-more', m.el), was = more?.open; if (more) more.open = true; document.body.classList.add('printing'); window.print(); document.body.classList.remove('printing'); if (more) more.open = was; return; } // 15.282 인쇄는 상세까지
       if (a === 'approve') { await api('POST', `/api/requests/${r.id}/approve`); toast(`승인했습니다. ${cfg.listTitle || cfg.label + '리스트'}에 등록됨`); }
       if (a === 'reject') { const v = await promptBox('반려 사유', '<label>사유 *<textarea name="reason" required rows="3"></textarea></label>'); if (!v) return; await api('POST', `/api/requests/${r.id}/reject`, v); toast('반려했습니다.'); }
       if (a === 'del') { if (!(await confirmBox('이 의뢰를 삭제할까요?'))) return; await api('DELETE', `/api/requests/${r.id}`); toast('삭제했습니다.'); }
-      if (a === 'status') { const v = await promptBox('상태/결과 변경', `<label>상태<select name="status">${['waiting', 'progress', 'done'].map((s) => `<option value="${s}" ${r.status === s ? 'selected' : ''}>${STATUS[s]}</option>`).join('')}</select></label><label>결과/메모<textarea name="result_note" rows="3">${esc(r.result_note)}</textarea></label>`); if (!v) return; await api('POST', `/api/requests/${r.id}/status`, v); toast('변경했습니다.'); }
+      if (a === 'status') { const v = await promptBox(type === 'rnd_analysis' ? '분석결과 입력' : '상태/결과 변경', `${type === 'rnd_analysis' && r.data?.dev_request_id ? `<p class="small muted">연결된 개발건 「${esc(r.data.dev_title || '')}」${r.data.dev_step ? ` · ${esc(r.data.dev_step)} 단계` : ''}의 단계별 분석 결과·소통 이력에 함께 남습니다.</p>` : ''}<label>상태<select name="status">${['waiting', 'progress', 'done'].map((s) => `<option value="${s}" ${r.status === s ? 'selected' : ''}>${STATUS[s]}</option>`).join('')}</select></label><label>결과/메모<textarea name="result_note" rows="3">${esc(r.result_note)}</textarea></label>`); if (!v) return; await api('POST', `/api/requests/${r.id}/status`, v); toast('변경했습니다.'); }
       if (a === 'edit') {
         m.close(); const e2 = modal(`<h3>${cfg.label}의뢰 수정</h3>${requestForm(type, r)}`, { wide: true });
         const editForm = $('form', e2.el); const draft = bindPhotoDraft(editForm);

@@ -3754,3 +3754,16 @@ tr.book-memo > td { background: var(--bg); font-style: italic; }
 .so-pr { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; text-align: left; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 7px 10px; cursor: pointer; }
 .so-pr:hover { border-color: var(--accent); }
 .pr-from-order { background: var(--accent-soft); border-radius: 8px; padding: 8px 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* 15.286 단계별 분석 결과 */
+.dc-ana-step { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; background: var(--panel); }
+.dc-ana-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.dc-ana-h .btn { margin-left: auto; }
+.dc-ana-item { display: block; width: 100%; text-align: left; border: 0; border-left: 4px solid #0c8599; background: color-mix(in srgb, #0c8599 6%, var(--panel)); border-radius: 6px; padding: 6px 10px; margin: 4px 0; cursor: pointer; }
+.dc-ana-item.st-done { border-left-color: #2f9e44; }
+.dc-ana-item:hover { background: color-mix(in srgb, #0c8599 12%, var(--panel)); }
+.dc-ana-no { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: var(--muted); }
+.dc-ana-res { margin-top: 2px; font-size: 13px; }
+.dc-ana-none { margin: 2px 0; }
+.dc-ana-checks { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.dr-ana { font-size: 12px; color: #0c8599; white-space: nowrap; }

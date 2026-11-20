@@ -21,6 +21,7 @@ const RND_CATEGORIES = ['의뢰분석', '시제품분석', '원료분석', '경�
 const analysisLike = t => t === 'analysis' || t === 'rnd_analysis';
 const ANALYSIS_CATEGORIES = ['수입검사', '의뢰검사', '출하검사', '공정검사'];
 const WORK_STATUSES = ['waiting', 'progress', 'done'];
+const STATUS_LABEL = { waiting: '대기', progress: '진행', done: '완료' }; // 15.286
 // 15.87 임가공: 외주 가공(세탁·커팅 등) 품목. 발주로만 받고(기타입고 불가) 세부 분류는 쓰지 않는다(item_category_nodes CHECK).
 const ITEM_CATEGORIES = ['원자재', '부자재', '반제품', '제품', '상품', '임가공'];
 function itemCategory(value) {
@@ -3503,6 +3504,17 @@ function requestFields(type, b) {
   if (type === 'rnd_analysis') { f.category = str(b.category, 20); if (!RND_CATEGORIES.includes(f.category)) throw bad('분석 구분을 선택하세요.'); if (data.item_category) f.data.item_category = itemCategory(data.item_category); } // 15.285
   return f;
 }
+// 15.286 연구 분석(rnd_analysis) ↔ 진행 중 개발건(development) · 로드맵 단계(공정 이름) 연결. data.dev_request_id·dev_step·dev_title에 둔다.
+async function rndDevLink(data) {
+  const raw = data.dev_request_id;
+  if (raw === undefined || raw === null || raw === '' || raw === 0 || raw === '0') { delete data.dev_request_id; delete data.dev_step; delete data.dev_title; return null; }
+  if (!/^[1-9]\d*$/.test(String(raw))) throw bad('연결할 개발건을 다시 고르세요.');
+  const dev = await db.prepare("SELECT id, req_no, title, status FROM requests WHERE id=? AND type='development' AND status NOT IN ('rejected')").get(Number(raw));
+  if (!dev) throw bad('연결할 개발건을 찾을 수 없습니다(개발 의뢰만 연결할 수 있습니다).');
+  data.dev_request_id = dev.id; data.dev_step = str(data.dev_step, 100); data.dev_title = dev.title;
+  return dev;
+}
+const rndDevNote = (user, devId, text) => ({ sql: 'INSERT INTO progress_comments(entity_type,entity_id,content,author_id,author_name) VALUES(?,?,?,?,?)', args: ['request', devId, ('[분석] ' + text).slice(0, 2000), user.id, user.name] });
 function decodeRequest(r) { return { ...r, data: JSON.parse(r.data || '{}') }; }
 async function getRequest(id) { const r = (await db.prepare('SELECT * FROM requests WHERE id=?').get(id)); if (!r) throw new HttpError(404, '의뢰를 찾을 수 없습니다.'); return r; }
 function roleLabel(type) { return { voc: '품질', analysis: '품질', development: '연구소', sample: '생산', sample_goods: '구매', rnd_analysis: '연구소' }[type]; }
@@ -3520,7 +3532,9 @@ route('GET', '/api/dev-roadmap', async ({ query }) => {
       (SELECT c.author_name || ' · ' || substr(c.created_at,6,11) || ' · ' || substr(c.content,1,80) FROM progress_comments c WHERE c.entity_type='request' AND c.entity_id=r.id AND c.content<>'(삭제됨)' ORDER BY c.id DESC LIMIT 1) AS last_comment
     FROM requests r LEFT JOIN dev_plans p ON p.request_id=r.id WHERE ${where.join(' AND ')} ORDER BY COALESCE(NULLIF(p.target_date,''), r.due_date, '9999') , r.id LIMIT 500`).all(...args);
   const steps = new Map(); for (const st of await db.prepare(`SELECT * FROM dev_plan_steps ${query.id ? 'WHERE request_id=? ' : ''}ORDER BY request_id, sort, id`).all(...(query.id ? [Number(query.id)] : []))) { if (!steps.has(st.request_id)) steps.set(st.request_id, []); steps.get(st.request_id).push(st); }
-  return { rows: rows.map(r => ({ ...r, term: r.term || '', progress: r.progress || 0, steps: steps.get(r.id) || [] })) };
+  const ana = new Map(); // 15.286 연결된 연구 분석(단계·결과)
+  for (const a of await db.prepare(`SELECT id, req_no, title, category, status, result_note, requester_name, created_at, updated_at, CAST(json_extract(data,'$.dev_request_id') AS INTEGER) AS dev_id, COALESCE(json_extract(data,'$.dev_step'),'') AS dev_step FROM requests WHERE type='rnd_analysis' AND status<>'rejected' AND json_extract(data,'$.dev_request_id') IS NOT NULL ${query.id ? "AND json_extract(data,'$.dev_request_id')=?" : ''} ORDER BY id`).all(...(query.id ? [Number(query.id)] : []))) { if (!ana.has(a.dev_id)) ana.set(a.dev_id, []); ana.get(a.dev_id).push(a); }
+  return { rows: rows.map(r => ({ ...r, term: r.term || '', progress: r.progress || 0, steps: steps.get(r.id) || [], analyses: ana.get(r.id) || [] })) };
 });
 // 15.277 담당자(개발·영업): 개발 담당·개발 승인권자·영업·관리자가 지정. 바뀌면 소통 내역에 [담당자] 한 줄을 같이 남김.
 route('PUT', '/api/dev-roadmap/:id/owners', async ({ user, params, body }) => {
@@ -3573,8 +3587,10 @@ route('GET', '/api/requests', async ({ query }) => {
 route('POST', '/api/requests', async ({ user, body }) => {
   const type = String(body.type || ''); if (!Object.hasOwn(REQUEST_TYPES, type)) throw bad('의뢰 종류가 올바르지 않습니다.');
   const f = requestFields(type, body);
+  const dev = type === 'rnd_analysis' ? await rndDevLink(f.data) : null; // 15.286
   const r = (await db.prepare('INSERT INTO requests(type,title,customer,due_date,category,target_price,data,requester_id,requester_name,inspection_snapshot) VALUES(?,?,?,?,?,?,?,?,?,?)')
     .run(type, f.title, f.customer, f.due_date, f.category, f.target_price, JSON.stringify(f.data), user.id, user.name, type==='analysis'?await inspectionSnapshot(f):''));
+  if (dev) { const c = rndDevNote(user, dev.id, `분석의뢰 등록 · ${f.title} (${f.category})${f.data.dev_step ? ` · 단계 「${f.data.dev_step}」` : ''}`); await db.prepare(c.sql).run(...c.args); }
   return decodeRequest((await getRequest(r.lastInsertRowid)));
 });
 route('PUT', '/api/requests/:id', async ({ user, params, body }) => {
@@ -3600,6 +3616,7 @@ route('PUT', '/api/requests/:id', async ({ user, params, body }) => {
     if (lineQty !== null) f.data.qty = lineQty;
   }
   f.data.spec = meta.spec; f.data.unit = meta.unit;
+  if (r.type === 'rnd_analysis') { if (f.data.dev_request_id === undefined) for (const k of ['dev_request_id', 'dev_step', 'dev_title']) { if (priorData[k] !== undefined) f.data[k] = priorData[k]; } else await rndDevLink(f.data); } // 15.286
   if (r.type === 'voc') f.data.lot = meta.lot;
   const status = r.status === 'rejected' && !isMgr ? 'pending' : r.status; // 반려건 수정 시 재접수
   (await db.prepare("UPDATE requests SET title=?,customer=?,due_date=?,category=?,target_price=?,data=?,status=?,spec=?,unit=?,lot=?,qty=?,updated_at=datetime('now','+9 hours') WHERE id=?")
@@ -3637,8 +3654,30 @@ route('POST', '/api/requests/:id/status', async ({ user, params, body }) => {
   if (!WORK_STATUSES.includes(r.status)) throw bad('승인된 의뢰만 진행상태를 바꿀 수 있습니다.');
   const status = String(body.status); if (!WORK_STATUSES.includes(status)) throw bad('상태 값이 올바르지 않습니다.');
   if(status==='done' && r.inspection_snapshot && !(await db.prepare("SELECT 1 FROM inspection_measurements WHERE request_id=? AND result IN ('pass','fail')").get(r.id))) throw bad('검사 측정값을 입력하고 판정을 완료하세요.');
-  (await db.prepare("UPDATE requests SET status=?, result_note=?, updated_at=datetime('now','+9 hours') WHERE id=?").run(status, body.result_note !== undefined ? str(body.result_note, 1000) : r.result_note, r.id));
+  const note = body.result_note !== undefined ? str(body.result_note, 1000) : r.result_note;
+  const cmds = [{ sql: "UPDATE requests SET status=?, result_note=?, updated_at=datetime('now','+9 hours') WHERE id=?", args: [status, note, r.id] }];
+  // 15.286 연구 분석 결과 이력: 결과·상태가 바뀌면 분석 자체와 연결된 개발건 소통에 한 줄씩(덮어써도 이력이 남음)
+  if (r.type === 'rnd_analysis' && (note !== (r.result_note || '') || status !== r.status)) {
+    const d = JSON.parse(r.data || '{}'), line = `${r.req_no || r.title} ${r.title} · ${STATUS_LABEL[status] || status}${note ? ` · 결과: ${note}` : ''}`;
+    cmds.push({ sql: 'INSERT INTO progress_comments(entity_type,entity_id,content,author_id,author_name) VALUES(?,?,?,?,?)', args: ['request', r.id, `[분석결과] ${STATUS_LABEL[status] || status}${note ? ' · ' + note : ''}`.slice(0, 2000), user.id, user.name] });
+    if (d.dev_request_id) cmds.push(rndDevNote(user, d.dev_request_id, `${line}${d.dev_step ? ` · 단계 「${d.dev_step}」` : ''}`));
+  }
+  await db.batch(cmds);
   return decodeRequest((await getRequest(r.id)));
+});
+// 15.286 이미 있는 연구 분석을 개발건·단계에 연결(바꾸기·끊기). 연구 담당·승인권자·의뢰자.
+route('POST', '/api/requests/:id/dev-link', async ({ user, params, body }) => {
+  const r = await getRequest(params.id); if (r.type !== 'rnd_analysis') throw bad('연구 분석의뢰만 개발건에 연결합니다.');
+  if (!(hasRole(user, 'dev') || hasRole(user, 'dev_approver') || r.requester_id === user.id)) throw new HttpError(403, '연구 담당자 또는 의뢰자만 연결할 수 있습니다.');
+  const d = JSON.parse(r.data || '{}'), before = d.dev_request_id || null, beforeStep = d.dev_step || '';
+  d.dev_request_id = body.dev_request_id; d.dev_step = body.dev_step;
+  const dev = await rndDevLink(d);
+  const cmds = [{ sql: "UPDATE requests SET data=?, updated_at=datetime('now','+9 hours') WHERE id=?", args: [JSON.stringify(d), r.id] }];
+  const label = `${r.req_no || ''} ${r.title}`.trim();
+  if (before && before !== dev?.id) cmds.push(rndDevNote(user, before, `연결 해제 · ${label}`));
+  if (dev && (before !== dev.id || beforeStep !== (d.dev_step || ''))) cmds.push(rndDevNote(user, dev.id, `분석 연결 · ${label} (${r.category})${d.dev_step ? ` · 단계 「${d.dev_step}」` : ''}${r.result_note ? ` · 결과: ${r.result_note}` : ''}`));
+  await db.batch(cmds);
+  return decodeRequest(await getRequest(r.id));
 });
 route('DELETE', '/api/requests/:id', async ({ user, params }) => {
   const r = (await getRequest(params.id));
