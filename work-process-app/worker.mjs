@@ -594,12 +594,14 @@ function vendorFlag(value) {
 }
 route('POST', '/api/vendors', async ({ user, body }) => {
   const [name, contact, phone] = vendorFields(body);
+  const tax = vendorTaxValues(body); if (tax && TAX_VENDOR_FIELDS.some(k => k !== 'tax_reverse' && tax[k]) && !hasRole(user, 'sales') && !hasRole(user, 'purchase')) throw new HttpError(403, '사업자 정보는 영업·구매 담당자나 관리자가 넣습니다. 사업자 칸을 비우고 등록하세요.'); // 15.266
   if (await db.prepare('SELECT 1 FROM vendors WHERE name_key=?').get(nameKey(name))) throw new HttpError(409, '이미 등록된 거래처입니다. 목록에서 수정하세요.');
   const code = vendorCode(body.code);
   if (code && await db.prepare('SELECT 1 FROM vendors WHERE code=?').get(code)) throw new HttpError(409, `거래처코드 ${code}는 이미 쓰고 있습니다.`);
   let r;
   try { r = await db.prepare(`INSERT INTO vendors(name,name_key,contact_name,phone,created_by,is_purchase,is_sales,freight_terms,sales_rep,code) VALUES(?,?,?,?,?,?,?,?,?,${code ? '?' : VENDOR_AUTO_CODE})`).run(name, nameKey(name), contact, phone, user.name, vendorFlag(body.is_purchase) || 0, vendorFlag(body.is_sales) || 0, JSON.stringify(freightTerms(body.freight_terms) || []), repName(body.sales_rep), ...(code ? [code] : [])); }
   catch (error) { if (/UNIQUE/i.test(String(error && error.message))) throw new HttpError(409, '그 사이 같은 이름이나 코드의 거래처가 등록되었습니다. 새로 불러오세요.'); throw error; }
+  if (tax) await db.prepare(`UPDATE vendors SET ${TAX_VENDOR_FIELDS.map(k => `${k}=?`).join(',')} WHERE id=?`).run(...TAX_VENDOR_FIELDS.map(k => tax[k]), r.lastInsertRowid); // 15.266
   return decodeVendor(await mustGet('vendors', r.lastInsertRowid));
 });
 route('PUT', '/api/vendors/:id', async ({ user, params, body }) => {
@@ -614,7 +616,9 @@ route('PUT', '/api/vendors/:id', async ({ user, params, body }) => {
   // 15.101 이름을 바꾸면 그 이름으로 저장된 문서(수주·전표·출하지시·세금계산서 초안·발주·출하·마감 키)도 따라 바꾼다.
   // 문서는 거래처 이름 글자를 들고 있어 그대로 두면 수주 잔량·전표 없는 출하·마감 확인이 새 이름과 맞지 않는다.
   const rep = body.sales_rep === undefined ? row.sales_rep || '' : repName(body.sales_rep); // 15.224
+  const tax = vendorTaxValues(body, row); if (vendorTaxChanged(tax, row) && !hasRole(user, 'sales') && !hasRole(user, 'purchase')) throw new HttpError(403, '사업자 정보는 영업·구매 담당자나 관리자가 고칩니다.'); // 15.266
   const cmds = [{ sql: 'UPDATE vendors SET name=?,name_key=?,contact_name=?,phone=?,is_purchase=?,is_sales=?,freight_terms=?,code=?,sales_rep=?,updated_by=?,updated_at=? WHERE id=?', args: [name, nameKey(name), contact, phone, purchase, sales, terms === undefined ? row.freight_terms : JSON.stringify(terms), code || '', rep, user.name, now(), row.id] }];
+  if (vendorTaxChanged(tax, row)) cmds.push({ sql: `UPDATE vendors SET ${TAX_VENDOR_FIELDS.map(k => `${k}=?`).join(',')} WHERE id=?`, args: [...TAX_VENDOR_FIELDS.map(k => tax[k]), row.id] }); // 15.266 사업자 정보도 같은 저장에서
   if ((code || '') !== (row.code || '')) cmds.push({ sql: "UPDATE sales_orders SET customer_code=? WHERE status='open' AND REPLACE(LOWER(customer),' ','')=?", args: [code || '', row.name_key] }); // 15.104 열린 수주만 새 코드로(끝난 수주는 당시 코드)
   if (nameKey(name) !== row.name_key || name !== row.name) {
     const k = row.name_key;
@@ -1200,7 +1204,7 @@ route('DELETE', '/api/warehouses/:id', async ({ user, params }) => {
   const row = await mustGet('warehouses', params.id);
   const lots = (await db.prepare('SELECT COUNT(*) c FROM po_receipt_lots WHERE warehouse=?').get(row.name)).c;
   const others = (await db.prepare('SELECT COUNT(*) c FROM other_receipts WHERE warehouse=?').get(row.name)).c;
-  const moves = (await db.prepare('SELECT COUNT(*) c FROM stock_transfers WHERE to_warehouse=?').get(row.name)).c;
+  const moves = (await db.prepare('SELECT COUNT(*) c FROM stock_transfers WHERE to_warehouse=?').get(row.name)).c + (await db.prepare('SELECT COUNT(*) c FROM stock_adjustments WHERE warehouse=?').get(row.name)).c; // 15.266 조정 기록도
   if (lots || others || moves) throw new HttpError(409, `${row.name}: 입고·이동 기록 ${lots + others + moves}건이 이 창고에 있어 지울 수 없습니다. 「사용」을 끄면 입력 화면에서만 빠집니다.`);
   const r = await db.prepare('DELETE FROM warehouses WHERE id=? AND NOT EXISTS(SELECT 1 FROM po_receipt_lots WHERE warehouse=?) AND NOT EXISTS(SELECT 1 FROM other_receipts WHERE warehouse=?) AND NOT EXISTS(SELECT 1 FROM stock_transfers WHERE to_warehouse=?)').run(row.id, row.name, row.name, row.name);
   if (!r.changes) throw new HttpError(409, '그 사이 이 창고로 입고가 기록되어 지울 수 없습니다.');
@@ -1208,22 +1212,37 @@ route('DELETE', '/api/warehouses/:id', async ({ user, params }) => {
 });
 route('PUT', '/api/warehouses/:id', async ({ user, params, body }) => {
   if (!canAdjustStock(user)) throw new HttpError(403, '창고는 물류팀장·관리자가 고칩니다.');
-  const row = await mustGet('warehouses', params.id), f = warehouseFields({ name: row.name, locations: row.locations, sort: row.sort, ...body });
+  const row = await mustGet('warehouses', params.id);
+  // 15.266 위치 이름 바꾸기: [{ from, to }] — 기록이 있는 위치도 바꿀 수 있고, 그 위치의 입고·이동·조정 기록도 함께 바뀐다
+  const renames = (Array.isArray(body.rename_locations) ? body.rename_locations : []).map(x => ({ from: str(x?.from, 50), to: str(x?.to, 50) })).filter(x => x.from && x.to && x.from !== x.to);
+  if (renames.length > 50) throw bad('위치 이름은 한 번에 50개까지 바꿀 수 있습니다.');
+  let locs = body.locations === undefined ? row.locations : body.locations;
+  if (renames.length) { const cur = String(locs || '').split(/[,\n]/).map(x => x.trim()).filter(Boolean); for (const r of renames) { if (!cur.includes(r.from)) throw bad(`${row.name}: 「${r.from}」 위치가 없습니다.`); if (cur.includes(r.to)) throw bad(`${row.name}: 「${r.to}」 위치가 이미 있습니다.`); cur[cur.indexOf(r.from)] = r.to; } locs = cur.join(','); }
+  const f = warehouseFields({ name: row.name, sort: row.sort, ...body, locations: locs });
   const clash = await db.prepare('SELECT id FROM warehouses WHERE name=?').get(f.name); if (clash && clash.id !== row.id) throw new HttpError(409, '같은 이름의 창고가 있습니다.');
   const active = body.active === undefined ? row.active : body.active ? 1 : 0;
   { // 15.209 입고·이동 기록이 있는 위치는 목록에서 지우지 못함(그 위치 재고가 「없는 위치」가 됨)
-    const keep = new Set(f.locations ? f.locations.split(',') : []), gone = (row.locations ? row.locations.split(',') : []).filter(x => !keep.has(x));
+    const keep = new Set(f.locations ? f.locations.split(',') : []), moved = new Set(renames.map(r => r.from)), gone = (row.locations ? row.locations.split(',') : []).filter(x => !keep.has(x) && !moved.has(x));
     for (const loc of gone) {
       const used = await db.prepare("SELECT (SELECT COUNT(*) FROM po_receipt_lots WHERE warehouse=? AND location=?) + (SELECT COUNT(*) FROM other_receipts WHERE warehouse=? AND location=?) + (SELECT COUNT(*) FROM stock_transfers WHERE to_warehouse=? AND to_location=? AND status='confirmed') AS n").get(row.name, loc, row.name, loc, row.name, loc);
       if (used.n) throw new HttpError(409, `${row.name} ${loc}: 입고·이동 기록 ${used.n}건이 있는 위치라 지울 수 없습니다. 재고를 다른 위치로 옮긴 뒤 지우세요.`);
     }
   }
-  // 이름을 바꾸면 기록에 남은 창고 이름도 함께 바꾼다(위치는 그대로).
-  try { await db.batch([
-    { sql: 'UPDATE warehouses SET name=?,locations=?,sort=?,active=? WHERE id=?', args: [f.name, f.locations, f.sort, active, row.id] },
-    { sql: 'UPDATE po_receipt_lots SET warehouse=? WHERE warehouse=?', args: [f.name, row.name] },
-    { sql: 'UPDATE other_receipts SET warehouse=? WHERE warehouse=?', args: [f.name, row.name] },
-  ]); } catch (error) { if (/UNIQUE/i.test(String(error && error.message))) throw new HttpError(409, '같은 이름의 창고가 있습니다.'); throw error; }
+  // 이름을 바꾸면 기록에 남은 창고 이름도 함께 바꾼다. 15.266 이동(도착·출발 위치 글자)·재고 조정도 함께, 위치 이름 바꾸기도 함께.
+  const W = row.name, N = f.name, cmds = [
+    { sql: 'UPDATE warehouses SET name=?,locations=?,sort=?,active=? WHERE id=?', args: [N, f.locations, f.sort, active, row.id] },
+    { sql: 'UPDATE po_receipt_lots SET warehouse=? WHERE warehouse=?', args: [N, W] },
+    { sql: 'UPDATE other_receipts SET warehouse=? WHERE warehouse=?', args: [N, W] },
+    { sql: "UPDATE stock_transfers SET to_warehouse=?, to_place=TRIM(? || ' ' || COALESCE(to_location,'')) WHERE to_warehouse=?", args: [N, N, W] },
+    { sql: "UPDATE stock_transfers SET from_place=? || substr(from_place, length(?) + 1) WHERE from_place=? OR substr(from_place, 1, length(?) + 1)=? || ' '", args: [N, W, W, W, W] },
+    { sql: 'UPDATE stock_adjustments SET warehouse=? WHERE warehouse=?', args: [N, W] }];
+  for (const r of renames) cmds.push(
+    { sql: 'UPDATE po_receipt_lots SET location=? WHERE warehouse=? AND location=?', args: [r.to, N, r.from] },
+    { sql: 'UPDATE other_receipts SET location=? WHERE warehouse=? AND location=?', args: [r.to, N, r.from] },
+    { sql: "UPDATE stock_transfers SET to_location=?, to_place=TRIM(to_warehouse || ' ' || ?) WHERE to_warehouse=? AND to_location=?", args: [r.to, r.to, N, r.from] },
+    { sql: "UPDATE stock_transfers SET from_place=TRIM(? || ' ' || ?) WHERE from_place=TRIM(? || ' ' || ?)", args: [N, r.to, N, r.from] },
+    { sql: 'UPDATE stock_adjustments SET location=? WHERE warehouse=? AND location=?', args: [r.to, N, r.from] });
+  try { await db.batch(cmds); } catch (error) { if (/UNIQUE/i.test(String(error && error.message))) throw new HttpError(409, '같은 이름의 창고가 있습니다.'); throw error; }
   return mustGet('warehouses', row.id);
 });
 
@@ -2550,6 +2569,15 @@ route('PUT', '/api/tax-company', async ({ user, body }) => {
   return v;
 });
 // 거래처 사업자 정보(세금계산서용)
+// 15.266 사업자 정보 값(거래처 등록·수정 한 번에 쓰려고 함수로). 본문에 사업자 칸이 하나도 없으면 null.
+function vendorTaxValues(body, row = {}) {
+  if (!TAX_VENDOR_FIELDS.some(k => body[k] !== undefined)) return null;
+  const pick = (k, f) => body[k] === undefined ? row[k] ?? '' : f(body[k]);
+  return { biz_no: pick('biz_no', bizNoField), biz_name: pick('biz_name', x => str(x, 100)), ceo: pick('ceo', x => str(x, 50)), address: pick('address', x => str(x, 200)), biz_type: pick('biz_type', x => str(x, 100)), biz_item: pick('biz_item', x => str(x, 100)),
+    tax_email: pick('tax_email', x => taxEmail(x, '세금계산서 이메일 1')), tax_email2: pick('tax_email2', x => taxEmail(x, '세금계산서 이메일 2')),
+    tax_reverse: body.tax_reverse === undefined ? row.tax_reverse || 0 : (body.tax_reverse === true || body.tax_reverse === 1 || body.tax_reverse === '1' || (Array.isArray(body.tax_reverse) && body.tax_reverse.length)) ? 1 : 0 };
+}
+const vendorTaxChanged = (v, row) => v && TAX_VENDOR_FIELDS.some(k => String(v[k] ?? '') !== String(row[k] ?? ''));
 route('PUT', '/api/vendors/:id/tax-info', async ({ user, params, body }) => {
   if (!hasRole(user, 'sales') && !hasRole(user, 'purchase')) throw new HttpError(403, '사업자 정보는 영업·구매 담당자나 관리자가 고칩니다.');
   const row = await mustGet('vendors', params.id);

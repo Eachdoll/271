@@ -32,6 +32,7 @@ async function pageStock(main) {
   try { const v = JSON.parse(sessionStorage.getItem('wpa:stock-sel') || 'null'); if (v && ['all', 'cat', 'wh'].includes(v.k) && Array.isArray(v.p)) sel = v; opened = new Set(JSON.parse(sessionStorage.getItem('wpa:stock-open') || '[]')); nav = sessionStorage.getItem('wpa:stock-nav') === 'wh' || sel.k === 'wh' ? 'wh' : 'cat'; } catch { /* 편의 */ }
   const canWh = ME.is_admin || ME.roles.includes('logistics_approver');
   const SEP = '\u0001', keyOf = (k, p) => [k, ...p].join(SEP);
+  if (sel.k !== 'all') for (let n = 1; n < sel.p.length; n++) opened.add(keyOf(sel.k, sel.p.slice(0, n))); // 15.266 다른 화면에서 고른 곳으로 오면 상위 폴더 펼침
   const matchCat = r => sel.k !== 'cat' || ((r.category || '미분류') === sel.p[0] && (!sel.p[1] || r.cat1 === sel.p[1]) && (!sel.p[2] || r.cat2 === sel.p[2]) && (!sel.p[3] || r.cat3 === sel.p[3]));
   const NOPLACE = '(위치 미지정)', matchWh = r => sel.k !== 'wh' || ((sel.p[0] === NOPLACE ? !r.warehouse : r.warehouse === sel.p[0]) && (!sel.p[1] || (sel.p[1] === NOPLACE ? !r.location : r.location === sel.p[1])));
   const catTree = () => {
@@ -55,7 +56,7 @@ async function pageStock(main) {
     $('#stockTree', main).innerHTML = `<div class="st-tabs" role="tablist" aria-label="내비게이션"><button type="button" role="tab" data-st-mode="cat" aria-selected="${nav === 'cat'}">📦 자재별</button><button type="button" role="tab" data-st-mode="wh" aria-selected="${nav === 'wh'}">🏬 창고별</button></div>
       <div class="st-row${sel.k === 'all' ? ' on' : ''}" style="--d:0"><span class="st-tw"></span><button type="button" class="st-node" data-st="all"><span class="st-ic">🗂</span>${nav === 'cat' ? '전체 자재' : '전체 창고'}${all != null ? ` <span class="st-n">${fmtNum(all)}</span>` : ''}</button></div>
       ${nav === 'cat' ? branch('cat', catTree(), [], 0) : branch('wh', whTree(), [], 0)}
-      <div class="st-set">${nav === 'cat' ? (ME.is_admin ? '<button type="button" class="btn small" data-st-set="cat">⚙ 분류 설정</button>' : '<span class="small muted">분류는 관리자가 설정합니다</span>') : (canWh ? '<button type="button" class="btn small" data-st-set="wh">⚙ 창고·구역 설정</button>' : '<span class="small muted">창고·구역은 물류팀장·관리자가 설정합니다</span>')}</div>`;
+      <div class="st-set">${nav === 'cat' ? (ME.is_admin ? '<button type="button" class="btn small" data-st-set="cat">⚙ 분류 설정</button>' : '<span class="small muted">분류는 관리자가 설정합니다</span>') : (canWh ? '<a class="btn small" href="#/logistics/warehouses" data-st-whlink>⚙ 창고 관리에서 설정</a>' : '<span class="small muted">창고·구역은 물류팀장·관리자가 설정합니다</span>')}</div>`;
     $('#stockPath', main).innerHTML = sel.k === 'all' ? '' : `<span class="muted">${sel.k === 'cat' ? '자재별' : '창고별'}</span> › ${sel.p.map(x => `<b>${esc(x)}</b>`).join(' › ')} <button type="button" class="link-btn small" data-st="all">전체 보기</button>`;
   };
   const saveTree = () => { try { sessionStorage.setItem('wpa:stock-sel', JSON.stringify(sel)); sessionStorage.setItem('wpa:stock-open', JSON.stringify([...opened])); sessionStorage.setItem('wpa:stock-nav', nav); } catch { /* 편의 */ } };
@@ -63,7 +64,7 @@ async function pageStock(main) {
   const setGroup = g => $$('[name=group]', main).forEach(r => { r.checked = r.value === g; });
   main.addEventListener('click', e => {
     const md = e.target.closest('[data-st-mode]'); if (md) { if (md.dataset.stMode !== nav) { nav = md.dataset.stMode; sel = { k: 'all', p: [] }; saveTree(); setGroup(nav === 'wh' ? 'place' : 'item'); drawTree(); load().catch(fail); } return; }
-    const st = e.target.closest('[data-st-set]'); if (st) { if (st.dataset.stSet === 'cat') manageItemCategories(sel.k === 'cat' && ['원자재', '부자재', '제품', '상품', '반제품'].includes(sel.p[0]) ? sel.p[0] : '원자재', reloadTree).catch(fail); else stockWarehouseEditor(reloadTree).catch(fail); return; }
+    const st = e.target.closest('[data-st-set]'); if (st) { if (st.dataset.stSet === 'cat') manageItemCategories(sel.k === 'cat' && ['원자재', '부자재', '제품', '상품', '반제품'].includes(sel.p[0]) ? sel.p[0] : '원자재', reloadTree).catch(fail); return; }
     const tw = e.target.closest('[data-st-tw]'); if (tw) { const k = tw.dataset.stTw; opened.has(k) ? opened.delete(k) : opened.add(k); saveTree(); drawTree(); return; }
     const nd = e.target.closest('[data-st]'); if (!nd) return;
     const [k, ...p] = nd.dataset.st.split(SEP); const key = nd.dataset.st;
@@ -524,25 +525,6 @@ async function lotHistoryWindow(r, onChange) {
       const v = await promptBox(`특채 취소 · ${r.lot}`, `<p class="small muted">취소하면 다시 투입·출고가 막힙니다(이미 쓴 기록은 그대로).</p><label>취소 사유 *<input name="reason" required maxlength="500"></label>`); if (!v) return;
       try { await api('POST', `/api/lots/concession/${vd.dataset.lcVoid}/void`, { reason: v.reason }); toast('특채를 취소했습니다.'); m.close(); await onChange?.(); } catch (error) { fail(error); }
     }
-  });
-}
-// 15.259 창고·구역 설정(물류팀장·관리자): 창고 이름·구역(쉼표·줄바꿈)·순서, 추가·저장·삭제
-async function stockWarehouseEditor(onClose) {
-  let list = await api('GET', '/api/warehouses?all=1');
-  const m = modal(`<h3>창고·구역 설정</h3><p class="small muted">재고 현황 「창고별」에 나오는 창고와 그 아래 구역(Location)입니다. 구역은 쉼표나 줄바꿈으로 나눠 적습니다. 입고·이동 기록이 있는 창고는 지울 수 없고 「사용」을 끄면 입력 화면에서만 빠집니다.</p><div data-wh-box></div><div class="actions"><button type="button" class="btn" data-wh-add>＋ 창고 추가</button><button type="button" class="btn primary" data-wh-done>닫기</button></div>`, { wide: true, onClose: () => onClose?.() });
-  const box = $('[data-wh-box]', m.el);
-  const draw = () => { box.innerHTML = `<div class="table-wrap"><table class="grid" data-no-sort data-keep-cols><thead><tr><th>순서</th><th>창고 이름</th><th>구역(Location)</th><th>사용</th><th></th></tr></thead><tbody>${list.map((w, i) => `<tr data-wh="${i}"><td><input type="number" name="sort" value="${esc(w.sort ?? 0)}" step="1" style="width:4.5em" aria-label="순서"></td><td><input name="name" value="${esc(w.name || '')}" maxlength="50" required aria-label="창고 이름" placeholder="예) 1동창고"></td><td><textarea name="locations" rows="2" maxlength="5000" aria-label="구역" placeholder="예) A구역, B구역">${esc(String(w.locations || '').split(',').join(', '))}</textarea></td><td class="c"><input type="checkbox" name="active"${w.active === 0 ? '' : ' checked'} aria-label="사용"></td><td class="nowrap"><button type="button" class="btn small primary" data-wh-save="${i}">저장</button>${w.id ? ` <button type="button" class="btn small danger" data-wh-del="${i}">삭제</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">창고가 없습니다. 「창고 추가」로 넣으세요.</td></tr>'}</tbody></table></div>`; };
-  const reload = async () => { list = await api('GET', '/api/warehouses?all=1'); draw(); };
-  draw();
-  $('[data-wh-done]', m.el).onclick = () => m.close();
-  $('[data-wh-add]', m.el).onclick = () => { list.push({ name: '', locations: '', sort: list.length ? Math.max(...list.map(w => Number(w.sort) || 0)) + 1 : 0, active: 1 }); draw(); $(`[data-wh="${list.length - 1}"] [name=name]`, box)?.focus(); };
-  box.addEventListener('click', async e => {
-    const sv = e.target.closest('[data-wh-save]'); if (sv) { const i = Number(sv.dataset.whSave), tr = sv.closest('tr'), w = list[i];
-      const body = { name: tr.querySelector('[name=name]').value.trim(), locations: tr.querySelector('[name=locations]').value.split(/[,\n]/).map(x => x.trim()).filter(Boolean).join(','), sort: Number(tr.querySelector('[name=sort]').value) || 0, active: tr.querySelector('[name=active]').checked };
-      if (!body.name) { tr.querySelector('[name=name]').focus(); return toast('창고 이름을 넣으세요.', 'err'); }
-      sv.disabled = true; try { await api(w.id ? 'PUT' : 'POST', w.id ? `/api/warehouses/${w.id}` : '/api/warehouses', body); toast(`${body.name} 저장했습니다.`); if (typeof rcLoadWarehouses === 'function') rcLoadWarehouses(true).catch(() => {}); await reload(); } catch (error) { sv.disabled = false; fail(error); } return; }
-    const dl = e.target.closest('[data-wh-del]'); if (dl) { const w = list[Number(dl.dataset.whDel)]; if (!await confirmBox(`${w.name} 창고를 지울까요?`)) return;
-      try { await api('DELETE', `/api/warehouses/${w.id}`); toast('지웠습니다.'); await reload(); } catch (error) { fail(error); } }
   });
 }
 // 15.260 품목 줄 더블클릭: 이 품목의 LOT별 잔량 → LOT 줄을 누르면 그 LOT의 입출고 내역

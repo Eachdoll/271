@@ -371,3 +371,25 @@ test('15.265 stock adjustment by LOT and location: count and +/- change LOT, pla
   assert.equal((await prod('POST', '/api/semi-batches', { process: 'cut', common: { work_date: today, unit_id: line.id }, request_id: rid(), items: [{ entry_mode: 'code', bom_id: semi.id, product_group: 'wiper', product_type: '천와이퍼', start_time: '08:00', end_time: '09:00', qty: 1000, inputs: [{ item: '위치원단', lot: 'WC-L', piece_nos: [1] }] }] })).status, 200);
   assert.equal((await prod('GET', '/api/inventory/places?q=WC-L')).body.rows.filter(r => r.lot === 'WC-L').reduce((t, r) => t + r.qty, 0), 40);
 });
+
+test('15.266 warehouse and location renames carry through receipts, moves and adjustments; vendor saved with business info at once', async () => {
+  const w1 = (await admin('POST', '/api/warehouses', { name: '연동1동', locations: 'A,B' })).body;
+  const g = (await admin('POST', '/api/boms', { product: '연동상품', product_code: 'LK-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  await admin('POST', '/api/receipts', { receipt_date: today, vendor: '연동상사', request_id: rid(), lines: [{ bom_id: g.id, lot: 'LK-L', qty: 20, warehouse: '연동1동', location: 'A' }] });
+  assert.equal((await admin('POST', '/api/stock-transfers', { item: '연동상품', unit: 'EA', lot: 'LK-L', qty: 5, from_place: '연동1동 A', to_warehouse: '연동1동', to_location: 'B', request_id: rid() })).status, 200);
+  assert.equal((await admin('POST', '/api/inventory/adjustments', { item: '연동상품', unit: 'EA', lot: 'LK-L', warehouse: '연동1동', location: 'B', kind: 'adjust', qty: 2, reason: 'x', request_id: rid() })).status, 200);
+  const places = async () => Object.fromEntries((await prod('GET', '/api/inventory/places?q=LK-L')).body.rows.filter(r => r.lot === 'LK-L').map(r => [`${r.warehouse} ${r.location}`, r.qty]));
+  assert.deepEqual(await places(), { '연동1동 A': 15, '연동1동 B': 7 });
+  // 창고 이름 + 위치 이름 바꾸기 → 위치별 재고가 새 이름으로 그대로
+  const up = await admin('PUT', `/api/warehouses/${w1.id}`, { name: '연동2동', rename_locations: [{ from: 'B', to: 'B구역' }] });
+  assert.equal(up.status, 200, JSON.stringify(up.body)); assert.equal(up.body.locations, 'A,B구역');
+  assert.deepEqual(await places(), { '연동2동 A': 15, '연동2동 B구역': 7 });
+  assert.equal((await admin('PUT', `/api/warehouses/${w1.id}`, { rename_locations: [{ from: 'A', to: 'B구역' }] })).status, 400, 'name already there');
+  // 거래처: 기본 + 사업자 정보 한 번에
+  const v = await admin('POST', '/api/vendors', { name: '한번상사', is_purchase: true, biz_no: '123-45-67890', ceo: '김대표', address: '서울', biz_type: '도소매', biz_item: '부자재', tax_email: 'a@b.co', tax_reverse: 1 });
+  assert.equal(v.status, 200, JSON.stringify(v.body)); assert.equal(v.body.biz_no, '123-45-67890'); assert.equal(v.body.ceo, '김대표'); assert.equal(v.body.tax_reverse, 1);
+  const e = await admin('PUT', `/api/vendors/${v.body.id}`, { name: '한번상사', contact_name: '이담당', ceo: '박대표', tax_reverse: 0 });
+  assert.equal(e.status, 200); assert.equal(e.body.ceo, '박대표'); assert.equal(e.body.tax_reverse, 0); assert.equal(e.body.biz_no, '123-45-67890'); assert.equal(e.body.contact_name, '이담당');
+  assert.equal((await prod('POST', '/api/vendors', { name: '권한상사', biz_no: '123-45-67891' })).status, 403, 'business info needs sales/purchase');
+  assert.equal((await prod('POST', '/api/vendors', { name: '권한상사' })).status, 200, 'without business info is fine');
+});

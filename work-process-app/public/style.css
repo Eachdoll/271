@@ -3514,3 +3514,7 @@ tr.lot-tk-sub > td { background: #fffbe6 !important; box-shadow: inset 3px 0 0 #
 /* 15.265 재고 수량 조정 창 */
 .adj-how { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 10px 12px; background: var(--bg); border-radius: 10px; }
 .adj-how label.inline { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+
+/* 15.266 거래처 등록·수정: 사업자 정보 묶음, 창고 관리 재고 칸 */
+.vendor-tax-h { grid-column: 1 / -1; margin: 10px 0 0; padding-top: 10px; border-top: 1px dashed var(--line); font-size: 14px; }
+.wh-loc-stock { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; } .wh-loc-stock a.chip { text-decoration: none; }
