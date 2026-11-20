@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.277';
+const APP_VERSION = '15.278';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -1387,6 +1387,39 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'Escape') { setCell(null); return; } else return;
   if (next) { e.preventDefault(); setCell(next); }
 });
+// 15.278 표 안 입력칸: 방향키는 값 올리고 내리기 대신 칸 이동(엑셀처럼). 숫자칸은 ↑↓←→ 모두 이동,
+// 글자칸은 ↑↓ 이동 · ←→는 글자 맨 앞/끝에서만 이동. 화면별 자체 처리(preventDefault)·추천 목록·조합 중은 건드리지 않음.
+const GRID_NAV_SKIP = new Set(['checkbox', 'radio', 'range', 'file', 'button', 'submit', 'reset', 'hidden', 'color']);
+const gridNavTarget = el => el && !el.disabled && !el.hidden && el.offsetParent !== null && !(el.tagName === 'INPUT' && GRID_NAV_SKIP.has(el.type));
+const gridNavIn = td => td && [...td.querySelectorAll('input, select, textarea')].find(gridNavTarget);
+document.addEventListener('keydown', e => {
+  if (e.defaultPrevented || e.isComposing || e.keyCode === 229 || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+  const el = e.target; if (!(el instanceof HTMLInputElement) || GRID_NAV_SKIP.has(el.type) || el.closest('[data-no-arrow-nav]')) return;
+  const td = el.closest('td, th'), tr = td?.parentElement, table = tr?.closest('table'); if (!td || !table || td.closest('table') !== table) return;
+  const num = el.type === 'number', vertical = e.key === 'ArrowUp' || e.key === 'ArrowDown';
+  if (!num && vertical && el.list) return; // 고르기 목록(datalist)은 ↓로 펼침
+  if (!num && !vertical) { // 글자칸 ←→: 맨 앞/끝일 때만
+    let a = null, b = null; try { a = el.selectionStart; b = el.selectionEnd; } catch { /* date 등 */ }
+    if (a === null) { if (el.type === 'date' || el.type === 'time' || el.type === 'month') return; }
+    else if (a !== b || (e.key === 'ArrowLeft' ? a > 0 : b < el.value.length)) return;
+  } else if (!num && el.type !== 'text' && el.type !== 'search' && el.type !== 'tel' && el.type !== 'email' && el.type !== 'url' && el.type !== '') return; // 날짜칸 ↑↓는 날짜 고치기 그대로
+  let next = null;
+  if (vertical) {
+    const col = td.cellIndex, step = e.key === 'ArrowDown' ? 1 : -1, rows = [...table.rows]; let i = rows.indexOf(tr) + step;
+    for (; rows[i]; i += step) { const r = rows[i]; if (r.hidden || r.offsetParent === null) continue; next = gridNavIn(r.cells[col]); if (next) break; }
+  } else {
+    const cells = [...tr.cells], step = e.key === 'ArrowRight' ? 1 : -1;
+    // 같은 칸 안에 입력칸이 여러 개면 그 안에서 먼저
+    const inCell = [...td.querySelectorAll('input, select, textarea')].filter(gridNavTarget), k = inCell.indexOf(el);
+    next = inCell[k + step] || null;
+    for (let i = td.cellIndex + step; !next && cells[i]; i += step) { const list = [...cells[i].querySelectorAll('input, select, textarea')].filter(gridNavTarget); next = step > 0 ? list[0] : list.at(-1); }
+  }
+  if (num || next) e.preventDefault(); // 숫자칸은 끝 칸이어도 값이 바뀌지 않게
+  if (next) { next.focus(); try { next.select?.(); } catch { /* */ } }
+});
+// 표 안 숫자칸: 마우스 휠로 값이 바뀌지 않게(포커스된 숫자칸 위 휠은 화면 스크롤로)
+document.addEventListener('wheel', e => { const el = e.target; if (el instanceof HTMLInputElement && el.type === 'number' && el === document.activeElement && el.closest('td')) el.blur(); }, { passive: true });
 // 15.204 휴대폰 3줄 그리드(출하지시 15.202와 같은 모양을 여러 목록에): 칸 이름표 상자(as-cards) 대신
 // 1줄 = 제목(a) + 오른쪽 값(b), 2줄 = 짧은 정보(c, 이름표는 [머리글, 줄임말]일 때만), 3줄 = 입력·단추(d). 나머지 칸(x)은 휴대폰에서 숨김. PC 표는 그대로.
 const PHONE_GRID = [
