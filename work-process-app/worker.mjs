@@ -5397,6 +5397,18 @@ function costCompute(item0, rates, prices) {
     sale_price: sale, margin: sale == null ? null : cr2(sale - total), margin_rate: sale ? cr2((sale - total) / sale * 100) : null, missing_price: lines.some(l => l.price_src === 'missing') };
   return { lines, totals, rates: used };
 }
+// 15.320 제품 사양(포장 구조·포장당/외포장당/박스당 sh·시트·원단 폭·자재 매입가) — 화면이 이 값으로 원가 줄(auto)을 만든다. 정해진 칸만 받는다.
+const COST_AUTO = ['fabric', 'pack', 'outer', 'box', 'cut', 'packing'];
+const COST_BUILD_ENUM = { pack: ['double', 'triple'], unit: ['pack', 'sheet', 'box'], dim: ['in', 'mm'], fdim: ['in', 'mm'], fbasis: ['', 'yd', 'sqm', 'm'], pk_cu: ['pack', 'sh'] };
+const COST_BUILD_VAL = ['sw', 'sl', 'fw', 'floss', 'spy', 'spp', 'spo', 'spb', 'puse', 'ouse', 'buse', 'fprice', 'pprice', 'oprice', 'bprice', 'cut_capa', 'cut_workers', 'pk_capa', 'pk_workers'];
+function costBuildClean(v0) {
+  let v = v0; if (typeof v === 'string') { try { v = JSON.parse(v || '{}'); } catch { v = {}; } } if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+  const o = { on: !!v.on };
+  for (const [k, list] of Object.entries(COST_BUILD_ENUM)) if (list.includes(v[k])) o[k] = v[k];
+  for (const k of COST_BUILD_VAL) if (v[k] !== undefined && v[k] !== null && String(v[k]).trim() !== '') { const x = str(String(v[k]), 40); costExpr(x, `제품 사양(${k}) `); o[k] = x; }
+  for (const k of ['fmat', 'pmat', 'omat', 'bmat']) { const id = optId(v[k]); if (id) o[k] = id; }
+  return o;
+}
 function costLinesClean(list, matIds) {
   if (!Array.isArray(list)) throw bad('원가 줄이 올바르지 않습니다.'); if (list.length > 200) throw bad('원가 줄은 200줄까지입니다.');
   const keys = new Set();
@@ -5409,6 +5421,7 @@ function costLinesClean(list, matIds) {
     const loss = o.loss === '' || o.loss == null ? 0 : Number(o.loss); if (!(loss >= 0 && loss <= 100)) throw bad(n + '로스(%)는 0~100으로 넣으세요.');
     const line = { key, type, material_id: mid, manual_price: !!(mid && o.manual_price), name: str(o.name, 100), spec: str(o.spec, 100), unit: str(o.unit, 20), qty: ex('qty', '소요량·작업량'), price: ex('price', '단가'), loss: type === 'mat' ? loss : 0,
       capa: type === 'labor' ? ex('capa', '시간당 처리량') : '', workers: type === 'labor' ? ex('workers', '인원') : '', note: str(o.note, 200) };
+    if (COST_AUTO.includes(o.auto)) line.auto = o.auto; /* 15.320 제품 사양에서 만든 줄 */
     if (!line.name && !mid) throw bad(n + '항목 이름을 넣으세요.');
     return line;
   });
@@ -5422,17 +5435,17 @@ async function costItemBody(o0, prior = {}) {
   const matIds = new Set((await db.prepare('SELECT id FROM cost_materials').all()).map(r => r.id));
   return { name: reqStr(pick('name'), '품목명', 150), spec: str(pick('spec'), 150), kind: COST_KIND[pick('kind')] ? pick('kind') : 'product', category: str(pick('category'), 50), bom_id: bom, unit: str(pick('unit'), 20),
     pieces: nOrNull(pick('pieces'), '낱개 수', 0.0001), pack_spec: str(pick('pack_spec'), 100), customer: str(pick('customer'), 100), sale_price: nOrNull(pick('sale_price'), '판매가'), sga_base: pick('sga_base') === 'mfg' ? 'mfg' : 'direct',
-    overrides: JSON.stringify(ov), lines: JSON.stringify(costLinesClean(o.lines === undefined ? JSON.parse(prior.lines || '[]') : o.lines, matIds)), note: str(pick('note'), 1000) };
+    overrides: JSON.stringify(ov), lines: JSON.stringify(costLinesClean(o.lines === undefined ? JSON.parse(prior.lines || '[]') : o.lines, matIds)), note: str(pick('note'), 1000), build: JSON.stringify(costBuildClean(o.build === undefined ? prior.build : o.build)) };
 }
-const COST_ITEM_COLS = ['name', 'spec', 'kind', 'category', 'bom_id', 'unit', 'pieces', 'pack_spec', 'customer', 'sale_price', 'sga_base', 'overrides', 'lines', 'note'];
-const costHeader = f => ({ name: f.name, spec: f.spec, kind: f.kind, unit: f.unit, pieces: f.pieces, pack_spec: f.pack_spec, customer: f.customer, sale_price: f.sale_price, sga_base: f.sga_base, overrides: JSON.parse(f.overrides || '{}') });
+const COST_ITEM_COLS = ['name', 'spec', 'kind', 'category', 'bom_id', 'unit', 'pieces', 'pack_spec', 'customer', 'sale_price', 'sga_base', 'overrides', 'lines', 'note', 'build'];
+const costHeader = f => ({ name: f.name, spec: f.spec, kind: f.kind, unit: f.unit, pieces: f.pieces, pack_spec: f.pack_spec, customer: f.customer, sale_price: f.sale_price, sga_base: f.sga_base, overrides: JSON.parse(f.overrides || '{}'), build: JSON.parse(f.build || '{}') });
 const costRevSql = (itemId, rev, date, reason, cause, f, calc, by) => ({ sql: 'INSERT INTO cost_item_revs(item_id,rev,effective_date,reason,cause,header,lines,rates,totals,created_by) VALUES(?,?,?,?,?,?,?,?,?,?)', args: [itemId, rev, date, reason, cause, JSON.stringify(costHeader(f)), JSON.stringify(calc.lines), JSON.stringify(calc.rates), JSON.stringify(calc.totals), by] });
-const costCostKey = f => JSON.stringify([f.lines, f.overrides, f.sga_base, f.pieces ?? null, f.kind]);
+const costCostKey = f => JSON.stringify([JSON.parse(f.lines || '[]').map(({ auto, ...l }) => (void auto, l)), f.overrides, f.sga_base, f.pieces ?? null, f.kind]);
 async function costItemsAll() { return (await db.prepare('SELECT * FROM cost_items ORDER BY active DESC, item_code').all()); }
 async function costLive(rows, date) { const [rates, prices] = [await costRatesAt(date), await costPricesAt(date)]; return rows.map(r => { try { return costCompute(r, rates, prices); } catch { return null; } }); }
 function costRowOut(r, live, revs) {
   const totals = JSON.parse(r.totals || '{}'), mine = revs.filter(x => x.item_id === r.id), prev = mine.filter(x => x.rev < r.rev).at(-1), pt = prev ? JSON.parse(prev.totals || '{}') : null;
-  return { ...r, lines: JSON.parse(r.lines || '[]'), overrides: JSON.parse(r.overrides || '{}'), history: JSON.parse(r.history || '[]'), active: !!r.active, kind_label: COST_KIND[r.kind], totals,
+  return { ...r, lines: JSON.parse(r.lines || '[]'), overrides: JSON.parse(r.overrides || '{}'), build: JSON.parse(r.build || '{}'), history: JSON.parse(r.history || '[]'), active: !!r.active, kind_label: COST_KIND[r.kind], totals,
     live: live?.totals || null, stale: !!live && Math.abs((live.totals.total || 0) - (totals.total || 0)) > 0.005, prev_total: pt?.total ?? null, prev_date: prev?.effective_date || null,
     change_pct: pt?.total ? cr2(((totals.total || 0) - pt.total) / pt.total * 100) : null, rev_count: mine.length };
 }
@@ -5446,7 +5459,9 @@ async function costMaterialsOut(date) {
   });
 }
 function costPriceBody(o, rates) {
-  const date = dateStr(o.effective_date || today(), '적용 시점'), currency = COST_CUR.includes(o.currency) ? o.currency : 'KRW';
+  const cur0 = String(o.currency ?? '').trim().toUpperCase(), date = dateStr(o.effective_date || today(), '적용 시점'), currency = cur0 || 'KRW';
+  if (!COST_CUR.includes(currency)) throw bad(`통화는 ${COST_CUR.join('·')} 중 하나로 넣으세요(${cur0}).`); /* 15.319 모르는 통화를 원화로 바꿔 넣지 않음 */
+  if (o.price === '' || o.price == null) throw bad('단가를 넣으세요.');
   const n = (v, l, allowNeg = false, def = 0) => { if (v === '' || v == null) return def; const x = Number(String(v).replace(/,/g, '')); if (!Number.isFinite(x) || (!allowNeg && x < 0)) throw bad(`${l}을(를) 숫자로 넣으세요.`); return x; };
   const price = n(o.price, '단가'), surcharge = n(o.surcharge, '할증(서차지)', true), extra = n(o.extra_krw, '부대비(원/단위)', true);
   let fx = currency === 'KRW' ? 1 : n(o.fx, '환율', false, null); if (currency !== 'KRW' && !fx) fx = Number(rates.fx?.[currency]) || 0; if (currency !== 'KRW' && !(fx > 0)) throw bad(`${currency} 환율을 넣거나 공통 기준에 ${currency} 환율을 먼저 넣으세요.`);
@@ -5534,7 +5549,7 @@ route('PUT', '/api/cost/materials/:id', async ({ user, params, body }) => {
 route('POST', '/api/cost/materials/:id/prices', async ({ user, params, body }) => {
   requireCost(user); const m = await mustGet('cost_materials', params.id), key = str(body.request_id, 80) || null;
   if (key && !body.dry) { const old = await db.prepare('SELECT * FROM cost_material_prices WHERE request_id=?').get(key); if (old) return { price: old, impact: { changed: [], unchanged: 0, skipped: [] } }; }
-  const p = costPriceBody(body, await costRatesAt(body.effective_date || today())); if (!p.reason) throw bad('단가가 바뀐 사유를 적으세요(예: 26년 5월 공급가 인상 +4%).');
+  const p = costPriceBody(body, await costRatesAt(body.effective_date || today())); if (!p.reason && !body.dry) throw bad('단가가 바뀐 사유를 적으세요(예: 26년 5월 공급가 인상 +4%).'); /* 15.319 영향 미리 보기는 사유 없이 */
   if (await db.prepare('SELECT 1 FROM cost_material_prices WHERE material_id=? AND effective_date=? AND krw_price=? AND price=?').get(m.id, p.effective_date, p.krw_price, p.price)) throw bad('같은 시점에 같은 단가가 이미 있습니다.');
   if (body.dry) {
     // 미리 보기: 이 단가를 그 시점에 넣었다고 치고 영향 계산
