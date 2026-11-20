@@ -393,3 +393,14 @@ test('15.266 warehouse and location renames carry through receipts, moves and ad
   assert.equal((await prod('POST', '/api/vendors', { name: '권한상사', biz_no: '123-45-67891' })).status, 403, 'business info needs sales/purchase');
   assert.equal((await prod('POST', '/api/vendors', { name: '권한상사' })).status, 200, 'without business info is fine');
 });
+
+test('15.267 vendor keeps system name apart from tax-invoice business name, plus contact, bank and other details', async () => {
+  const v = await admin('POST', '/api/vendors', { name: 'O&M Halyard(할야드)', biz_name: 'O&M Halyard Singapore Pte Ltd', ceo: 'Kim', name_en: 'O&M Halyard', tel: '+65 6305 6360', fax: '+65 6305 6376', addr: '101 Thomson Road', tax_contact: '회계담당', tax_dept: '재무팀', tax_phone: '02-1', contact_title: '과장', contact_mobile: '010-1', contact_email: 'buyer@om.co', bank_name: 'DBS', bank_account: '123', bank_holder: 'O&M', memo: '태국 글러브' });
+  assert.equal(v.status, 200, JSON.stringify(v.body));
+  assert.equal(v.body.name, 'O&M Halyard(할야드)'); assert.equal(v.body.biz_name, 'O&M Halyard Singapore Pte Ltd');
+  for (const [k, x] of Object.entries({ name_en: 'O&M Halyard', tel: '+65 6305 6360', fax: '+65 6305 6376', addr: '101 Thomson Road', tax_contact: '회계담당', tax_dept: '재무팀', contact_title: '과장', contact_email: 'buyer@om.co', bank_name: 'DBS', bank_holder: 'O&M', memo: '태국 글러브' })) assert.equal(v.body[k], x, k);
+  const e = await prod('PUT', `/api/vendors/${v.body.id}`, { name: 'O&M Halyard(할야드)', memo: '메모 바꿈', bank_account: '999' });
+  assert.equal(e.status, 200, JSON.stringify(e.body)); assert.equal(e.body.memo, '메모 바꿈'); assert.equal(e.body.bank_account, '999'); assert.equal(e.body.tel, '+65 6305 6360', 'untouched fields kept');
+  assert.equal((await admin('POST', '/api/vendors', { name: '메일틀림', contact_email: 'nope' })).status, 400);
+  assert.equal((await admin('GET', '/api/vendors?q=' + encodeURIComponent('메일틀림'))).body.length, 0, 'nothing saved on a bad email');
+});

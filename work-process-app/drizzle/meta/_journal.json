@@ -505,6 +505,13 @@
       "when": 1798109613000,
       "tag": "0071_adjust_lot_place",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "6",
+      "when": 1798196013000,
+      "tag": "0072_vendor_details",
+      "breakpoints": true
     }
   ]
 }

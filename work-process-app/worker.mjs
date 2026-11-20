@@ -584,6 +584,14 @@ function freightMap(value) {
   }
   return out;
 }
+// 15.267 거래처 상세 칸(누구나 고칠 수 있는 일반 정보). 보내지 않은 칸은 그대로.
+const VENDOR_EXTRA = { name_en: 100, corp_no: 20, tel: 30, fax: 30, addr: 200, homepage: 200, memo: 1000, tax_contact: 50, tax_dept: 50, tax_phone: 30, contact_title: 50, contact_mobile: 30, contact_email: 100, bank_name: 50, bank_account: 50, bank_holder: 50 };
+function vendorExtra(body, row = {}) {
+  const out = {};
+  for (const [k, n] of Object.entries(VENDOR_EXTRA)) out[k] = body[k] === undefined ? row[k] ?? '' : str(body[k], n);
+  if (out.contact_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(out.contact_email)) throw bad('담당자 이메일 형식을 확인하세요.');
+  return out;
+}
 function vendorFields(body) { return [reqStr(body.name, '거래처 이름', 100), str(body.contact_name, 50), str(body.phone, 30)]; }
 const repName = v => str(v, 50); // 15.224 영업담당자(사용자 이름 또는 직접 입력)
 // 체크 값: true/false(화면), 1/0, '1'/'on', ['1'](폼 배열). 보내지 않으면 undefined(고치기에서는 기존 값 유지).
@@ -594,6 +602,7 @@ function vendorFlag(value) {
 }
 route('POST', '/api/vendors', async ({ user, body }) => {
   const [name, contact, phone] = vendorFields(body);
+  const extra = vendorExtra(body); // 15.267 저장 전에 형식 확인
   const tax = vendorTaxValues(body); if (tax && TAX_VENDOR_FIELDS.some(k => k !== 'tax_reverse' && tax[k]) && !hasRole(user, 'sales') && !hasRole(user, 'purchase')) throw new HttpError(403, '사업자 정보는 영업·구매 담당자나 관리자가 넣습니다. 사업자 칸을 비우고 등록하세요.'); // 15.266
   if (await db.prepare('SELECT 1 FROM vendors WHERE name_key=?').get(nameKey(name))) throw new HttpError(409, '이미 등록된 거래처입니다. 목록에서 수정하세요.');
   const code = vendorCode(body.code);
@@ -602,6 +611,7 @@ route('POST', '/api/vendors', async ({ user, body }) => {
   try { r = await db.prepare(`INSERT INTO vendors(name,name_key,contact_name,phone,created_by,is_purchase,is_sales,freight_terms,sales_rep,code) VALUES(?,?,?,?,?,?,?,?,?,${code ? '?' : VENDOR_AUTO_CODE})`).run(name, nameKey(name), contact, phone, user.name, vendorFlag(body.is_purchase) || 0, vendorFlag(body.is_sales) || 0, JSON.stringify(freightTerms(body.freight_terms) || []), repName(body.sales_rep), ...(code ? [code] : [])); }
   catch (error) { if (/UNIQUE/i.test(String(error && error.message))) throw new HttpError(409, '그 사이 같은 이름이나 코드의 거래처가 등록되었습니다. 새로 불러오세요.'); throw error; }
   if (tax) await db.prepare(`UPDATE vendors SET ${TAX_VENDOR_FIELDS.map(k => `${k}=?`).join(',')} WHERE id=?`).run(...TAX_VENDOR_FIELDS.map(k => tax[k]), r.lastInsertRowid); // 15.266
+  { const x = extra, keys = Object.keys(x).filter(k => x[k]); if (keys.length) await db.prepare(`UPDATE vendors SET ${keys.map(k => `${k}=?`).join(',')} WHERE id=?`).run(...keys.map(k => x[k]), r.lastInsertRowid); } // 15.267
   return decodeVendor(await mustGet('vendors', r.lastInsertRowid));
 });
 route('PUT', '/api/vendors/:id', async ({ user, params, body }) => {
@@ -618,6 +628,7 @@ route('PUT', '/api/vendors/:id', async ({ user, params, body }) => {
   const rep = body.sales_rep === undefined ? row.sales_rep || '' : repName(body.sales_rep); // 15.224
   const tax = vendorTaxValues(body, row); if (vendorTaxChanged(tax, row) && !hasRole(user, 'sales') && !hasRole(user, 'purchase')) throw new HttpError(403, '사업자 정보는 영업·구매 담당자나 관리자가 고칩니다.'); // 15.266
   const cmds = [{ sql: 'UPDATE vendors SET name=?,name_key=?,contact_name=?,phone=?,is_purchase=?,is_sales=?,freight_terms=?,code=?,sales_rep=?,updated_by=?,updated_at=? WHERE id=?', args: [name, nameKey(name), contact, phone, purchase, sales, terms === undefined ? row.freight_terms : JSON.stringify(terms), code || '', rep, user.name, now(), row.id] }];
+  { const x = vendorExtra(body, row), keys = Object.keys(x).filter(k => x[k] !== (row[k] ?? '')); if (keys.length) cmds.push({ sql: `UPDATE vendors SET ${keys.map(k => `${k}=?`).join(',')} WHERE id=?`, args: [...keys.map(k => x[k]), row.id] }); } // 15.267
   if (vendorTaxChanged(tax, row)) cmds.push({ sql: `UPDATE vendors SET ${TAX_VENDOR_FIELDS.map(k => `${k}=?`).join(',')} WHERE id=?`, args: [...TAX_VENDOR_FIELDS.map(k => tax[k]), row.id] }); // 15.266 사업자 정보도 같은 저장에서
   if ((code || '') !== (row.code || '')) cmds.push({ sql: "UPDATE sales_orders SET customer_code=? WHERE status='open' AND REPLACE(LOWER(customer),' ','')=?", args: [code || '', row.name_key] }); // 15.104 열린 수주만 새 코드로(끝난 수주는 당시 코드)
   if (nameKey(name) !== row.name_key || name !== row.name) {

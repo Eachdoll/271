@@ -185,27 +185,35 @@ async function pagePrices(main) {
 // 거래처 구분 체크(등록·수정)와 목록 표시
 const vendorTypeChecks = (v = {}) => `<fieldset class="vendor-types"><legend>구분</legend><label class="inline"><input type="checkbox" name="is_purchase" value="1"${v.is_purchase ? ' checked' : ''}> 매입처</label><label class="inline"><input type="checkbox" name="is_sales" value="1"${v.is_sales ? ' checked' : ''}> 매출처</label></fieldset>`;
 const vendorTypeChips = v => v.is_purchase || v.is_sales ? `${v.is_purchase ? '<span class="chip">매입</span>' : ''}${v.is_sales ? '<span class="chip green">매출</span>' : ''}` : '<span class="muted small">구분 없음</span>';
-// 15.266 거래처 등록·수정에서 사업자 정보(세금계산서 받는 쪽)도 한 번에 — 「더보기 › 사업자 정보」로 따로 들어가지 않게
-function vendorTaxFields(v = {}) {
-  return `<h4 class="span2 vendor-tax-h">사업자 정보 <span class="hint">(세금계산서·거래명세서에 쓰임 · 모르면 비워 두고 나중에)</span></h4>
-    <label>사업자등록번호<input name="biz_no" maxlength="12" inputmode="numeric" placeholder="000-00-00000" value="${esc(v.biz_no || '')}"></label><label>상호(법인명)<input name="biz_name" maxlength="100" value="${esc(v.biz_name || '')}" placeholder="비우면 거래처 이름"></label>
-    <label>대표자<input name="ceo" maxlength="50" value="${esc(v.ceo || '')}"></label><label class="span2">주소<input name="address" maxlength="200" value="${esc(v.address || '')}"></label>
-    <label>업태<input name="biz_type" maxlength="100" value="${esc(v.biz_type || '')}"></label><label>종목<input name="biz_item" maxlength="100" value="${esc(v.biz_item || '')}"></label>
-    <label>세금계산서 이메일 1<input name="tax_email" type="email" maxlength="100" value="${esc(v.tax_email || '')}"></label><label>세금계산서 이메일 2<input name="tax_email2" type="email" maxlength="100" value="${esc(v.tax_email2 || '')}"></label>
-    <label class="inline span2"><input type="checkbox" name="tax_reverse" value="1"${v.tax_reverse ? ' checked' : ''}> 역발행 거래처 <span class="hint">(거래처가 계산서 발행을 요청 — 예: 삼성전자)</span></label>`;
+// 15.267 거래처 등록·수정 양식: 기본 정보(시스템에서 부르는 거래처명) / 세금계산서(사업자) 정보(계산서에 찍히는 사업자상호) / 거래 담당자 / 결제 계좌 / 메모
+function vendorFormHtml(v = {}) {
+  const f = (name, label, { max = 100, type = 'text', span = '', ph = '', mode = '', req = false, list = '' } = {}) => `<label${span ? ` class="${span}"` : ''}>${label}${req ? ' *' : ''}<input name="${name}"${type !== 'text' ? ` type="${type}"` : ''} maxlength="${max}"${mode ? ` inputmode="${mode}"` : ''}${ph ? ` placeholder="${esc(ph)}"` : ''}${req ? ' required' : ''}${list ? ` list="${list}" autocomplete="off"` : ''} value="${esc(v[name] ?? '')}"></label>`;
+  const sec = (title, hint, body) => `<fieldset class="vendor-sec"><legend>${title}${hint ? ` <span class="hint">${hint}</span>` : ''}</legend><div class="form-grid">${body}</div></fieldset>`;
+  return sec('기본 정보', '(이 시스템에서 부르는 이름 · 목록·전표·검색에 쓰임)',
+      `<label>거래처코드 <span class="hint">(영문·숫자 20자)</span><input name="code" maxlength="20" placeholder="비우면 자동(C0001…)" autocapitalize="characters" pattern="[A-Za-z0-9_-]{0,20}" value="${esc(v.code || '')}"></label>`
+      + f('name', '거래처명 <span class="hint">(시스템 표시명)</span>', { req: true, ph: '예) O&M Halyard(할야드)' }) + f('name_en', '영문명', { ph: 'English name' })
+      + vendorTypeChecks(v) + f('tel', '대표 전화', { max: 30, mode: 'tel' }) + f('fax', '팩스', { max: 30, mode: 'tel' })
+      + f('addr', '주소 <span class="hint">(사무실·배송지)</span>', { max: 200, span: 'span2' }) + f('homepage', '홈페이지', { max: 200, ph: 'https://' })
+      + f('sales_rep', '영업담당자 <span class="hint">(우리 회사 담당)</span>', { max: 50, list: 'vendorRepList' }))
+    + sec('세금계산서(사업자) 정보', '(계산서·거래명세서에 찍히는 정보 — 사업자등록증대로 · 모르면 비워 두고 나중에)',
+      f('biz_name', '사업자상호 <span class="hint">(계산서에 찍히는 이름)</span>', { ph: '비우면 거래처명', span: 'span2' }) + f('ceo', '대표자', { max: 50 })
+      + f('biz_no', '사업자등록번호', { max: 12, mode: 'numeric', ph: '000-00-00000' }) + f('corp_no', '법인등록번호', { max: 20, mode: 'numeric', ph: '000000-0000000' })
+      + f('biz_type', '업태') + f('biz_item', '종목') + f('address', '사업장 주소', { max: 200, span: 'span2' })
+      + f('tax_contact', '계산서 담당자', { max: 50 }) + f('tax_dept', '담당 부서', { max: 50 }) + f('tax_phone', '담당자 전화', { max: 30, mode: 'tel' })
+      + f('tax_email', '세금계산서 이메일 1', { type: 'email' }) + f('tax_email2', '세금계산서 이메일 2', { type: 'email' })
+      + `<label class="inline"><input type="checkbox" name="tax_reverse" value="1"${v.tax_reverse ? ' checked' : ''}> 역발행 거래처 <span class="hint">(거래처가 발행 요청 — 예: 삼성전자)</span></label>`)
+    + sec('거래 담당자', '(발주·납품 연락)',
+      f('contact_name', '담당자 이름', { max: 50 }) + f('contact_title', '직위', { max: 50 }) + f('phone', '직통 전화', { max: 30, mode: 'tel', ph: '예) 02-123-4567' })
+      + f('contact_mobile', '휴대전화', { max: 30, mode: 'tel', ph: '010-0000-0000' }) + f('contact_email', '이메일', { type: 'email' }))
+    + sec('결제 계좌', '(대금 지급·입금 확인)', f('bank_name', '은행', { max: 50 }) + f('bank_account', '계좌번호', { max: 50 }) + f('bank_holder', '예금주', { max: 50 }))
+    + `<label class="vendor-memo">메모<textarea name="memo" rows="2" maxlength="1000">${esc(v.memo || '')}</textarea></label>`;
 }
 const vendorBody = v => ({ ...v, tax_reverse: Array.isArray(v.tax_reverse) ? (v.tax_reverse.length ? 1 : 0) : v.tax_reverse ? 1 : 0 });
 async function pageVendors(main) {
   main.innerHTML = `
   <h1>거래처 관리 <span class="dept">관리</span></h1>
   <p class="muted">매입처(발주·입고)와 매출처(출하·생산의뢰·고객사)를 체크해 두면 입력 화면에서 해당 거래처만 골라 보여 줍니다. 둘 다 체크하면 양쪽에 모두 나오고, 둘 다 비우면 구분 없이 어디에나 나옵니다. 누구나 거래처를 등록·수정할 수 있습니다. 발주·입고·출하 입력에서 거래처 이름을 고르면 담당자와 연락처가 함께 보이고, 발주에서는 그 거래처의 최근 매입 품목을 바로 불러올 수 있습니다. 입력 화면에서 새 이름을 쓰면 자동으로 이 목록에 추가됩니다.</p>
-  <form class="card" id="vendorNew"><h3>거래처 등록</h3><div class="form-grid">
-    <label>거래처코드 <span class="hint">(영문·숫자·-·_ 20자, 저장 시 대문자)</span><input name="code" maxlength="20" placeholder="비우면 자동(C0001…)" autocapitalize="characters" pattern="[A-Za-z0-9_-]{0,20}"></label>
-    <label>거래처 이름 *<input name="name" required maxlength="100"></label>
-    <label>담당자 이름<input name="contact_name" maxlength="50"></label>
-    <label>연락처<input name="phone" maxlength="30" inputmode="tel" placeholder="예) 010-1234-5678"></label>
-    <label>영업담당자 <span class="hint">(매출처, 우리 회사 담당)</span><input name="sales_rep" maxlength="50" list="vendorRepList" autocomplete="off"></label><datalist id="vendorRepList"></datalist>
-    ${vendorTypeChecks()}${vendorTaxFields()}</div>
+  <form class="card" id="vendorNew"><h3>거래처 등록</h3><datalist id="vendorRepList"></datalist>${vendorFormHtml()}
     <div class="actions"><button type="button" class="btn" id="vendorImport" title="거래처를 엑셀로 여러 곳 한 번에 등록">엑셀 올리기</button>${ME.is_admin ? '<button type="button" class="btn" id="vendorFillCodes" title="코드가 비어 있는 거래처에 C0001부터 번호를 붙입니다">빈 코드 자동 채우기</button>' : ''}<button class="btn primary">등록</button></div></form>
   <div class="seg class-tabs" id="vendorTypeTabs" role="group" aria-label="거래처 구분"></div>
   <form id="vendorFilters" class="toolbar list-filters" data-read-only="true"><label class="list-search">검색<input type="search" name="q" maxlength="200" placeholder="거래처·코드·담당자·연락처"></label><button type="submit" class="btn primary">조회</button><span class="small muted" id="vendorCount"></span></form>
@@ -229,12 +237,12 @@ async function pageVendors(main) {
     if (mine !== version || !main.isConnected) return;
     $('#vendorCount').textContent = `${rows.length}곳`;
     $('#vendorList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>코드</th><th>거래처</th><th>구분</th><th>운송비 조건</th><th>담당자</th><th>연락처</th><th>영업담당자</th><th>등록</th><th></th></tr></thead><tbody>${rows.map((v, i) => `<tr>
-      <td class="nowrap">${esc(v.code || '')}</td><td data-card-primary><b>${esc(v.name)}</b>${v.biz_no ? `<div class="small muted">${esc(v.biz_no)}</div>` : ''}</td><td>${vendorTypeChips(v)}</td><td class="small">${v.is_purchase || v.freight_terms?.length ? freightSummary(v.freight_terms) : '<span class="muted">—</span>'}</td><td>${esc(v.contact_name) || '<span class="muted">미등록</span>'}</td><td>${v.phone ? `<a href="tel:${esc(v.phone.replace(/[^0-9+]/g, ''))}">${esc(v.phone)}</a>` : '<span class="muted">미등록</span>'}</td><td class="nowrap">${v.sales_rep ? esc(v.sales_rep) : '<span class="muted">—</span>'}</td>
+      <td class="nowrap">${esc(v.code || '')}</td><td data-card-primary><b>${esc(v.name)}</b>${v.biz_name && v.biz_name !== v.name ? `<div class="small" title="세금계산서 사업자상호">계산서: ${esc(v.biz_name)}</div>` : ''}${v.biz_no ? `<div class="small muted">${esc(v.biz_no)}</div>` : ''}</td><td>${vendorTypeChips(v)}</td><td class="small">${v.is_purchase || v.freight_terms?.length ? freightSummary(v.freight_terms) : '<span class="muted">—</span>'}</td><td>${esc(v.contact_name) || '<span class="muted">미등록</span>'}</td><td>${v.phone ? `<a href="tel:${esc(v.phone.replace(/[^0-9+]/g, ''))}">${esc(v.phone)}</a>` : '<span class="muted">미등록</span>'}</td><td class="nowrap">${v.sales_rep ? esc(v.sales_rep) : '<span class="muted">—</span>'}</td>
       <td class="small muted">${esc(v.created_by || '')}${v.updated_by ? ` · 수정 ${esc(v.updated_by)}` : ''}</td>
       <td class="nowrap row-acts"><button class="btn small" data-vendor-edit="${i}">수정</button>${rowMenu(v.name, [`<button class="btn small" data-vendor-recent="${i}">최근 매입</button>`, `<button class="btn small" data-vendor-freight="${i}">운송비 조건</button>`, ME.is_admin || v.created_by === ME.name ? `<button class="btn small danger" data-vendor-del="${i}">삭제</button>` : ''])}</td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">등록된 거래처가 없습니다.</div>';
     $$('[data-vendor-edit]', main).forEach(button => button.onclick = async () => {
-      const v = rows[button.dataset.vendorEdit]; const values = await promptBox('거래처 수정', `<div class="form-grid">${fields(v)}${vendorTaxFields(v)}</div>`, { wide: true }); if (!values) return;
+      const v = rows[button.dataset.vendorEdit]; const values = await promptBox(`거래처 수정 · ${v.name}`, vendorFormHtml(v), { wide: true }); if (!values) return;
       try { await api('PUT', '/api/vendors/' + v.id, vendorBody(values)); toast('거래처를 수정했습니다.'); load(); } catch (error) { fail(error); }
     });
     $$('[data-vendor-tax]', main).forEach(button => button.onclick = () => editVendorTaxInfo(rows[button.dataset.vendorTax].name, load));
