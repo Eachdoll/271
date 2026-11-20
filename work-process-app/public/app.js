@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.315';
+const APP_VERSION = '15.316';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -391,7 +391,7 @@ const NAV = [
     { sub: '품질보증(QA)', items: [['#/quality/docs', '문서관리'], ['#/quality/changes', '변경관리'], ['#/quality/training', '교육·자격관리'], ['#/quality/audits', '심사 관리'], ['#/quality/certs', '인증서 관리'], ['#/quality/suppliers', '협력업체 품질'], ['#/quality/validation', '밸리데이션'], ['#/quality/capa', '부적합·CAPA'], ['#/quality/voc/list', 'VOC 관리'], ['#/quality/calibration', '검교정 관리']] }, // 15.306 2단계 A1·A2·A3·A5
     { sub: '품질관리(QC)', items: [['#/quality/inspections', '수입·출하 검사 이력'], ['#/quality/list', '분석 관리'], ['#/quality/coa', 'COA 발행'], ['#/quality/pqc', '공정품질(PQC)'], ['#/quality/methods', '시험법·신뢰성']] }, // 15.307 C1·C3
   ] },
-  { group: '연구소', items: [['#/dev/list', '개발 관리'], ['#/dev/schedule', '스케줄 관리'], ['#/dev/analysis', '연구 분석 관리'], ['#/dev/specs', '검사규격 항목설정'], ['#/dev/ip', '지식재산권 관리']] }, // 15.302 지식재산권 // 15.276 · 15.285 · 15.295 메뉴 이름 개발 → 연구소, 연구소 검사규격
+  { group: '연구소', items: [['#/dev/list', '개발 관리'], ['#/dev/schedule', '스케줄 관리'], ['#/dev/cost', '개발원가 관리'], ['#/dev/analysis', '연구 분석 관리'], ['#/dev/specs', '검사규격 항목설정'], ['#/dev/ip', '지식재산권 관리']] }, // 15.302 지식재산권 // 15.276 · 15.285 · 15.295 메뉴 이름 개발 → 연구소, 연구소 검사규격
   { group: '생산', items: [
     { sub: '샘플(제품)', items: [['#/prod/list', '제품 샘플리스트']] },
     ['#/prod/orders', '생산의뢰 접수'],
@@ -441,7 +441,8 @@ const ROUTE_ROLE = [
   [['#/sales/quotes', '#/sales/orders', '#/sales/bills', '#/sales/calendar', '#/sales/reps', '#/sales/returns', '#/sales/delivery-status', '#/sales/closing', '#/sales/tax', '#/sales/tax-check', '#/sales/book', '#/sales/ledger', '#/sales/aging'], ['sales']],
   [['#/purchase/stock', '#/purchase/bills', '#/purchase/calendar', '#/purchase/returns', '#/purchase/receipt-status', '#/purchase/closing', '#/purchase/tax', '#/purchase/tax-check', '#/purchase/book', '#/purchase/ledger', '#/purchase/aging'], ['purchase']],
   [['#/purchase/payments', '#/purchase/disbursements', '#/purchase/notes'], ['sales', 'purchase']],
-  [['#/admin/org/chart', '#/admin/org/duties'], null], // 15.314 조직도·지정 담당자는 누구나 보기(고치기는 관리자)
+  [['#/admin/org/chart', '#/admin/org/duties'], null],
+  [['#/dev/cost'], ['dev']], // 15.316 개발원가는 연구소(개발·개발책임자)만 // 15.314 조직도·지정 담당자는 누구나 보기(고치기는 관리자)
   [['#/admin/org'], ['관리자']], // 부서·직급 탭은 관리자만(일반 사용자 탭 줄에서 숨김)
 ];
 function routeRoles(route) {
@@ -610,6 +611,7 @@ const PAGES = {
   '#/dev/analysis/request': main => pageRndData(main), // 15.288 분석데이터 입력(연구원)
   '#/dev/specs': main => pageRndSpecs(main), // 15.295 연구소 검사규격 항목설정
   '#/dev/ip': main => pageIpRights(main), // 15.302 지식재산권 관리
+  '#/dev/cost': main => pageDevCost(main), // 15.316 개발원가 관리
   '#/dev/schedule': main => pageDevRoadmap(main), // 15.276 개발 스케줄 관리(로드맵)
   '#/prod/request': () => { location.replace('#/sales/sample/product'); }, // 15.183 영업으로 옮김(예전 즐겨찾기)
   '#/sales/sample/product': () => pageIntake('sample'), // 15.183 제품 샘플의뢰(영업)
@@ -787,12 +789,17 @@ const PROCESS_FLOWS = [
   { key: 'coa', name: 'LOT별 COA', on: ['#/quality/coa'], steps: [['#/prod/finished', '생산실적'], ['#/quality/list', '출하검사'], ['#/quality/coa', 'COA 발행·승인'], ['#/logistics/ship', '출하']] },
   { key: 'supplier', name: '협력업체 품질', on: ['#/quality/suppliers'], steps: [['#/logistics/receive', '입고'], ['#/quality/inspections', '수입검사·공급사 COA'], ['#/quality/suppliers', '협력업체 평가'], ['#/quality/changes', '업체 변경점']] },
   { key: 'pqc', name: '공정품질', on: ['#/quality/pqc'], steps: [['#/quality/pqc', '공정·환경 측정·SPC'], ['#/quality/capa', '이상발생 → CAPA'], ['#/quality/changes', '공정 변경']] },
-  { key: 'plant', name: '설비·예방보전', on: ['#/prod/equipment', '#/prod/pm'], steps: [['#/prod/equipment', '설비 등록·PM 항목'], ['#/prod/pm', 'PM 일정·수행'], ['#/quality/validation', '설비 적격성(IQ·OQ·PQ)']] },
-  { key: 'risk', name: '위험성평가', on: ['#/prod/risk', '#/prod/risk/actions', '#/prod/reliability'], steps: [['#/prod/reliability', '설비 신뢰도(고장 이력)'], ['#/prod/risk', '평가 작성 · 승인'], ['#/prod/risk/actions', '개선 조치 · 재평가'], ['#/quality/capa', 'CAPA(FMEA·HAZOP)']] }, // 15.313
+  { key: 'plant', name: '설비·예방보전', on: ['#/prod/equipment', '#/prod/pm'], steps: [['#/prod/equipment', '설비 등록·PM 항목'], ['#/prod/pm', 'PM 일정·수행'], ['#/prod/reliability', '신뢰도(MTBF·MTTR)'], ['#/quality/validation', '설비 적격성(IQ·OQ·PQ)']] }, // 15.316 신뢰도 단계
+  // 15.316 위험성평가는 안전(KOSHA)과 설비·공정(FMEA·HAZOP) 두 흐름으로 나눔(같은 화면에서 위 칩으로 바꿔 봄). 안전은 지정 담당자(15.314)에서 시작해 교육으로 닫힌다.
+  { key: 'safety', name: '안전보건 위험성평가', on: ['#/prod/risk', '#/prod/risk/actions', '#/admin/org/duties'], steps: [['#/admin/org/duties', '안전보건 담당 지정'], ['#/prod/risk', '위험성평가 작성·승인'], ['#/prod/risk/actions', '감소대책·재평가'], ['#/quality/training', '근로자 교육·공유']] },
+  { key: 'risk', name: '설비·공정 FMEA', on: ['#/prod/reliability', '#/prod/risk', '#/prod/risk/actions'], steps: [['#/prod/equipment', '설비 고장 이력'], ['#/prod/reliability', '설비 신뢰도'], ['#/prod/risk', 'FMEA·HAZOP 작성·승인'], ['#/prod/risk/actions', '권고 조치'], ['#/quality/capa', 'CAPA'], ['#/quality/changes', '변경관리']] }, // 15.313
   { key: 'method', name: '시험·측정', on: ['#/quality/calibration', '#/quality/methods'], steps: [['#/quality/calibration', '계측기 검교정'], ['#/quality/methods', '시험법·신뢰성'], ['#/quality/validation', '시험법 밸리데이션']] },
   { key: 'audit', name: '심사·인증', on: ['#/quality/audits', '#/quality/certs'], steps: [['#/quality/audits', '심사 계획·실시'], ['#/quality/capa', '지적 → CAPA'], ['#/quality/certs', '인증 유지']] },
   { key: 'qm', name: '품질경영(목표 → 점검 → 개선)', on: ['#/quality/kpi', '#/quality/risks'], steps: [['#/quality/kpi', '품질목표·KPI'], ['#/quality/risks', '리스크 관리'], ['#/quality/audits', '내부심사'], ['#/quality/capa', '개선(CAPA)']] },
   { key: 'semi', name: '반제품 · 포장 생산', steps: [['#/prod/semi', '반제품 계획'], ['#/prod/semi/cut', '커팅/융착'], ['#/prod/semi/wash', '세탁'], ['#/prod/finished', '포장(완제품 실적)'], ['#/logistics/ship', '출하']] },
+  // 15.316 연구소: 개발의뢰부터 일정·분석·개발원가·지식재산까지, 조직: 부서 → 조직도 → 지정 담당자 → 사용 권한
+  { key: 'dev', name: '개발 · 원가', on: ['#/dev/request', '#/dev/list', '#/dev/schedule', '#/dev/analysis', '#/dev/cost', '#/dev/ip'], steps: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발 진행'], ['#/dev/schedule', '일정 관리'], ['#/dev/analysis', '시험·분석'], ['#/dev/cost', '개발원가'], ['#/dev/ip', '지식재산권']] },
+  { key: 'org', name: '조직 · 담당', on: ['#/admin/org', '#/admin/org/chart'], steps: [['#/admin/org', '부서·직급'], ['#/admin/org/chart', '조직도'], ['#/admin/org/duties', '지정 담당자'], ['#/admin/users/roles', '사용 권한']] },
 ];
 const FLOW_KEY = 'wpa:flow', FLOW_FOLD = 'wpa:flow-fold';
 const flowStore = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } return null; };
@@ -1206,7 +1213,7 @@ async function pageFavorites(main) {
 }
 function pageNoMenu(main) {
   const label = (MENU_GROUP_LABELS.find(([key]) => key === routeMenu(location.hash)) || [, ''])[1];
-  if (!canUseRoute(location.hash)) { const need = { sales: '영업', purchase: '구매' }; main.innerHTML = `<h1>사용 권한이 없습니다</h1><div class="card"><p>이 화면은 <b>${esc(routeRoles(location.hash).map(r => need[r] || r).join(' 또는 '))}</b> 사용 권한이 있어야 쓸 수 있습니다. 필요하면 관리자에게 「회원 관리 › 사용 권한」에서 권한을 요청하세요.</p><div class="actions" style="justify-content:flex-start"><a class="btn primary" href="#/">홈으로</a></div></div>`; return; } // 15.179
+  if (!canUseRoute(location.hash)) { const need = { sales: '영업', purchase: '구매', dev: '연구소(개발)' }; main.innerHTML = `<h1>사용 권한이 없습니다</h1><div class="card"><p>이 화면은 <b>${esc(routeRoles(location.hash).map(r => need[r] || r).join(' 또는 '))}</b> 사용 권한이 있어야 쓸 수 있습니다. 필요하면 관리자에게 「회원 관리 › 사용 권한」에서 권한을 요청하세요.</p><div class="actions" style="justify-content:flex-start"><a class="btn primary" href="#/">홈으로</a></div></div>`; return; } // 15.179
   main.innerHTML = `<h1>열람 권한이 없습니다</h1><div class="card"><p>${esc(label)} 메뉴는 열람 권한이 없습니다. 필요하면 관리자에게 메뉴 권한을 요청하세요.</p><div class="actions" style="justify-content:flex-start"><a class="btn primary" href="#/">대시보드로</a></div></div>`;
 }
 // 메뉴 열람 설정 입력(부서 기본·사용자 직접 지정에서 같이 쓴다).

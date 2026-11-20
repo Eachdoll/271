@@ -2385,6 +2385,7 @@ if (typeof document !== "undefined") document.addEventListener('click', e => {
 
 // (3) 기록 찾기: 메뉴 찾기 칸에 번호·제목을 치면 그 기록을 바로 연다.
 const FIND_OPEN = {
+  devcost: id => costOpen(id), // 15.316
   ra: id => raOpen(id), // 15.313
   nc: id => ncOpen(id), coa: id => coaOpen(id), change: id => chgOpen(id), doc: id => qdocOpen(id), audit: id => audOpen(id), validation: id => valOpen(id), reliability: id => relOpen(id), equipment: id => eqOpen(id),
   risk: async id => { const r = (await api('GET', '/api/risks')).rows.find(x => x.id === id); if (r) riskOpen(r); },
@@ -2795,5 +2796,186 @@ async function pageReliability(main) {
   main.addEventListener('click', e => { const b = e.target.closest('[data-rel-fmea]'); if (b) { const r = data.rows.find(x => x.id === Number(b.dataset.relFmea)); raOpen(null, { method: 'fmea', equipment_id: r.id, title: `${r.name} 설비 FMEA`, process: r.location || '' }).catch(fail); } });
   form.addEventListener('input', e => { if (e.target.name === 'q') return draw(); clearTimeout(timer); timer = setTimeout(() => load().catch(fail), 400); });
   form.onsubmit = e => e.preventDefault();
+  await load();
+}
+
+// ── 15.316 연구소 › 개발원가 관리 ──
+// 개발 건(개발리스트)별 원가표: 엑셀처럼 줄을 쌓고(Enter·↑↓ 이동, 엑셀에서 여러 줄 복사 → 붙여넣기), 금액·구분별 소계·판관비·총원가·단위원가·이익률을 바로 계산.
+// 목록은 원가표별 합계와 누적 총원가, 「개발리스트 매칭」은 개발 건마다 원가표 수·총원가와 원가 없는 개발을 보여 준다.
+const DC_CAT_LABEL = { material: '매입가(재료)', incidental: '부대비용(운송·관세·포장)', outsource: '외주가공', test: '시험·인증', tooling: '금형·지그', labor: '인건비', sga: '판관비', etc: '기타' };
+const DC_STATUS_LABEL = { draft: '작성', confirmed: '확정' };
+const DC_CURS = ['KRW', 'USD', 'EUR', 'JPY', 'CNY'];
+const DC_VIEW_KEY = 'wpa:dc-view';
+const dcFmt = (v, d = 0) => v == null || v === '' || !Number.isFinite(Number(v)) ? '' : Number(v).toLocaleString('ko-KR', { maximumFractionDigits: d });
+const dcNum = v => { const n = Number(String(v ?? '').replace(/[,\s₩$]/g, '')); return Number.isFinite(n) ? n : 0; };
+// 서버와 같은 계산(화면에서 바로 보여 주기용, 저장 때는 서버 값이 기준)
+function dcCalcC(h, lines) {
+  const amt = l => { const cur = l.currency || 'KRW', fx = cur === 'KRW' ? 1 : (dcNum(l.fx) || 1); return Math.round((l.qty === '' || l.qty == null ? 1 : dcNum(l.qty)) * dcNum(l.unit_price) * fx); };
+  const by = Object.fromEntries(Object.keys(DC_CAT_LABEL).map(k => [k, 0])); for (const l of lines) by[l.cat || 'material'] += amt(l);
+  const direct = lines.filter(l => (l.cat || 'material') !== 'sga').reduce((s, l) => s + amt(l), 0), sgaAuto = Math.round(direct * dcNum(h.sga_rate) / 100), sga = by.sga + sgaAuto, total = direct + sga;
+  const base = dcNum(h.base_qty) > 0 ? dcNum(h.base_qty) : 1, unit = Math.round(total / base * 100) / 100, tp = h.target_price === '' || h.target_price == null ? null : dcNum(h.target_price);
+  const pr = dcNum(h.profit_rate);
+  return { amt, by, direct, sga_auto: sgaAuto, sga, total, unit_cost: unit, margin: tp == null ? null : Math.round((tp - unit) * 100) / 100, margin_rate: tp ? Math.round((tp - unit) / tp * 1000) / 10 : null, suggest: pr > 0 && pr < 100 ? Math.round(unit / (1 - pr / 100)) : null };
+}
+const DC_COLS_C = [
+  { k: 'date', l: '발생일', t: 'date', w: 116 }, { k: 'cat', l: '구분', t: 'sel', w: 112 }, { k: 'item', l: '품목·내용 *', t: 'text', w: 140 }, { k: 'spec', l: '규격', t: 'text', w: 80 }, { k: 'vendor', l: '거래처', t: 'text', w: 90 },
+  { k: 'qty', l: '수량', t: 'num', w: 58 }, { k: 'unit', l: '단위', t: 'text', w: 54 }, { k: 'unit_price', l: '단가', t: 'num', w: 84 }, { k: 'currency', l: '통화', t: 'cur', w: 76 }, { k: 'fx', l: '환율', t: 'num', w: 62 },
+  { k: '_amt', l: '금액(원)', t: 'calc', w: 100 }, { k: 'note', l: '비고', t: 'text', w: 80 },
+];
+// 붙여넣기 때 구분 글자 → 키(「매입가」·「부대비용」·「운송」 등)
+const dcCatOf = v => { const s = String(v || '').trim(); if (DC_CAT_LABEL[s]) return s; const hit = Object.entries(DC_CAT_LABEL).find(([, l]) => l.startsWith(s) || l.includes(s) && s.length >= 2); if (hit) return hit[0]; if (/운송|관세|포장|통관|보험|택배/.test(s)) return 'incidental'; if (/재료|원자재|매입|자재/.test(s)) return 'material'; if (/시험|인증|분석/.test(s)) return 'test'; if (/금형|지그|치구/.test(s)) return 'tooling'; if (/인건|노무/.test(s)) return 'labor'; if (/판관|영업|관리비|출장/.test(s)) return 'sga'; if (/외주|가공/.test(s)) return 'outsource'; return s ? 'etc' : 'material'; };
+async function costOpen(id = null, pre = {}) {
+  const list = await api('GET', '/api/dev-costs'), c = id ? list.rows.find(x => x.id === id) : null; if (id && !c) return toast('원가표를 찾을 수 없습니다.', 'err');
+  const can = list.can_manage, appr = list.can_confirm, st = c?.status || 'draft', edit = can && st === 'draft', dis = edit ? '' : ' disabled';
+  const h0 = c || { base_qty: 1, sga_rate: 0, profit_rate: 0, ...pre };
+  const lines = (c?.lines || []).map(l => ({ ...l }));
+  if (edit && !lines.length) for (let i = 0; i < 3; i++) lines.push({ cat: 'material', date: todayStr(), currency: 'KRW' });
+  const devOpt = d => `${d.req_no || '#' + d.id} · ${d.title}${d.customer ? ' · ' + d.customer : ''}`;
+  const m = modal(`<h3>${c ? `${esc(c.cost_no)} · ${esc(c.title)} <span class="chip ${st === 'confirmed' ? 'green' : ''}">${esc(DC_STATUS_LABEL[st])}</span>` : '새 개발원가표'}</h3>
+    <form class="stack" data-dc-form><div class="form-grid">
+      <label class="span2">개발리스트 매칭<select name="dev_request_id"${dis}><option value="">— 개발 건 없이(사전 검토)</option>${list.dev_requests.map(d => `<option value="${d.id}"${d.id === Number(h0.dev_request_id) ? ' selected' : ''}>${esc(devOpt(d))}</option>`).join('')}</select><span class="hint">고르면 이름·고객이 비어 있을 때 개발 건에서 채웁니다</span></label>
+      <label>원가표 이름 *<input name="title" maxlength="200" value="${esc(h0.title || '')}" placeholder="예) 9인치 와이퍼 1차 시제품"${dis}></label>
+      <label>고객<input name="customer" maxlength="100" value="${esc(h0.customer || '')}"${dis}></label>
+      <label>제품·모델<input name="product" maxlength="200" value="${esc(h0.product || '')}"${dis}></label>
+      <label>원가 기준 수량 *<input type="number" name="base_qty" min="0" step="any" value="${esc(h0.base_qty ?? 1)}"${dis}><span class="hint">단위원가 = 총원가 ÷ 이 수량</span></label>
+      <label>단위<input name="unit" maxlength="20" value="${esc(h0.unit || '')}" placeholder="EA·BOX·kg"${dis}></label>
+      <label>판관비율(%)<input type="number" name="sga_rate" min="0" max="99" step="any" value="${esc(h0.sga_rate ?? 0)}"${dis}><span class="hint">직접비 × 비율을 판관비로 더함</span></label>
+      <label>목표 이익률(%)<input type="number" name="profit_rate" min="0" max="99" step="any" value="${esc(h0.profit_rate ?? 0)}"${dis}><span class="hint">권장 판매단가 계산</span></label>
+      <label>목표 판매단가(원)<input type="number" name="target_price" min="0" step="any" value="${esc(h0.target_price ?? '')}"${dis}></label>
+      <label class="span3">비고<input name="note" maxlength="1000" value="${esc(h0.note || '')}"${dis}></label></div>
+      <fieldset class="vendor-sec"><legend>원가 내역 <span class="hint">${edit ? 'Enter·↑↓로 줄 이동, 엑셀에서 여러 칸·줄을 복사해 붙여넣으면 그 칸부터 채웁니다(열 순서: 발생일·구분·품목·규격·거래처·수량·단위·단가·통화·환율)' : '확정된 원가표는 잠겨 있습니다'}</span></legend>
+        <div class="table-wrap dc-wrap"><table class="grid dc-grid" data-no-sort data-no-filter data-keep-cols data-no-reorder data-no-autoalign><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
+        ${edit ? '<div class="actions"><button type="button" class="btn small" data-dc-add>＋ 줄</button><button type="button" class="btn small" data-dc-add5>＋ 5줄</button><span class="grow"></span></div>' : ''}
+      </fieldset>
+      <div class="dc-sum" data-dc-sum></div>
+      <div class="actions">${c ? '<button type="button" class="btn" data-dc-hist>이력</button><button type="button" class="btn" data-dc-xlsx>엑셀</button>' : ''}${c && edit && !c.history.some(x => /확정/.test(x.what || '')) ? '<button type="button" class="btn danger" data-dc-del>삭제</button>' : ''}<span class="grow"></span>
+        ${c && appr && st === 'confirmed' ? '<button type="button" class="btn" data-dc-to="draft">확정 취소</button>' : ''}${edit ? `<button class="btn${c && appr ? '' : ' primary'}">저장</button>` : ''}${c && appr && edit ? '<button type="button" class="btn primary" data-dc-to="confirmed">저장하고 확정</button>' : ''}</div>
+    </form>`, { wide: true });
+  m.el.classList.add('dc-modal');
+  const form = $('[data-dc-form]', m.el), table = $('.dc-grid', form), touched = () => { if (m.el.parentElement) m.el.parentElement.dataset.dirty = '1'; };
+  const head = () => edit ? formObj(form) : h0; // 읽기 전용(확정)이면 저장된 값으로
+  // 개발 건을 고르면 비어 있는 이름·고객을 그 개발 건에서 채움
+  form.elements.dev_request_id?.addEventListener('change', () => { const d = list.dev_requests.find(x => x.id === Number(form.elements.dev_request_id.value)); if (!d) return; if (!form.elements.title.value.trim()) form.elements.title.value = `${d.title}${d.cost_count ? ` ${d.cost_count + 1}차` : ''} 원가`; if (!form.elements.customer.value.trim()) form.elements.customer.value = d.customer || ''; });
+  const cell = (col, l, r) => {
+    const v = l[col.k] ?? '', at = `data-r="${r}" data-k="${col.k}" aria-label="${esc(col.l.replace(' *', ''))} ${r + 1}번 줄"`, st = ` style="min-width:${col.w}px"`;
+    if (col.t === 'calc') return `<td class="r dc-amt" data-amt="${r}">${dcFmt(dcCalcC(head(), [l]).amt(l))}</td>`;
+    if (!edit) return `<td class="${['num', 'calc'].includes(col.t) ? 'r' : col.t === 'date' || col.t === 'cur' ? 'c' : ''}">${esc(col.t === 'sel' ? DC_CAT_LABEL[v] || v : col.t === 'num' ? dcFmt(v, 4) : v)}</td>`;
+    if (col.t === 'sel') return `<td><select ${at}${st}>${Object.entries(DC_CAT_LABEL).map(([k, lb]) => `<option value="${k}"${(v || 'material') === k ? ' selected' : ''}>${esc(lb)}</option>`).join('')}</select></td>`;
+    if (col.t === 'cur') return `<td><select ${at}${st}>${DC_CURS.map(k => `<option${(v || 'KRW') === k ? ' selected' : ''}>${k}</option>`).join('')}</select></td>`;
+    if (col.t === 'date') return `<td><input type="date" ${at} value="${esc(v)}"${st}></td>`;
+    if (col.t === 'num') return `<td><input inputmode="decimal" class="r" ${at} value="${esc(v === '' || v == null ? '' : col.k === 'fx' && (l.currency || 'KRW') === 'KRW' ? '' : v)}"${col.k === 'fx' && (l.currency || 'KRW') === 'KRW' ? ' placeholder="1" disabled' : ''}${st}></td>`;
+    return `<td><input ${at} value="${esc(v)}" maxlength="${col.k === 'item' || col.k === 'spec' ? 200 : col.k === 'note' ? 300 : 100}"${st}></td>`;
+  };
+  const sum = () => {
+    const h = head(), k = dcCalcC(h, lines), cats = Object.entries(k.by).filter(([, v]) => v);
+    $('tfoot', table).innerHTML = `<tr class="dc-total"><td></td><td colspan="${DC_COLS_C.findIndex(c => c.k === '_amt')}" class="r"><b>합계 ${lines.length}줄</b></td><td class="r"><b>${dcFmt(Object.values(k.by).reduce((a, b) => a + b, 0))}</b></td><td colspan="${DC_COLS_C.length - DC_COLS_C.findIndex(c => c.k === '_amt') - 1 + (edit ? 1 : 0)}"></td></tr>`;
+    $('[data-dc-sum]', form).innerHTML = `<div class="dc-sum-grid"><table class="grid dc-cat" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>구분</th><th>금액(원)</th><th>비율</th></tr></thead><tbody>${cats.map(([c, v]) => `<tr><td>${esc(DC_CAT_LABEL[c])}</td><td class="r">${dcFmt(v)}</td><td class="r">${k.total ? dcFmt(v / k.total * 100, 1) + '%' : ''}</td></tr>`).join('') || '<tr><td colspan="3" class="muted small">원가 줄이 없습니다.</td></tr>'}${k.sga_auto ? `<tr><td>판관비(직접비 × ${dcFmt(h.sga_rate, 2)}%)</td><td class="r">${dcFmt(k.sga_auto)}</td><td class="r">${k.total ? dcFmt(k.sga_auto / k.total * 100, 1) + '%' : ''}</td></tr>` : ''}</tbody></table>
+      <dl class="dc-kpi"><div><dt>직접비</dt><dd>${dcFmt(k.direct)}</dd></div><div><dt>판관비</dt><dd>${dcFmt(k.sga)}</dd></div><div class="em"><dt>총원가</dt><dd>${dcFmt(k.total)}원</dd></div>
+        <div class="em"><dt>단위원가 (÷ ${dcFmt(h.base_qty || 1, 2)}${esc(h.unit || '')})</dt><dd>${dcFmt(k.unit_cost, 2)}원</dd></div>
+        ${k.margin != null ? `<div class="${k.margin < 0 ? 'neg' : 'pos'}"><dt>목표가 ${dcFmt(h.target_price, 2)} 대비 이익</dt><dd>${dcFmt(k.margin, 2)}원 · ${dcFmt(k.margin_rate, 1)}%</dd></div>` : ''}
+        ${k.suggest != null ? `<div><dt>이익률 ${dcFmt(h.profit_rate, 1)}% 권장 판매단가</dt><dd>${dcFmt(k.suggest)}원</dd></div>` : ''}</dl></div>`;
+  };
+  const draw = () => {
+    $('thead', table).innerHTML = `<tr><th class="c">No</th>${DC_COLS_C.map(c => `<th>${esc(c.l)}</th>`).join('')}${edit ? '<th></th>' : ''}</tr>`;
+    $('tbody', table).innerHTML = lines.map((l, r) => `<tr><td class="c">${r + 1}</td>${DC_COLS_C.map(c => cell(c, l, r)).join('')}${edit ? `<td class="nowrap"><button type="button" class="btn small" data-dc-dup="${r}" title="줄 복사">⧉</button> <button type="button" class="btn small" data-dc-rm="${r}" aria-label="${r + 1}번 줄 삭제">×</button></td>` : ''}</tr>`).join('') || `<tr><td colspan="${DC_COLS_C.length + 2}" class="empty">원가 줄이 없습니다.</td></tr>`;
+    sum();
+  };
+  draw();
+  const focus = (r, k) => { const el = $(`[data-r="${r}"][data-k="${k}"]`, table); if (el && !el.disabled) { el.focus(); el.select?.(); } };
+  const newLine = () => { const last = lines.at(-1) || {}; return { date: last.date || todayStr(), cat: last.cat || 'material', currency: last.currency || 'KRW', fx: last.currency && last.currency !== 'KRW' ? last.fx : '', vendor: last.vendor || '' }; };
+  const onEdit = e => {
+    const t = e.target.closest('[data-k]'); if (!t) return; const r = Number(t.dataset.r), l = lines[r]; if (!l) return;
+    l[t.dataset.k] = t.value; touched();
+    if (t.dataset.k === 'currency') { const fx = $(`[data-r="${r}"][data-k="fx"]`, table); if (fx) { fx.disabled = t.value === 'KRW'; fx.placeholder = t.value === 'KRW' ? '1' : '환율'; if (t.value === 'KRW') { fx.value = ''; l.fx = ''; } else fx.focus(); } }
+    const a = $(`[data-amt="${r}"]`, table); if (a) a.textContent = dcFmt(dcCalcC(head(), [l]).amt(l)); sum();
+  };
+  table.addEventListener('input', onEdit); table.addEventListener('change', onEdit);
+  form.addEventListener('input', e => { if (!e.target.closest('.dc-grid')) sum(); });
+  // 엑셀식 이동: Enter·↓ 다음 줄(마지막이면 줄 추가), ↑ 윗줄. 날짜·고르기 칸은 ↑↓를 값 바꾸기에 그대로 둠.
+  table.addEventListener('keydown', e => {
+    const t = e.target.closest('[data-k]'); if (!t || !edit) return; const r = Number(t.dataset.r), k = t.dataset.k;
+    if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); if (r === lines.length - 1) { lines.push(newLine()); draw(); } focus(r + 1, k); return; }
+    if (t.tagName === 'SELECT' || t.type === 'date') return;
+    if (e.key === 'ArrowDown' && r < lines.length - 1) { e.preventDefault(); focus(r + 1, k); } else if (e.key === 'ArrowUp' && r > 0) { e.preventDefault(); focus(r - 1, k); }
+  });
+  // 엑셀에서 복사한 여러 칸(탭)·여러 줄 붙여넣기: 그 칸부터 오른쪽·아래로 채움, 모자란 줄은 추가
+  table.addEventListener('paste', e => {
+    const t = e.target.closest('[data-k]'); if (!t || !edit) return; const text = e.clipboardData?.getData('text/plain') || ''; if (!/[\t\n]/.test(text.trim())) return;
+    e.preventDefault(); const rows = text.replace(/\r/g, '').replace(/\n$/, '').split('\n').map(x => x.split('\t'));
+    const keys = DC_COLS_C.filter(c => c.t !== 'calc').map(c => c.k), start = keys.indexOf(t.dataset.k), r0 = Number(t.dataset.r);
+    rows.forEach((vals, i) => {
+      const r = r0 + i; while (lines.length <= r) lines.push(newLine());
+      vals.forEach((v, j) => { const k = keys[start + j]; if (!k) return; v = v.trim(); lines[r][k] = k === 'cat' ? dcCatOf(v) : k === 'currency' ? (DC_CURS.includes(v.toUpperCase()) ? v.toUpperCase() : 'KRW') : ['qty', 'unit_price', 'fx'].includes(k) ? String(dcNum(v) || (v === '' ? '' : 0)) : k === 'date' ? (v.match(/\d{4}[-./]\d{1,2}[-./]\d{1,2}/)?.[0].replace(/[./]/g, '-').replace(/-(\d)(?=-|$)/g, '-0$1') || '') : v; });
+    });
+    touched(); draw(); toast(`${rows.length}줄을 붙여넣었습니다.`); focus(r0, t.dataset.k);
+  });
+  form.addEventListener('click', async e => {
+    if (e.target.closest('[data-dc-add]')) { lines.push(newLine()); touched(); draw(); focus(lines.length - 1, 'item'); return; }
+    if (e.target.closest('[data-dc-add5]')) { for (let i = 0; i < 5; i++) lines.push(newLine()); touched(); draw(); return; }
+    const d = e.target.closest('[data-dc-dup]'); if (d) { const r = Number(d.dataset.dcDup), { key, amount, ...rest } = lines[r]; void key; void amount; lines.splice(r + 1, 0, { ...rest }); touched(); draw(); return; }
+    const x = e.target.closest('[data-dc-rm]'); if (x) { lines.splice(Number(x.dataset.dcRm), 1); touched(); draw(); }
+  });
+  const body = () => { const h = head(); return { ...h, lines: lines.filter(l => String(l.item || '').trim() || dcNum(l.unit_price)).map(l => Object.fromEntries(Object.entries(l).filter(([k]) => k !== 'amount'))) }; };
+  const save = async () => c ? api('PUT', `/api/dev-costs/${c.id}`, { ...body(), revision: c.revision }) : api('POST', '/api/dev-costs', { ...body(), request_id: crypto.randomUUID() });
+  const reopen = async (r, msg) => { toast(msg); m.close(); qReload(); await costOpen(r.id); };
+  form.onsubmit = async e => { e.preventDefault(); try { reopen(await save(), '저장했습니다.'); } catch (err) { fail(err); } };
+  $$('[data-dc-to]', m.el).forEach(b => b.addEventListener('click', async () => {
+    try {
+      if (b.dataset.dcTo === 'confirmed') { const r = await save(); return reopen(await api('POST', `/api/dev-costs/${r.id}/step`, { to: 'confirmed', revision: r.revision }), '확정했습니다. 고치려면 「확정 취소」 하세요.'); }
+      const v = await promptBox('확정 취소', '<label>사유 *<input name="reason" required maxlength="300" placeholder="예) 원단 단가 변경"></label>'); if (!v) return;
+      reopen(await api('POST', `/api/dev-costs/${c.id}/step`, { to: 'draft', revision: c.revision, reason: v.reason }), '확정을 취소했습니다.');
+    } catch (err) { fail(err); }
+  }));
+  $('[data-dc-del]', m.el)?.addEventListener('click', async () => { if (!await confirmBox('이 원가표를 지울까요?')) return; try { await api('DELETE', `/api/dev-costs/${c.id}?revision=${c.revision}`); toast('지웠습니다.'); m.close(); qReload(); } catch (err) { fail(err); } });
+  $('[data-dc-hist]', m.el)?.addEventListener('click', () => qHistory(c.cost_no, c.history, DC_STATUS_LABEL));
+  $('[data-dc-xlsx]', m.el)?.addEventListener('click', () => dcXlsx(c));
+}
+function dcXlsx(c) {
+  const k = c.calc, rows = c.lines.map((l, i) => [i + 1, l.date || '', DC_CAT_LABEL[l.cat] || l.cat, l.item, l.spec, l.vendor, l.qty, l.unit, l.unit_price, l.currency, l.currency === 'KRW' ? '' : l.fx, l.amount, l.note]);
+  const blank = Array(13).fill(''), put = (label, v) => { const r = [...blank]; r[3] = label; r[11] = v; return r; };
+  rows.push([...blank], put('직접비', k.direct), put(`판관비${c.sga_rate ? ` (줄 + 직접비 × ${c.sga_rate}%)` : ''}`, k.sga), put('총원가', k.total), put(`단위원가 (÷ ${c.base_qty}${c.unit || ''})`, k.unit_cost));
+  if (k.margin != null) rows.push(put(`목표가 ${c.target_price} 대비 이익 (${k.margin_rate}%)`, k.margin)); if (k.suggest != null) rows.push(put(`권장 판매단가 (이익률 ${c.profit_rate}%)`, k.suggest));
+  xlsxDownload(`${c.cost_no}_${c.title}.xlsx`, { sheet: c.cost_no, titles: [`개발원가 ${c.cost_no} · ${c.title}`, `${c.dev ? `${c.dev.req_no} ${c.dev.title} · ` : ''}${c.customer || ''} ${c.product || ''} · ${DC_STATUS_LABEL[c.status]}${c.confirmed_by ? ' · 확정 ' + c.confirmed_by : ''}`],
+    columns: ['No', '발생일', '구분', '품목·내용', '규격', '거래처', '수량', '단위', '단가', '통화', '환율', '금액(원)', '비고'].map((label, i) => ({ label, type: [0, 6, 8, 10].includes(i) ? 'number' : i === 11 ? 'money' : i === 1 ? 'date' : 'text' })), rows });
+}
+async function pageDevCost(main) {
+  let view = (() => { try { return localStorage.getItem(DC_VIEW_KEY) === 'match' ? 'match' : 'list'; } catch { return 'list'; } })();
+  main.innerHTML = `<h1>개발원가 관리 <span class="dept">연구소</span></h1>
+    <p class="muted">개발 건마다 <b>매입가·부대비용(운송·관세·포장)·외주가공·시험·인증·금형·인건비·판관비</b>를 엑셀처럼 줄로 쌓으면 금액(수량 × 단가 × 환율)·구분별 소계·판관비(줄 + 직접비 × 판관비율)·총원가·단위원가·목표가 대비 이익률·권장 판매단가를 자동 계산합니다. 「개발리스트 매칭」에서 개발 건별 누적 원가와 원가표가 없는 개발을 봅니다.</p>
+    <div class="ip-tiles" id="dcTiles"></div>
+    <div class="seg dc-view" role="group" aria-label="보기"><button type="button" class="btn" data-dc-view="list">원가표 목록(누적)</button><button type="button" class="btn" data-dc-view="match">개발리스트 매칭</button></div>
+    <form class="toolbar list-filters" data-read-only id="dcFilters"><label class="lf-sel">상태<select name="st"><option value="">전체</option>${Object.entries(DC_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">원가 없는 개발만<select name="nocost"><option value="">아니오</option><option value="1">예</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="번호·개발명·고객·제품·품목"></label><span class="grow"></span><span id="dcTools" class="ip-tools"></span></form>
+    <div id="dcList"></div>`;
+  const form = $('#dcFilters', main); let data = { rows: [], dev_requests: [] };
+  const load = async () => { data = await api('GET', '/api/dev-costs'); if (main.isConnected) draw(); };
+  main.qReload = () => load().catch(fail);
+  const draw = () => {
+    const v = formObj(form), q = (v.q || '').trim().toLowerCase(), rows = data.rows;
+    $$('[data-dc-view]', main).forEach(b => b.classList.toggle('primary', b.dataset.dcView === view));
+    form.elements.nocost.closest('label').hidden = view !== 'match'; form.elements.st.closest('label').hidden = view !== 'list';
+    const live = data.dev_requests.filter(d => !['done', 'rejected'].includes(d.status)), noCost = live.filter(d => !d.cost_count), loss = rows.filter(r => r.calc.margin != null && r.calc.margin < 0);
+    qTiles('dcTiles', [['원가표', rows.length], ['작성 중', rows.filter(r => r.status === 'draft').length, rows.some(r => r.status === 'draft') ? 'yellow' : ''], ['확정', rows.filter(r => r.status === 'confirmed').length, 'green'], ['원가표 없는 진행 개발', noCost.length, noCost.length ? 'yellow' : ''], ['목표가 미달', loss.length, loss.length ? 'red' : ''], ['누적 총원가(원)', dcFmt(rows.reduce((s, r) => s + r.calc.total, 0))]]);
+    $('#dcTools', main).innerHTML = data.can_manage ? '<button type="button" class="btn primary" data-dc-new>＋ 원가표</button>' : '';
+    if (view === 'list') {
+      const shown = rows.filter(r => (!v.st || r.status === v.st) && (!q || [r.cost_no, r.title, r.customer, r.product, r.dev?.req_no, r.dev?.title, ...r.lines.map(l => l.item)].join(' ').toLowerCase().includes(q)));
+      // 누적: 발생일(첫 줄) 순으로 더해 간 총원가
+      const order = [...shown].sort((a, b) => String(a.calc.first_date || a.created_at).localeCompare(String(b.calc.first_date || b.created_at)) || a.id - b.id); let run = 0; const cum = {}; for (const r of order) { run += r.calc.total; cum[r.id] = run; }
+      const tot = k => shown.reduce((s, r) => s + (r.calc[k] || 0), 0);
+      $('#dcList', main).innerHTML = shown.length ? `<div class="table-wrap"><table class="grid ip-table dc-list"><thead><tr><th>번호</th><th>개발(개발리스트)</th><th>원가표 · 제품</th><th>고객</th><th>발생 기간</th><th>직접비</th><th>판관비</th><th>총원가</th><th>단위원가</th><th>목표가 · 이익률</th><th>누적 총원가</th><th>상태</th><th></th></tr></thead><tbody>${shown.map(r => `<tr data-dc-row="${r.id}" class="${r.calc.margin != null && r.calc.margin < 0 ? 'ip-over' : ''}"><td class="nowrap" data-card-primary><b>${esc(r.cost_no)}</b></td><td>${r.dev ? `<b>${esc(r.dev.req_no || '')}</b> ${esc(r.dev.title)}` : '<span class="muted small">매칭 없음</span>'}</td><td>${esc(r.title)}${r.product ? `<div class="small muted">${esc(r.product)}</div>` : ''}</td><td>${esc(r.customer || '')}</td><td class="c nowrap">${esc(r.calc.first_date || '')}${r.calc.last_date && r.calc.last_date !== r.calc.first_date ? ` ~ ${esc(r.calc.last_date)}` : ''}</td><td class="r">${dcFmt(r.calc.direct)}</td><td class="r">${dcFmt(r.calc.sga)}</td><td class="r"><b>${dcFmt(r.calc.total)}</b></td><td class="r">${dcFmt(r.calc.unit_cost, 2)}<div class="small muted">/${dcFmt(r.base_qty, 2)}${esc(r.unit || '')}</div></td><td class="r">${r.target_price != null ? `${dcFmt(r.target_price, 2)}<div class="small ${r.calc.margin < 0 ? 'err-text' : 'muted'}">${dcFmt(r.calc.margin_rate, 1)}%</div>` : '<span class="muted">—</span>'}</td><td class="r">${dcFmt(cum[r.id])}</td><td class="c"><span class="chip ${r.status === 'confirmed' ? 'green' : ''}">${esc(r.status_label)}</span></td><td><button type="button" class="btn small" data-dc-open="${r.id}">열기</button></td></tr>`).join('')}</tbody>
+        <tfoot><tr class="dc-total"><td colspan="5" class="r"><b>합계 ${shown.length}건</b></td><td class="r">${dcFmt(tot('direct'))}</td><td class="r">${dcFmt(tot('sga'))}</td><td class="r"><b>${dcFmt(tot('total'))}</b></td><td colspan="5"></td></tr></tfoot></table></div>`
+        : `<div class="empty">${rows.length ? '조건에 맞는 원가표가 없습니다.' : `원가표가 없습니다.${data.can_manage ? ' 「＋ 원가표」로 개발 건을 고르고 매입가·부대비용을 넣어 보세요. 엑셀에서 복사해 붙여넣어도 됩니다.' : ''}`}</div>`;
+    } else {
+      const shown = data.dev_requests.filter(d => (!v.nocost || !d.cost_count) && (!q || [d.req_no, d.title, d.customer].join(' ').toLowerCase().includes(q)));
+      $('#dcList', main).innerHTML = shown.length ? `<div class="table-wrap"><table class="grid ip-table dc-match"><thead><tr><th>개발 번호</th><th>개발명</th><th>고객</th><th>개발 상태</th><th>원가표</th><th>누적 총원가</th><th>최근 단위원가</th><th></th></tr></thead><tbody>${shown.map(d => { const mine = rows.filter(r => r.dev_request_id === d.id), last = mine[0]; return `<tr class="${!d.cost_count && !['done', 'rejected'].includes(d.status) ? 'ip-over' : ''}"><td class="nowrap" data-card-primary><b>${esc(d.req_no || '#' + d.id)}</b></td><td>${esc(d.title)}</td><td>${esc(d.customer || '')}</td><td class="c">${esc(REQ_STATE[d.status] || d.status || '')}</td><td class="r">${d.cost_count ? `${d.cost_count}건` : '<span class="chip yellow">없음</span>'}</td><td class="r"><b>${d.cost_total ? dcFmt(d.cost_total) : ''}</b></td><td class="r">${last ? `${dcFmt(last.calc.unit_cost, 2)}<div class="small muted">${esc(last.cost_no)}</div>` : ''}</td><td class="nowrap">${last ? `<button type="button" class="btn small" data-dc-open="${last.id}">열기</button> ` : ''}${data.can_manage ? `<button type="button" class="btn small" data-dc-start="${d.id}">＋ 원가표</button>` : ''}</td></tr>`; }).join('')}</tbody></table></div>`
+        : `<div class="empty">${data.dev_requests.length ? '조건에 맞는 개발 건이 없습니다.' : '개발리스트에 개발 건이 없습니다. 「개발 관리 › 개발의뢰」에서 먼저 등록하세요.'}</div>`;
+    }
+  };
+  main.addEventListener('click', e => {
+    const vb = e.target.closest('[data-dc-view]'); if (vb) { view = vb.dataset.dcView; try { localStorage.setItem(DC_VIEW_KEY, view); } catch {} draw(); return; }
+    if (e.target.closest('[data-dc-new]')) return costOpen().catch(fail);
+    const o = e.target.closest('[data-dc-open]'); if (o) return costOpen(Number(o.dataset.dcOpen)).catch(fail);
+    const s = e.target.closest('[data-dc-start]'); if (s) { const d = data.dev_requests.find(x => x.id === Number(s.dataset.dcStart)); costOpen(null, { dev_request_id: d.id, title: `${d.title}${d.cost_count ? ` ${d.cost_count + 1}차` : ''} 원가`, customer: d.customer || '' }).catch(fail); }
+  });
+  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }

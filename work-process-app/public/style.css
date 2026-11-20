@@ -4147,3 +4147,57 @@ p a.btn.small, p .btn.small { white-space: nowrap; }
 /* 다크 모드: 지정 담당 배지·구분 카드 제목 글자를 밝게(전기 주황 등 대비 2.6 → 4.5 이상) */
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .oc-badge, :root:not([data-theme="light"]) .duty-card h3 { color: color-mix(in srgb, var(--c) 55%, #fff); } }
 :root[data-theme="dark"] .oc-badge, :root[data-theme="dark"] .duty-card h3 { color: color-mix(in srgb, var(--c) 55%, #fff); }
+
+/* 15.316 다크 모드 대비 정리(화면 설정 「다크」 선택과 기기 다크를 같게, 다크에서 밝은 칩·흐린 숫자 없애기) */
+/* 기기 다크에만 있던 규칙 → 「다크」 선택에도 */
+:root[data-theme="dark"] .rs-page .rs-badge-ok { background: #173a28; color: #7fd6a4; } :root[data-theme="dark"] .rs-page .rs-badge-no { background: #2b303a; color: #b4bcc8; }
+:root[data-theme="dark"] .rs-page .rs-badge-part { background: #3a2f12; color: #f0c867; } :root[data-theme="dark"] .rs-page .rs-badge-warn { background: #3d1c1c; color: #f19a9a; }
+:root[data-theme="dark"] .sc-table tr.sc-row.on > td { background: #3a2e1e !important; }
+/* 「다크」 선택에만 있던 규칙 → 기기 다크에도, 주의 카드 글자도 밝게 */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ps-card.warn { background: #3a2f12; } :root:not([data-theme="light"]) .ps-card.warn b { color: #f0c867; } }
+:root[data-theme="dark"] .ps-card.warn b { color: #f0c867; }
+/* 품질·생산 목록 타일 숫자와 D-day 칩: 라이트는 진하게, 다크는 밝은 칩 대신 어두운 바탕 + 밝은 글자 */
+.ip-tile.yellow b { color: #b35c00; } .ip-dd.soon { color: #a35200; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ip-tile.red b { color: #ff8787; } :root:not([data-theme="light"]) .ip-tile.yellow b { color: #ffc078; } :root:not([data-theme="light"]) .ip-tile.green b { color: #69db7c; }
+  :root:not([data-theme="light"]) .ip-dd.soon { background: #3a2f12; color: #ffd43b; } :root:not([data-theme="light"]) .ip-dd.over { background: #3d1c1c; color: #ff8787; } }
+:root[data-theme="dark"] .ip-tile.red b { color: #ff8787; } :root[data-theme="dark"] .ip-tile.yellow b { color: #ffc078; } :root[data-theme="dark"] .ip-tile.green b { color: #69db7c; }
+:root[data-theme="dark"] .ip-dd.soon { background: #3a2f12; color: #ffd43b; } :root[data-theme="dark"] .ip-dd.over { background: #3d1c1c; color: #ff8787; }
+/* 대시보드 부서 영문 머리글(Sales·Quality…): 라이트는 조금 진하게, 다크는 조금 밝게 */
+.dm-en { color: color-mix(in srgb, var(--dept) 78%, #000); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .dm-en { color: color-mix(in srgb, var(--dept) 70%, #fff); } }
+:root[data-theme="dark"] .dm-en { color: color-mix(in srgb, var(--dept) 70%, #fff); }
+/* 즐겨찾기 ☆(라이트): 너무 흐려 대비 2.1 → 3.4 */
+.fav-toggle:not([aria-pressed="true"]) { color: #7f8a9c; }
+/* KHA·PJH 스킨 다크: 밝은 초록·갈색 알약 위 흰 글자(대비 2.3~2.9) → 진한 글자 */
+:root[data-skin="kha"][data-theme="dark"] .top .who .tag, :root[data-skin="kha"][data-theme="dark"][data-nav="top"] .nav-group[data-dept].drop > button.nav-title, :root[data-skin="kha"][data-theme="dark"][data-nav="top"] .nav-group[data-dept]:has(.nav-body a.active):not(.nav-fav) > button.nav-title, :root[data-skin="kha"][data-theme="dark"][data-nav="top"] .nav-group[data-dept="fav"].drop > button.nav-title { color: #062616; }
+:root[data-skin="pjh"][data-theme="dark"] .top .who .tag, :root[data-skin="pjh"][data-theme="dark"][data-nav="top"] .nav-group[data-dept].drop > button.nav-title, :root[data-skin="pjh"][data-theme="dark"][data-nav="top"] .nav-group[data-dept]:has(.nav-body a.active):not(.nav-fav) > button.nav-title, :root[data-skin="pjh"][data-theme="dark"][data-nav="top"] .nav-group[data-dept="fav"].drop > button.nav-title { color: #2a1406; }
+@media (prefers-color-scheme: dark) {
+  :root[data-skin="kha"]:not([data-theme="light"]) .top .who .tag, :root[data-skin="kha"]:not([data-theme="light"])[data-nav="top"] .nav-group[data-dept].drop > button.nav-title, :root[data-skin="kha"]:not([data-theme="light"])[data-nav="top"] .nav-group[data-dept]:has(.nav-body a.active):not(.nav-fav) > button.nav-title, :root[data-skin="kha"]:not([data-theme="light"])[data-nav="top"] .nav-group[data-dept="fav"].drop > button.nav-title { color: #062616; }
+  :root[data-skin="pjh"]:not([data-theme="light"]) .top .who .tag, :root[data-skin="pjh"]:not([data-theme="light"])[data-nav="top"] .nav-group[data-dept].drop > button.nav-title, :root[data-skin="pjh"]:not([data-theme="light"])[data-nav="top"] .nav-group[data-dept]:has(.nav-body a.active):not(.nav-fav) > button.nav-title, :root[data-skin="pjh"]:not([data-theme="light"])[data-nav="top"] .nav-group[data-dept="fav"].drop > button.nav-title { color: #2a1406; }
+}
+
+/* 15.316 개발원가: 엑셀식 원가 그리드 · 요약 */
+.modal.wide:has(.dc-grid) { width: min(1560px, calc(100vw - 32px)); max-width: none; }
+.dc-wrap { max-height: 52vh; overflow: auto; }
+.dc-grid td { padding: 2px 3px; vertical-align: middle; }
+.dc-grid input, .dc-grid select { width: 100%; font-size: 13px; min-height: 30px; border-radius: 4px; }
+.dc-grid input:focus, .dc-grid select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.dc-grid input.r { text-align: right; font-variant-numeric: tabular-nums; }
+.dc-grid thead th { position: sticky; top: 0; z-index: 1; white-space: nowrap; }
+.dc-grid .dc-amt { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.dc-total td { background: var(--total-bg, var(--bg)); font-variant-numeric: tabular-nums; }
+.dc-sum-grid { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(280px, 1.2fr); gap: 12px; align-items: start; }
+.dc-kpi { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin: 0; }
+.dc-kpi > div { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--panel); }
+.dc-kpi dt { font-size: 12px; color: var(--muted); } .dc-kpi dd { margin: 2px 0 0; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.dc-kpi .em { border-color: var(--accent); } .dc-kpi .em dd { color: var(--accent); }
+.dc-kpi .neg { border-color: var(--red, #e03131); } .dc-kpi .neg dd { color: var(--red, #e03131); } .dc-kpi .pos dd { color: var(--green, #2f9e44); }
+.dc-view { display: inline-flex; margin: 0 0 8px; } .dc-view .btn { border-radius: 0; } .dc-view .btn:first-child { border-radius: 6px 0 0 6px; } .dc-view .btn:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
+.dc-list td.r, .dc-match td.r { font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 700px) { .dc-sum-grid { grid-template-columns: 1fr; } }
+.dc-total td { white-space: nowrap; }
+.dc-grid select { padding-right: 18px; }
+/* 개발 스케줄 범례 ◆(다음 예정): 라이트에서 너무 옅어 진하게(대비 2.3 → 3.5) */
+.dr-legend .dr-next-i { color: #c76d00; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .dr-legend .dr-next-i { color: #ffa94d; } }
+:root[data-theme="dark"] .dr-legend .dr-next-i { color: #ffa94d; }

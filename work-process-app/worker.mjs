@@ -524,7 +524,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'qualifications', 'supplier_evals', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests', 'quality_audits', 'audit_findings', 'validations', 'quality_goals', 'quality_kpi_values', 'quality_risks', 'risk_assessments', 'org_duty_assignments']; // 15.313 위험성평가 · 15.314 지정 담당자
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'qualifications', 'supplier_evals', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests', 'quality_audits', 'audit_findings', 'validations', 'quality_goals', 'quality_kpi_values', 'quality_risks', 'risk_assessments', 'org_duty_assignments', 'dev_costs']; // 15.313 위험성평가 · 15.314 지정 담당자
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -5253,6 +5253,96 @@ route('GET', '/api/equipment-reliability', async ({ query }) => {
   const mt = tot.fails ? (tot.planned - tot.down) / tot.fails : null;
   return { from, to: end, hours, mission, rows: out, total: { ...tot, planned: r2(tot.planned), down: r2(tot.down), mtbf: r2(mt), mttr: tot.fails ? r2(tot.down / tot.fails) : null, availability: tot.planned ? r2((tot.planned - tot.down) / tot.planned * 100) : null } };
 });
+// ── 15.316 연구소 › 개발원가 관리 ──
+// 개발 건(개발리스트 requests.type='development')별 원가표. 원가 줄은 엑셀처럼 쌓고(발생일·구분·품목·규격·거래처·수량·단위·단가·통화·환율), 서버가 금액을 계산한다.
+// 금액 = 수량 × 단가 × 환율(원 단위 반올림). 직접비 = 판관비 줄을 뺀 합, 판관비 = 판관비 줄 + 직접비 × 판관비율, 총원가 = 직접비 + 판관비,
+// 단위원가 = 총원가 ÷ 기준 수량, 목표 판매단가가 있으면 이익·이익률, 목표 이익률이 있으면 권장 판매단가 = 단위원가 ÷ (1 − 이익률).
+// 보기·작성은 연구소(개발·개발책임자), 확정·확정 취소는 개발책임자. 확정된 원가표는 잠김.
+const DC_CAT = { material: '매입가(재료)', incidental: '부대비용(운송·관세·포장)', outsource: '외주가공', test: '시험·인증', tooling: '금형·지그', labor: '인건비', sga: '판관비', etc: '기타' };
+const DC_STATUS = { draft: '작성', confirmed: '확정' };
+const DC_CUR = ['KRW', 'USD', 'EUR', 'JPY', 'CNY'];
+const DC_COLS = ['dev_request_id', 'title', 'customer', 'product', 'base_qty', 'unit', 'sga_rate', 'profit_rate', 'target_price', 'lines', 'note'];
+const requireResearcher = user => { if (!isResearcher(user)) throw new HttpError(403, '개발원가는 연구소(개발 담당·개발책임자)만 봅니다.'); };
+function dcLines(list, prior = []) {
+  if (!Array.isArray(list)) throw bad('원가 줄이 올바르지 않습니다.'); if (list.length > 500) throw bad('원가 줄은 500줄까지입니다.');
+  const keys = new Set();
+  return list.map((x, i) => {
+    const o = x && typeof x === 'object' ? x : {}, n = `${i + 1}번 줄 `, key = /^[a-f0-9]{8}$/.test(o.key || '') ? o.key : randomHex(4);
+    if (keys.has(key)) throw bad('원가 줄이 겹칩니다.'); keys.add(key);
+    const blank = v => v === '' || v == null;
+    const qty = blank(o.qty) ? 1 : numS(o.qty, n + '수량'), price = blank(o.unit_price) ? 0 : numS(o.unit_price, n + '단가'), fx = blank(o.fx) ? 1 : num(o.fx, n + '환율');
+    if (fx <= 0) throw bad(n + '환율은 0보다 커야 합니다.');
+    const cur = DC_CUR.includes(o.currency) ? o.currency : 'KRW';
+    return { key, date: qDate(o.date, n + '발생일'), cat: DC_CAT[o.cat] ? o.cat : 'material', item: reqStr(o.item, n + '품목·내용', 200), spec: str(o.spec, 200), vendor: str(o.vendor, 100), qty, unit: str(o.unit, 20), unit_price: price, currency: cur, fx: cur === 'KRW' ? 1 : fx, amount: Math.round(qty * price * (cur === 'KRW' ? 1 : fx)), note: str(o.note, 300) };
+  });
+}
+function dcCalc(r) {
+  const lines = Array.isArray(r.lines) ? r.lines : JSON.parse(r.lines || '[]'), by = Object.fromEntries(Object.keys(DC_CAT).map(k => [k, 0]));
+  for (const l of lines) by[l.cat] = (by[l.cat] || 0) + (l.amount || 0);
+  const direct = lines.filter(l => l.cat !== 'sga').reduce((s, l) => s + (l.amount || 0), 0), sgaAuto = Math.round(direct * (r.sga_rate || 0) / 100), sga = by.sga + sgaAuto, total = direct + sga;
+  const base = r.base_qty > 0 ? r.base_qty : 1, unit_cost = Math.round(total / base * 100) / 100;
+  const margin = r.target_price != null ? Math.round((r.target_price - unit_cost) * 100) / 100 : null, margin_rate = r.target_price ? Math.round((r.target_price - unit_cost) / r.target_price * 1000) / 10 : null;
+  const suggest = r.profit_rate > 0 && r.profit_rate < 100 ? Math.round(unit_cost / (1 - r.profit_rate / 100)) : null;
+  const dates = lines.map(l => l.date).filter(Boolean).sort();
+  return { by, direct, sga_auto: sgaAuto, sga, total, unit_cost, margin, margin_rate, suggest, first_date: dates[0] || null, last_date: dates.at(-1) || null, line_count: lines.length };
+}
+async function dcBody(o0, prior = {}) {
+  const o = o0 && typeof o0 === 'object' ? o0 : {}, pick = k => o[k] === undefined ? prior[k] : o[k];
+  const dev = optId(pick('dev_request_id')); let devRow = null;
+  if (dev) { devRow = await db.prepare("SELECT id, req_no, title, customer FROM requests WHERE id=? AND type='development'").get(dev); if (!devRow) throw bad('개발리스트의 개발 건을 다시 고르세요.'); }
+  const rate = (v, l) => { if (v === '' || v == null) return 0; const n = num(v, l); if (n >= 100) throw bad(`${l}은(는) 100% 미만으로 넣으세요.`); return n; };
+  const base = pick('base_qty') === '' || pick('base_qty') == null ? 1 : num(pick('base_qty'), '원가 기준 수량'); if (base <= 0) throw bad('원가 기준 수량은 0보다 커야 합니다.');
+  const tp = pick('target_price'); const lines = dcLines(o.lines === undefined ? JSON.parse(prior.lines || '[]') : o.lines);
+  return { dev_request_id: dev, title: str(pick('title'), 200) || devRow?.title || reqStr('', '원가표 이름(제품·개발명)', 200), customer: str(pick('customer'), 100) || (!prior.id ? devRow?.customer || '' : ''), product: str(pick('product'), 200),
+    base_qty: base, unit: str(pick('unit'), 20), sga_rate: rate(pick('sga_rate'), '판관비율'), profit_rate: rate(pick('profit_rate'), '목표 이익률'), target_price: tp === '' || tp == null ? null : num(tp, '목표 판매단가'), lines: JSON.stringify(lines), note: str(pick('note'), 1000) };
+}
+async function dcDevMap() { return Object.fromEntries((await db.prepare("SELECT id, req_no, title, customer, status FROM requests WHERE type='development'").all()).map(r => [r.id, r])); }
+const dcRow = (r, devs = {}) => ({ ...r, lines: JSON.parse(r.lines || '[]'), history: JSON.parse(r.history || '[]'), status_label: DC_STATUS[r.status] || r.status, dev: r.dev_request_id ? devs[r.dev_request_id] || null : null, calc: dcCalc(r) });
+route('GET', '/api/dev-costs', async ({ user }) => {
+  requireResearcher(user); const devs = await dcDevMap();
+  const rows = (await db.prepare('SELECT * FROM dev_costs ORDER BY id DESC LIMIT 3000').all()).map(r => dcRow(r, devs));
+  const dev_requests = Object.values(devs).sort((a, b) => b.id - a.id).map(d => ({ ...d, cost_count: rows.filter(r => r.dev_request_id === d.id).length, cost_total: rows.filter(r => r.dev_request_id === d.id).reduce((s, r) => s + r.calc.total, 0) }));
+  return { rows, dev_requests, categories: DC_CAT, currencies: DC_CUR, can_manage: isResearcher(user), can_confirm: hasRole(user, 'dev_approver'), today: today() };
+});
+route('POST', '/api/dev-costs', async ({ user, body }) => {
+  requireResearcher(user); const key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM dev_costs WHERE request_id=?').get(key); if (old) return dcRow(old, await dcDevMap()); }
+  const f = await dcBody(body), prefix = 'DC-' + today().slice(2, 7).replace('-', '') + '-';
+  const r = await db.prepare(`INSERT INTO dev_costs(cost_no,${DC_COLS.join(',')},history,request_id,created_by) VALUES(${nextDocNo('dev_costs', 'cost_no')},${DC_COLS.map(() => '?').join(',')},?,?,?)`)
+    .run(prefix, prefix, prefix, ...DC_COLS.map(k => f[k]), JSON.stringify([{ at: now(), by: user.name, what: '작성' }]), key, user.name);
+  return dcRow(await mustGet('dev_costs', r.lastInsertRowid), await dcDevMap());
+});
+route('PUT', '/api/dev-costs/:id', async ({ user, params, body }) => {
+  requireResearcher(user); const prior = await mustGet('dev_costs', params.id);
+  if (Number(body.revision) !== prior.revision) throw conflict();
+  if (prior.status === 'confirmed') throw bad('확정된 원가표입니다. 개발책임자가 「확정 취소」한 뒤 고치세요.');
+  const f = await dcBody(body, prior), changed = DC_COLS.filter(k => (prior[k] ?? null) !== (f[k] ?? null)); if (!changed.length) return dcRow(prior, await dcDevMap());
+  const t = dcCalc(f), t0 = dcCalc(prior);
+  const r = await db.prepare(`UPDATE dev_costs SET ${DC_COLS.map(k => k + '=?').join(',')},history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`)
+    .run(...DC_COLS.map(k => f[k]), pushHist(prior, { by: user.name, what: t.total !== t0.total ? `수정 · 총원가 ${t0.total.toLocaleString('ko-KR')} → ${t.total.toLocaleString('ko-KR')}` : '수정', fields: changed }), user.name, prior.id, prior.revision);
+  if (!r.changes) throw conflict();
+  return dcRow(await mustGet('dev_costs', prior.id), await dcDevMap());
+});
+route('POST', '/api/dev-costs/:id/step', async ({ user, params, body }) => {
+  requireResearcher(user); const prior = await mustGet('dev_costs', params.id);
+  if (Number(body.revision) !== prior.revision) throw conflict();
+  if (!hasRole(user, 'dev_approver')) throw new HttpError(403, '확정·확정 취소는 개발책임자가 합니다.');
+  const to = body.to, reason = str(body.reason, 300); let set;
+  if (prior.status === 'draft' && to === 'confirmed') { if (!JSON.parse(prior.lines || '[]').length) throw bad('원가 줄을 하나 이상 넣어야 확정합니다.'); set = { status: 'confirmed', confirmed_by: user.name, confirmed_at: now() }; }
+  else if (prior.status === 'confirmed' && to === 'draft') { if (!reason) throw bad('확정 취소 사유를 적으세요.'); set = { status: 'draft', confirmed_by: '', confirmed_at: null }; }
+  else throw bad(`「${DC_STATUS[prior.status]}」에서 「${DC_STATUS[to] || to}」(으)로 갈 수 없습니다.`);
+  const keys = Object.keys(set);
+  const r = await db.prepare(`UPDATE dev_costs SET ${keys.map(k => k + '=?').join(',')},history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`)
+    .run(...keys.map(k => set[k]), pushHist(prior, { by: user.name, what: to === 'confirmed' ? `확정 · 총원가 ${dcCalc(prior).total.toLocaleString('ko-KR')}` : '확정 취소', status: [prior.status, to], ...(reason ? { reason } : {}) }), user.name, prior.id, prior.revision);
+  if (!r.changes) throw conflict();
+  return dcRow(await mustGet('dev_costs', prior.id), await dcDevMap());
+});
+route('DELETE', '/api/dev-costs/:id', async ({ user, params, query }) => {
+  requireResearcher(user); const prior = await mustGet('dev_costs', params.id);
+  if (Number(query.revision) !== prior.revision) throw conflict();
+  if (prior.status !== 'draft' || JSON.parse(prior.history || '[]').some(h => /확정/.test(h.what || ''))) throw bad('한 번이라도 확정된 원가표는 지울 수 없습니다.');
+  await db.prepare('DELETE FROM dev_costs WHERE id=? AND revision=?').run(prior.id, prior.revision); return { ok: true };
+});
 // 15.312 통합 번호 검색(메뉴 찾기 칸): NC-·COA-·CHG-·AUD-·VAL-·REL-·RSK-·문서번호·설비번호·시험법·의뢰 번호와 제목으로 기록을 찾는다.
 // 열람 제한이 있는 품질 문서는 qdocVisible로 거르고, 나머지는 화면(메뉴 권한)에서 다시 거른다. 종류마다 5건, 모두 25건까지.
 route('GET', '/api/find', async ({ user, query }) => {
@@ -5270,6 +5360,7 @@ route('GET', '/api/find', async ({ user, query }) => {
   await add('equipment', '설비 대장', '#/prod/equipment', "SELECT id, equip_no, name, status FROM equipment WHERE equip_no LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\' ORDER BY equip_no LIMIT 5", r => ({ id: r.id, no: r.equip_no, label: r.name, state: EQ_STATUS[r.status] }));
   await add('method', '시험법', '#/quality/methods', "SELECT id, method_no, name, status FROM test_methods WHERE method_no LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\' ORDER BY method_no LIMIT 5", r => ({ id: r.id, no: r.method_no, label: r.name, state: r.status === 'active' ? '사용' : '폐지' }));
   await add('ra', '위험성평가', '#/prod/risk', "SELECT id, ra_no, method, title, status FROM risk_assessments WHERE ra_no LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\' ORDER BY id DESC LIMIT 5", r => ({ id: r.id, no: r.ra_no, label: `${RA_METHOD[r.method]} · ${r.title}`, state: RA_STATUS[r.status] }));
+  if (isResearcher(user)) await add('devcost', '개발원가', '#/dev/cost', "SELECT id, cost_no, title, status FROM dev_costs WHERE cost_no LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\' ORDER BY id DESC LIMIT 5", r => ({ id: r.id, no: r.cost_no, label: r.title, state: DC_STATUS[r.status] })); // 15.316 연구소만
   await add('request', '의뢰', '', "SELECT id, req_no, type, title, status FROM requests WHERE req_no LIKE ? ESCAPE '\\' OR (req_no IS NOT NULL AND title LIKE ? ESCAPE '\\') ORDER BY id DESC LIMIT 5", r => ({ id: r.id, no: r.req_no, label: r.title, rtype: r.type, state: r.status }));
   return { rows: rows.slice(0, 25) };
 });

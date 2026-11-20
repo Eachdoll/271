@@ -1151,3 +1151,31 @@ test('15.315 review fixes: find keeps underscore, %/_ alone empty; reliability w
   const bad = await prod('PUT', `/api/risk-assess/${k.id}/rows/${k.rows[0].key}`, { revision: k.revision, done: today, f2: 9, s2: 1 }); assert.match(bad.body.error, /^1번 줄/);
   k = (await prod('POST', `/api/risk-assess/${k.id}/step`, { to: 'draft', revision: k.revision, rev_note: '설비 교체' })).body; assert.equal(k.next_review, null);
 });
+
+test('15.316 development cost sheets: auto amounts (qty x price x fx), direct/SGA/total/unit cost/margin/suggested price, dev list matching, researcher-only, confirm lock', async () => {
+  const dev = (await admin('POST', '/api/requests', { type: 'development', title: '저분진 와이퍼 원가', customer: '삼성SDI', due_date: '2027-03-31', target_price: '150', data: { extra: 'x' } })).body;
+  assert.equal((await prod('GET', '/api/dev-costs')).status, 403);
+  assert.equal((await admin('POST', '/api/dev-costs', { dev_request_id: 999999, lines: [] })).status, 400);
+  let c = (await admin('POST', '/api/dev-costs', { dev_request_id: dev.id, product: '9인치 와이퍼', base_qty: 1000, unit: 'EA', sga_rate: 10, profit_rate: 20, target_price: 150, request_id: rid(), lines: [
+    { date: '2026-11-01', cat: 'material', item: '폴리에스터 원단', qty: 50, unit: 'kg', unit_price: 12, currency: 'USD', fx: 1400 },
+    { date: '2026-11-03', cat: 'incidental', item: '항공 운송비', qty: 1, unit_price: 80000 },
+    { date: '2026-11-05', cat: 'test', item: '파티클 시험', qty: 2, unit_price: 50000 },
+    { cat: 'sga', item: '영업 출장비', qty: 1, unit_price: 20000 },
+  ] })).body;
+  assert.deepEqual([c.title, c.customer, c.dev.req_no === dev.req_no, /^DC-\d{4}-01$/.test(c.cost_no)], ['저분진 와이퍼 원가', '삼성SDI', true, true]);
+  assert.deepEqual(c.lines.map(l => l.amount), [840000, 80000, 100000, 20000]);
+  // 직접비 1,020,000 · 판관비 = 20,000 + 102,000 · 총원가 1,142,000 · 단위원가 1,142 → 목표가 150은 적자, 권장가 = 1142/(1-0.2) = 1427.5 → 1428
+  assert.deepEqual([c.calc.direct, c.calc.sga_auto, c.calc.sga, c.calc.total, c.calc.unit_cost, c.calc.margin, c.calc.margin_rate, c.calc.suggest, c.calc.first_date, c.calc.last_date], [1020000, 102000, 122000, 1142000, 1142, -992, -661.3, 1428, '2026-11-01', '2026-11-05']);
+  assert.equal(c.calc.by.material, 840000);
+  assert.equal((await admin('PUT', `/api/dev-costs/${c.id}`, { revision: c.revision, lines: [{ cat: 'material', item: '', qty: 1 }] })).status, 400, 'item required');
+  assert.equal((await admin('PUT', `/api/dev-costs/${c.id}`, { revision: c.revision, sga_rate: 100 })).status, 400);
+  c = (await admin('PUT', `/api/dev-costs/${c.id}`, { revision: c.revision, target_price: 2000 })).body; assert.deepEqual([c.calc.margin, c.calc.margin_rate], [858, 42.9]);
+  const list = (await admin('GET', '/api/dev-costs')).body, d = list.dev_requests.find(x => x.id === dev.id); assert.deepEqual([d.cost_count, d.cost_total], [1, 1142000]);
+  c = (await admin('POST', `/api/dev-costs/${c.id}/step`, { to: 'confirmed', revision: c.revision })).body; assert.equal(c.status, 'confirmed');
+  assert.equal((await admin('PUT', `/api/dev-costs/${c.id}`, { revision: c.revision, note: 'x' })).status, 400, 'locked');
+  assert.equal((await admin('POST', `/api/dev-costs/${c.id}/step`, { to: 'draft', revision: c.revision })).status, 400, 'reason');
+  c = (await admin('POST', `/api/dev-costs/${c.id}/step`, { to: 'draft', revision: c.revision, reason: '단가 변경' })).body; assert.equal(c.status, 'draft');
+  assert.equal((await admin('DELETE', `/api/dev-costs/${c.id}?revision=${c.revision}`)).status, 400, 'once confirmed cannot delete');
+  assert.ok((await admin('GET', '/api/find?q=' + c.cost_no)).body.rows.some(x => x.type === 'devcost'));
+  assert.ok(!(await prod('GET', '/api/find?q=' + c.cost_no)).body.rows.some(x => x.type === 'devcost'), 'non-researcher cannot find');
+});
