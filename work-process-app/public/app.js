@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.305';
+const APP_VERSION = '15.306';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -382,7 +382,7 @@ const NAV = [
   ] },
   // 15.305 품질 메뉴를 품질보증(QA)·품질관리(QC) 묶음으로(개발지침서 3장). 품질경영(QM)은 4단계에서 메뉴가 생기면 추가.
   { group: '품질', items: [
-    { sub: '품질보증(QA)', items: [['#/quality/capa', '부적합·CAPA'], ['#/quality/voc/list', 'VOC 관리'], ['#/quality/certs', '인증서 관리'], ['#/quality/calibration', '검교정 관리']] },
+    { sub: '품질보증(QA)', items: [['#/quality/docs', '문서관리'], ['#/quality/changes', '변경관리'], ['#/quality/training', '교육·자격관리'], ['#/quality/certs', '인증서 관리'], ['#/quality/suppliers', '협력업체 품질'], ['#/quality/capa', '부적합·CAPA'], ['#/quality/voc/list', 'VOC 관리'], ['#/quality/calibration', '검교정 관리']] }, // 15.306 2단계 A1·A2·A3·A5
     { sub: '품질관리(QC)', items: [['#/quality/inspections', '수입·출하 검사 이력'], ['#/quality/list', '분석 관리'], ['#/quality/coa', 'COA 발행']] },
   ] },
   { group: '연구소', items: [['#/dev/list', '개발 관리'], ['#/dev/schedule', '스케줄 관리'], ['#/dev/analysis', '연구 분석 관리'], ['#/dev/specs', '검사규격 항목설정'], ['#/dev/ip', '지식재산권 관리']] }, // 15.302 지식재산권 // 15.276 · 15.285 · 15.295 메뉴 이름 개발 → 연구소, 연구소 검사규격
@@ -586,6 +586,10 @@ const PAGES = {
   '#/quality/calibration': main => pageCalibration(main), // 15.304
   '#/quality/coa': main => pageCoa(main), // 15.305 LOT별 COA
   '#/quality/capa': main => pageNcs(main), // 15.305 부적합·CAPA
+  '#/quality/docs': main => pageQDocs(main), // 15.306 A1 문서관리
+  '#/quality/changes': main => pageChanges(main), // 15.306 A2 변경관리
+  '#/quality/training': main => pageTraining(main), // 15.306 A3 교육·자격
+  '#/quality/suppliers': main => pageSuppliers(main), // 15.306 A5 협력업체 품질
   '#/quality/request': () => pageIntake('analysis'),
   '#/quality/list': () => pageWorkList('analysis'),
   '#/quality/voc/request': () => pageIntake('voc'),
@@ -2360,6 +2364,7 @@ function requestDetail(type, r, reload) {
       ${type === 'rnd_analysis' && (hasRole('dev') || hasRole('dev_approver')) ? '<button class="btn primary" data-a="measure">측정값 수정</button>' : ''}
       ${type === 'analysis' && !['수입검사', '출하검사'].includes(r.category) && hasRole('quality') && ['waiting', 'progress', 'done'].includes(r.status) ? '<button class="btn primary" data-a="measure">측정값 입력</button>' : ''}
       ${type === 'analysis' && r.category === '출하검사' && (r.lot || r.data?.lot_etc) && hasRole('quality') ? '<button class="btn" data-a="coa" title="이 LOT의 COA(성적서) 발행">COA 발행</button>' : ''}
+      ${type === 'analysis' && r.category === '수입검사' && hasRole('quality') ? '<button class="btn" data-a="scoa" title="공급사가 보낸 COA(성적서) 파일 첨부·보기">공급사 COA</button>' : ''}
       ${['analysis', 'voc'].includes(type) && hasRole('quality') && r.status !== 'pending' ? '<button class="btn" data-a="capa" title="부적합·CAPA로 등록(원인분석·조치·검증)">CAPA 등록</button>' : ''}
       ${type === 'rnd_analysis' && (mgr || mine || hasRole('dev_approver')) ? '<button class="btn" data-a="devlink">개발건 연결</button>' : ''}
       ${mgr && ['waiting', 'progress', 'done'].includes(r.status) ? `<button class="btn" data-a="status">${type === 'rnd_analysis' ? '상태·의견' : '상태/결과 변경'}</button>` : ''}
@@ -2375,6 +2380,7 @@ function requestDetail(type, r, reload) {
       if (a === 'devlink') { m.close(); await rndDevLinkBox(r, reload); return; } // 15.286
       if (a === 'measure') { m.close(); await rndMeasureEdit(r, reload); return; } // 15.292 · 15.305 품질 분석의뢰도 같은 그리드
       if (a === 'coa') { m.close(); location.hash = '#/quality/coa'; setTimeout(() => coaNew(r.lot || r.data?.lot_etc).catch(fail), 400); return; } // 15.305
+      if (a === 'scoa') { await scoaOpen(r.id); return; } // 15.306 A5
       if (a === 'capa') { await ncNew({ source_type: type === 'voc' ? 'voc' : r.category === '수입검사' ? 'iqc' : r.category === '출하검사' ? 'oqc' : 'analysis', source_id: r.id, source_no: r.req_no, title: `${r.title}${type === 'voc' ? ' 고객 불만' : ' 부적합'}`, item: r.title, lot: r.lot || r.data?.lot_etc || (['있음', '없음'].includes(r.data?.lot) ? '' : r.data?.lot || ''), kind: type === 'voc' ? '고객 불만' : 'OOS' }); return; } // 15.305
       if (a === 'photos') { await openAttachments('request', r.id, r.title, { editable: (mine && ['pending','rejected'].includes(r.status)) || mgr }); return; }
       if (a === 'print') { const more = $('.rq-more', m.el), was = more?.open; if (more) more.open = true; document.body.classList.add('printing'); window.print(); document.body.classList.remove('printing'); if (more) more.open = was; return; } // 15.282 인쇄는 상세까지
@@ -3070,7 +3076,9 @@ async function pageAdmin(main) {
         } while (after !== null);
       }
       const signatures = (backup.tables.laundry_reports || []).map(row => row.signature).concat(backup.tables.settings.filter(row => row.key === 'laundry_report_settings').map(row => { try { return JSON.parse(row.value).signature; } catch { return ''; } })).filter(Boolean);
-      const photos = [...new Set(backup.tables.laundry.concat(backup.tables.attachments || [], backup.tables.purchase_requests || []).flatMap(row => JSON.parse(row.photos || '[]')).concat(signatures))];
+      // 15.306 품질 문서(작업본·승인판)·공급사 COA 파일도 함께
+      const qfiles = (backup.tables.quality_docs || []).flatMap(row => [JSON.parse(row.file_json || '{}').file, ...JSON.parse(row.versions || '[]').map(v => v.file?.file)]).concat((backup.tables.supplier_coas || []).flatMap(row => JSON.parse(row.files || '[]').map(x => x.file))).filter(Boolean);
+      const photos = [...new Set(backup.tables.laundry.concat(backup.tables.attachments || [], backup.tables.purchase_requests || []).flatMap(row => JSON.parse(row.photos || '[]')).concat(signatures, qfiles))];
       for (const [i, file] of photos.entries()) {
         status.textContent = `사진을 저장하고 있습니다… (${i + 1}/${photos.length})`;
         const response = await fetch('/uploads/' + encodeURIComponent(file));

@@ -1224,7 +1224,7 @@ async function ncOpen(id) {
         <label class="span3">근본 원인<input data-cause="root" maxlength="300" value="${esc(c.root || '')}"${dis}></label></div></fieldset>
       <fieldset class="vendor-sec"><legend>조치</legend><div class="form-grid">${ta('correction', '시정(이번 건 처리: 재작업·폐기·특채 등)', n.correction)}${ta('corrective', '시정조치(재발 방지)', n.corrective)}${ta('preventive', '예방조치(다른 품목·공정에도)', n.preventive)}${f('action_date', '조치 완료일', n.action_date, " type='date'")}</div></fieldset>
       <fieldset class="vendor-sec"><legend>유효성검증</legend><div class="form-grid">${f('verify_date', '검증일', n.verify_date, " type='date'")}<label>결과<select name="verify_result"${dis}><option value="">—</option><option${n.verify_result === '유효' ? ' selected' : ''}>유효</option><option${n.verify_result === '효과 없음' ? ' selected' : ''}>효과 없음</option></select></label>${ta('verify_note', '검증 내용(재발 여부·확인 데이터)', n.verify_note, 'span3')}</div></fieldset>
-      <div class="actions"><button type="button" class="btn" data-nc-hist>이력</button>${can && !closed ? '<button type="button" class="btn danger" data-nc-void>취소</button><span class="grow"></span><button class="btn">저장</button>' : ''}${can && !closed && next && next !== 'closed' ? `<button type="button" class="btn primary" data-nc-next="${next}">저장하고 「${NC_STATUS_LABEL[next]}」로 →</button>` : ''}${list.can_close && n.status === 'verify' ? '<button type="button" class="btn primary" data-nc-next="closed">종결</button>' : ''}${list.can_close && closed ? '<button type="button" class="btn" data-nc-reopen>다시 열기</button>' : ''}</div>
+      <div class="actions"><button type="button" class="btn" data-nc-hist>이력</button>${can && !closed ? '<button type="button" class="btn danger" data-nc-void>취소</button><span class="grow"></span><button class="btn">저장</button>' : ''}${can && !closed && next && next !== 'closed' ? `<button type="button" class="btn primary" data-nc-next="${next}">저장하고 「${NC_STATUS_LABEL[next]}」로 →</button>` : ''}${list.can_close && n.status === 'verify' ? '<button type="button" class="btn primary" data-nc-next="closed">종결</button>' : ''}${list.can_close && closed ? '<button type="button" class="btn" data-nc-reopen>다시 열기</button>' : ''}${can && ['action', 'verify', 'closed'].includes(n.status) ? '<button type="button" class="btn" data-nc-chg title="조치가 4M(사람·설비·자재·방법) 변경이면 변경관리로">변경 요청 만들기</button>' : ''}</div>
     </form>`, { wide: true });
   const form = $('[data-nc-form]', m.el);
   const body = () => { const v = formObj(form); v.cause_json = Object.fromEntries($$('[data-cause]', form).map(i => [i.dataset.cause, i.value.trim()]).filter(([, x]) => x)); return { ...v, revision: n.revision }; };
@@ -1233,6 +1233,7 @@ async function ncOpen(id) {
   $('[data-nc-next]', m.el)?.addEventListener('click', e => save(e.currentTarget.dataset.ncNext));
   $('[data-nc-void]', m.el)?.addEventListener('click', async () => { const v = await promptBox('부적합 취소', '<label>취소 사유 *<input name="reason" required maxlength="300" placeholder="예) 측정 오류로 확인 — 실제 부적합 아님"></label>'); if (v) save('void', v); });
   $('[data-nc-reopen]', m.el)?.addEventListener('click', async () => { const v = await promptBox('다시 열기', '<label>사유 *<input name="reason" required maxlength="300"></label>'); if (v) save('verify', v); });
+  $('[data-nc-chg]', m.el)?.addEventListener('click', () => { m.close(); chgNew({ source_type: 'capa', source_id: n.id, source_no: n.nc_no, title: n.corrective || n.title, item: n.item, kind: 'method' }).catch(fail); }); // 15.306 CAPA → 변경관리
   $('[data-nc-hist]', m.el).onclick = () => modal(`<h3>이력 · ${esc(n.nc_no)}</h3><div class="table-wrap"><table class="grid"><thead><tr><th>일시</th><th>담당</th><th>내용</th></tr></thead><tbody>${[...n.history].reverse().map(h => `<tr><td class="nowrap">${esc(String(h.at || '').slice(0, 16))}</td><td>${esc(h.by || '')}</td><td>${esc(h.what || '')}${h.status ? ` · ${esc(NC_STATUS_LABEL[h.status[0]] || '')} → ${esc(NC_STATUS_LABEL[h.status[1]] || '')}` : ''}${(h.fields || []).length ? ` · ${h.fields.length}칸` : ''}${h.reason ? ` · ${esc(h.reason)}` : ''}${h.source ? ` · 출처 ${esc(h.source)}` : ''}</td></tr>`).join('')}</tbody></table></div>`, { wide: true });
 }
 async function pageNcs(main) {
@@ -1261,5 +1262,437 @@ async function pageNcs(main) {
   });
   main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-nc-row]'); if (tr) ncOpen(Number(tr.dataset.ncRow)).catch(fail); });
   form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  await load();
+}
+
+// ── 15.306 품질 2단계(QA 체계): 문서관리 · 변경관리 · 교육·자격관리 · 협력업체 품질 ──
+const Q_FILE_TYPES = /^(application\/pdf|image\/(jpeg|png|webp))$/;
+const qFileData = f => new Promise((resolve, reject) => {
+  if (!Q_FILE_TYPES.test(f.type)) return reject(new Error(`「${f.name}」: PDF 또는 사진(jpg·png·webp)만 올릴 수 있습니다.`));
+  if (f.size > 8 * 1024 * 1024) return reject(new Error(`「${f.name}」(${(f.size / 1024 / 1024).toFixed(1)}MB)은 8MB를 넘습니다. 줄여서 올리세요.`));
+  const r = new FileReader(); r.onload = () => resolve({ data: r.result, name: f.name }); r.onerror = () => reject(new Error('파일을 읽지 못했습니다.')); r.readAsDataURL(f);
+});
+const qFiles = input => Promise.all([...(input?.files || [])].map(qFileData));
+const qFileLink = (f, label = '') => f?.file ? `<a class="q-file" href="/uploads/${esc(f.file)}" target="_blank" rel="noopener" title="${esc(f.name || '')}"><span class="q-file-t">${f.file.endsWith('.pdf') ? 'PDF' : 'IMG'}</span>${esc(label || f.name || '파일')}</a>` : '';
+const qDd = (d, today, on = true, warn = 30) => { const n = on ? ipDday(d, today) : null; if (n === null) return ''; const cls = n < 0 ? 'over' : n <= warn ? 'soon' : ''; return ` <span class="ip-dd ${cls}">${n < 0 ? `D+${-n}` : n === 0 ? 'D-DAY' : `D-${n}`}</span>`; };
+const qStepper = (flow, labels, status) => `<div class="nc-stepper">${flow.map((s, i) => `<span class="nc-step${s === status ? ' on' : flow.indexOf(status) > i ? ' done' : ''}">${i + 1}. ${labels[s]}</span>`).join('<span class="nc-arrow">→</span>')}</div>`;
+const qTiles = (id, list) => { const el = document.getElementById(id); if (el) el.innerHTML = list.map(([l, n, c], i) => `<button type="button" class="ip-tile ${c || ''}" data-q-tile="${i}"><span>${l}</span><b>${n}</b></button>`).join(''); };
+function qHistory(title, hist, labels = {}) {
+  modal(`<h3>이력 · ${esc(title)}</h3><div class="table-wrap"><table class="grid"><thead><tr><th>일시</th><th>담당</th><th>내용</th></tr></thead><tbody>${[...(hist || [])].reverse().map(h => `<tr><td class="nowrap">${esc(String(h.at || '').slice(0, 16))}</td><td>${esc(h.by || '')}</td><td>${esc(h.what || '')}${h.status ? ` · ${esc(labels[h.status[0]] || h.status[0])} → ${esc(labels[h.status[1]] || h.status[1])}` : ''}${(h.fields || []).length ? ` · ${h.fields.length}칸` : ''}${h.reason ? ` · ${esc(h.reason)}` : ''}${h.source ? ` · ${esc(h.source)}` : ''}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">이력이 없습니다.</td></tr>'}</tbody></table></div>`, { wide: true });
+}
+const qReload = () => document.querySelector('#main')?.qReload?.();
+
+// A1 문서관리
+const QDOC_KIND_LABEL = { manual: '품질 매뉴얼', procedure: '절차서', instruction: '지침서', form: '양식·서식', std: '규격(KS·ISO 등)', law: '법규', customer: '고객 요구서', ext_other: '기타 외부문서' };
+const QDOC_INT = ['manual', 'procedure', 'instruction', 'form'];
+const QDOC_STATUS_LABEL = { draft: '초안', review: '검토', approved: '승인·배포', obsolete: '폐지' };
+const QDOC_CHIP = { draft: '', review: 'yellow', approved: 'green', obsolete: '' };
+const qdocRev = d => d.internal ? `Rev.${d.rev}` : esc(d.edition || '—');
+function qdocDeptBoxes(depts, chosen = []) {
+  return `<fieldset class="vendor-sec q-depts"><legend>열람 부서 <span class="hint">(아무것도 고르지 않으면 전 부서. 품질은 항상 봄)</span></legend><div class="q-chk">${depts.map(d => `<label class="chk"><input type="checkbox" name="access_depts" value="${esc(d)}"${chosen.includes(d) ? ' checked' : ''}> ${esc(d)}</label>`).join('') || '<span class="muted small">조직(부서)이 아직 없습니다.</span>'}</div></fieldset>`;
+}
+const qdocVals = (form, extra = {}) => { const v = formObj(form); v.training_needed = (v.training_needed || []).length ? 1 : 0; v.access_depts = v.access_depts || []; return { ...v, ...extra }; };
+async function qdocNew(pre = {}) {
+  const list = await api('GET', '/api/qdocs');
+  const ext = pre.scope === 'external';
+  const kinds = Object.entries(QDOC_KIND_LABEL).filter(([k]) => QDOC_INT.includes(k) !== ext);
+  let fileEl = null;
+  const v = await promptBox(ext ? '외부문서 등록' : '문서 제정(초안)', `${pre.change_no ? `<p class="small">변경 <b>${esc(pre.change_no)}</b>에 연결합니다.</p>` : ''}<div class="form-grid">
+    <label>종류 *<select name="kind">${kinds.map(([k, l]) => `<option value="${k}"${(pre.kind || (ext ? 'std' : 'procedure')) === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+    <label>문서번호 <span class="hint">(비우면 자동: QP-01·EX-01…)</span><input name="doc_no" maxlength="40" placeholder="${ext ? '예) KS K 0901' : '예) QP-07'}"></label>
+    <label class="span3">제목 *<input name="title" required maxlength="200" value="${esc(pre.title || '')}"></label>
+    ${ext ? `<label>발행처 *<input name="issuer" required maxlength="100" placeholder="국가기술표준원 · ISO · 고객사"></label><label>판·연도<input name="edition" maxlength="60" placeholder="예) 2024 · 3판"></label><label>시행·발행일<input type="date" name="effective_date" value="${todayStr()}"></label>` : ''}
+    <label>주관 부서<input name="dept" maxlength="50" list="qdDepts" value="${esc(pre.dept || '품질')}"><datalist id="qdDepts">${list.depts.map(d => `<option value="${esc(d)}">`).join('')}</datalist></label>
+    <label>담당자<input name="owner_name" maxlength="50" value="${esc(ME?.name || '')}"></label>
+    <label>보존기간(년) <span class="hint">(0 = 영구)</span><input type="number" name="retention_years" min="0" max="99" value="3"></label>
+    <label>검토 주기(개월) <span class="hint">(0 = 없음)</span><input type="number" name="review_months" min="0" max="60" value="${ext ? 12 : 12}"></label>
+    <label class="span2">파일 (PDF·사진, 8MB)<input type="file" data-q-file accept="application/pdf,image/jpeg,image/png,image/webp"></label>
+    ${ext ? '' : '<label class="chk span3"><input type="checkbox" name="training_needed" value="1"> 승인·배포 뒤 교육 필요(개정 교육)</label>'}
+    <label class="span3">메모<input name="note" maxlength="1000"></label></div>${qdocDeptBoxes(list.depts)}`, { wide: true,
+    onOpen: el => { fileEl = $('[data-q-file]', el); },
+    submit: async vals => { const files = await qFiles(fileEl); const v2 = { ...vals, training_needed: (vals.training_needed || []).length ? 1 : 0, access_depts: vals.access_depts || [] }; return api('POST', '/api/qdocs', { ...v2, files, change_id: pre.change_id || null, request_id: crypto.randomUUID() }); } });
+  if (!v) return null; toast(`${v.doc_no} ${ext ? '외부문서를 등록했습니다.' : '초안을 만들었습니다. 파일을 올리고 검토를 요청하세요.'}`); qReload(); await qdocOpen(v.id); return v;
+}
+async function qdocOpen(id) {
+  const list = await api('GET', '/api/qdocs'), d = list.rows.find(x => x.id === id); if (!d) return toast('문서를 찾을 수 없습니다.', 'err');
+  const can = list.can_manage, appr = list.can_approve, locked = d.internal && ['approved', 'obsolete'].includes(d.status) || d.status === 'obsolete', dis = !can || locked ? ' disabled' : '', mdis = !can || d.status === 'obsolete' ? ' disabled' : '';
+  const flow = ['draft', 'review', 'approved'];
+  const m = modal(`<h3>${esc(d.doc_no)} · ${esc(d.title)} <span class="chip ${QDOC_CHIP[d.status]}">${esc(d.status_label)}</span></h3>
+    ${d.internal ? qStepper(flow, QDOC_STATUS_LABEL, d.status) : ''}
+    <p class="small muted">${esc(d.kind_label)} · ${qdocRev(d)}${d.current ? ` · 현행 ${d.internal ? `Rev.${d.current.rev}` : esc(d.current.edition || '')} (${esc(d.current.effective_date || '')} 시행, 승인 ${esc(d.current.approved_by || '')})` : ' · 아직 승인된 판 없음'}${d.change_id ? ` · 변경 연결 #${d.change_id}` : ''}</p>
+    ${d.current?.file ? `<p>현행판 내려받기: ${qFileLink(d.current.file)}</p>` : ''}
+    <form class="stack" data-qd-form>
+      <fieldset class="vendor-sec"><legend>문서 ${locked && can && d.status !== 'obsolete' ? '<span class="hint">(승인된 판의 내용·파일은 「개정」으로 바꿉니다. 관리 정보는 고칠 수 있음)</span>' : ''}</legend><div class="form-grid">
+        <label class="span3">제목<input name="title" required maxlength="200" value="${esc(d.title)}"${dis}></label>
+        <input type="hidden" name="kind" value="${esc(d.kind)}">
+        ${d.internal ? '' : `<label>발행처<input name="issuer" maxlength="100" value="${esc(d.issuer)}"${dis}></label><label>판·연도<input name="edition" maxlength="60" value="${esc(d.edition)}"${dis}></label><label>시행·발행일<input type="date" name="effective_date" value="${esc(d.effective_date || '')}"${dis}></label>`}
+        <label>주관 부서<input name="dept" maxlength="50" value="${esc(d.dept)}"${mdis}></label><label>담당자<input name="owner_name" maxlength="50" value="${esc(d.owner_name)}"${mdis}></label>
+        <label>보존기간(년)<input type="number" name="retention_years" min="0" max="99" value="${d.retention_years}"${mdis}></label>
+        <label>검토 주기(개월)<input type="number" name="review_months" min="0" max="60" value="${d.review_months}"${mdis}></label>
+        <label>다음 검토일${qDd(d.next_review, list.today, d.status === 'approved')}<input type="date" name="next_review" value="${esc(d.next_review || '')}"${mdis}></label>
+        <label>폐기 예정일<input type="date" name="dispose_date" value="${esc(d.dispose_date || '')}"${mdis}></label>
+        ${d.internal ? `<label class="span3">${d.rev ? `Rev.${d.rev} 개정 내용 *` : '제정 내용·목적'}<textarea name="summary" rows="2" maxlength="1000"${dis}>${esc(d.summary)}</textarea></label>` : ''}
+        ${can && !locked ? `<label class="span2">${d.file ? '파일 바꾸기' : '파일 올리기'} (PDF·사진, 8MB)<input type="file" data-q-file accept="application/pdf,image/jpeg,image/png,image/webp"></label>` : ''}
+        ${can && d.file ? `<div class="span3 small">작업 파일: ${qFileLink(d.file)}</div>` : ''}
+        ${d.internal ? `<label class="chk span3"><input type="checkbox" name="training_needed" value="1"${d.training_needed ? ' checked' : ''}${mdis}> 승인·배포 뒤 교육 필요(개정 교육)</label>` : ''}
+        <label class="span3">메모<input name="note" maxlength="1000" value="${esc(d.note)}"${mdis}></label>
+      </div></fieldset>
+      ${can ? qdocDeptBoxes(list.depts, d.access_depts).replace(/<input type="checkbox"/g, `<input type="checkbox"${mdis}`) : `<p class="small muted">열람 부서: ${d.access_depts.length ? d.access_depts.map(esc).join(', ') : '전 부서'}</p>`}
+      ${d.versions.length ? `<fieldset class="vendor-sec"><legend>${d.internal ? '제·개정 이력' : '판 이력'}</legend><div class="table-wrap"><table class="grid"><thead><tr><th>판</th><th>시행일</th><th>승인·등록</th><th>내용</th>${can ? '<th>파일</th>' : ''}</tr></thead><tbody>${[...d.versions].reverse().map((v, i) => `<tr${i ? ' class="row-off"' : ''}><td class="nowrap">${d.internal ? `Rev.${v.rev}` : esc(v.edition || '—')}${i ? '' : ' <span class="chip green">현행</span>'}</td><td class="nowrap">${esc(v.effective_date || '')}</td><td class="nowrap">${esc(v.approved_by || '')} ${esc(String(v.approved_at || '').slice(0, 10))}</td><td>${esc(v.summary || '')}</td>${can ? `<td>${qFileLink(v.file)}</td>` : ''}</tr>`).join('')}</tbody></table></div></fieldset>` : ''}
+      <div class="actions"><button type="button" class="btn" data-qd-hist>이력</button>
+        ${can && d.status === 'draft' && !d.versions.length ? '<button type="button" class="btn danger" data-qd-del>삭제</button>' : ''}
+        ${appr && d.status !== 'obsolete' ? '<button type="button" class="btn danger" data-qd-step="obsolete">폐지</button>' : ''}
+        <span class="grow"></span>
+        ${can && d.status !== 'obsolete' ? '<button class="btn">저장</button>' : ''}
+        ${can && d.internal && d.status === 'draft' ? '<button type="button" class="btn primary" data-qd-step="review">저장하고 검토 요청 →</button>' : ''}
+        ${appr && d.status === 'review' ? '<button type="button" class="btn" data-qd-step="draft">반려</button><button type="button" class="btn primary" data-qd-step="approved">승인·배포</button>' : ''}
+        ${can && d.internal && d.status === 'approved' ? '<button type="button" class="btn" data-qd-train>개정 교육 계획</button><button type="button" class="btn primary" data-qd-step="revise">개정 시작</button>' : ''}
+      </div></form>`, { wide: true });
+  const form = $('[data-qd-form]', m.el);
+  const save = async () => { const files = await qFiles($('[data-q-file]', form)); const r = await api('PUT', `/api/qdocs/${d.id}`, { ...qdocVals(form), files, revision: d.revision }); return r; };
+  const reopen = async () => { m.close(); qReload(); await qdocOpen(d.id); };
+  form.onsubmit = async e => { e.preventDefault(); try { await save(); toast('저장했습니다.'); await reopen(); } catch (err) { fail(err); } };
+  $('[data-qd-hist]', m.el).onclick = () => qHistory(d.doc_no, d.history, QDOC_STATUS_LABEL);
+  $('[data-qd-del]', m.el)?.addEventListener('click', async () => { if (!await confirmBox(`${d.doc_no} 초안을 지울까요?`)) return; try { await api('DELETE', `/api/qdocs/${d.id}?revision=${d.revision}`); toast('지웠습니다.'); m.close(); qReload(); } catch (err) { fail(err); } });
+  $('[data-qd-train]', m.el)?.addEventListener('click', () => { m.close(); trNew({ doc_id: d.id, doc_label: `${d.doc_no} Rev.${d.current?.rev ?? d.rev} ${d.title}`, kind: '문서 개정 교육', title: `${d.doc_no} ${d.title} Rev.${d.current?.rev ?? d.rev} 개정 교육`, change_id: d.change_id }).catch(fail); });
+  $$('[data-qd-step]', m.el).forEach(b => b.addEventListener('click', async () => {
+    const to = b.dataset.qdStep;
+    try {
+      let rev = d.revision, extra = {};
+      if (to === 'review') { const saved = await save(); rev = saved.revision; }
+      if (to === 'draft' || to === 'obsolete') { const v = await promptBox(to === 'draft' ? '반려' : '문서 폐지', `<label>${to === 'draft' ? '반려' : '폐지'} 사유 *<input name="reason" required maxlength="300"></label>${to === 'obsolete' && d.retention_years ? `<p class="small muted">폐기 예정일은 오늘부터 보존기간 ${d.retention_years}년 뒤로 잡힙니다.</p>` : ''}`); if (!v) return; extra = v; }
+      if (to === 'revise') { const v = await promptBox(`${d.doc_no} 개정 시작 (Rev.${d.rev + 1})`, '<p class="small muted">현행판은 승인 전까지 그대로 배포됩니다. 개정본 파일을 올리고 검토를 요청하세요.</p><label>개정 내용 *<textarea name="summary" required rows="2" maxlength="1000" placeholder="무엇을 왜 바꾸는지"></textarea></label>'); if (!v) return; extra = { summary: v.summary }; }
+      const r = await api('POST', `/api/qdocs/${d.id}/step`, { to: to === 'revise' ? 'draft' : to, revision: rev, ...extra });
+      toast({ review: '검토를 요청했습니다.', approved: '승인·배포했습니다.', draft: '반려했습니다.', revise: `Rev.${r.rev} 개정을 시작했습니다.`, obsolete: '폐지했습니다.' }[to]);
+      if (r.training_suggest && await confirmBox(`${r.doc_no} Rev.${r.rev} 개정 교육 계획을 지금 만들까요?`)) { m.close(); qReload(); return trNew({ doc_id: r.id, kind: '문서 개정 교육', title: `${r.doc_no} ${r.title} Rev.${r.rev} 개정 교육`, change_id: r.change_id }); }
+      await reopen();
+    } catch (err) { fail(err); }
+  }));
+}
+async function pageQDocs(main) {
+  main.innerHTML = `<h1>문서관리 <span class="dept">품질</span></h1>
+  <p class="muted">내부문서(매뉴얼·절차서·지침서·양식)는 <b>초안 → 검토 → 승인·배포 → 폐지</b>로 관리하고, 개정하면 판(Rev)이 오르며 이전 판은 이력에 남습니다. 승인 전까지는 현행판이 그대로 배포됩니다. 외부문서(규격·법규·고객 요구서)는 대장으로 관리합니다. 열람 부서를 정하면 그 부서와 품질만 봅니다.</p>
+  <div class="ip-tiles" id="qdTiles"></div>
+  <form class="toolbar list-filters" data-read-only id="qdFilters">
+    <label class="lf-sel">구분<select name="scope"><option value="">전체</option><option value="internal">내부문서</option><option value="external">외부문서</option></select></label>
+    <label class="lf-sel">종류<select name="kind"><option value="">전체</option>${Object.entries(QDOC_KIND_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
+    <label class="lf-sel">상태<select name="st"><option value="live">폐지 빼고</option><option value="">전체</option>${Object.entries(QDOC_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}<option value="due">검토일 30일 안·지남</option></select></label>
+    <label class="list-search">찾기<input type="search" name="q" placeholder="문서번호·제목·부서·담당·발행처"></label><span class="grow"></span><span id="qdTools" class="ip-tools"></span></form>
+  <div id="qdList"></div>`;
+  const form = $('#qdFilters', main); let data = { rows: [], today: todayStr() };
+  const load = async () => { data = await api('GET', '/api/qdocs'); if (main.isConnected) draw(); };
+  main.qReload = () => load().catch(fail);
+  const due = r => r.status === 'approved' && r.next_review && ipDday(r.next_review, data.today) <= 30;
+  const draw = () => {
+    const v = formObj(form), q = (v.q || '').trim().toLowerCase(), all = data.rows;
+    qTiles('qdTiles', [['전체(폐지 빼고)', all.filter(r => r.status !== 'obsolete').length], ['승인·배포', all.filter(r => r.status === 'approved').length, 'green'], ['검토 대기', all.filter(r => r.status === 'review').length, all.some(r => r.status === 'review') ? 'yellow' : ''], ['초안·개정 중', all.filter(r => r.status === 'draft').length], ['검토일 30일 안·지남', all.filter(due).length, all.some(due) ? 'red' : '']]);
+    $('#qdTools', main).innerHTML = data.can_manage ? '<button type="button" class="btn" id="qdExt">＋ 외부문서</button><button type="button" class="btn primary" id="qdNew">＋ 문서 제정</button>' : '';
+    const rows = all.filter(r => (!v.scope || r.scope === v.scope) && (!v.kind || r.kind === v.kind) && (v.st === 'live' ? r.status !== 'obsolete' : v.st === 'due' ? due(r) : !v.st || r.status === v.st) && (!q || [r.doc_no, r.title, r.dept, r.owner_name, r.issuer].join(' ').toLowerCase().includes(q)));
+    $('#qdList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>문서번호</th><th>제목</th><th>종류</th><th>판</th><th>주관 부서 · 담당</th><th>시행일</th><th>다음 검토</th><th>열람</th><th>상태</th><th>현행판</th><th></th></tr></thead><tbody>${rows.map(r => `<tr data-qd-row="${r.id}" class="${due(r) ? (ipDday(r.next_review, data.today) < 0 ? 'ip-over' : 'ip-soon') : ''}${r.status === 'obsolete' ? ' row-off' : ''}">
+      <td class="nowrap" data-card-primary><b>${esc(r.doc_no)}</b></td><td><b>${esc(r.title)}</b>${r.internal ? '' : `<div class="small muted">${esc(r.issuer)}</div>`}</td><td class="nowrap">${esc(r.kind_label)}</td>
+      <td class="nowrap">${qdocRev(r)}${r.internal && r.current && r.current.rev !== r.rev ? `<div class="small muted">현행 Rev.${r.current.rev}</div>` : ''}</td><td>${esc(r.dept)}${r.owner_name ? `<div class="small muted">${esc(r.owner_name)}</div>` : ''}</td>
+      <td class="nowrap">${esc(r.current?.effective_date || r.effective_date || '')}</td><td class="nowrap">${esc(r.next_review || '')}${qDd(r.next_review, data.today, r.status === 'approved')}</td>
+      <td class="small">${r.access_depts.length ? r.access_depts.map(esc).join(', ') : '<span class="muted">전 부서</span>'}</td><td><span class="chip ${QDOC_CHIP[r.status]}">${esc(r.status_label)}</span></td>
+      <td>${r.current?.file ? qFileLink(r.current.file, '열기') : '<span class="muted small">—</span>'}</td><td><button type="button" class="btn small" data-qd-open="${r.id}">열기</button></td></tr>`).join('')}</tbody></table></div>`
+      : `<div class="empty">${all.length ? '조건에 맞는 문서가 없습니다.' : data.can_manage ? '등록된 문서가 없습니다. 「＋ 문서 제정」으로 품질 매뉴얼·절차서를, 「＋ 외부문서」로 KS·ISO 규격이나 고객 요구서를 넣으세요.' : '볼 수 있는 문서가 없습니다.'}</div>`;
+  };
+  main.addEventListener('click', e => {
+    const t = e.target.closest('[data-q-tile]'); if (t) { form.elements.st.value = ['live', 'approved', 'review', 'draft', 'due'][Number(t.dataset.qTile)]; draw(); return; }
+    if (e.target.closest('#qdNew')) return qdocNew().catch(fail);
+    if (e.target.closest('#qdExt')) return qdocNew({ scope: 'external', kind: 'std' }).catch(fail);
+    const o = e.target.closest('[data-qd-open]'); if (o) qdocOpen(Number(o.dataset.qdOpen)).catch(fail);
+  });
+  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-qd-row]'); if (tr && !e.target.closest('a,button')) qdocOpen(Number(tr.dataset.qdRow)).catch(fail); });
+  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  await load();
+}
+
+// A2 변경관리
+const CHG_KIND_LABEL = { man: '사람(Man)', machine: '설비(Machine)', material: '원자재(Material)', method: '방법(Method)', design: '설계', spec: '규격' };
+const CHG_STATUS_LABEL = { requested: '요청', evaluating: '영향평가', approved: '승인', applied: '적용', verified: '검증완료', rejected: '반려', void: '취소' };
+const CHG_CHIP = { requested: 'yellow', evaluating: 'yellow', approved: 'yellow', applied: 'yellow', verified: 'green', rejected: 'red', void: '' };
+const CHG_FLOW = ['requested', 'evaluating', 'approved', 'applied', 'verified'];
+const CHG_SOURCE_LABEL = { internal: '직접 요청', capa: 'CAPA 조치', supplier: '협력업체 변경점' };
+const CHG_IMPACT_LABEL = { quality: '제품 품질·특성', customer: '고객 통보·승인(PCN)', docs: '문서 개정', validation: '재밸리데이션', training: '교육', inspection: '검사 기준·규격', stock: '재고·재공품 처리' };
+async function chgNew(pre = {}) {
+  const v = await promptBox(pre.source_type === 'supplier' ? '협력업체 변경점 접수' : '변경 요청', `${pre.source_no ? `<p class="small">출처 <b>${esc(CHG_SOURCE_LABEL[pre.source_type] || '')} ${esc(pre.source_no)}</b>에서 요청합니다.</p>` : ''}${pre.vendor ? `<p class="small">업체 <b>${esc(pre.vendor)}</b>의 변경 통보를 접수합니다.</p>` : ''}<div class="form-grid">
+    <label>변경 유형 *<select name="kind">${Object.entries(CHG_KIND_LABEL).map(([k, l]) => `<option value="${k}"${(pre.kind || 'method') === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+    <label>대상 품목·공정<input name="item" maxlength="200" value="${esc(pre.item || '')}"></label><label>적용 예정일<input type="date" name="plan_date"></label>
+    <label class="span3">변경 내용(제목) *<input name="title" required maxlength="200" value="${esc(pre.title || '')}"></label>
+    <label class="span3">사유<textarea name="reason" rows="2" maxlength="1000">${esc(pre.reason || '')}</textarea></label>
+    <label class="span3">변경 전<input name="before_text" maxlength="1000" placeholder="예) 원단 A사 PET 80g"></label><label class="span3">변경 후<input name="after_text" maxlength="1000" placeholder="예) 원단 B사 PET 80g"></label></div>`, { wide: true,
+    submit: async vals => api('POST', '/api/changes', { ...vals, source_type: pre.source_type || 'internal', source_id: pre.source_id || null, vendor: pre.vendor || '', request_id: crypto.randomUUID() }) });
+  if (!v) return null; toast(`${v.change_no} 변경을 요청했습니다.${hasRole('quality') ? ' 영향평가를 진행하세요.' : ' 품질에서 영향평가 후 승인합니다.'}`); qReload(); if (hasRole('quality')) await chgOpen(v.id); return v;
+}
+async function chgOpen(id) {
+  const list = await api('GET', '/api/changes'), c = list.rows.find(x => x.id === id); if (!c) return toast('변경을 찾을 수 없습니다.', 'err');
+  const can = list.can_manage, mine = c.requester_name === list.me, end = ['verified', 'rejected', 'void'].includes(c.status), edit = !end && (can || (mine && c.status === 'requested')), dis = edit ? '' : ' disabled';
+  const imp = c.impact || {}, f = (n, l, v, a = '') => `<label>${l}<input name="${n}" value="${esc(v ?? '')}"${a}${dis}></label>`;
+  const next = { requested: 'evaluating', evaluating: 'approved', approved: 'applied', applied: 'verified' }[c.status];
+  const m = modal(`<h3>${esc(c.change_no)} · ${esc(c.title)} <span class="chip ${CHG_CHIP[c.status]}">${esc(c.status_label)}</span></h3>
+    ${qStepper(CHG_FLOW, CHG_STATUS_LABEL, c.status)}
+    <p class="small muted">${esc(c.source_label)}${c.source_no ? ` · <b>${esc(c.source_no)}</b>` : ''}${c.vendor ? ` · 업체 <b>${esc(c.vendor)}</b>` : ''} · 요청 ${esc(c.requester_name)} ${esc(String(c.created_at).slice(0, 10))}${c.approved_by ? ` · 승인 ${esc(c.approved_by)} ${esc(String(c.approved_at || '').slice(0, 10))}` : ''}</p>
+    <form class="stack" data-chg-form>
+      <fieldset class="vendor-sec"><legend>변경 내용</legend><div class="form-grid">
+        <label>변경 유형<select name="kind"${dis}>${Object.entries(CHG_KIND_LABEL).map(([k, l]) => `<option value="${k}"${c.kind === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        ${f('item', '대상 품목·공정', c.item)}${f('owner_name', '담당', c.owner_name)}
+        <label class="span3">제목<input name="title" required maxlength="200" value="${esc(c.title)}"${dis}></label>
+        <label class="span3">사유<textarea name="reason" rows="2" maxlength="1000"${dis}>${esc(c.reason)}</textarea></label>
+        <label class="span3">변경 전<input name="before_text" maxlength="1000" value="${esc(c.before_text)}"${dis}></label><label class="span3">변경 후<input name="after_text" maxlength="1000" value="${esc(c.after_text)}"${dis}></label>
+      </div></fieldset>
+      <fieldset class="vendor-sec"><legend>영향평가 <span class="hint">(모두 「있음/없음」을 골라야 승인)</span></legend><div class="table-wrap"><table class="grid chg-imp"><thead><tr><th>항목</th><th>영향</th><th>조치·메모</th></tr></thead><tbody>${Object.entries(CHG_IMPACT_LABEL).map(([k, l]) => { const x = imp[k] || {}, idis = can && !end ? '' : ' disabled'; return `<tr class="${x.v === 'yes' ? 'chg-yes' : ''}"><td class="nowrap">${l}</td><td class="nowrap"><label class="chk"><input type="radio" name="imp_${k}" value="yes"${x.v === 'yes' ? ' checked' : ''}${idis}> 있음</label> <label class="chk"><input type="radio" name="imp_${k}" value="no"${x.v === 'no' ? ' checked' : ''}${idis}> 없음</label></td><td><input name="impn_${k}" maxlength="300" value="${esc(x.note || '')}"${idis}></td></tr>`; }).join('')}</tbody></table></div>
+        ${can && !end ? `<div class="actions wrap small">${imp.docs?.v === 'yes' ? '<button type="button" class="btn small" data-chg-doc>문서 개정 연결</button><button type="button" class="btn small" data-chg-newdoc>새 문서 제정</button>' : ''}${imp.training?.v === 'yes' ? '<button type="button" class="btn small" data-chg-train>교육 계획 만들기</button>' : ''}${imp.validation?.v === 'yes' ? '<span class="muted">재밸리데이션은 4단계 「밸리데이션」 메뉴에서 연결됩니다.</span>' : ''}</div>` : ''}
+        ${c.docs.length || c.trainings.length ? `<p class="small">연결: ${c.docs.map(x => `<a href="#/quality/docs" data-chg-go-doc="${x.id}">${esc(x.doc_no)} Rev.${x.rev} (${esc(x.status_label)})</a>`).join(' · ')}${c.docs.length && c.trainings.length ? ' · ' : ''}${c.trainings.map(t => `<a href="#/quality/training" data-chg-go-tr="${t.id}">교육 ${esc(t.plan_date)} ${esc(t.title)}</a>`).join(' · ')}</p>` : ''}
+      </fieldset>
+      <fieldset class="vendor-sec"><legend>적용 · 검증</legend><div class="form-grid">
+        ${f('plan_date', '적용 예정일', c.plan_date, " type='date'")}${f('apply_date', '적용일', c.apply_date, " type='date'")}${f('first_lot', '초물 LOT(변경 뒤 첫 LOT)', c.first_lot, " maxlength='100'")}
+        ${f('verify_date', '검증일', c.verify_date, " type='date'")}<label>검증 결과<select name="verify_result"${dis}><option value="">—</option><option${c.verify_result === '유효' ? ' selected' : ''}>유효</option><option${c.verify_result === '효과 없음' ? ' selected' : ''}>효과 없음</option></select></label>
+        <label class="span3">검증 내용(초물 검사·변경 전후 비교)<textarea name="verify_note" rows="2" maxlength="1000"${dis}>${esc(c.verify_note)}</textarea></label></div></fieldset>
+      <div class="actions"><button type="button" class="btn" data-chg-hist>이력</button>${!end && (can || mine) ? '<button type="button" class="btn danger" data-chg-to="void">취소</button>' : ''}${list.can_approve && c.status === 'evaluating' ? '<button type="button" class="btn danger" data-chg-to="rejected">반려</button>' : ''}<span class="grow"></span>
+        ${edit ? '<button class="btn">저장</button>' : ''}${can && next && (next !== 'approved' || list.can_approve) ? `<button type="button" class="btn primary" data-chg-to="${next}">${next === 'approved' ? '승인' : `저장하고 「${CHG_STATUS_LABEL[next]}」로 →`}</button>` : ''}</div>
+    </form>`, { wide: true });
+  const form = $('[data-chg-form]', m.el);
+  const body = () => { const v = formObj(form), impact = {}; for (const k of Object.keys(CHG_IMPACT_LABEL)) { impact[k] = { v: v['imp_' + k] || '', note: v['impn_' + k] || '' }; delete v['imp_' + k]; delete v['impn_' + k]; } return { ...v, ...(can ? { impact_json: impact } : {}), revision: c.revision }; };
+  const save = async (status, extra = {}) => { try { const r = await api('PUT', `/api/changes/${c.id}`, { ...body(), ...(status ? { status } : {}), ...extra }); toast(status ? `「${CHG_STATUS_LABEL[status]}」(으)로 넘겼습니다.` : '저장했습니다.'); m.close(); qReload(); await chgOpen(c.id); return r; } catch (e) { fail(e); } };
+  form.onsubmit = e => { e.preventDefault(); save(null); };
+  $$('[data-chg-to]', m.el).forEach(b => b.addEventListener('click', async () => { const to = b.dataset.chgTo; if (['void', 'rejected'].includes(to)) { const v = await promptBox(to === 'void' ? '변경 취소' : '변경 반려', `<label>사유 *<input name="reason" required maxlength="300"></label>`); if (v) save(to, v); return; } save(to); }));
+  $('[data-chg-hist]', m.el).onclick = () => qHistory(c.change_no, c.history, CHG_STATUS_LABEL);
+  $('[data-chg-train]', m.el)?.addEventListener('click', () => { m.close(); trNew({ change_id: c.id, kind: '직무 교육', title: `${c.change_no} ${c.title} 변경 교육` }).catch(fail); });
+  $('[data-chg-newdoc]', m.el)?.addEventListener('click', () => { m.close(); qdocNew({ change_id: c.id, change_no: c.change_no, title: '' }).catch(fail); });
+  $('[data-chg-doc]', m.el)?.addEventListener('click', async () => {
+    const docs = (await api('GET', '/api/qdocs')).rows.filter(d => d.internal && d.status === 'approved');
+    if (!docs.length) return toast('개정할 승인 문서가 없습니다. 「새 문서 제정」을 쓰세요.', 'err');
+    const v = await promptBox('개정할 문서 고르기', `<label>문서 *<select name="doc">${docs.map(d => `<option value="${d.id}">${esc(d.doc_no)} Rev.${d.rev} ${esc(d.title)}</option>`).join('')}</select></label><label>개정 내용 *<textarea name="summary" required rows="2" maxlength="1000">${esc(`${c.change_no} ${c.title}`)}</textarea></label>`);
+    if (!v) return; const d = docs.find(x => x.id === Number(v.doc));
+    try { const r = await api('POST', `/api/qdocs/${d.id}/step`, { to: 'draft', summary: v.summary, change_id: c.id, revision: d.revision }); toast(`${r.doc_no} Rev.${r.rev} 개정을 시작했습니다(변경 ${c.change_no} 연결).`); m.close(); await qdocOpen(r.id); } catch (e) { fail(e); }
+  });
+  m.el.addEventListener('click', e => { const a = e.target.closest('[data-chg-go-doc]'); if (a) { e.preventDefault(); m.close(); qdocOpen(Number(a.dataset.chgGoDoc)).catch(fail); } const t = e.target.closest('[data-chg-go-tr]'); if (t) { e.preventDefault(); m.close(); trOpen(Number(t.dataset.chgGoTr)).catch(fail); } });
+}
+async function pageChanges(main) {
+  main.innerHTML = `<h1>변경관리 <span class="dept">품질</span></h1>
+  <p class="muted">사람·설비·원자재·방법(4M)과 설계·규격 변경을 <b>요청 → 영향평가 → 승인 → 적용(초물 LOT) → 검증완료</b>로 관리합니다. 누구나 요청할 수 있고, 영향평가·진행은 품질, 승인은 품질책임자가 합니다. CAPA 조치와 협력업체 변경점에서도 바로 요청됩니다.</p>
+  <div class="ip-tiles" id="chgTiles"></div>
+  <form class="toolbar list-filters" data-read-only id="chgFilters"><label class="lf-sel">단계<select name="st"><option value="live">진행 중</option><option value="">전체</option>${Object.entries(CHG_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">유형<select name="kind"><option value="">전체</option>${Object.entries(CHG_KIND_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">출처<select name="src"><option value="">전체</option>${Object.entries(CHG_SOURCE_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="list-search">찾기<input type="search" name="q" placeholder="번호·내용·품목·업체·초물 LOT·요청자"></label><span class="grow"></span><span id="chgTools" class="ip-tools"></span></form>
+  <div id="chgList"></div>`;
+  const form = $('#chgFilters', main); let data = { rows: [] };
+  const load = async () => { data = await api('GET', '/api/changes'); if (main.isConnected) draw(); };
+  main.qReload = () => load().catch(fail);
+  const live = r => !['verified', 'rejected', 'void'].includes(r.status);
+  const draw = () => {
+    const v = formObj(form), q = (v.q || '').trim().toLowerCase(), all = data.rows;
+    qTiles('chgTiles', [['진행 중', all.filter(live).length], ['요청', all.filter(r => r.status === 'requested').length, all.some(r => r.status === 'requested') ? 'yellow' : ''], ['영향평가', all.filter(r => r.status === 'evaluating').length], ['승인(적용 대기)', all.filter(r => r.status === 'approved').length], ['적용(검증 대기)', all.filter(r => r.status === 'applied').length], ['검증완료', all.filter(r => r.status === 'verified').length, 'green']]);
+    $('#chgTools', main).innerHTML = '<button type="button" class="btn primary" id="chgNewBtn">＋ 변경 요청</button>';
+    const rows = all.filter(r => (v.st === 'live' ? live(r) : !v.st || r.status === v.st) && (!v.kind || r.kind === v.kind) && (!v.src || r.source_type === v.src) && (!q || [r.change_no, r.title, r.item, r.vendor, r.first_lot, r.requester_name, r.source_no].join(' ').toLowerCase().includes(q)));
+    $('#chgList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>번호</th><th>출처</th><th>유형</th><th>변경 내용</th><th>대상 품목</th><th>요청</th><th>적용(예정)일</th><th>초물 LOT</th><th>영향</th><th>단계</th><th></th></tr></thead><tbody>${rows.map(r => { const yes = Object.entries(r.impact).filter(([, x]) => x.v === 'yes').map(([k]) => CHG_IMPACT_LABEL[k]);
+      return `<tr data-chg-row="${r.id}" class="${['rejected', 'void'].includes(r.status) ? 'row-off' : ''}"><td class="nowrap" data-card-primary><b>${esc(r.change_no)}</b></td><td>${esc(r.source_label)}${r.source_no || r.vendor ? `<div class="small muted">${esc(r.source_no || r.vendor)}</div>` : ''}</td><td class="nowrap">${esc(r.kind_label)}</td><td><b>${esc(r.title)}</b>${r.after_text ? `<div class="small muted">→ ${esc(r.after_text)}</div>` : ''}</td><td>${esc(r.item)}</td><td class="nowrap">${esc(r.requester_name)}<div class="small muted">${esc(String(r.created_at).slice(0, 10))}</div></td><td class="nowrap">${esc(r.apply_date || r.plan_date || '')}${!r.apply_date && r.plan_date ? ' <span class="small muted">예정</span>' : ''}</td><td>${esc(r.first_lot)}</td><td class="small">${yes.length ? yes.map(esc).join(', ') : '<span class="muted">—</span>'}</td><td><span class="chip ${CHG_CHIP[r.status]}">${esc(r.status_label)}</span></td><td><button type="button" class="btn small" data-chg-open="${r.id}">열기</button></td></tr>`; }).join('')}</tbody></table></div>`
+      : `<div class="empty">${all.length ? '조건에 맞는 변경이 없습니다.' : '등록된 변경이 없습니다. 원자재·설비·작업 방법을 바꿀 때 「＋ 변경 요청」으로 시작합니다.'}</div>`;
+  };
+  main.addEventListener('click', e => {
+    const t = e.target.closest('[data-q-tile]'); if (t) { form.elements.st.value = ['live', 'requested', 'evaluating', 'approved', 'applied', 'verified'][Number(t.dataset.qTile)]; draw(); return; }
+    if (e.target.closest('#chgNewBtn')) return chgNew().catch(fail);
+    const o = e.target.closest('[data-chg-open]'); if (o) chgOpen(Number(o.dataset.chgOpen)).catch(fail);
+  });
+  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-chg-row]'); if (tr) chgOpen(Number(tr.dataset.chgRow)).catch(fail); });
+  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  await load();
+}
+
+// A3 교육·자격관리
+const TR_KINDS = ['OJT', '정기 교육', '직무 교육', '외부 교육', '문서 개정 교육', '법정 교육'];
+const TR_STATUS_LABEL = { planned: '계획', done: '실시', evaluated: '평가완료', void: '취소' };
+const TR_CHIP = { planned: 'yellow', done: 'yellow', evaluated: 'green', void: '' };
+const QUAL_STATUS_LABEL = { valid: '유효', expired: '만료', withdrawn: '반납·취소' };
+let qDirectory = null;
+const qPeople = async () => (qDirectory ||= await api('GET', '/api/directory'));
+function trPicker(people, chosen) {
+  const by = {}; for (const p of people) (by[p.department || '부서 없음'] ||= []).push(p);
+  return `<fieldset class="vendor-sec"><legend>교육 대상자 <span class="hint" data-tr-count></span></legend><div class="tr-pick">${Object.entries(by).map(([d, list]) => `<div class="tr-dept"><label class="chk tr-dept-h"><input type="checkbox" data-tr-dept="${esc(d)}"> <b>${esc(d)}</b></label>${list.map(p => `<label class="chk"><input type="checkbox" name="att" value="${esc(p.name)}" data-dept="${esc(d)}"${chosen.includes(p.name) ? ' checked' : ''}> ${esc(p.name)}${p.position ? ` <span class="muted small">${esc(p.position)}</span>` : ''}</label>`).join('')}</div>`).join('')}</div></fieldset>`;
+}
+function trBindPicker(el) {
+  const count = () => { const n = $$('[name=att]:checked', el).length; const c = $('[data-tr-count]', el); if (c) c.textContent = `(${n}명)`; };
+  el.addEventListener('change', e => { const d = e.target.closest('[data-tr-dept]'); if (d) $$(`[name=att][data-dept="${CSS.escape(d.dataset.trDept)}"]`, el).forEach(i => { i.checked = d.checked; }); count(); });
+  count();
+}
+async function trNew(pre = {}) {
+  const people = await qPeople();
+  const v = await promptBox('교육 계획 등록', `${pre.doc_label ? `<p class="small">관련 문서 <b>${esc(pre.doc_label)}</b></p>` : ''}<div class="form-grid">
+    <label class="span3">교육명 *<input name="title" required maxlength="200" value="${esc(pre.title || '')}"></label>
+    <label>유형 *<select name="kind">${TR_KINDS.map(k => `<option${(pre.kind || '정기 교육') === k ? ' selected' : ''}>${k}</option>`).join('')}</select></label>
+    <label>예정일 *<input type="date" name="plan_date" required value="${todayStr()}"></label><label>시간(h)<input type="number" step="0.5" min="0.5" max="200" name="hours"></label>
+    <label>강사<input name="instructor" maxlength="50" value="${esc(ME?.name || '')}"></label><label>장소<input name="place" maxlength="100"></label><label>평가 방법<input name="eval_method" maxlength="50" list="trEval"><datalist id="trEval"><option value="필기 시험"><option value="실기 확인"><option value="구두 확인"><option value="설문"></datalist></label>
+    <label class="span3">교육 내용<textarea name="content" rows="2" maxlength="2000"></textarea></label></div>${trPicker(people, [])}`, { wide: true,
+    onOpen: trBindPicker,
+    submit: async vals => { const { att = [], ...rest } = vals; return api('POST', '/api/trainings', { ...rest, doc_id: pre.doc_id || null, change_id: pre.change_id || null, attendees: att.map(n => ({ user_name: n })), request_id: crypto.randomUUID() }); } });
+  if (!v) return null; toast('교육 계획을 등록했습니다. 대상자는 「참석 확인」을 누를 수 있습니다.'); if (location.hash !== '#/quality/training') location.hash = '#/quality/training'; else qReload(); return v;
+}
+async function trOpen(id) {
+  const list = await api('GET', '/api/trainings'), t = list.rows.find(x => x.id === id); if (!t) return toast('교육을 찾을 수 없습니다.', 'err');
+  const can = list.can_manage && t.status !== 'void', dis = can ? '' : ' disabled', people = can ? await qPeople() : [];
+  const me = t.attendees.find(a => a.user_name === list.me), next = { planned: 'done', done: 'evaluated' }[t.status];
+  const f = (n, l, v, a = '') => `<label>${l}<input name="${n}" value="${esc(v ?? '')}"${a}${dis}></label>`;
+  const m = modal(`<h3>${esc(t.title)} <span class="chip ${TR_CHIP[t.status]}">${esc(t.status_label)}</span></h3>
+    ${qStepper(['planned', 'done', 'evaluated'], TR_STATUS_LABEL, t.status)}
+    <p class="small muted">${esc(t.kind)}${t.doc_label ? ` · 관련 문서 ${esc(t.doc_label)}` : ''}${t.change_id ? ` · 변경 #${t.change_id}` : ''} · 등록 ${esc(t.created_by)}</p>
+    ${me && !me.attended && ['planned', 'done'].includes(t.status) ? '<p><button type="button" class="btn primary" data-tr-attend>참석 확인(본인)</button></p>' : ''}
+    <form class="stack" data-tr-form>
+      <fieldset class="vendor-sec"><legend>교육</legend><div class="form-grid">
+        <label class="span3">교육명<input name="title" required maxlength="200" value="${esc(t.title)}"${dis}></label>
+        <label>유형<select name="kind"${dis}>${TR_KINDS.map(k => `<option${t.kind === k ? ' selected' : ''}>${k}</option>`).join('')}</select></label>
+        ${f('plan_date', '예정일', t.plan_date, " type='date' required")}${f('done_date', '실시일', t.done_date, " type='date'")}${f('hours', '시간(h)', t.hours, " type='number' step='0.5' min='0.5'")}
+        ${f('instructor', '강사', t.instructor)}${f('place', '장소', t.place)}${f('eval_method', '평가 방법', t.eval_method)}
+        <label class="span3">교육 내용<textarea name="content" rows="2" maxlength="2000"${dis}>${esc(t.content)}</textarea></label></div></fieldset>
+      <fieldset class="vendor-sec"><legend>대상자 · 참석 · 평가 <span class="hint">(${t.attendees.filter(a => a.attended).length}/${t.attendees.length}명 참석)</span></legend>
+        <div class="table-wrap"><table class="grid tr-att"><thead><tr><th>이름</th><th>부서</th><th>참석</th><th>본인 확인</th><th>점수</th><th>결과</th><th>메모</th>${can ? '<th></th>' : ''}</tr></thead><tbody>${t.attendees.map(a => `<tr data-att="${esc(a.user_name)}"><td class="nowrap"><b>${esc(a.user_name)}</b></td><td>${esc(a.dept)}</td><td><input type="checkbox" data-a-att${a.attended ? ' checked' : ''}${dis}></td><td class="small nowrap">${esc(String(a.confirmed_at || '').slice(0, 16))}</td><td><input type="number" min="0" max="100" step="any" data-a-score value="${a.score ?? ''}" class="tr-score"${dis}></td><td><select data-a-result${dis}>${['', '이수', '미이수', '재교육'].map(x => `<option value="${x}"${a.result === x ? ' selected' : ''}>${x || '—'}</option>`).join('')}</select></td><td><input data-a-note maxlength="300" value="${esc(a.note)}"${dis}></td>${can ? '<td><button type="button" class="btn small danger" data-a-del>×</button></td>' : ''}</tr>`).join('') || `<tr><td colspan="8" class="muted">대상자가 없습니다.</td></tr>`}</tbody></table></div>
+        ${can ? '<div class="actions"><button type="button" class="btn small" data-tr-add>＋ 대상자 추가</button><button type="button" class="btn small" data-tr-allok>참석자 모두 「이수」</button></div>' : ''}</fieldset>
+      <div class="actions"><button type="button" class="btn" data-tr-hist>이력</button>${can && t.status !== 'evaluated' ? '<button type="button" class="btn danger" data-tr-void>취소</button>' : ''}<span class="grow"></span>${can ? '<button class="btn">저장</button>' : ''}${can && next ? `<button type="button" class="btn primary" data-tr-next="${next}">저장하고 「${TR_STATUS_LABEL[next]}」로 →</button>` : ''}</div>
+    </form>`, { wide: true });
+  const form = $('[data-tr-form]', m.el);
+  const atts = () => $$('[data-att]', form).map(tr => ({ user_name: tr.dataset.att, attended: $('[data-a-att]', tr).checked ? 1 : 0, score: $('[data-a-score]', tr).value, result: $('[data-a-result]', tr).value, note: $('[data-a-note]', tr).value }));
+  const save = async (status, extra = {}) => { try { await api('PUT', `/api/trainings/${t.id}`, { ...formObj(form), attendees: atts(), ...(status ? { status } : {}), revision: t.revision, ...extra }); toast(status ? `「${TR_STATUS_LABEL[status]}」(으)로 넘겼습니다.` : '저장했습니다.'); m.close(); qReload(); await trOpen(t.id); } catch (e) { fail(e); } };
+  form.onsubmit = e => { e.preventDefault(); save(null); };
+  $('[data-tr-next]', m.el)?.addEventListener('click', e => { if (e.currentTarget.dataset.trNext === 'done' && !form.elements.done_date.value) form.elements.done_date.value = todayStr(); save(e.currentTarget.dataset.trNext); });
+  $('[data-tr-void]', m.el)?.addEventListener('click', async () => { const v = await promptBox('교육 취소', '<label>사유 *<input name="reason" required maxlength="300"></label>'); if (v) save('void', v); });
+  $('[data-tr-hist]', m.el).onclick = () => qHistory(t.title, t.history, TR_STATUS_LABEL);
+  $('[data-tr-allok]', m.el)?.addEventListener('click', () => $$('[data-att]', form).forEach(tr => { if ($('[data-a-att]', tr).checked && !$('[data-a-result]', tr).value) $('[data-a-result]', tr).value = '이수'; }));
+  form.addEventListener('click', e => { const d = e.target.closest('[data-a-del]'); if (d) d.closest('tr').remove(); });
+  $('[data-tr-attend]', m.el)?.addEventListener('click', async () => { try { await api('POST', `/api/trainings/${t.id}/attend`); toast('참석을 확인했습니다.'); m.close(); qReload(); } catch (e) { fail(e); } });
+  $('[data-tr-add]', m.el)?.addEventListener('click', async () => {
+    const have = atts().map(a => a.user_name), v = await promptBox('대상자 추가', trPicker(people.filter(p => !have.includes(p.name)), []), { wide: true, onOpen: trBindPicker }); if (!v?.att?.length) return;
+    const tb = $('.tr-att tbody', form); if (!have.length) tb.innerHTML = '';
+    tb.insertAdjacentHTML('beforeend', v.att.map(n => `<tr data-att="${esc(n)}"><td class="nowrap"><b>${esc(n)}</b></td><td>${esc(people.find(p => p.name === n)?.department || '')}</td><td><input type="checkbox" data-a-att></td><td></td><td><input type="number" min="0" max="100" step="any" data-a-score class="tr-score"></td><td><select data-a-result>${['', '이수', '미이수', '재교육'].map(x => `<option value="${x}">${x || '—'}</option>`).join('')}</select></td><td><input data-a-note maxlength="300"></td><td><button type="button" class="btn small danger" data-a-del>×</button></td></tr>`).join(''));
+    toast(`${v.att.length}명을 넣었습니다. 「저장」을 눌러야 반영됩니다.`);
+  });
+}
+async function qualEdit(r = null, can = true) {
+  const people = await qPeople(), v0 = r || { status: 'valid' };
+  const v = await promptBox(r ? '자격 수정' : '자격 등록', `<div class="form-grid">
+    <label>대상자 *<input name="user_name" required list="qlPeople" value="${esc(v0.user_name || '')}"><datalist id="qlPeople">${people.map(p => `<option value="${esc(p.name)}">${esc(p.department || '')}</option>`).join('')}</datalist></label>
+    <label>자격명 *<input name="kind" required maxlength="100" list="qlKinds" value="${esc(v0.kind || '')}"><datalist id="qlKinds">${['수입검사원', '출하검사원', '공정검사원', '내부심사원(ISO 9001)', '내부심사원(ISO 14001)', '클린룸 작업자', '시험원(파티클)', '지게차 운전기능사', '품질경영기사', '품질경영산업기사'].map(x => `<option value="${x}">`).join('')}</datalist></label>
+    <label>자격번호<input name="cert_no" maxlength="80" value="${esc(v0.cert_no || '')}"></label><label>발급처<input name="issuer" maxlength="100" value="${esc(v0.issuer || '')}" placeholder="사내 · 한국산업인력공단 · 인증기관"></label>
+    <label>취득일<input type="date" name="acquired_date" value="${esc(v0.acquired_date || '')}"></label><label>만료일 <span class="hint">(없으면 비움)</span><input type="date" name="expire_date" value="${esc(v0.expire_date || '')}"></label>
+    <label>상태<select name="status">${Object.entries(QUAL_STATUS_LABEL).map(([k, l]) => `<option value="${k}"${v0.status === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+    <label class="span2">메모<input name="note" maxlength="500" value="${esc(v0.note || '')}"></label></div>`, { wide: true,
+    submit: async vals => r ? api('PUT', `/api/qualifications/${r.id}`, { ...vals, revision: r.revision }) : api('POST', '/api/qualifications', { ...vals, request_id: crypto.randomUUID() }) });
+  if (v) { toast('저장했습니다.'); qReload(); }
+}
+async function pageTraining(main) {
+  const tab0 = sessionStorage.getItem('qTrTab') || 'plan';
+  main.innerHTML = `<h1>교육·자격관리 <span class="dept">품질</span></h1>
+  <p class="muted">연간 교육 계획(OJT·정기·직무·외부·문서 개정 교육)과 실적(참석·시간·평가), 개인별 교육 이력, 검사원·심사원 등 자격의 만료일을 관리합니다. 교육 대상자는 본인이 「참석 확인」을 누릅니다.</p>
+  <div class="seg q-tabs" id="trTabs"><button type="button" data-tab="plan">교육 계획·실적</button><button type="button" data-tab="people">개인별 이력</button><button type="button" data-tab="qual">자격 관리</button></div>
+  <div class="ip-tiles" id="trTiles"></div>
+  <form class="toolbar list-filters" data-read-only id="trFilters"><label class="lf-sel">연도<select name="year"></select></label><label class="lf-sel" data-only="plan">상태<select name="st"><option value="">전체</option>${Object.entries(TR_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}<option value="mine">내 참석 확인 대기</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="교육명·강사·대상자·자격명"></label><span class="grow"></span><span id="trTools" class="ip-tools"></span></form>
+  <div id="trList"></div>`;
+  const form = $('#trFilters', main); let tab = tab0, tr = { rows: [] }, ql = { rows: [] };
+  const load = async () => { [tr, ql] = await Promise.all([api('GET', '/api/trainings'), api('GET', '/api/qualifications')]); if (!main.isConnected) return;
+    const ys = [...new Set([todayStr().slice(0, 4), ...tr.rows.map(r => r.plan_date.slice(0, 4))])].sort().reverse(), cur = form.elements.year.value || todayStr().slice(0, 4);
+    form.elements.year.innerHTML = ys.map(y => `<option${y === cur ? ' selected' : ''}>${y}</option>`).join('') + '<option value="">전체</option>'; draw(); };
+  main.qReload = () => load().catch(fail);
+  const waitMine = r => ['planned', 'done'].includes(r.status) && r.attendees.some(a => a.user_name === tr.me && !a.attended);
+  const draw = () => {
+    $$('#trTabs button', main).forEach(b => b.classList.toggle('on', b.dataset.tab === tab)); $$('[data-only]', form).forEach(x => { x.hidden = x.dataset.only !== tab; });
+    const v = formObj(form), q = (v.q || '').trim().toLowerCase(), yr = r => !v.year || String(r).startsWith(v.year);
+    const rows = tr.rows.filter(r => yr(r.plan_date));
+    if (tab === 'plan') {
+      qTiles('trTiles', [['계획', rows.filter(r => r.status === 'planned').length, ''], ['실시', rows.filter(r => r.status === 'done').length, ''], ['평가완료', rows.filter(r => r.status === 'evaluated').length, 'green'], ['교육 시간 합(h)', rows.filter(r => r.status !== 'void').reduce((s, r) => s + (r.hours || 0) * r.attendees.filter(a => a.attended).length, 0)], ['내 참석 확인 대기', tr.rows.filter(waitMine).length, tr.rows.some(waitMine) ? 'yellow' : '']]);
+      $('#trTools', main).innerHTML = tr.can_manage ? '<button type="button" class="btn primary" id="trNewBtn">＋ 교육 계획</button>' : '';
+      const list = rows.filter(r => (v.st === 'mine' ? waitMine(r) : !v.st || r.status === v.st) && (!q || [r.title, r.instructor, r.kind, r.doc_label, ...r.attendees.map(a => a.user_name)].join(' ').toLowerCase().includes(q)));
+      $('#trList', main).innerHTML = list.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>예정일</th><th>교육명</th><th>유형</th><th>강사</th><th>참석 / 대상</th><th>시간</th><th>실시일</th><th>관련 문서</th><th>상태</th><th></th></tr></thead><tbody>${list.map(r => `<tr data-tr-row="${r.id}" class="${r.status === 'void' ? 'row-off' : r.status === 'planned' && r.plan_date < tr.today ? 'ip-over' : ''}"><td class="nowrap">${esc(r.plan_date)}</td><td data-card-primary><b>${esc(r.title)}</b></td><td class="nowrap">${esc(r.kind)}</td><td>${esc(r.instructor)}</td><td class="nowrap">${r.attendees.filter(a => a.attended).length} / ${r.attendees.length}</td><td>${r.hours ?? ''}</td><td class="nowrap">${esc(r.done_date || '')}</td><td class="small">${esc(r.doc_label)}</td><td><span class="chip ${TR_CHIP[r.status]}">${esc(r.status_label)}</span></td><td class="nowrap">${waitMine(r) ? `<button type="button" class="btn small primary" data-tr-att="${r.id}">참석 확인</button> ` : ''}<button type="button" class="btn small" data-tr-open="${r.id}">열기</button></td></tr>`).join('')}</tbody></table></div>`
+        : `<div class="empty">${tr.rows.length ? '조건에 맞는 교육이 없습니다.' : '등록된 교육이 없습니다. 「＋ 교육 계획」으로 연간 교육을 넣으세요.'}</div>`;
+    } else if (tab === 'people') {
+      const by = new Map();
+      for (const r of rows.filter(r => r.status !== 'void')) for (const a of r.attendees) { const p = by.get(a.user_name) || { name: a.user_name, dept: a.dept, n: 0, att: 0, hours: 0, fail: 0, list: [] }; p.n++; if (a.attended) { p.att++; p.hours += r.hours || 0; } if (['미이수', '재교육'].includes(a.result)) p.fail++; p.list.push({ r, a }); by.set(a.user_name, p); }
+      const people = [...by.values()].filter(p => !q || [p.name, p.dept].join(' ').toLowerCase().includes(q)).sort((a, b) => a.dept.localeCompare(b.dept, 'ko') || a.name.localeCompare(b.name, 'ko'));
+      qTiles('trTiles', [['교육 대상 인원', by.size], ['참석 합계(회)', [...by.values()].reduce((s, p) => s + p.att, 0)], ['교육 시간 합(h)', [...by.values()].reduce((s, p) => s + p.hours, 0)], ['미이수·재교육', [...by.values()].reduce((s, p) => s + p.fail, 0), [...by.values()].some(p => p.fail) ? 'red' : '']]);
+      $('#trTools', main).innerHTML = '';
+      $('#trList', main).innerHTML = people.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>이름</th><th>부서</th><th>대상</th><th>참석</th><th>시간(h)</th><th>미이수·재교육</th><th>자격</th><th>교육 이력</th></tr></thead><tbody>${people.map(p => { const qs = ql.rows.filter(x => x.user_name === p.name && x.status === 'valid'); return `<tr><td class="nowrap" data-card-primary><b>${esc(p.name)}</b></td><td>${esc(p.dept)}</td><td>${p.n}</td><td>${p.att}</td><td>${p.hours}</td><td>${p.fail ? `<span class="chip red">${p.fail}</span>` : '0'}</td><td class="small">${qs.map(x => esc(x.kind)).join(', ')}</td><td class="small">${p.list.sort((x, y) => y.r.plan_date.localeCompare(x.r.plan_date)).slice(0, 6).map(({ r, a }) => `<a href="#/quality/training" data-tr-open="${r.id}">${esc(r.done_date || r.plan_date)} ${esc(r.title)}</a>${a.result ? ` (${esc(a.result)})` : a.attended ? '' : ' <span class="muted">미참석</span>'}`).join('<br>')}${p.list.length > 6 ? `<br><span class="muted">외 ${p.list.length - 6}건</span>` : ''}</td></tr>`; }).join('')}</tbody></table></div>` : '<div class="empty">이 기간의 교육 이력이 없습니다.</div>';
+    } else {
+      const live = r => r.status === 'valid', dd = r => live(r) && r.expire_date ? ipDday(r.expire_date, ql.today) : null;
+      qTiles('trTiles', [['유효 자격', ql.rows.filter(live).length, 'green'], ['90일 안 만료', ql.rows.filter(r => { const d = dd(r); return d !== null && d >= 0 && d <= 90; }).length, ql.rows.some(r => { const d = dd(r); return d !== null && d >= 0 && d <= 90; }) ? 'yellow' : ''], ['만료 지남', ql.rows.filter(r => { const d = dd(r); return d !== null && d < 0; }).length, ql.rows.some(r => { const d = dd(r); return d !== null && d < 0; }) ? 'red' : '']]);
+      $('#trTools', main).innerHTML = ql.can_manage ? '<button type="button" class="btn primary" id="qlNewBtn">＋ 자격 등록</button>' : '';
+      const list = ql.rows.filter(r => !q || [r.user_name, r.kind, r.cert_no, r.issuer].join(' ').toLowerCase().includes(q));
+      $('#trList', main).innerHTML = list.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>이름</th><th>자격명</th><th>자격번호</th><th>발급처</th><th>취득일</th><th>만료일</th><th>상태</th><th></th></tr></thead><tbody>${list.map(r => { const d = dd(r); return `<tr class="${d === null ? (live(r) ? '' : 'row-off') : d < 0 ? 'ip-over' : d <= 90 ? 'ip-soon' : ''}"><td class="nowrap" data-card-primary><b>${esc(r.user_name)}</b></td><td>${esc(r.kind)}</td><td>${esc(r.cert_no)}</td><td>${esc(r.issuer)}</td><td class="nowrap">${esc(r.acquired_date || '')}</td><td class="nowrap">${r.expire_date ? esc(r.expire_date) + qDd(r.expire_date, ql.today, live(r), 90) : '<span class="muted">없음</span>'}</td><td><span class="chip ${live(r) ? 'green' : ''}">${esc(r.status_label)}</span></td><td class="nowrap">${ql.can_manage ? `<button type="button" class="btn small" data-ql-edit="${r.id}">수정</button> <button type="button" class="btn small danger" data-ql-del="${r.id}">삭제</button>` : ''}</td></tr>`; }).join('')}</tbody></table></div>` : `<div class="empty">${ql.rows.length ? '조건에 맞는 자격이 없습니다.' : '등록된 자격이 없습니다. 검사원·내부심사원 등 자격을 넣으면 만료일을 D-day로 보여 줍니다.'}</div>`;
+    }
+  };
+  main.addEventListener('click', async e => {
+    const tb = e.target.closest('#trTabs [data-tab]'); if (tb) { tab = tb.dataset.tab; try { sessionStorage.setItem('qTrTab', tab); } catch {} draw(); return; }
+    const t = e.target.closest('[data-q-tile]'); if (t && tab === 'plan') { form.elements.st.value = ['planned', 'done', 'evaluated', '', 'mine'][Number(t.dataset.qTile)]; draw(); return; }
+    if (e.target.closest('#trNewBtn')) return trNew().catch(fail);
+    if (e.target.closest('#qlNewBtn')) return qualEdit().catch(fail);
+    const o = e.target.closest('[data-tr-open]'); if (o) { e.preventDefault(); return trOpen(Number(o.dataset.trOpen)).catch(fail); }
+    const a = e.target.closest('[data-tr-att]'); if (a) { try { await api('POST', `/api/trainings/${a.dataset.trAtt}/attend`); toast('참석을 확인했습니다.'); load(); } catch (err) { fail(err); } return; }
+    const qe = e.target.closest('[data-ql-edit]'); if (qe) return qualEdit(ql.rows.find(r => r.id === Number(qe.dataset.qlEdit))).catch(fail);
+    const qd = e.target.closest('[data-ql-del]'); if (qd) { const r = ql.rows.find(x => x.id === Number(qd.dataset.qlDel)); if (!await confirmBox(`${r.user_name} · ${r.kind} 자격을 지울까요?`)) return; try { await api('DELETE', `/api/qualifications/${r.id}?revision=${r.revision}`); toast('지웠습니다.'); load(); } catch (err) { fail(err); } }
+  });
+  main.addEventListener('dblclick', e => { const r = e.target.closest('[data-tr-row]'); if (r && !e.target.closest('button')) trOpen(Number(r.dataset.trRow)).catch(fail); });
+  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  await load();
+}
+
+// A5 협력업체 품질
+const SUP_GRADE_CHIP = { A: 'green', B: 'green', C: 'yellow', D: 'red' };
+const supGradeOf = t => t >= 90 ? 'A' : t >= 80 ? 'B' : t >= 70 ? 'C' : 'D';
+async function supEval(row, year) {
+  const suggest = row.fail_rate == null ? 100 : Math.max(0, Math.round(100 - row.fail_rate * 2)), e0 = row.eval || {};
+  const v = await promptBox(`${row.vendor} ${year}년 유효성평가`, `<p class="small muted">수입검사 ${row.iqc_total}건 · 판정 ${row.iqc_judged}건 중 불합격 ${row.iqc_fail}건${row.fail_rate != null ? ` (${row.fail_rate}%)` : ''} → 품질 점수 제안 <b>${suggest}점</b>(100 − 불합격률×2). 총점 = 품질 50% + 납기 30% + 대응 20%, 등급 A 90↑ · B 80↑ · C 70↑ · D.</p><div class="form-grid">
+    <label>품질 점수 *<input type="number" name="quality_score" min="0" max="100" step="0.1" required value="${e0.quality_score ?? suggest}"></label>
+    <label>납기 점수 *<input type="number" name="delivery_score" min="0" max="100" step="0.1" required value="${e0.delivery_score ?? ''}"></label>
+    <label>대응 점수 *<input type="number" name="response_score" min="0" max="100" step="0.1" required value="${e0.response_score ?? ''}" placeholder="클레임·변경 통보 대응"></label>
+    <div class="span3 sup-total" data-sup-total></div><label class="span3">평가 의견<textarea name="note" rows="2" maxlength="1000">${esc(e0.note || '')}</textarea></label></div>`, { wide: true,
+    onOpen: el => { const calc = () => { const g = n => Number(el.querySelector(`[name=${n}]`).value) || 0, t = Math.round((g('quality_score') * 0.5 + g('delivery_score') * 0.3 + g('response_score') * 0.2) * 10) / 10, gr = supGradeOf(t); $('[data-sup-total]', el).innerHTML = `총점 <b>${t}</b> · 등급 <span class="chip ${SUP_GRADE_CHIP[gr]}">${gr}</span>`; }; el.addEventListener('input', calc); calc(); },
+    submit: async vals => api('POST', '/api/supplier-evals', { ...vals, vendor: row.vendor, year, revision: e0.revision }) });
+  if (v) { toast(`${row.vendor}: ${v.total}점 · ${v.grade}등급으로 평가했습니다.`); qReload(); }
+}
+async function scoaOpen(inspectionId, after = null) {
+  const s = await api('GET', `/api/supplier-coas/${inspectionId}`), can = hasRole('quality');
+  const m = modal(`<h3>공급사 COA · ${esc(s.item)} <span class="small muted">${esc(s.lot || '')}</span></h3>
+    <p class="small muted">${esc(s.vendor)} · 수입검사 ${esc(s.req_no || '')}${s.coa_requested ? ' · <b>발주 때 COA 요청함</b>' : ''}${s.updated_by ? ` · 마지막 ${esc(s.updated_by)} ${esc(String(s.updated_at || '').slice(0, 16))}` : ''}</p>
+    <form class="stack" data-scoa-form>
+      ${s.files.length ? `<div class="scoa-files">${s.files.map(f => `<label class="chk">${can ? `<input type="checkbox" name="keep" value="${esc(f.file)}" checked> ` : ''}${qFileLink(f)}</label>`).join('')}${can ? '<p class="small muted">체크를 풀고 저장하면 그 파일을 지웁니다.</p>' : ''}</div>` : '<p class="muted">아직 받은 COA가 없습니다.</p>'}
+      ${can ? `<div class="form-grid"><label class="span2">COA 파일 추가 (PDF·사진, 여러 개)<input type="file" multiple data-q-file accept="application/pdf,image/jpeg,image/png,image/webp"></label><label>수령일<input type="date" name="received_date" value="${esc(s.received_date || '')}"></label><label class="span3">메모<input name="note" maxlength="500" value="${esc(s.note)}"></label></div>
+      <div class="actions"><span class="grow"></span><button type="button" class="btn" data-no>닫기</button><button class="btn primary">저장</button></div>` : ''}
+    </form>`, { wide: true });
+  $('[data-no]', m.el)?.addEventListener('click', () => m.close());
+  const form = $('[data-scoa-form]', m.el);
+  form.onsubmit = async e => { e.preventDefault(); try { const files = await qFiles($('[data-q-file]', form)); const v = formObj(form); await api('PUT', `/api/supplier-coas/${inspectionId}`, { files, keep: v.keep || [], received_date: v.received_date, note: v.note, revision: s.revision }); toast('공급사 COA를 저장했습니다.'); m.close(); after?.(); qReload(); } catch (err) { fail(err); } };
+}
+async function supOpen(vendor, year) {
+  const d = await api('GET', '/api/supplier-quality/detail?vendor=' + encodeURIComponent(vendor)), can = hasRole('quality');
+  const RES = { pass: ['합격', 'green'], fail: ['불합격', 'red'], pending: ['검사 대기', 'yellow'] };
+  const m = modal(`<h3>${esc(vendor)} · 협력업체 품질 카드</h3>
+    <div class="actions wrap">${can ? '<button type="button" class="btn" data-sup-chg>변경점 접수</button>' : ''}</div>
+    <fieldset class="vendor-sec"><legend>유효성평가</legend>${d.evals.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>연도</th><th>품질</th><th>납기</th><th>대응</th><th>총점</th><th>등급</th><th>수입검사(불합격)</th><th>평가</th><th>의견</th></tr></thead><tbody>${d.evals.map(e => `<tr><td>${e.year}</td><td>${e.quality_score}</td><td>${e.delivery_score}</td><td>${e.response_score}</td><td><b>${e.total}</b></td><td><span class="chip ${SUP_GRADE_CHIP[e.grade]}">${e.grade}</span></td><td>${e.iqc_total} (${e.iqc_fail})</td><td class="nowrap small">${esc(e.evaluated_by)} ${esc(String(e.evaluated_at || '').slice(0, 10))}</td><td class="small">${esc(e.note)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">평가 기록이 없습니다.</p>'}</fieldset>
+    <fieldset class="vendor-sec"><legend>업체 변경점</legend>${d.changes.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>번호</th><th>유형</th><th>내용</th><th>접수</th><th>단계</th></tr></thead><tbody>${d.changes.map(c => `<tr><td class="nowrap"><a href="#/quality/changes" data-sup-go-chg="${c.id}">${esc(c.change_no)}</a></td><td>${esc(c.kind_label)}</td><td>${esc(c.title)}</td><td class="nowrap">${esc(String(c.created_at).slice(0, 10))}</td><td><span class="chip ${CHG_CHIP[c.status]}">${esc(c.status_label)}</span></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">접수된 변경점이 없습니다.</p>'}</fieldset>
+    <fieldset class="vendor-sec"><legend>수입검사 · 공급사 COA <span class="hint">(최근 200건)</span></legend>${d.inspections.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>의뢰일</th><th>번호</th><th>품목</th><th>LOT</th><th>판정</th><th>공급사 COA</th></tr></thead><tbody>${d.inspections.map(r => { const res = RES[r.result] || [r.result, '']; return `<tr><td class="nowrap">${esc(r.created_at.slice(0, 10))}</td><td class="nowrap">${esc(r.req_no || '')}</td><td>${esc(r.title)}</td><td>${esc(r.lot)}</td><td><span class="chip ${res[1]}">${esc(res[0])}</span></td><td class="nowrap">${r.coa_files.length ? r.coa_files.map(f => qFileLink(f, '받음')).join(' ') : r.coa_requested ? '<span class="chip red">미수령</span>' : '<span class="muted small">—</span>'} ${can ? `<button type="button" class="btn small" data-sup-coa="${r.id}">${r.coa_files.length ? '수정' : '첨부'}</button>` : ''}</td></tr>`; }).join('')}</tbody></table></div>` : '<p class="muted">이 업체의 수입검사가 없습니다.</p>'}</fieldset>`, { wide: true });
+  m.el.addEventListener('click', e => {
+    const c = e.target.closest('[data-sup-coa]'); if (c) return scoaOpen(Number(c.dataset.supCoa), () => { m.close(); supOpen(vendor, year); }).catch(fail);
+    const g = e.target.closest('[data-sup-go-chg]'); if (g) { e.preventDefault(); m.close(); chgOpen(Number(g.dataset.supGoChg)).catch(fail); }
+    if (e.target.closest('[data-sup-chg]')) { m.close(); chgNew({ source_type: 'supplier', vendor, kind: 'material' }).catch(fail); }
+  });
+}
+async function pageSuppliers(main) {
+  main.innerHTML = `<h1>협력업체 품질 <span class="dept">품질</span></h1>
+  <p class="muted">매입처별 품질 카드입니다. 수입검사 건수·불합격률과 <b>공급사 COA 미수령</b>(발주 때 COA를 요청한 입고)은 자동으로 모이고, 연 1회 유효성평가(품질 50%·납기 30%·대응 20% → A~D 등급)를 남깁니다. 업체의 4M 변경 통보는 「변경점 접수」로 변경관리에 올립니다.</p>
+  <div class="ip-tiles" id="supTiles"></div>
+  <form class="toolbar list-filters" data-read-only id="supFilters"><label class="lf-sel">연도<select name="year">${[0, 1, 2, 3].map(i => { const y = Number(todayStr().slice(0, 4)) - i; return `<option>${y}</option>`; }).join('')}</select></label><label class="lf-sel">보기<select name="show"><option value="active">이 해 수입검사 있는 업체</option><option value="">매입처 전체</option><option value="coa">COA 미수령 있음</option><option value="noeval">미평가</option><option value="low">C·D 등급</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="업체명"></label></form>
+  <div id="supList"></div>`;
+  const form = $('#supFilters', main); let data = { rows: [], year: Number(todayStr().slice(0, 4)) };
+  const load = async () => { data = await api('GET', '/api/supplier-quality?year=' + form.elements.year.value); if (main.isConnected) draw(); };
+  main.qReload = () => load().catch(fail);
+  const draw = () => {
+    const v = formObj(form), q = (v.q || '').trim().toLowerCase(), all = data.rows, act = all.filter(r => r.iqc_total);
+    const judged = act.reduce((s, r) => s + r.iqc_judged, 0), failN = act.reduce((s, r) => s + r.iqc_fail, 0), miss = all.reduce((s, r) => s + r.coa_missing, 0);
+    qTiles('supTiles', [['수입검사 업체', act.length], ['수입검사', act.reduce((s, r) => s + r.iqc_total, 0)], ['불합격률', judged ? `${Math.round(failN / judged * 1000) / 10}%` : '—', failN ? 'yellow' : ''], ['COA 미수령', miss, miss ? 'red' : ''], ['미평가(검사 있는 업체)', act.filter(r => !r.eval).length], ['C·D 등급', all.filter(r => r.eval && ['C', 'D'].includes(r.eval.grade)).length, all.some(r => r.eval && ['C', 'D'].includes(r.eval.grade)) ? 'red' : '']]);
+    const rows = all.filter(r => (v.show === 'active' ? r.iqc_total > 0 : v.show === 'coa' ? r.coa_missing > 0 : v.show === 'noeval' ? r.iqc_total > 0 && !r.eval : v.show === 'low' ? r.eval && ['C', 'D'].includes(r.eval.grade) : true) && (!q || r.vendor.toLowerCase().includes(q)));
+    $('#supList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>업체</th><th>수입검사</th><th>불합격</th><th>불합격률</th><th>COA 미수령</th><th>${data.year} 평가</th><th>최근 평가</th><th>변경점(진행/전체)</th><th></th></tr></thead><tbody>${rows.map(r => `<tr data-sup-row="${esc(r.vendor)}" class="${r.eval && r.eval.grade === 'D' ? 'ip-over' : r.coa_missing ? 'ip-soon' : ''}"><td data-card-primary><b>${esc(r.vendor)}</b></td><td>${r.iqc_total}</td><td>${r.iqc_fail ? `<span class="chip red">${r.iqc_fail}</span>` : 0}</td><td>${r.fail_rate == null ? '<span class="muted">—</span>' : r.fail_rate + '%'}</td><td>${r.coa_req ? (r.coa_missing ? `<span class="chip red">${r.coa_missing}</span> / ${r.coa_req}` : `0 / ${r.coa_req}`) : '<span class="muted">—</span>'}</td><td>${r.eval ? `${r.eval.total} <span class="chip ${SUP_GRADE_CHIP[r.eval.grade]}">${r.eval.grade}</span>` : '<span class="muted">미평가</span>'}</td><td class="small">${r.last_eval && (!r.eval || r.last_eval.year !== r.eval.year) ? `${r.last_eval.year} · ${r.last_eval.grade}` : ''}</td><td>${r.changes_open} / ${r.changes_total}</td><td class="nowrap"><button type="button" class="btn small" data-sup-open="${esc(r.vendor)}">카드</button>${data.can_manage ? ` <button type="button" class="btn small primary" data-sup-eval="${esc(r.vendor)}">${r.eval ? '재평가' : '평가'}</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
+      : `<div class="empty">${all.length ? '조건에 맞는 업체가 없습니다. 「보기」를 「매입처 전체」로 바꿔 보세요.' : '매입처가 없습니다. 관리 › 거래처에서 매입처를 등록하세요.'}</div>`;
+  };
+  main.addEventListener('click', e => {
+    const o = e.target.closest('[data-sup-open]'); if (o) return supOpen(o.dataset.supOpen, data.year).catch(fail);
+    const ev = e.target.closest('[data-sup-eval]'); if (ev) return supEval(data.rows.find(r => r.vendor === ev.dataset.supEval), data.year).catch(fail);
+    const t = e.target.closest('[data-q-tile]'); if (t) { form.elements.show.value = ['active', 'active', 'active', 'coa', 'noeval', 'low'][Number(t.dataset.qTile)]; draw(); }
+  });
+  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-sup-row]'); if (tr && !e.target.closest('button')) supOpen(tr.dataset.supRow, data.year).catch(fail); });
+  form.elements.year.addEventListener('change', () => load().catch(fail)); form.addEventListener('input', e => { if (e.target.name !== 'year') draw(); }); form.elements.show.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }

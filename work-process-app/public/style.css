@@ -3936,3 +3936,18 @@ table.coa-items thead th { background: var(--erp-head, var(--bg)); }
 .nc-step.done { background: color-mix(in srgb, #2f9e44 10%, var(--panel)); color: #2b8a3e; border-color: #8ce99a; }
 .nc-step.on { background: var(--accent-soft); color: var(--text); border-color: var(--accent); font-weight: 700; }
 .nc-arrow { color: var(--muted); font-size: 12px; }
+
+/* 15.306 문서관리·변경관리·교육·자격·협력업체 품질 */
+.q-file { display: inline-flex; align-items: center; gap: 5px; text-decoration: none; color: var(--accent); white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+.q-file:hover { text-decoration: underline; }
+.q-file-t { font-size: 10.5px; font-weight: 700; letter-spacing: .3px; padding: 1px 4px; border-radius: 4px; background: color-mix(in srgb, #e03131 12%, var(--panel)); color: #c92a2a; }
+.q-chk, .tr-dept { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.tr-pick { display: grid; gap: 8px; max-height: 260px; overflow: auto; }
+.tr-dept { padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; }
+.tr-dept-h { flex-basis: 100%; }
+.tr-score { width: 70px; }
+.q-tabs { margin: 0 0 10px; }
+table.chg-imp td { vertical-align: middle; } table.chg-imp td:last-child input { width: 100%; }
+table.chg-imp tr.chg-yes td:first-child { font-weight: 700; color: var(--text); }
+.sup-total { font-size: 14px; }
+.scoa-files { display: grid; gap: 6px; }
