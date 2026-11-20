@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.316';
+const APP_VERSION = '15.317';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -969,14 +969,17 @@ async function render() {
   document.body.classList.remove('operator-mode');
   shell();
   refreshNavBadges();
+  const seq = render.seq = (render.seq || 0) + 1; // 15.317 빠르게 메뉴를 옮기면 앞 화면의 늦게 끝난 그리기가 새 화면에 탭·경로(HOME 등)를 덮어쓰던 것: 앞 그리기는 페이지 뒤 단계를 건너뜀
   const page = canSeeRoute(route) ? PAGES[location.hash || '#/'] || pageHome : pageNoMenu;
-  try { await page($('#main')); if (page === pageHome || page === pageTasks) applyMenuAccess($('#main')); if (page !== pageNoMenu) favoriteTools($('#main'), route); applyView($('#main'), route); foldHelp($('#main')); erpEntryBar($('#main'), route); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  try { await page($('#main')); if (seq !== render.seq) return; if (page === pageHome || page === pageTasks) applyMenuAccess($('#main')); if (page !== pageNoMenu) favoriteTools($('#main'), route); applyView($('#main'), route); foldHelp($('#main')); erpEntryBar($('#main'), route); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  if (seq !== render.seq) return;
   try { autoRememberLists($('#main')); } catch { /* 15.281 조회 조건 기억은 편의 기능 */ }
   try { managedTabs($('#main'), route.split('?')[0]); } catch { /* 15.213 */ }
   try { processGuide($('#main'), route.split('?')[0]); } catch { /* 15.280 업무 흐름 안내는 편의 기능 */ }
   try { pageTabs($('#main'), route); } catch { /* 탭은 편의 기능 */ }
   uxAfterRender(route);
 }
+render.seq = 0;
 // 15.169 저장 안 한 입력 지키기: 입력 화면(#main의 저장 폼, 조회 조건·읽기 전용·팝업 제외)에 값을 넣고 저장하지 않은 채
 // 다른 메뉴·탭·주소로 가면 물어본다(「취소」면 주소를 되돌려 화면·입력 그대로). 자동 보관(초안)이 붙은 폼은 이미 보관되므로 묻지 않는다.
 // 저장(submit)하면 표시를 지우고, 새로 고침·창 닫기에는 브라우저 경고.

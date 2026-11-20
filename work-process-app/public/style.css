@@ -4201,3 +4201,8 @@ p a.btn.small, p .btn.small { white-space: nowrap; }
 .dr-legend .dr-next-i { color: #c76d00; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .dr-legend .dr-next-i { color: #ffa94d; } }
 :root[data-theme="dark"] .dr-legend .dr-next-i { color: #ffa94d; }
+
+/* 15.317 다크 모드에서 표 글자를 끌어 고르면 파란 선택 바탕 위 파란 링크·숫자가 안 보이던 것: 선택 색을 직접 정함(글자는 흰색으로) */
+::selection { background: #b9d3ff; color: #0b1b3a; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) ::selection { background: #3d63dd; color: #fff; } }
+:root[data-theme="dark"] ::selection { background: #3d63dd; color: #fff; }
