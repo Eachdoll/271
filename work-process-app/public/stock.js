@@ -14,7 +14,8 @@ async function pageStock(main) {
   <div class="stock-ex"><details class="stock-tree-box" open><summary>자재별 · 창고별</summary><nav id="stockTree" class="stock-tree" aria-label="재고 분류·창고"></nav></details><section class="stock-ex-main">
   <form id="stockFilters" class="toolbar list-filters lf-oneline" data-read-only="true">
     <label class="lf-date">기준일<input type="date" name="asof" value="${todayStr()}" max="${todayStr()}" required></label>
-    <label class="list-search">품목 검색<input type="search" name="q" maxlength="200" placeholder="품목명·규격·LOT"></label>
+    <label class="list-search">품목 검색<input type="search" name="q" maxlength="200" placeholder="품목명·코드·규격"></label>
+    <label class="list-search lf-lot">LOT 검색<input type="search" name="lot" maxlength="100" placeholder="LOT 번호 일부(예: R2611)" autocomplete="off"></label>
     <label class="lf-sel lf-wide">재고 상태<select name="state"><option value="">전체</option><option value="instock">재고 있음</option><option value="low">안전재고 미달</option><option value="negative">재고 음수(기록 확인)</option></select></label>
     <button type="submit" class="btn primary">조회</button>
   </form>
@@ -22,8 +23,9 @@ async function pageStock(main) {
     <div class="seg result-seg" role="group" aria-label="보기"><label><input type="radio" name="group" value="item" form="stockFilters" checked> 품목 합계</label><label><input type="radio" name="group" value="spec" form="stockFilters"> 규격·사이즈별</label><label><input type="radio" name="group" value="lot" form="stockFilters"> LOT별</label><label><input type="radio" name="group" value="place" form="stockFilters"> 창고·위치별</label></div>
     <span class="result-tools"><button type="button" class="btn" id="stockLots" title="LOT가 적힌 입고 − 같은 LOT 출하">LOT별 재고</button><button type="button" class="btn" id="stockCsv">CSV 저장</button><span id="stockAdjustSlot"></span></span></div>
   <div class="stock-path" id="stockPath"></div><div id="stockList"></div></section></div>`;
-  const form = $('#stockFilters', main); let version = 0, current = { rows: [], group: 'item' };
-  $('#stockLots', main).onclick = () => stockLotWindow(form.elements.asof.value || todayStr(), form.elements.q.value);
+  const form = $('#stockFilters', main); const lotQ = () => (form.elements.lot.value || '').trim().toLowerCase(), lotHit = l => !lotQ() || String(l || '').toLowerCase().includes(lotQ()); // 15.294 LOT 검색
+  let version = 0, current = { rows: [], group: 'item' };
+  $('#stockLots', main).onclick = () => stockLotWindow(form.elements.asof.value || todayStr(), form.elements.lot.value.trim() || form.elements.q.value);
   // 15.258 파일 탐색기처럼: 왼쪽 분류(원자재·부자재·제품·상품·반제품 → 1·2·3차) / 창고(→ 구역·Location)를 고르면 오른쪽에 그 재고
   if (window.matchMedia?.('(max-width: 860px)').matches) $('.stock-tree-box', main).open = false; // 휴대폰은 접힌 채로 시작
   let [catNodes, whList] = await Promise.all([api('GET', '/api/item-categories').catch(() => []), api('GET', '/api/warehouses').catch(() => [])]);
@@ -93,10 +95,10 @@ async function pageStock(main) {
   };
   // 15.230 창고·위치별: 창고 → 위치 → 품목·LOT 잔량(어디에 얼마나 있는지)
   const loadPlaces = async mine => {
-    const v = formObj(form), data = await api('GET', '/api/inventory/places?' + new URLSearchParams({ asof: v.asof || todayStr(), q: v.q || '' }));
+    const v = formObj(form), data = await api('GET', '/api/inventory/places?' + new URLSearchParams({ asof: v.asof || todayStr(), q: v.q || v.lot || '' }));
     if (mine !== version || !main.isConnected) return;
     $('#stockAdjustSlot').innerHTML = stMoveBtn();
-    placeAll = data.rows; drawTree(); const rows = data.rows.filter(matchWh), whs = new Set(rows.map(r => r.warehouse || '(위치 미지정)')); current = { asof: data.asof, group: 'place', rows };
+    placeAll = data.rows.filter(r => lotHit(r.lot)); drawTree(); const rows = placeAll.filter(matchWh), whs = new Set(rows.map(r => r.warehouse || '(위치 미지정)')); current = { asof: data.asof, group: 'place', rows };
     $('#stockSummary').innerHTML = `${fmtNum(rows.length)}줄 · 창고 ${whs.size}곳 · 기준일 ${esc(data.asof)}${data.more ? ' · <span class="chip yellow">앞 3000줄</span>' : ''}`;
     let prev = '';
     $('#stockList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid stock-place-grid"><thead><tr><th>창고</th><th>위치(Location)</th><th>품목코드</th><th>품목명</th><th>LOT</th><th class="r">수량</th><th>처음 입고</th><th></th></tr></thead><tbody>${rows.map((r, i) => { const wh = r.warehouse || '(위치 미지정)', head = wh !== prev; prev = wh;
@@ -108,15 +110,15 @@ async function pageStock(main) {
   // 15.260 LOT별: 품목·LOT 잔량(자재별 트리로 거름, 품목·LOT 검색), 더블클릭·「내역」 → 입출고 LOT 내역
   let lotAll = null;
   const loadLots = async mine => {
-    const v = formObj(form), data = await api('GET', '/api/inventory/lots?' + new URLSearchParams({ asof: v.asof || todayStr(), q: v.q || '', qc: '1', cat: '1', ...(v.state === 'instock' ? { state: 'instock' } : {}) }));
+    const v = formObj(form), data = await api('GET', '/api/inventory/lots?' + new URLSearchParams({ asof: v.asof || todayStr(), q: v.q || v.lot || '', qc: '1', cat: '1', ...(v.state === 'instock' ? { state: 'instock' } : {}) }));
     if (mine !== version || !main.isConnected) return;
     $('#stockAdjustSlot').innerHTML = stMoveBtn();
-    lotAll = data.rows.filter(r => r.lot !== '(LOT 미지정)'); itemAll = lotAll; drawTree();
+    lotAll = data.rows.filter(r => r.lot !== '(LOT 미지정)' && lotHit(r.lot)); itemAll = lotAll; drawTree();
     const rows = lotAll.filter(matchCat).filter(r => v.state !== 'negative' || r.balance < 0);
     current = { asof: data.asof, group: 'lot', rows };
     $('#stockSummary').innerHTML = `LOT ${fmtNum(rows.length)}개 · 품목 ${fmtNum(new Set(rows.map(r => r.item)).size)} · 기준일 ${esc(data.asof)}${data.more ? ' · <span class="chip yellow">앞부분만 · 검색으로 좁히세요</span>' : ''}${rows.some(r => r.qc === 'fail') ? ` · <span class="chip red">불합격 ${rows.filter(r => r.qc === 'fail').length}</span>` : ''}`;
     $('#stockList').innerHTML = rows.length ? `<p class="small muted st-dbl-hint">줄을 <b>더블클릭</b>하면(휴대폰은 「내역」) 그 LOT의 입고·출고·투입 내역이 나옵니다.</p><div class="table-wrap"><table class="grid stock-lot-grid"><thead><tr><th>LOT</th><th>품목코드</th><th>품목명</th><th>분류</th><th class="r">입고·생산</th><th class="r">출고·투입</th><th class="r">잔량</th><th>품질</th><th>위치</th><th>처음 입고</th><th>마지막</th><th></th></tr></thead><tbody>${rows.map((r, i) => `<tr data-lot-row="${i}" class="${r.balance < 0 ? 'row-red' : r.balance === 0 ? 'row-off' : ''}${r.qc === 'concession' ? ' lot-tk-row' : ''}" title="더블클릭: 입출고 LOT 내역"><td class="nowrap"><span class="lot-tag">${esc(r.lot)}</span></td><td class="small nowrap">${esc(r.product_code || '')}</td><td><b>${esc(r.item)}</b></td><td class="small">${esc(r.category || '미분류')}${r.cat1 ? `<div class="muted">${esc([r.cat1, r.cat2, r.cat3].filter(Boolean).join(' › '))}</div>` : ''}</td><td class="r">${fmtNum(r.received)}</td><td class="r">${fmtNum(r.shipped)}</td><td class="r"><b>${fmtNum(r.balance)}</b> ${esc(r.unit || '')}</td><td class="nowrap">${lotQcChip(r)}</td><td class="small">${esc(r.places || '')}</td><td class="small muted">${esc(r.first_date || '')}</td><td class="small muted">${esc(r.last_date || '')}</td><td class="nowrap"><button type="button" class="btn small" data-lot-his="${i}">내역</button>${stCanAdjust() ? ` <button type="button" class="btn small" data-lot-adj="${i}" title="이 LOT 수량 조정(실사·증감)">조정</button>` : ''}${stCanMove() && r.balance > 0 ? ` <button type="button" class="btn small" data-lot-mv2="${i}" title="이 LOT를 다른 창고·위치로">이동</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
-      : `<div class="empty">${v.q ? `「${esc(v.q)}」에 맞는 LOT가 없습니다.` : '조건에 맞는 LOT가 없습니다.'}</div>`;
+      : `<div class="empty">${v.q || v.lot ? `「${esc([v.q, v.lot].filter(Boolean).join(' · '))}」에 맞는 LOT가 없습니다.` : '조건에 맞는 LOT가 없습니다.'}</div>`;
   };
   const openLot = r => lotHistoryWindow(r, () => load()).catch(fail);
   main.addEventListener('dblclick', e => {
@@ -136,10 +138,12 @@ async function pageStock(main) {
     const gv = $$('[name=group]', main).find(x => x.checked)?.value;
     if (gv === 'place') return loadPlaces(mine);
     if (gv === 'lot') return loadLots(mine); // 15.260
-    const result = await api('GET', '/api/inventory?' + new URLSearchParams(formObj(form)));
+    const fv = formObj(form), lq = lotQ(); delete fv.lot;
+    const [result, lotRows] = await Promise.all([api('GET', '/api/inventory?' + new URLSearchParams(fv)), lq ? api('GET', '/api/inventory/lots?' + new URLSearchParams({ asof: fv.asof || todayStr(), q: lq })).then(d => d.rows.filter(x => lotHit(x.lot))) : null]);
     if (mine !== version || !main.isConnected) return;
-    itemAll = result.rows; const rows = result.rows.filter(matchCat); current = { ...result, rows }; drawTree(); const bySpec = result.group === 'spec';
-    const qv = (form.elements.q.value || '').trim(); if (qv) api('GET', '/api/inventory/lots?' + new URLSearchParams({ asof: result.asof, q: qv })).then(d => { const n = d.rows.filter(x => x.lot.toLowerCase().includes(qv.toLowerCase())).length; if (n && mine === version && main.isConnected) $('#stockSummary').insertAdjacentHTML('beforeend', ` · <button type="button" class="link-btn" data-to-lot>LOT 「${esc(qv)}」 ${n}개 → LOT별로 보기</button>`); }).catch(() => {}); // 15.260
+    const lotByName = lotRows && new Set(lotRows.map(x => x.item)); // 15.294 LOT 검색 → 그 LOT가 남아 있는 품목만
+    itemAll = lotRows ? result.rows.filter(r => lotByName.has(r.item)) : result.rows; const rows = itemAll.filter(matchCat); current = { ...result, rows }; drawTree(); const bySpec = result.group === 'spec';
+    const qv = lq || (form.elements.q.value || '').trim(); if (qv) api('GET', '/api/inventory/lots?' + new URLSearchParams({ asof: result.asof, q: qv })).then(d => { const n = d.rows.filter(x => x.lot.toLowerCase().includes(qv.toLowerCase())).length; if (n && mine === version && main.isConnected) $('#stockSummary').insertAdjacentHTML('beforeend', ` · <button type="button" class="link-btn" data-to-lot>LOT 「${esc(qv)}」 ${n}개 → LOT별로 보기</button>`); }).catch(() => {}); // 15.260
     const lowRows = result.group === 'item' ? rows.filter(r => r.low) : [];
     $('#stockAdjustSlot').innerHTML = (result.can_adjust ? '<button type="button" class="btn" id="stockAdjust">＋ 기초재고·실사·조정</button>' : '') + stMoveBtn()
       + (lowRows.length && (ME.is_admin || ME.roles.includes('purchase')) ? ` <button type="button" class="btn" id="stockReorder" title="안전재고 미달 품목을 매입처별 발주로">부족분 발주 <span class="sub-count">${lowRows.length}</span></button>` : '');
@@ -154,7 +158,7 @@ async function pageStock(main) {
         ${bySpec ? '' : `<td class="r">${r.min_qty == null ? '<span class="muted">—</span>' : fmtNum(r.min_qty)}</td>`}
         <td class="small muted">${esc(r.last_date === '0000-00-00' ? '' : r.last_date)}</td>
         <td class="nowrap"><button class="btn small" data-stock-lots="${i}" aria-expanded="false" title="이 품목의 LOT별 남은 수량">LOT ▾</button> <button class="btn small" data-stock-moves="${i}">내역</button>${stCanMove() && !bySpec ? ` <button class="btn small" data-stock-mv="${i}" title="이 품목의 LOT을 다른 창고·위치로">이동</button>` : ''}${result.can_adjust ? `${bySpec ? '' : ` <button class="btn small" data-stock-min="${i}">안전재고</button>`} <button class="btn small" data-stock-count="${i}">실사</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
-      : '<div class="empty">해당하는 재고가 없습니다. 입고·생산실적·출하를 등록하거나 기초재고를 입력하면 여기에 나타납니다.</div>';
+      : lq ? `<div class="empty">LOT 「${esc(lq)}」가 있는 품목이 없습니다.</div>` : '<div class="empty">해당하는 재고가 없습니다. 입고·생산실적·출하를 등록하거나 기초재고를 입력하면 여기에 나타납니다.</div>';
     // 15.150 품목 줄 아래에 LOT별 남은 수량(위치·처음 입고일) 펼치기
     $$('[data-stock-lots]', main).forEach(button => button.onclick = async () => {
       const tr = button.closest('tr'), open = button.getAttribute('aria-expanded') === 'true';

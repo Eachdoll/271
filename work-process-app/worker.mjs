@@ -3668,20 +3668,21 @@ route('POST', '/api/requests/:id/status', async ({ user, params, body }) => {
 });
 // 15.287·15.288 분석데이터 직접 입력(연구원만): 승인 없이 완료된 연구 분석(RA-분석일 번호)으로 저장. 개발건·단계는 골랐을 때만 연결하고 이력을 남긴다.
 // 15.292 연구 분석 측정값: 검사규격 형식(항목·단위·하한·상한·측정 횟수) + 측정값 → 항목별 평균·판정, 전체 판정. 하한·상한이 없으면 판정 없이 기록만.
-function rndMeasure(itemsIn, valuesIn) {
+function rndMeasure(itemsIn, valuesIn, samplesIn) { // 15.293 samplesIn: [{lot, values}] 시료 여러 개
   if (!Array.isArray(itemsIn) || !itemsIn.length) return null;
   if (itemsIn.length > 30) throw bad('측정 항목은 30개까지입니다.');
   const num = (v, label) => { if (v === '' || v == null) return null; if (!['string', 'number'].includes(typeof v) || !Number.isFinite(Number(v))) throw bad(`${label}은(는) 숫자로 입력하세요.`); return Number(v); };
   const items = itemsIn.map((it, i) => { const o = it && typeof it === 'object' ? it : {}; const min = num(o.min, '하한'), max = num(o.max, '상한'), count = Number(o.count) || 1;
     if (min !== null && max !== null && min > max) throw bad(`${o.name || i + 1}: 하한이 상한보다 큽니다.`); if (!Number.isInteger(count) || count < 1 || count > 10) throw bad('측정 횟수는 1~10회입니다.');
     return { key: 'i' + i, name: reqStr(o.name, `${i + 1}번째 측정 항목`, 100), unit: str(o.unit, 30), min, max, count }; });
-  const vals = valuesIn && typeof valuesIn === 'object' ? valuesIn : {};
+  const srcs = Array.isArray(samplesIn) && samplesIn.length ? samplesIn : [{ lot: '', values: valuesIn }];
+  if (srcs.length > 20) throw bad('시료는 20개까지입니다.');
   let filled = 0, missing = false, failed = false; const summary = [];
-  const values = {};
+  const rows = srcs.map((src, n) => { const vals = src && typeof src.values === 'object' && src.values ? src.values : {}, values = {};
+    for (const it of items) { const list = (Array.isArray(vals[it.key]) ? vals[it.key] : []).slice(0, it.count); while (list.length < it.count) list.push(null); values[it.key] = list.map(v => num(v, `${it.name} 측정값`)); }
+    return { lot: str(src?.lot, 100) || (srcs.length > 1 ? `시료 ${n + 1}` : ''), values }; });
   for (const it of items) {
-    const list = (Array.isArray(vals[it.key]) ? vals[it.key] : []).slice(0, it.count); while (list.length < it.count) list.push(null);
-    values[it.key] = list.map(v => num(v, `${it.name} 측정값`));
-    const got = values[it.key].filter(v => v !== null); filled += got.length; if (got.length < it.count) missing = true;
+    const got = rows.flatMap(r => r.values[it.key].filter(v => v !== null)); filled += got.length; if (rows.some(r => r.values[it.key].some(v => v === null))) missing = true;
     const bad1 = got.some(v => (it.min !== null && v < it.min) || (it.max !== null && v > it.max)); if (bad1) failed = true;
     const avg = got.length ? Math.round(got.reduce((t, v) => t + v, 0) / got.length * 1000) / 1000 : null;
     const spec = it.min !== null && it.max !== null ? `${it.min}~${it.max}` : it.min !== null ? `≥${it.min}` : it.max !== null ? `≤${it.max}` : '';
@@ -3690,12 +3691,12 @@ function rndMeasure(itemsIn, valuesIn) {
   if (!filled) throw bad('측정값을 하나 이상 넣으세요.');
   const judged = items.some(it => it.min !== null || it.max !== null);
   const result = failed ? 'fail' : missing ? 'pending' : 'pass';
-  return { snapshot: { kind: '연구분석', items }, rows: [{ lot: '', values }], result, judged, summary: summary.join(' · ') + (judged ? ` → ${failed ? '불합격' : missing ? '측정 중' : '합격'}` : '') };
+  return { snapshot: { kind: '연구분석', items }, rows, result, judged, summary: (rows.length > 1 ? `시료 ${rows.length}개 · ` : '') + summary.join(' · ') + (judged ? ` → ${failed ? '불합격' : missing ? '측정 중' : '합격'}` : '') };
 }
 const isResearcher = user => hasRole(user, 'dev') || hasRole(user, 'dev_approver');
 async function createRndData(user, body, devId) {
   if (!isResearcher(user)) throw new HttpError(403, '분석데이터는 연구원(개발·개발책임자)만 입력합니다.');
-  const meas = rndMeasure(body.spec_items, body.values); // 15.292 측정값(검사규격 형식)
+  const meas = rndMeasure(body.spec_items, body.values, body.samples); // 15.292 측정값(검사규격 형식)
   const memo = str(body.result_note, 1000);
   if (!meas && !memo) throw bad('측정값을 넣거나 분석 결과를 적으세요.');
   const result = (meas ? meas.summary + (memo ? ` / 의견: ${memo}` : '') : memo).slice(0, 1000);
@@ -3729,7 +3730,7 @@ route('GET', '/api/requests/:id/rnd-measure', async ({ params }) => {
 route('PUT', '/api/requests/:id/rnd-measure', async ({ user, params, body }) => {
   if (!isResearcher(user)) throw new HttpError(403, '측정값은 연구원(개발·개발책임자)만 고칩니다.');
   const r = await getRequest(params.id); if (r.type !== 'rnd_analysis') throw bad('연구 분석만 고칠 수 있습니다.');
-  const meas = rndMeasure(body.spec_items, body.values); if (!meas) throw bad('측정 항목을 넣으세요.');
+  const meas = rndMeasure(body.spec_items, body.values, body.samples); if (!meas) throw bad('측정 항목을 넣으세요.');
   const prior = await db.prepare('SELECT * FROM inspection_measurements WHERE request_id=?').get(r.id);
   const reason = prior ? reqStr(body.reason, '수정 사유', 300) : str(body.reason, 300) || '측정값 입력';
   const d = JSON.parse(r.data || '{}'), memo = body.result_note !== undefined ? str(body.result_note, 1000) : d.memo || '';
