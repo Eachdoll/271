@@ -3,9 +3,23 @@ let LR_META = null;
 const lrKey = (section, garment, part, size) => [section, garment, part, size].join('|');
 const lrWon = (n) => fmtNum(Math.round(n || 0));
 
+// 15.275 종횡 바꾸기(이 기기에 기억): 기본은 행 = 사이즈, 열 = 의류. 바꾸면 행 = 의류(원피스·투피스…), 열 = 사이즈(S·M·L…).
+const LR_FLIP_KEY = 'wpa:lr-flip';
+const lrFlipped = () => { try { return localStorage.getItem(LR_FLIP_KEY) === '1'; } catch { return false; } };
+function lrGridFlip(form, section, values, editable, cols) {
+  const sizes = LR_META.sizes, label = (size) => form.size_labels[size] || size;
+  const name = (col) => `<b>${esc(col.g.group)}</b>${col.g.label ? ` ${esc(col.g.label)}` : ''}${col.part && col.g.parts.length > 1 ? ` <span class="small muted">· ${esc(col.part)}</span>` : ''}`;
+  const cell = (col, size) => { const key = lrKey(section, col.g.key, col.part, size); const v = values.get(key) || ''; return editable ? `<td><input type="number" min="0" step="1" inputmode="numeric" data-lr="${esc(key)}" value="${v}" aria-label="${esc(`${form.label} ${section === 'wash' ? '세탁' : '폐기'} ${col.g.group} ${col.g.label} ${col.part} ${size}`)}"></td>` : `<td>${v ? fmtNum(v) : ''}</td>`; };
+  const total = (col) => sizes.reduce((sum, size) => sum + (values.get(lrKey(section, col.g.key, col.part, size)) || 0), 0);
+  const sizeTotal = (size) => cols.reduce((sum, col) => sum + (values.get(lrKey(section, col.g.key, col.part, size)) || 0), 0);
+  return `<table class="lr-grid lr-flip"><thead><tr><th>구분</th>${sizes.map((size) => `<th>${esc(label(size))}</th>`).join('')}<th>계</th></tr></thead>
+    <tbody>${cols.map((col) => `<tr><th class="lr-rowname">${name(col)}</th>${sizes.map((size) => cell(col, size)).join('')}<td class="lr-rowsum" data-lr-total="${esc(lrKey(section, col.g.key, col.part, ''))}">${fmtNum(total(col))}</td></tr>`).join('')}</tbody>
+    <tfoot><tr><th>계</th>${sizes.map((size) => `<td data-lr-stotal="${esc([section, form.key, size].join('|'))}">${fmtNum(sizeTotal(size))}</td>`).join('')}<td>${fmtNum(cols.reduce((t, col) => t + total(col), 0))}</td></tr></tfoot></table>`;
+}
 // One paper-form table (세탁 or 폐기) for a department. values: Map(key → qty). editable → number inputs.
-function lrGrid(form, section, values, editable) {
+function lrGrid(form, section, values, editable, flip = lrFlipped()) {
   const cols = form.garments.flatMap((g) => (section === 'wash' ? [''] : g.parts).map((part) => ({ g, part })));
+  if (flip) return lrGridFlip(form, section, values, editable, cols);
   const groups = []; for (const g of form.garments) { const span = section === 'wash' ? 1 : g.parts.length; const last = groups.at(-1); if (last && last.name === g.group) { last.span += span; last.items.push(g); } else groups.push({ name: g.group, span, items: [g] }); }
   const deep = section === 'wash' ? 2 : 3;
   const single = (group) => group.items.length === 1 && !group.items[0].label && (section === 'wash' || group.items[0].parts.length === 1);
@@ -103,7 +117,7 @@ async function lrEditor(id, done) {
   if (id) { try { report = await api('GET', '/api/laundry-reports/' + id); } catch (err) { fail(err); return; } }
   const values = lrValues(report.lines); const issued = report.status === 'issued'; const editable = report.can_edit && !issued;
   const section = (form) => `<details class="lr-form" ${form.key === 'prod' || lrFormTotal(form, values) ? 'open' : ''}><summary>${esc(form.label)} <span class="muted small" data-lr-form-total="${form.key}"></span></summary>
-    <h4>세탁</h4><div class="table-wrap">${lrGrid(form, 'wash', values, editable)}</div><h4>폐기</h4><div class="table-wrap">${lrGrid(form, 'discard', values, editable)}</div></details>`;
+    <h4>세탁</h4><div class="table-wrap" data-lr-grid="${form.key}|wash">${lrGrid(form, 'wash', values, editable)}</div><h4>폐기</h4><div class="table-wrap" data-lr-grid="${form.key}|discard">${lrGrid(form, 'discard', values, editable)}</div></details>`;
   const m = modal(`<h3>${id ? '세탁 검수 기록' : '새 세탁 검수 등록'} ${issued ? '<span class="tag">발행됨</span>' : id ? '<span class="tag soft">작성 중</span>' : ''}</h3>
     ${issued ? `<p class="muted small">${esc(report.issued_at)} ${esc(report.issued_by)} 발행 · 수정하려면 발행을 취소하세요.</p>` : `<p class="muted small">${esc(LR_META.vendor)}에서 받은 리스트를 검수한 수량으로 입력하세요. 빈 칸은 0입니다.</p>`}
     <form class="stack"><div class="form-grid">
@@ -111,6 +125,7 @@ async function lrEditor(id, done) {
       <label>회수일<input name="pickup_label" maxlength="40" value="${esc(report.pickup_label)}" placeholder="예: 261105" ${editable ? '' : 'disabled'}></label>
       <label class="span2">확인자<input name="inspector" maxlength="120" value="${esc(report.inspector)}" placeholder="회사 · 부서 · 이름 · 직급" ${editable ? '' : 'disabled'}></label>
       <label class="span3">메모<input name="note" maxlength="500" value="${esc(report.note)}" ${editable ? '' : 'disabled'}></label></div>
+    <div class="lr-flip-bar"><button type="button" class="btn small" data-lr-flip aria-pressed="${lrFlipped()}" title="행·열을 바꿉니다(이 기기에 기억)">⇄ 종횡 바꾸기</button><span class="small muted" data-lr-flip-label>${lrFlipped() ? '행: 의류 · 열: 사이즈' : '행: 사이즈 · 열: 의류'}</span></div>
     ${LR_META.forms.map(section).join('')}
     <div class="actions">
       ${id && editable ? '<button type="button" class="btn danger" data-act="delete">삭제</button>' : ''}
@@ -124,9 +139,18 @@ async function lrEditor(id, done) {
   const totals = () => {
     const now = editable ? lrValues(collect()) : values;
     $$('[data-lr-total]', m.el).forEach((td) => { const prefix = td.dataset.lrTotal; td.textContent = fmtNum(LR_META.sizes.reduce((sum, size) => sum + (now.get(prefix + size) || 0), 0)); });
+    $$('[data-lr-stotal]', m.el).forEach((td) => { const [sec, fk, size] = td.dataset.lrStotal.split('|'), form = LR_META.forms.find((f) => f.key === fk); td.textContent = fmtNum([...now].reduce((sum, [key, qty]) => { const [ks, kg, , kz] = key.split('|'); return sum + (ks === sec && kz === size && form?.garments.some((g) => g.key === kg) ? qty : 0); }, 0)); });
+    $$('.lr-flip tfoot td:last-child', m.el).forEach((td) => { const row = td.closest('table'); td.textContent = fmtNum($$('[data-lr-total]', row).reduce((t, x) => t + (Number(String(x.textContent).replace(/,/g, '')) || 0), 0)); });
     LR_META.forms.forEach((form) => { const wash = [...now].reduce((sum, [key, qty]) => sum + (key.startsWith('wash|') && form.garments.some((g) => g.key === key.split('|')[1]) ? qty : 0), 0); $(`[data-lr-form-total="${form.key}"]`, m.el).textContent = `세탁 ${fmtNum(wash)} · 폐기 ${fmtNum(lrFormTotal(form, now) - wash)}`; });
   };
   m.el.addEventListener('input', (e) => { if (e.target.dataset.lr) totals(); }); totals();
+  // 15.275 종횡 바꾸기: 지금 입력한 값을 그대로 두고 표만 다시 그림
+  $('[data-lr-flip]', m.el).onclick = (e) => {
+    const now = editable ? lrValues(collect()) : values, flip = !lrFlipped();
+    try { localStorage.setItem(LR_FLIP_KEY, flip ? '1' : '0'); } catch { /* 이 화면에만 */ }
+    $$('[data-lr-grid]', m.el).forEach((box) => { const [fk, sec] = box.dataset.lrGrid.split('|'); box.innerHTML = lrGrid(LR_META.forms.find((f) => f.key === fk), sec, now, editable, flip); });
+    e.currentTarget.setAttribute('aria-pressed', String(flip)); $('[data-lr-flip-label]', m.el).textContent = flip ? '행: 의류 · 열: 사이즈' : '행: 사이즈 · 열: 의류'; totals();
+  };
   const entryDraft = editable ? bindEntryDraft($('form', m.el), `laundry-report:${id || 'new'}`, { afterRestore: totals }) : null;
   const save = async () => {
     entryDraft?.start();

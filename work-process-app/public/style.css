@@ -3551,3 +3551,9 @@ tr.book-memo > td { background: var(--bg); font-style: italic; }
 .modal.vendor-modal { width: min(1100px, 96vw); }
 .vendor-contacts input { width: 100%; min-width: 80px; }
 .vendor-bar { justify-content: flex-start; margin: 4px 0 10px; }
+
+/* 15.275 세탁 검수 종횡 바꾸기 */
+.lr-flip-bar { display: flex; align-items: center; gap: 10px; margin: 4px 0; }
+.lr-flip-bar [data-lr-flip][aria-pressed="true"] { background: var(--accent-soft, #e8eefc); border-color: var(--accent, #2457d6); }
+.lr-grid.lr-flip .lr-rowname { text-align: left; white-space: nowrap; }
+.lr-grid.lr-flip .lr-rowsum { font-weight: 700; }
