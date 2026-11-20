@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.312';
+const APP_VERSION = '15.313';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -187,7 +187,7 @@ function modal(html, { wide = false, onClose = () => {} } = {}) {
   let dirty = false, asking = false;
   const touch = e => { if (e.isTrusted && e.target.matches?.('input:not([type=checkbox]):not([type=radio]):not([type=search]):not([readonly]), textarea:not([readonly]), select') && e.target.closest('form')) { dirty = true; wrap.dataset.dirty = '1'; } };
   wrap.addEventListener('input', touch, true); wrap.addEventListener('change', touch, true);
-  const userClose = async () => { if (asking) return; if (dirty && wrap.isConnected) { asking = true; const ok = await confirmBox('입력한 내용이 저장되지 않았습니다. 창을 닫을까요?'); asking = false; if (!ok) return; } close(); };
+  const userClose = async () => { if (asking) return; if ((dirty || wrap.dataset.dirty === '1') && wrap.isConnected) { asking = true; const ok = await confirmBox('입력한 내용이 저장되지 않았습니다. 창을 닫을까요?'); asking = false; if (!ok) return; } close(); };
   const onKey = (e) => {
     if (wrap !== $$('.modal-wrap').at(-1)) return; // only the top dialog reacts
     if (e.key === 'Escape') userClose();
@@ -399,6 +399,7 @@ const NAV = [
     { sub: '반제품 생산', items: [['#/prod/semi', '반제품 생산 관리'], ['#/prod/semi/cut', '커팅/융착 작업 관리'], ['#/prod/semi/wash', '세탁(호기별) 작업 관리']] },
     ['#/prod/lot-trace', 'LOT 연결 조회'], // 15.249 완제품 ↔ 봉투(반제품) ↔ 원자재 LOT
     { sub: '공무', items: [['#/prod/equipment', '설비 대장·이력'], ['#/prod/pm', '예방보전(PM) 일정']] }, // 15.307 생산설비·예방보전
+    { sub: '위험성평가', items: [['#/prod/risk', '위험성평가(KOSHA·FMEA·HAZOP)'], ['#/prod/risk/actions', '개선 조치 추적'], ['#/prod/reliability', '설비 신뢰도(MTBF·MTTR)']] }, // 15.313
   ] },
   { group: '물류', items: [
     { sub: '입고', items: [['#/logistics/receipt/new', '입고 입력'], ['#/logistics/receive', '입고목록'], ['#/logistics/receipts', '입고증 목록']] }, // 15.290 출하처럼 입고도 메뉴에서 나눠 고름(관리 탭 없앰)
@@ -675,6 +676,9 @@ const PAGES = {
   '#/prod/lot-trace': main => pageLotTrace(main), // 15.249
   '#/prod/equipment': main => pageEquipment(main), // 15.307 공무
   '#/prod/pm': main => pagePm(main), // 15.307 공무
+  '#/prod/risk': main => pageRiskAssess(main), // 15.313 위험성평가
+  '#/prod/risk/actions': main => pageRiskActions(main),
+  '#/prod/reliability': main => pageReliability(main),
   '#/quality/pqc': main => pagePqc(main), // 15.307 C1
   '#/quality/methods': main => pageMethods(main), // 15.307 C3
   '#/quality/audits': main => pageAudits(main), // 15.308 A4
@@ -778,6 +782,7 @@ const PROCESS_FLOWS = [
   { key: 'supplier', name: '협력업체 품질', on: ['#/quality/suppliers'], steps: [['#/logistics/receive', '입고'], ['#/quality/inspections', '수입검사·공급사 COA'], ['#/quality/suppliers', '협력업체 평가'], ['#/quality/changes', '업체 변경점']] },
   { key: 'pqc', name: '공정품질', on: ['#/quality/pqc'], steps: [['#/quality/pqc', '공정·환경 측정·SPC'], ['#/quality/capa', '이상발생 → CAPA'], ['#/quality/changes', '공정 변경']] },
   { key: 'plant', name: '설비·예방보전', on: ['#/prod/equipment', '#/prod/pm'], steps: [['#/prod/equipment', '설비 등록·PM 항목'], ['#/prod/pm', 'PM 일정·수행'], ['#/quality/validation', '설비 적격성(IQ·OQ·PQ)']] },
+  { key: 'risk', name: '위험성평가', on: ['#/prod/risk', '#/prod/risk/actions', '#/prod/reliability'], steps: [['#/prod/reliability', '설비 신뢰도(고장 이력)'], ['#/prod/risk', '평가 작성 · 승인'], ['#/prod/risk/actions', '개선 조치 · 재평가'], ['#/quality/capa', 'CAPA(FMEA·HAZOP)']] }, // 15.313
   { key: 'method', name: '시험·측정', on: ['#/quality/calibration', '#/quality/methods'], steps: [['#/quality/calibration', '계측기 검교정'], ['#/quality/methods', '시험법·신뢰성'], ['#/quality/validation', '시험법 밸리데이션']] },
   { key: 'audit', name: '심사·인증', on: ['#/quality/audits', '#/quality/certs'], steps: [['#/quality/audits', '심사 계획·실시'], ['#/quality/capa', '지적 → CAPA'], ['#/quality/certs', '인증 유지']] },
   { key: 'qm', name: '품질경영(목표 → 점검 → 개선)', on: ['#/quality/kpi', '#/quality/risks'], steps: [['#/quality/kpi', '품질목표·KPI'], ['#/quality/risks', '리스크 관리'], ['#/quality/audits', '내부심사'], ['#/quality/capa', '개선(CAPA)']] },

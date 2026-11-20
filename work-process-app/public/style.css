@@ -4054,3 +4054,22 @@ table.rpt-list td.c { text-align: center; } table.rpt-list td.r { text-align: ri
 .rpt-sign { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 16px; border: 1px solid var(--line-strong, #9aa6b8); }
 .rpt-sign span { padding: 4px 8px 44px; font-size: 12.5px; border-left: 1px solid var(--line-strong, #9aa6b8); } .rpt-sign span:first-child { border-left: 0; }
 @media print { .rpt-sheet { color: #000; } .no-print { display: none !important; } }
+
+/* 15.313 위험성평가 워크시트 · 평가표 인쇄 */
+.modal.wide:has(.ra-ws) { width: min(1560px, calc(100vw - 32px)); max-width: none; }
+.ra-wrap { max-height: 58vh; overflow: auto; }
+.ra-ws td { vertical-align: top; padding: 4px; }
+.ra-ws input, .ra-ws select, .ra-ws textarea { width: 100%; font-size: 13px; }
+.ra-ws select.ra-rate { width: 56px; }
+.ra-ws textarea { resize: vertical; min-height: 34px; }
+.ra-ws thead th { position: sticky; top: 0; z-index: 1; white-space: nowrap; }
+.ra-sum { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 2px 0 6px; }
+.err-text { color: var(--danger); }
+.chk-list { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+@page land { size: A4 landscape; margin: 10mm; }
+.rpt-sheet.rpt-land { page: land; }
+.modal.wide.rpt-modal.rpt-wide { width: min(1400px, calc(100vw - 32px)); }
+table.rpt-list.ra-print { font-size: 11px; }
+table.rpt-list.ra-print th, table.rpt-list.ra-print td { padding: 3px 4px; word-break: keep-all; overflow-wrap: anywhere; }
+table.rpt-list.ra-print thead th { white-space: normal; text-align: center; }
+@media print { table.rpt-list.ra-print { font-size: 9px; } }

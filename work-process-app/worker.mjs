@@ -4038,7 +4038,7 @@ route('POST', '/api/coas/:id/void', async ({ user, params, body }) => {
 
 // 부적합·CAPA: 등록 → 원인분석 → 조치 → 유효성검증 → 종결(품질책임자). 출처(수입·출하검사·분석·VOC·공정 이상·심사 지적)에서 바로 등록하면 출처 번호·품목·LOT를 채운다.
 const NC_STATUS = { open: '등록', analysis: '원인분석', action: '조치', verify: '유효성검증', closed: '종결', void: '취소' };
-const NC_SOURCE = { iqc: '수입검사', oqc: '출하검사', analysis: '분석', process: '공정 이상', voc: '고객 불만(VOC)', audit: '심사 지적', other: '기타' };
+const NC_SOURCE = { iqc: '수입검사', oqc: '출하검사', analysis: '분석', process: '공정 이상', voc: '고객 불만(VOC)', audit: '심사 지적', risk: '위험성평가', other: '기타' };
 const NC_KIND = ['OOS', 'OOT', '공정 이상', '고객 불만', '심사 지적', '기타'];
 const NC_GRADE = { critical: '치명', major: '중대', minor: '경미' };
 const NC_COLS = ['kind', 'grade', 'title', 'detail', 'item', 'lot', 'qty', 'found_date', 'owner_name', 'due_date', 'containment', 'cause_json', 'correction', 'corrective', 'preventive', 'action_date', 'verify_date', 'verify_result', 'verify_note'];
@@ -5058,6 +5058,196 @@ route('PUT', '/api/risks/:id', async ({ user, params, body }) => {
   if (!r.changes) throw conflict();
   return riskRow(await mustGet('quality_risks', prior.id));
 });
+// ── 15.313 생산 › 위험성평가 ──
+// 작업 위험성평가(KOSHA 「사업장 위험성평가에 관한 지침」 2023: 유해·위험요인 파악 → 위험성 결정 → 감소대책 → 공유) · 공정 FMEA(AIAG-VDA 2019, AP=조치 우선순위) · HAZOP(IEC 61882: 노드 · 변수 × 가이드워드 = 이탈).
+// 평가서 한 건(risk_assessments)에 워크시트 줄(rows JSON). 작성 → 검토 요청 → 승인(생산·품질 책임자) → 개정(Rev+1)·폐지. 작성 중에만 워크시트를 고치고,
+// 승인 뒤에도 줄마다 개선 조치 결과(완료일·조치 후 재평가)는 기록한다. 허용할 수 없는 위험(높음·보통, FMEA는 AP 높음)은 감소대책·담당·기한이 있어야 검토 요청·승인된다.
+const RA_METHOD = { kosha: '작업 위험성평가', fmea: '공정 FMEA', hazop: 'HAZOP' };
+const RA_STATUS = { draft: '작성', review: '검토 요청', approved: '승인', obsolete: '폐지' };
+const RA_KIND = { initial: '최초평가', regular: '정기평가', adhoc: '수시평가', continuous: '상시평가' };
+const RA_HAZARD = { machine: '기계적 요인', electric: '전기적 요인', chemical: '화학(물질)적 요인', bio: '생물학적 요인', work: '작업특성 요인', env: '작업환경 요인', other: '기타' };
+const RA_GRADE = { H: '높음', M: '보통', L: '낮음' };
+const RA_PREFIX = { kosha: 'RA-', fmea: 'FMEA-', hazop: 'HZ-' };
+const RA_COLS = ['title', 'kind', 'scale', 'process', 'item', 'equipment_id', 'scope', 'team', 'assess_date', 'next_review', 'rows', 'summary'];
+const canRaApprove = user => !!user.is_admin || publicUser(user).roles.some(r => r === 'production_approver' || r === 'quality_approver');
+// AIAG-VDA FMEA 핸드북(2019) 공정 FMEA AP 표: 심각도 → 발생도 → 검출도 순으로 무게. H는 조치(또는 현 관리로 충분한 근거) 필수, M은 조치 권장, L은 선택.
+function fmeaAP(s, o, d) {
+  if (!s || !o || !d) return null;
+  if (s >= 9) { if (o >= 6) return 'H'; if (o >= 4) return d >= 2 ? 'H' : 'M'; if (o >= 2) return d >= 7 ? 'H' : d >= 5 ? 'M' : 'L'; return 'L'; }
+  if (s >= 7) { if (o >= 8) return 'H'; if (o >= 6) return d >= 2 ? 'H' : 'M'; if (o >= 4) return d >= 7 ? 'H' : 'M'; if (o >= 2) return d >= 5 ? 'M' : 'L'; return 'L'; }
+  if (s >= 4) { if (o >= 8) return d >= 5 ? 'H' : 'M'; if (o >= 6) return d >= 2 ? 'M' : 'L'; if (o >= 4) return d >= 7 ? 'M' : 'L'; return 'L'; }
+  if (s >= 2) return o >= 8 && d >= 5 ? 'M' : 'L';
+  return 'L';
+}
+// 위험성 = 가능성(빈도) × 중대성(강도). 3×3: 6~9 높음 · 3~4 보통 · 1~2 낮음(허용). 5×5(HAZOP 포함): 15~25 높음 · 8~12 보통 · 1~6 낮음. scale 1 = 3단계 판단법(상·중·하 직접 고름).
+function raScore(method, scale, r, after = false) {
+  const k = after ? '2' : '';
+  if (method === 'fmea') { const s = r['s' + k], o = r['o' + k], d = r['d' + k]; return s && o && d ? { score: s * o * d, grade: fmeaAP(s, o, d) } : { score: null, grade: null }; }
+  if (method === 'kosha' && scale === 1) return { score: null, grade: r['lvl' + k] || null };
+  const a = method === 'hazop' ? r['l' + k] : r['f' + k], b = r['s' + k]; if (!a || !b) return { score: null, grade: null };
+  const s = a * b; return { score: s, grade: (method === 'kosha' && scale === 3) ? (s >= 6 ? 'H' : s >= 3 ? 'M' : 'L') : (s >= 15 ? 'H' : s >= 8 ? 'M' : 'L') };
+}
+const raNeedsAction = (method, g) => method === 'fmea' ? g === 'H' : g === 'H' || g === 'M';
+function raRowsClean(method, scale, list, prior = []) {
+  if (!Array.isArray(list)) throw bad('워크시트 줄이 올바르지 않습니다.'); if (list.length > 300) throw bad('워크시트 줄은 300개까지입니다.');
+  const max = method === 'fmea' ? 10 : method === 'hazop' ? 5 : scale === 5 ? 5 : 3, keys = new Set();
+  const rate = (v, label, hi = max) => intIn(v, label, 1, hi, null), lvl = v => v === '' || v == null ? null : ['H', 'M', 'L'].includes(v) ? v : (() => { throw bad('위험성 수준(상·중·하)을 고르세요.'); })();
+  return list.map((x, i) => {
+    const o = x && typeof x === 'object' ? x : {}, key = /^[a-f0-9]{8}$/.test(o.key || '') ? o.key : randomHex(4), old = prior.find(p => p.key === key) || {};
+    if (keys.has(key)) throw bad('워크시트 줄이 겹칩니다.'); keys.add(key);
+    const n = `${i + 1}번 줄 `, row = { key };
+    if (method === 'kosha') {
+      Object.assign(row, { task: str(o.task, 200), cat: RA_HAZARD[o.cat] ? o.cat : 'other', hazard: reqStr(o.hazard, n + '유해·위험요인', 500), basis: str(o.basis, 200), current: str(o.current, 500) });
+      if (scale === 1) Object.assign(row, { lvl: lvl(o.lvl), lvl2: lvl(o.lvl2) }); else Object.assign(row, { f: rate(o.f, n + '가능성(빈도)'), s: rate(o.s, n + '중대성(강도)'), f2: rate(o.f2, n + '개선 후 가능성'), s2: rate(o.s2, n + '개선 후 중대성') });
+    } else if (method === 'fmea') {
+      Object.assign(row, { step: str(o.step, 200), func: str(o.func, 300), mode: reqStr(o.mode, n + '고장 모드', 300), effect: str(o.effect, 300), cls: ['CC', 'SC'].includes(o.cls) ? o.cls : '', cause: str(o.cause, 300), prevent: str(o.prevent, 300), detect: str(o.detect, 300),
+        s: rate(o.s, n + '심각도(S)'), o: rate(o.o, n + '발생도(O)'), d: rate(o.d, n + '검출도(D)'), s2: rate(o.s2, n + '조치 후 S'), o2: rate(o.o2, n + '조치 후 O'), d2: rate(o.d2, n + '조치 후 D') });
+    } else {
+      const param = str(o.param, 30), guide = str(o.guide, 40);
+      Object.assign(row, { node: str(o.node, 100), param, guide, dev: str(o.dev, 200) || [param, guide].filter(Boolean).join(' '), cause: str(o.cause, 500), cons: str(o.cons, 500), safeguard: str(o.safeguard, 500),
+        s: rate(o.s, n + '심각도'), l: rate(o.l, n + '가능성'), s2: rate(o.s2, n + '조치 후 심각도'), l2: rate(o.l2, n + '조치 후 가능성') });
+      if (!row.dev) throw bad(n + '이탈(변수 + 가이드워드)을 넣으세요.');
+    }
+    Object.assign(row, { action: str(o.action, 1000), owner: str(o.owner, 50), due: qDate(o.due, n + '조치 기한'), done: qDate(o.done, n + '완료일'), nc_id: old.nc_id ?? null, nc_no: old.nc_no || '', result: str(o.result ?? old.result, 500) });
+    row.done_by = row.done && old.done === row.done ? old.done_by || '' : '';
+    if (row.done && row.done > today()) throw bad(n + '완료일이 오늘보다 늦습니다.');
+    return row;
+  });
+}
+function raCheck(ra, rows) {
+  if (!rows.length) throw bad('워크시트에 줄을 하나 이상 넣으세요.');
+  rows.forEach((r, i) => {
+    const b = raScore(ra.method, ra.scale, r); if (!b.grade) throw bad(`${i + 1}번 줄 위험성(평가 점수)을 넣으세요.`);
+    if (raNeedsAction(ra.method, b.grade) && (!r.action || !r.owner || !r.due)) throw bad(`${i + 1}번 줄은 ${ra.method === 'fmea' ? 'AP 높음' : `위험성 「${RA_GRADE[b.grade]}」`}이라 감소대책·담당·기한을 넣어야 합니다.`);
+  });
+  if (!ra.assess_date) throw bad('평가일을 넣으세요.');
+}
+function raBody(o0, prior = {}) {
+  const o = o0 && typeof o0 === 'object' ? o0 : {}, pick = k => o[k] === undefined ? prior[k] : o[k];
+  const method = prior.method || (RA_METHOD[o.method] ? o.method : null); if (!method) throw bad('평가 방법(작업 위험성평가·FMEA·HAZOP)을 고르세요.');
+  const scale = method === 'kosha' ? [1, 3, 5].includes(Number(pick('scale'))) ? Number(pick('scale')) : 3 : method === 'fmea' ? 10 : 5;
+  const kind = RA_KIND[pick('kind')] ? pick('kind') : 'regular';
+  const rows = raRowsClean(method, scale, o.rows === undefined ? JSON.parse(prior.rows || '[]') : o.rows, JSON.parse(prior.rows || '[]'));
+  const f = { method, title: reqStr(pick('title'), '평가명', 200), kind, scale, process: str(pick('process'), 200), item: str(pick('item'), 200), equipment_id: optId(pick('equipment_id')), scope: str(pick('scope'), 1000), team: str(pick('team'), 300),
+    assess_date: qDate(pick('assess_date'), '평가일'), next_review: qDate(pick('next_review'), '재평가 예정일'), rows: JSON.stringify(rows), summary: str(pick('summary'), 2000) };
+  if (f.next_review && f.assess_date && f.next_review < f.assess_date) throw bad('재평가 예정일이 평가일보다 빠릅니다.');
+  return f;
+}
+function raRow(r, eqs = {}) {
+  const t = today(), rows = JSON.parse(r.rows || '[]').map(x => { const b = raScore(r.method, r.scale, x), a = raScore(r.method, r.scale, x, true); return { ...x, score: b.score, grade: b.grade, score2: a.score, grade2: a.grade, need: raNeedsAction(r.method, b.grade), open: !!x.action && !x.done, over: !!x.action && !x.done && !!x.due && x.due < t }; });
+  const cnt = g => rows.filter(x => x.grade === g).length;
+  return { ...r, rows, history: JSON.parse(r.history || '[]'), method_label: RA_METHOD[r.method], status_label: RA_STATUS[r.status], kind_label: RA_KIND[r.kind] || r.kind, equipment: eqs[r.equipment_id] || null,
+    counts: { H: cnt('H'), M: cnt('M'), L: cnt('L'), open: rows.filter(x => x.open).length, over: rows.filter(x => x.over).length, done: rows.filter(x => x.action && x.done).length, residual: rows.filter(x => x.done ? raNeedsAction(r.method, x.grade2) : x.need).length },
+    review_over: r.status === 'approved' && !!r.next_review && r.next_review < t };
+}
+const raEqMap = async () => Object.fromEntries((await db.prepare('SELECT id, equip_no, name FROM equipment').all()).map(e => [e.id, e]));
+route('GET', '/api/risk-assess', async ({ user, query }) => {
+  const eqs = await raEqMap(), m = RA_METHOD[query.method] ? query.method : '';
+  const rows = (await db.prepare(`SELECT * FROM risk_assessments ${m ? 'WHERE method=?' : ''} ORDER BY CASE status WHEN 'obsolete' THEN 1 ELSE 0 END, id DESC LIMIT 2000`).all(...(m ? [m] : []))).map(r => raRow(r, eqs));
+  return { rows, equipment: Object.values(eqs).sort((a, b) => a.equip_no.localeCompare(b.equip_no)), can_manage: canPlant(user), can_approve: canRaApprove(user), today: today() };
+});
+route('POST', '/api/risk-assess', async ({ user, body }) => {
+  requirePlant(user); const key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM risk_assessments WHERE request_id=?').get(key); if (old) return raRow(old, await raEqMap()); }
+  const f = raBody(body), prefix = RA_PREFIX[f.method] + today().slice(2, 7).replace('-', '') + '-';
+  if (f.equipment_id && !await db.prepare('SELECT 1 FROM equipment WHERE id=?').get(f.equipment_id)) throw bad('설비를 찾을 수 없습니다.');
+  const r = await db.prepare(`INSERT INTO risk_assessments(ra_no,method,${RA_COLS.join(',')},history,request_id,created_by) VALUES(${nextDocNo('risk_assessments', 'ra_no')},?,${RA_COLS.map(() => '?').join(',')},?,?,?)`)
+    .run(prefix, prefix, prefix, f.method, ...RA_COLS.map(k => f[k]), JSON.stringify([{ at: now(), by: user.name, what: '작성' }]), key, user.name);
+  return raRow(await mustGet('risk_assessments', r.lastInsertRowid), await raEqMap());
+});
+route('PUT', '/api/risk-assess/:id', async ({ user, params, body }) => {
+  requirePlant(user); const prior = await mustGet('risk_assessments', params.id);
+  if (Number(body.revision) !== prior.revision) throw conflict();
+  if (prior.status !== 'draft') throw bad(prior.status === 'review' ? '검토 요청 중에는 고칠 수 없습니다. 반려된 뒤 고치세요.' : '승인된 평가서는 「개정」을 눌러 새 Rev로 고치세요. 개선 조치 결과는 줄마다 「조치 결과」로 넣습니다.');
+  const f = raBody(body, prior); if (f.equipment_id && !await db.prepare('SELECT 1 FROM equipment WHERE id=?').get(f.equipment_id)) throw bad('설비를 찾을 수 없습니다.');
+  const changed = RA_COLS.filter(k => (prior[k] ?? null) !== (f[k] ?? null)); if (!changed.length) return raRow(prior, await raEqMap());
+  const r = await db.prepare(`UPDATE risk_assessments SET ${RA_COLS.map(k => k + '=?').join(',')},history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`)
+    .run(...RA_COLS.map(k => f[k]), pushHist(prior, { by: user.name, what: '수정', fields: changed }), user.name, prior.id, prior.revision);
+  if (!r.changes) throw conflict();
+  return raRow(await mustGet('risk_assessments', prior.id), await raEqMap());
+});
+route('DELETE', '/api/risk-assess/:id', async ({ user, params, query }) => {
+  requirePlant(user); const prior = await mustGet('risk_assessments', params.id);
+  if (Number(query.revision) !== prior.revision) throw conflict();
+  if (prior.status !== 'draft' || prior.rev > 0 || prior.approved_at) throw bad('한 번도 승인되지 않은 작성 중 평가서만 지울 수 있습니다. 승인된 평가서는 「폐지」하세요.');
+  if (JSON.parse(prior.rows || '[]').some(x => x.nc_id)) throw bad('CAPA로 넘긴 줄이 있어 지울 수 없습니다.');
+  await db.prepare('DELETE FROM risk_assessments WHERE id=? AND revision=?').run(prior.id, prior.revision); return { ok: true };
+});
+// 단계: 작성 → 검토 요청(작성자) → 승인·반려(책임자) · 승인 → 개정(Rev+1, 작성) · 승인 → 폐지(책임자)
+route('POST', '/api/risk-assess/:id/step', async ({ user, params, body }) => {
+  requirePlant(user); const prior = await mustGet('risk_assessments', params.id);
+  if (Number(body.revision) !== prior.revision) throw conflict();
+  const from = prior.status, to = body.to, reason = str(body.reason, 300), rows = JSON.parse(prior.rows || '[]'), set = { status: to }; let what = '';
+  const approver = canRaApprove(user), need = () => { if (!approver) throw new HttpError(403, '승인·반려·폐지는 생산·품질 책임자나 관리자가 합니다.'); };
+  if (from === 'draft' && to === 'review') { raCheck(prior, rows); what = '검토 요청'; }
+  else if (from === 'review' && to === 'approved') {
+    need(); raCheck(prior, rows);
+    Object.assign(set, { approved_by: user.name, approved_at: now(), next_review: prior.next_review || addYears(prior.assess_date || today(), 1) }); what = prior.rev ? `Rev.${prior.rev} 개정 승인` : '승인';
+  } else if (from === 'review' && to === 'draft') { if (!approver && prior.created_by !== user.name) throw new HttpError(403, '반려는 책임자가, 검토 요청 취소는 작성자가 합니다.'); if (approver && !reason) throw bad('반려 사유를 적으세요.'); what = approver ? '반려' : '검토 요청 취소'; }
+  else if (from === 'approved' && to === 'draft') { const note = reqStr(body.rev_note, '개정 사유(무엇이 바뀌었는지)', 300); Object.assign(set, { rev: prior.rev + 1, rev_note: note, approved_by: '', approved_at: null }); what = `Rev.${prior.rev + 1} 개정 시작`; }
+  else if (from !== 'obsolete' && to === 'obsolete') { need(); if (!reason) throw bad('폐지 사유를 적으세요.'); what = '폐지'; }
+  else throw bad(`「${RA_STATUS[from]}」에서 「${RA_STATUS[to] || to}」(으)로 갈 수 없습니다.`);
+  const keys = Object.keys(set);
+  const r = await db.prepare(`UPDATE risk_assessments SET ${keys.map(k => k + '=?').join(',')},history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`)
+    .run(...keys.map(k => set[k]), pushHist(prior, { by: user.name, what, status: [from, to], ...(reason ? { reason } : {}), ...(set.rev_note ? { reason: set.rev_note } : {}) }), user.name, prior.id, prior.revision);
+  if (!r.changes) throw conflict();
+  return raRow(await mustGet('risk_assessments', prior.id), await raEqMap());
+});
+// 개선 조치 결과: 승인 뒤에도 줄마다 완료일 + 조치 후 재평가(잔여 위험)를 넣는다. 완료를 풀 수도 있다(done 빈 값).
+route('PUT', '/api/risk-assess/:id/rows/:key', async ({ user, params, body }) => {
+  requirePlant(user); const prior = await mustGet('risk_assessments', params.id);
+  if (Number(body.revision) !== prior.revision) throw conflict();
+  if (prior.status === 'obsolete') throw bad('폐지된 평가서입니다.');
+  const rows = JSON.parse(prior.rows || '[]'), i = rows.findIndex(x => x.key === params.key); if (i < 0) throw bad('워크시트 줄을 찾을 수 없습니다.');
+  const cur = rows[i]; if (!cur.action) throw bad('감소대책(조치)이 없는 줄입니다.');
+  const after = prior.method === 'fmea' ? ['s2', 'o2', 'd2'] : prior.method === 'hazop' ? ['s2', 'l2'] : prior.scale === 1 ? ['lvl2'] : ['f2', 's2'];
+  const next = { ...cur, ...Object.fromEntries(after.map(k => [k, body[k] === undefined ? cur[k] : body[k]])), done: body.done === undefined ? cur.done : body.done, result: body.result === undefined ? cur.result || '' : body.result };
+  const [clean] = raRowsClean(prior.method, prior.scale, [next], rows);
+  if (clean.done) { if (!raScore(prior.method, prior.scale, clean, true).grade) throw bad('조치 후 재평가(잔여 위험)를 넣어야 완료로 기록합니다.'); clean.done_by = cur.done === clean.done ? cur.done_by || user.name : user.name; } else clean.done_by = '';
+  rows[i] = clean;
+  const r = await db.prepare("UPDATE risk_assessments SET rows=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?")
+    .run(JSON.stringify(rows), pushHist(prior, { by: user.name, what: clean.done ? `${i + 1}번 줄 조치 완료` : `${i + 1}번 줄 조치 결과 수정` }), user.name, prior.id, prior.revision);
+  if (!r.changes) throw conflict();
+  return raRow(await mustGet('risk_assessments', prior.id), await raEqMap());
+});
+// FMEA·HAZOP 줄 → 부적합·CAPA(출처: 위험성평가). 근본 대책을 품질 CAPA로 관리할 때.
+route('POST', '/api/risk-assess/:id/rows/:key/nc', async ({ user, params, body }) => {
+  requirePlant(user); const prior = await mustGet('risk_assessments', params.id);
+  if (Number(body.revision) !== prior.revision) throw conflict();
+  if (prior.method === 'kosha' || prior.status === 'obsolete') throw bad('공정 FMEA·HAZOP 평가서의 줄만 CAPA로 넘깁니다.');
+  const rows = JSON.parse(prior.rows || '[]'), i = rows.findIndex(x => x.key === params.key); if (i < 0) throw bad('워크시트 줄을 찾을 수 없습니다.');
+  const x = rows[i]; if (x.nc_id) throw bad(`이미 CAPA(${x.nc_no})로 넘긴 줄입니다.`);
+  const g = raScore(prior.method, prior.scale, x).grade, fm = prior.method === 'fmea';
+  const nc = await ncCreate(user, { type: 'risk', id: prior.id, no: prior.ra_no }, { kind: '공정 이상', grade: g === 'H' ? 'major' : 'minor', title: `[${RA_METHOD[prior.method]}] ${fm ? x.mode : x.dev}`.slice(0, 200),
+    detail: (fm ? [x.step && `공정 ${x.step}`, x.effect && `영향 ${x.effect}`, x.cause && `원인 ${x.cause}`, `S${x.s}·O${x.o}·D${x.d} AP ${g || '-'}`] : [x.node && `노드 ${x.node}`, x.cause && `원인 ${x.cause}`, x.cons && `결과 ${x.cons}`, x.safeguard && `안전장치 ${x.safeguard}`]).filter(Boolean).join('\n'),
+    item: prior.item, owner_name: x.owner, due_date: x.due && x.due >= today() ? x.due : null, corrective: x.action });
+  rows[i] = { ...x, nc_id: nc.id, nc_no: nc.nc_no };
+  const r = await db.prepare(`UPDATE risk_assessments SET rows=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`)
+    .run(JSON.stringify(rows), pushHist(prior, { by: user.name, what: `${i + 1}번 줄 → CAPA ${nc.nc_no}` }), user.name, prior.id, prior.revision);
+  if (!r.changes) { await db.prepare('DELETE FROM nonconformities WHERE id=?').run(nc.id); throw conflict(); }
+  return { ...raRow(await mustGet('risk_assessments', prior.id), await raEqMap()), nc_id: nc.id, nc_no: nc.nc_no };
+});
+// 설비 신뢰도: 기간의 계획 가동시간(일수 × 하루 가동시간, 설치일·오늘로 자름)과 고장 이력(고장 건수, 고장·수리 비가동 시간)으로
+// MTBF = (가동시간 − 비가동) ÷ 고장 수, MTTR = 비가동 ÷ 고장 수, 가용도 = MTBF ÷ (MTBF + MTTR), 고장률 λ = 1 ÷ MTBF, 신뢰도 R(t) = e^(−t ÷ MTBF)(임무 시간 t).
+route('GET', '/api/equipment-reliability', async ({ query }) => {
+  const t = today(), to = query.to ? dateStr(query.to, '끝 날짜') : t, from = query.from ? dateStr(query.from, '시작 날짜') : addDaysISO(to, -364);
+  if (from > to) throw bad('시작 날짜가 끝 날짜보다 늦습니다.');
+  const hours = query.hours === undefined || query.hours === '' ? 24 : Number(query.hours), mission = query.mission === undefined || query.mission === '' ? 8 : Number(query.mission);
+  if (!(hours > 0 && hours <= 24)) throw bad('하루 가동시간은 0보다 크고 24 이하로 넣으세요.'); if (!(mission > 0 && mission <= 100000)) throw bad('임무 시간은 0보다 큰 시간으로 넣으세요.');
+  const end = to > t ? t : to, days = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000) + 1, r2 = v => v == null ? null : Math.round(v * 100) / 100;
+  const logs = await db.prepare("SELECT equipment_id, SUM(CASE WHEN kind='failure' THEN 1 ELSE 0 END) fails, SUM(CASE WHEN kind IN ('failure','repair') THEN COALESCE(downtime_hours,0) ELSE 0 END) down, MAX(CASE WHEN kind='failure' THEN log_date END) last_fail FROM equipment_logs WHERE log_date BETWEEN ? AND ? GROUP BY equipment_id").all(from, end);
+  const lm = Object.fromEntries(logs.map(l => [l.equipment_id, l])), out = [];
+  for (const e of await db.prepare("SELECT id, equip_no, name, kind, location, install_date, status FROM equipment WHERE status<>'disposed' ORDER BY equip_no").all()) {
+    const s = e.install_date && e.install_date > from ? e.install_date : from; if (s > end) { out.push({ ...e, days: 0, planned: 0, fails: 0, down: 0, mtbf: null, mttr: null, availability: null, lambda: null, reliability: null, last_fail: null }); continue; }
+    const l = lm[e.id] || { fails: 0, down: 0, last_fail: null }, planned = days(s, end) * hours, down = Math.min(l.down || 0, planned), up = planned - down;
+    const mtbf = l.fails ? up / l.fails : null, mttr = l.fails ? down / l.fails : null;
+    out.push({ ...e, days: days(s, end), planned: r2(planned), fails: l.fails || 0, down: r2(down), up: r2(up), mtbf: r2(mtbf), mttr: r2(mttr), availability: planned ? r2(up / planned * 100) : null, lambda: mtbf ? Math.round(1000 / mtbf * 10000) / 10000 : 0,
+      reliability: mtbf ? r2(Math.exp(-mission / mtbf) * 100) : (planned ? 100 : null), last_fail: l.last_fail || null });
+  }
+  const tot = out.reduce((a, x) => ({ planned: a.planned + (x.planned || 0), down: a.down + (x.down || 0), fails: a.fails + x.fails }), { planned: 0, down: 0, fails: 0 });
+  const mt = tot.fails ? (tot.planned - tot.down) / tot.fails : null;
+  return { from, to: end, hours, mission, rows: out, total: { ...tot, planned: r2(tot.planned), down: r2(tot.down), mtbf: r2(mt), mttr: tot.fails ? r2(tot.down / tot.fails) : null, availability: tot.planned ? r2((tot.planned - tot.down) / tot.planned * 100) : null } };
+});
 // 15.312 통합 번호 검색(메뉴 찾기 칸): NC-·COA-·CHG-·AUD-·VAL-·REL-·RSK-·문서번호·설비번호·시험법·의뢰 번호와 제목으로 기록을 찾는다.
 // 열람 제한이 있는 품질 문서는 qdocVisible로 거르고, 나머지는 화면(메뉴 권한)에서 다시 거른다. 종류마다 5건, 모두 25건까지.
 route('GET', '/api/find', async ({ user, query }) => {
@@ -5074,6 +5264,7 @@ route('GET', '/api/find', async ({ user, query }) => {
   await add('risk', '리스크 관리', '#/quality/risks', "SELECT id, risk_no, content, status FROM quality_risks WHERE risk_no LIKE ? OR content LIKE ? ORDER BY id DESC LIMIT 5", r => ({ id: r.id, no: r.risk_no, label: r.content, state: RISK_STATUS[r.status] }));
   await add('equipment', '설비 대장', '#/prod/equipment', "SELECT id, equip_no, name, status FROM equipment WHERE equip_no LIKE ? OR name LIKE ? ORDER BY equip_no LIMIT 5", r => ({ id: r.id, no: r.equip_no, label: r.name, state: EQ_STATUS[r.status] }));
   await add('method', '시험법', '#/quality/methods', "SELECT id, method_no, name, status FROM test_methods WHERE method_no LIKE ? OR name LIKE ? ORDER BY method_no LIMIT 5", r => ({ id: r.id, no: r.method_no, label: r.name, state: r.status === 'active' ? '사용' : '폐지' }));
+  await add('ra', '위험성평가', '#/prod/risk', "SELECT id, ra_no, method, title, status FROM risk_assessments WHERE ra_no LIKE ? OR title LIKE ? ORDER BY id DESC LIMIT 5", r => ({ id: r.id, no: r.ra_no, label: `${RA_METHOD[r.method]} · ${r.title}`, state: RA_STATUS[r.status] }));
   await add('request', '의뢰', '', "SELECT id, req_no, type, title, status FROM requests WHERE req_no LIKE ? OR (req_no IS NOT NULL AND title LIKE ?) ORDER BY id DESC LIMIT 5", r => ({ id: r.id, no: r.req_no, label: r.title, rtype: r.type, state: r.status }));
   return { rows: rows.slice(0, 25) };
 });
@@ -6832,6 +7023,10 @@ route('GET', '/api/alerts', async ({ user }) => {
     await qa('리스크 대응 기한 지남', '#/quality/risks', "SELECT COUNT(*) c, MIN(due_date) d FROM quality_risks WHERE status<>'closed' AND due_date IS NOT NULL AND due_date<?", t);
   }
   if (hasRole(user, 'production') || hasRole(user, 'quality')) await qa('예방보전(PM) 예정일 지남', '#/prod/pm', "SELECT COUNT(*) c, MIN(json_extract(j.value,'$.next_due')) d FROM equipment e, json_each(e.pm_items) j WHERE e.status<>'disposed' AND json_extract(j.value,'$.next_due')<?", t);
+  if (hasRole(user, 'production') || hasRole(user, 'quality')) { // 15.313 위험성평가 개선 조치 기한·재평가 예정일
+    await qa('위험성평가 개선 조치 기한 지남', '#/prod/risk/actions', "SELECT COUNT(*) c, MIN(json_extract(j.value,'$.due')) d FROM risk_assessments a, json_each(a.rows) j WHERE a.status<>'obsolete' AND COALESCE(json_extract(j.value,'$.action'),'')<>'' AND COALESCE(json_extract(j.value,'$.done'),'')='' AND json_extract(j.value,'$.due')<?", t);
+    await qa('위험성평가 재평가 예정일 30일 안·지남', '#/prod/risk', "SELECT COUNT(*) c, MIN(next_review) d FROM risk_assessments WHERE status='approved' AND next_review IS NOT NULL AND next_review<=?", in30);
+  }
   const result = { today: t, quality_alerts: qAlerts, overdue_pos: overduePos, overdue_po_count: overduePoCount, overdue_requests: overdueRequests, overdue_request_count: overdueRequestCount, stale_approvals: stale, low_yield: await lowYieldUnits() };
   if (user.is_admin) { const last = await getSetting('last_backup_at'); result.backup = { last_at: last, days: last ? Math.floor((Date.parse(t) - Date.parse(String(last).slice(0, 10))) / 864e5) : null, by: await getSetting('last_backup_by') }; }
   return result;
@@ -7708,6 +7903,8 @@ route('GET', '/api/my-tasks', async ({ user }) => {
     ]) { const c = (await db.prepare(sql).get()).c; if (c) q.push({ key, label, href, count: c }); }
     if (q.length) approvals.quality = q;
   }
+  // 15.313 위험성평가 승인 대기(생산·품질 책임자)
+  if (canRaApprove(user)) { const c = (await db.prepare("SELECT COUNT(*) c FROM risk_assessments WHERE status='review'").get()).c; if (c) (approvals.quality ||= []).push({ key: 'risk_assess', label: '위험성평가 승인 대기(검토 요청)', href: '#/prod/risk', count: c }); }
   // 15.309 교육 대상자 본인 「참석 확인」 대기
   { const items = await db.prepare("SELECT t.id,t.title,t.plan_date FROM training_attendees a JOIN trainings t ON t.id=a.training_id WHERE (a.user_id=? OR a.user_name=?) AND a.attended=0 AND t.status IN ('planned','done') ORDER BY t.plan_date LIMIT 20").all(user.id, user.name);
     if (items.length) approvals.training_attend = { count: items.length, items: items.slice(0, 5) }; }

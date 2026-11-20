@@ -1059,3 +1059,45 @@ test('15.312 find API: record numbers and titles across quality tables, restrict
   assert.equal((await admin('GET', '/api/find?q=' + encodeURIComponent("%' OR 1=1 --"))).status, 200);
   void d;
 });
+
+test('15.313 risk assessment: FMEA AP table, KOSHA 3x3 action rule, review/approve by approver only, locked after approval, action result with residual risk, revise, HAZOP to CAPA, equipment reliability', async () => {
+  const ap = async (s, o, d) => (await prod('POST', '/api/risk-assess', { method: 'fmea', title: 'AP', rows: [{ mode: 'x', s, o, d }], request_id: rid() })).body.rows[0].grade;
+  for (const [s, o, d, g] of [[9, 4, 1, 'M'], [9, 4, 2, 'H'], [10, 1, 10, 'L'], [9, 2, 6, 'M'], [8, 6, 1, 'M'], [7, 4, 7, 'H'], [7, 2, 5, 'M'], [5, 8, 5, 'H'], [5, 6, 1, 'L'], [5, 4, 7, 'M'], [2, 8, 5, 'M'], [3, 9, 4, 'L'], [1, 10, 10, 'L']]) assert.equal(await ap(s, o, d), g, `S${s} O${o} D${d}`);
+  // KOSHA 3×3: 가능성×중대성 6 이상 높음 · 3~4 보통 · 2 이하 낮음 → 보통·높음은 감소대책·담당·기한 없이는 검토 요청 불가
+  let k = (await prod('POST', '/api/risk-assess', { method: 'kosha', title: '세탁 공정 위험성평가', kind: 'initial', scale: 3, process: '세탁', assess_date: today, rows: [{ task: '세탁기 투입', cat: 'machine', hazard: '회전 드럼에 손 끼임', f: 2, s: 3 }, { task: '세제 보충', cat: 'chemical', hazard: '세제 피부 접촉', f: 1, s: 2 }], request_id: rid() })).body;
+  assert.deepEqual(k.rows.map(r => [r.score, r.grade]), [[6, 'H'], [2, 'L']]); assert.match(k.ra_no, /^RA-\d{4}-01$/);
+  assert.equal((await prod('POST', '/api/risk-assess', { method: 'kosha', title: 'x', scale: 3, rows: [{ hazard: 'y', f: 4, s: 1 }] })).status, 400, '3x3 scale bounds');
+  let r = await prod('POST', `/api/risk-assess/${k.id}/step`, { to: 'review', revision: k.revision }); assert.equal(r.status, 400); assert.match(r.body.error, /1번 줄.*감소대책/);
+  k = (await prod('PUT', `/api/risk-assess/${k.id}`, { revision: k.revision, rows: k.rows.map((x, i) => i ? x : { ...x, action: '인터록 도어·투입 전 정지', owner: '생산', due: '2020-01-01' }) })).body;
+  k = (await prod('POST', `/api/risk-assess/${k.id}/step`, { to: 'review', revision: k.revision })).body; assert.equal(k.status, 'review');
+  assert.equal((await prod('PUT', `/api/risk-assess/${k.id}`, { revision: k.revision, title: '바꿈' })).status, 400, 'locked in review');
+  assert.equal((await prod('POST', `/api/risk-assess/${k.id}/step`, { to: 'approved', revision: k.revision })).status, 403, 'production staff cannot approve');
+  assert.ok((await admin('GET', '/api/my-tasks')).body.approvals.quality.some(x => x.key === 'risk_assess'));
+  k = (await admin('POST', `/api/risk-assess/${k.id}/step`, { to: 'approved', revision: k.revision })).body; assert.equal(k.status, 'approved'); assert.equal(k.next_review, `${Number(today.slice(0, 4)) + 1}${today.slice(4)}`.replace('-02-29', '-02-28'));
+  assert.equal((await prod('PUT', `/api/risk-assess/${k.id}`, { revision: k.revision, title: '바꿈' })).status, 400, 'locked after approval');
+  assert.equal(k.counts.over, 1); assert.ok((await prod('GET', '/api/alerts')).body.quality_alerts.some(a => /개선 조치 기한 지남/.test(a.label)));
+  // 조치 결과: 재평가 없이 완료 불가 → 재평가(1×3=3 보통) 넣으면 완료, 잔여 위험 집계
+  const key = k.rows[0].key;
+  assert.equal((await prod('PUT', `/api/risk-assess/${k.id}/rows/${key}`, { revision: k.revision, done: today })).status, 400);
+  k = (await prod('PUT', `/api/risk-assess/${k.id}/rows/${key}`, { revision: k.revision, done: today, f2: 1, s2: 1, result: '도어 인터록 설치' })).body;
+  assert.deepEqual([k.rows[0].done, k.rows[0].grade2, k.rows[0].done_by, k.rows[0].result, k.counts.over, k.counts.residual], [today, 'L', '생산', '도어 인터록 설치', 0, 0]);
+  assert.equal((await prod('DELETE', `/api/risk-assess/${k.id}?revision=${k.revision}`)).status, 400, 'approved cannot be deleted');
+  assert.equal((await prod('POST', `/api/risk-assess/${k.id}/step`, { to: 'draft', revision: k.revision })).status, 400, 'revise needs note');
+  k = (await prod('POST', `/api/risk-assess/${k.id}/step`, { to: 'draft', revision: k.revision, rev_note: '설비 교체' })).body; assert.deepEqual([k.status, k.rev, k.rows[0].done], ['draft', 1, today]);
+  // HAZOP: 이탈 = 변수 + 가이드워드, 5×5(15 이상 높음), 줄 → CAPA(출처 위험성평가), 두 번은 안 됨, KOSHA 줄은 CAPA 안 됨
+  let h = (await prod('POST', '/api/risk-assess', { method: 'hazop', title: '세탁수 순환', process: '세탁', assess_date: today, rows: [{ node: '순환 펌프', param: '유량', guide: '없음(No)', cause: '펌프 정지', cons: '세탁 불량', safeguard: '유량계', s: 4, l: 4, action: '저유량 경보', owner: '공무', due: today }], request_id: rid() })).body;
+  assert.deepEqual([h.rows[0].dev, h.rows[0].score, h.rows[0].grade], ['유량 없음(No)', 16, 'H']); assert.match(h.ra_no, /^HZ-/);
+  const n = (await prod('POST', `/api/risk-assess/${h.id}/rows/${h.rows[0].key}/nc`, { revision: h.revision })).body; assert.match(n.nc_no, /^NC-/); assert.equal(n.rows[0].nc_no, n.nc_no);
+  const nc = (await admin('GET', '/api/ncs')).body.rows.find(x => x.id === n.nc_id); assert.deepEqual([nc.source_type, nc.source_no, nc.grade, nc.corrective], ['risk', h.ra_no, 'major', '저유량 경보']);
+  assert.equal((await prod('POST', `/api/risk-assess/${h.id}/rows/${h.rows[0].key}/nc`, { revision: n.revision })).status, 400);
+  assert.equal((await prod('POST', `/api/risk-assess/${k.id}/rows/${key}/nc`, { revision: k.revision })).status, 400);
+  assert.equal((await prod('DELETE', `/api/risk-assess/${h.id}?revision=${n.revision}`)).status, 400, 'row sent to CAPA blocks delete');
+  assert.ok((await admin('GET', '/api/find?q=' + h.ra_no)).body.rows.some(x => x.type === 'ra' && x.id === h.id));
+  // 설비 신뢰도: 10일 × 24h = 240h, 고장 2건(비가동 4h+수리 2h) → MTBF 117h, MTTR 3h, 가용도 97.5%
+  const from = new Date(Date.parse(today) - 9 * 86400000).toISOString().slice(0, 10);
+  let e = (await prod('POST', '/api/equipment', { name: '신뢰도 세탁기', install_date: from, request_id: rid() })).body;
+  for (const [kind, dt] of [['failure', 4], ['failure', null], ['repair', 2]]) { const lg = await prod('POST', `/api/equipment/${e.id}/logs`, { kind, log_date: today, description: '고장', downtime_hours: dt, revision: e.revision, request_id: rid() }); assert.equal(lg.status, 200, JSON.stringify(lg.body)); e = (await prod('GET', `/api/equipment/${e.id}/logs`)).body.equipment; }
+  const rel = (await prod('GET', `/api/equipment-reliability?from=${from}&to=${today}&hours=24&mission=10`)).body, er = rel.rows.find(x => x.id === e.id);
+  assert.deepEqual([er.planned, er.fails, er.down, er.mtbf, er.mttr, er.availability, er.reliability], [240, 2, 6, 117, 3, 97.5, Math.round(Math.exp(-10 / 117) * 10000) / 100]);
+  assert.equal((await prod('GET', '/api/equipment-reliability?hours=30')).status, 400);
+});
