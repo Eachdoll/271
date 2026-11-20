@@ -64,9 +64,28 @@ function exportReport(report) {
   const link = document.createElement('a'); link.href = url; link.download = `서울세미텍-리포트-${report.range.from}-${report.range.to}.csv`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
+// 15.310 리포트 기본 기간(사람별 설정): 14d=최근(집계 단위에 맞춰 14일·12주·12개월), week=이번 주, month=이번 달, year=올해, 12m=최근 12개월
+const REPORT_PERIOD_LABEL = { '14d': '최근(집계 단위에 맞춰 14일 · 12주 · 12개월)', week: '이번 주', month: '이번 달', year: '올해', '12m': '최근 12개월' };
+function reportPresetRange(period, grain) {
+  const today = reportRange('day')[1];
+  if (period === 'week') return [mondayOf(today), today];
+  if (period === 'month') return [monthStart(today), today];
+  if (period === 'year') return [today.slice(0, 4) + '-01-01', today];
+  if (period === '12m') return reportRange('month');
+  return reportRange(grain || 'day');
+}
+const REPORT_BLOCKS = [['common', '공통 요약'], ['dept', '부서별 리포트'], ['detail', '수량 상세(입고·생산·출하·분석)']];
+const REPORT_DETAIL = [['detail:kpis', '요약 카드(분석·입고·생산·출하)'], ['detail:chart:analysis', '차트 · 분석 등록·현재 완료'], ['detail:chart:incoming', '차트 · 입고수량 추이'], ['detail:chart:production', '차트 · 생산계획·실제 생산량'], ['detail:chart:shipping', '차트 · 출하수량 추이'],
+  ['detail:status', '분석 현재 상태'], ['detail:units', '단위·품목별 합계'], ['detail:top:incoming', '입고수량 상위 10개 품목'], ['detail:top:production', '생산계획 상위 10개 품목'], ['detail:periods', '기간별 상세 수치'], ['detail:semi', '반제품 수율(커팅/융착 · 세탁)'], ['detail:definitions', '집계 기준']];
+const deptSetupItems = (pre, d, parent, hint = '') => [
+  ...d.kpis.map(k => ({ key: `${pre}kpi:${k.label}`, label: `요약 · ${k.label}`, hint, parent })),
+  ...d.charts.map(c => ({ key: `${pre}chart:${c.title}`, label: `차트 · ${c.title}`, hint, parent })),
+  ...d.tables.map(t => ({ key: `${pre}table:${t.title}`, label: `표 · ${t.title}`, hint, parent })),
+];
+
 async function pageReports(main) {
-  const [from, to] = reportRange('day'); let current = null, requestId = 0, selectedUnit = '';
-  main.innerHTML = `<div class="report-heading"><div><h1>리포트 · 통계</h1><p class="muted">분석 처리 현황과 입고·생산·출하 데이터를 기간별로 확인합니다.</p></div><div class="actions"><button class="btn" id="reportCsv" disabled>전체 단위 CSV</button><button class="btn" id="reportPrint" disabled>인쇄 · PDF</button></div></div>
+  const rp = uiPref('report'); const [from, to] = reportRange('day'); let current = null, requestId = 0, selectedUnit = '';
+  main.innerHTML = `<div class="report-heading"><div><h1>리포트 · 통계</h1><p class="muted">공통·부서별 통계와 입고·생산·출하·분석 수량을 기간별로 봅니다. 「표시 설정」에서 보일 구역·항목과 기본 기간을 정할 수 있습니다(내 계정에 저장).</p></div><div class="actions"><button type="button" class="btn" id="reportSetup" title="보일 구역·항목·기본 조건(사람별)">⚙ 표시 설정</button><button class="btn" id="reportCsv" disabled>전체 단위 CSV</button><button class="btn" id="reportPrint" disabled>인쇄 · PDF</button></div></div>
     <form class="card report-filters" id="reportForm" data-read-only="true"><div class="form-grid">
     <label>집계 단위<select name="grain" id="reportGrain"><option value="day">일간</option><option value="week">주간 (월요일 시작)</option><option value="month">월간</option></select></label>
     <label>시작일<input name="from" type="date" required value="${from}"></label><label>종료일<input name="to" type="date" required value="${to}"></label>
@@ -74,10 +93,17 @@ async function pageReports(main) {
     <label>품목·거래처 검색<input name="q" type="search" maxlength="200" placeholder="품목명 또는 거래처"></label>
     <label>생산일정 기준<select name="plan_period"><option value="day">일간 생산일정</option><option value="week">주간 생산일정</option><option value="month">월간 생산일정</option></select></label></div>
     <div class="actions wrap"><button type="submit" class="btn primary">리포트 조회</button><button type="button" class="btn" data-report-range="week">이번 주</button><button type="button" class="btn" data-report-range="month">이번 달</button><button type="button" class="btn" data-report-range="year">올해</button><span class="muted small">최대 3년 · 한국 시간 기준</span></div></form>
-    <div class="report-meta"><p id="reportStamp" class="small muted" role="status"></p><label class="inline">수량 차트 단위 <select id="reportUnit" aria-label="수량 차트 단위" disabled></select></label></div>
-    <div id="reportContent" aria-live="polite"></div>`;
+    <div id="reportBlocks">
+      <section class="dept-sec" id="deptCommon" data-block="common"><div class="dept-head"><h2>공통</h2><span class="small muted" data-dept-range></span><button type="button" class="btn small" data-dept-xlsx="common">엑셀</button><button type="button" class="btn small" id="deptSettings">기준값${ME.is_admin ? ' 설정' : ''}</button></div><div data-dept-body><p class="muted">불러오는 중…</p></div></section>
+      <section class="dept-sec" id="deptMine" data-block="dept"><div class="dept-head"><h2>부서별</h2><div class="seg" id="deptTabs" role="tablist">${DEPT_TABS.map(([k, l]) => `<button type="button" role="tab" data-dept="${k}">${l}${k === myDept() ? ' <span class="sub-count">내 부서</span>' : ''}</button>`).join('')}</div><button type="button" class="btn small" data-dept-xlsx="mine">엑셀</button></div><div data-dept-body><p class="muted">불러오는 중…</p></div></section>
+      <section class="dept-sec" id="reportDetail" data-block="detail"><div class="dept-head"><h2>수량 상세</h2><span class="small muted">입고·생산·출하·분석</span></div><div class="report-meta"><p id="reportStamp" class="small muted" role="status"></p><label class="inline">수량 차트 단위 <select id="reportUnit" aria-label="수량 차트 단위" disabled></select></label></div><div id="reportContent" aria-live="polite"></div></section>
+    </div>`;
+  // 15.310 구역(공통·부서별·수량 상세)은 표시 설정의 순서대로, 숨긴 구역은 빼고(불러오지도 않음)
+  const blocksEl = $('#reportBlocks', main), shownBlocks = applyWidgetPref(REPORT_BLOCKS.map(([key, label]) => ({ key, label })), rp).map(b => b.key), hide = new Set(rp.hidden || []);
+  for (const key of shownBlocks) blocksEl.append($(`[data-block="${key}"]`, blocksEl));
+  $$('[data-block]', blocksEl).forEach(sec => { sec.hidden = !shownBlocks.includes(sec.dataset.block); });
   const form = $('#reportForm', main), content = $('#reportContent', main), unitSelect = $('#reportUnit', main);
-  const loadDept = mountDeptReports(main, form); // 15.120 공통 + 부서별
+  const dept = mountDeptReports(main, form, { shown: shownBlocks, hide }); // 15.120 공통 + 부서별
   const draw = () => {
     const report = current; if (!report) return;
     const unit = selectedUnit, grain = report.range.grain;
@@ -95,24 +121,33 @@ async function pageReports(main) {
       const top = rows.filter(row => row.unit === unit).sort((a, b) => b[key] - a[key]).slice(0, 10);
       return top.length ? `<table class="grid"><thead><tr><th>품목</th><th>분류</th><th class="r">수량</th></tr></thead><tbody>${top.map(row => `<tr><td>${esc(row.item)}</td><td>${esc(row.item_category)}</td><td class="r">${reportNumber(row[key])}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">해당 단위의 데이터가 없습니다.</p>';
     };
-    content.innerHTML = `<div class="report-kpis">
+    // 15.310 수량 상세의 블록도 표시 설정대로(숨김·순서). 차트·표 블록은 이어지는 것끼리 2열 격자로.
+    const parts = {
+      'detail:kpis': `<div class="report-kpis">
       ${card('분석 등록', reportNumber(report.analysis.total) + '건', `현재 완료 ${reportNumber(report.analysis.statuses.done)}건 · 완료율 ${reportNumber(report.analysis.completion_rate)}%`)}
       ${card('입고수량 · 선택 단위', reportNumber(incomingTotal), `${esc(unit || '데이터 없음')} · 전체 입고 ${report.receipts.count}건 / 이상 ${report.receipts.abnormal_count}건`)}
       ${card('실제 생산량 · 선택 단위', reportNumber(productionTotal.actual_qty), `${esc(unit || '데이터 없음')} · 계획수량 ${reportNumber(productionTotal.planned_qty)} / 전체 일정 ${report.production.plans}건`)}
-      ${card('출하수량 · 선택 단위', reportNumber(shippingTotal), `${esc(unit || '데이터 없음')} · 전체 출하 ${report.shipments.count}건`)}</div>
-      <div class="report-chart-grid"><section class="card"><h3>분석 등록 · 현재 완료</h3>${reportChart('분석 등록 및 현재 완료 건수', report.analysis.series, [{ key: 'total', label: '등록' }, { key: 'done', label: '현재 완료' }], grain)}<p class="small muted">${esc(report.definitions.analysis)}</p></section>
-      <section class="card"><h3>입고수량 추이 <span class="tag">${esc(unit || '단위 선택')}</span></h3>${reportChart('발주입고와 기타입고 수량', incoming, [{ key: 'purchase', label: '발주입고' }, { key: 'other', label: '기타입고' }], grain)}</section>
-      <section class="card"><h3>생산계획 · 실제 생산량 <span class="tag">${esc(unit || '단위 선택')}</span></h3>${reportChart('생산계획 및 실제 생산량', production, [{ key: 'planned_qty', label: '계획' }, { key: 'actual_qty', label: '실제 생산' }, { key: 'completed_qty', label: '완료 체크' }], grain)}</section>
-      <section class="card"><h3>출하수량 추이 <span class="tag">${esc(unit || '단위 선택')}</span></h3>${reportChart('출하수량', shipping, [{ key: 'qty', label: '출하' }], grain)}</section></div>
-      <div class="report-chart-grid"><section class="card"><h3>분석 현재 상태</h3><div class="report-statuses">${Object.entries(report.analysis.statuses).map(([status, count]) => `<div><span>${esc(STATUS[status])}</span><div class="report-status-track"><i style="width:${report.analysis.total ? count / report.analysis.total * 100 : 0}%"></i></div><b>${reportNumber(count)}건</b></div>`).join('')}</div></section>
-      <section class="card"><h3>단위·품목별 합계</h3><div class="table-wrap"><table class="grid"><thead><tr><th>단위 / 미지정 품목</th><th class="r">입고</th><th class="r">생산계획</th><th class="r">완료 체크</th><th class="r">실제 생산</th><th class="r">계획 차이</th><th class="r">달성률</th><th class="r">출하</th></tr></thead><tbody>${report.units.map(value => { const r = report.receipts.by_unit.find(row => row.unit === value) || {}; const p = report.production.by_unit.find(row => row.unit === value) || {}; const s = report.shipments.by_unit.find(row => row.unit === value) || {}; return `<tr><td>${esc(value)}</td><td class="r">${reportNumber(r.qty)}</td><td class="r">${reportNumber(p.planned_qty)}</td><td class="r">${reportNumber(p.completed_qty)}</td><td class="r">${reportNumber(p.actual_qty)}</td><td class="r">${reportNumber(p.variance_qty)}</td><td class="r">${p.achievement_rate ?? '—'}%</td><td class="r">${reportNumber(s.qty)}</td></tr>`; }).join('') || '<tr><td colspan="8">수량 데이터가 없습니다.</td></tr>'}</tbody></table></div></section>
-      <section class="card"><h3>입고수량 상위 10개 품목</h3><p class="small muted">${esc(unit || '단위 선택')}</p><div class="table-wrap">${ranking(report.receipts.items, 'qty')}</div></section><section class="card"><h3>생산계획 상위 10개 품목</h3><p class="small muted">${esc(unit || '단위 선택')}</p><div class="table-wrap">${ranking(report.production.items, 'planned_qty')}</div></section></div>
-      <details class="card"><summary>기간별 상세 수치</summary><div class="table-wrap"><table class="grid"><thead><tr><th>기간 시작</th><th class="r">분석등록</th><th class="r">현재완료</th><th class="r">발주입고</th><th class="r">기타입고</th><th class="r">생산계획</th><th class="r">완료 체크</th><th class="r">실제 생산</th><th class="r">출하</th></tr></thead><tbody>${report.buckets.map((bucket, i) => `<tr><td>${esc(bucket)}</td><td class="r">${reportNumber(report.analysis.series[i].total)}</td><td class="r">${reportNumber(report.analysis.series[i].done)}</td><td class="r">${reportNumber(incoming[i].purchase)}</td><td class="r">${reportNumber(incoming[i].other)}</td><td class="r">${reportNumber(production[i].planned_qty)}</td><td class="r">${reportNumber(production[i].completed_qty)}</td><td class="r">${reportNumber(production[i].actual_qty)}</td><td class="r">${reportNumber(shipping[i].qty)}</td></tr>`).join('')}</tbody></table></div><p class="small muted">수량 열: ${esc(unit || '데이터 없음')}</p></details>
-      ${semiReportSection(report)}
-      <details class="card report-definitions"><summary>집계 기준</summary>${Object.values(report.definitions).map(text => `<p class="small muted">${esc(text)}</p>`).join('')}</details>`;
+      ${card('출하수량 · 선택 단위', reportNumber(shippingTotal), `${esc(unit || '데이터 없음')} · 전체 출하 ${report.shipments.count}건`)}</div>`,
+      'detail:chart:analysis': { grid: `<section class="card"><h3>분석 등록 · 현재 완료</h3>${reportChart('분석 등록 및 현재 완료 건수', report.analysis.series, [{ key: 'total', label: '등록' }, { key: 'done', label: '현재 완료' }], grain)}<p class="small muted">${esc(report.definitions.analysis)}</p></section>` },
+      'detail:chart:incoming': { grid: `<section class="card"><h3>입고수량 추이 <span class="tag">${esc(unit || '단위 선택')}</span></h3>${reportChart('발주입고와 기타입고 수량', incoming, [{ key: 'purchase', label: '발주입고' }, { key: 'other', label: '기타입고' }], grain)}</section>` },
+      'detail:chart:production': { grid: `<section class="card"><h3>생산계획 · 실제 생산량 <span class="tag">${esc(unit || '단위 선택')}</span></h3>${reportChart('생산계획 및 실제 생산량', production, [{ key: 'planned_qty', label: '계획' }, { key: 'actual_qty', label: '실제 생산' }, { key: 'completed_qty', label: '완료 체크' }], grain)}</section>` },
+      'detail:chart:shipping': { grid: `<section class="card"><h3>출하수량 추이 <span class="tag">${esc(unit || '단위 선택')}</span></h3>${reportChart('출하수량', shipping, [{ key: 'qty', label: '출하' }], grain)}</section>` },
+      'detail:status': { grid: `<section class="card"><h3>분석 현재 상태</h3><div class="report-statuses">${Object.entries(report.analysis.statuses).map(([status, count]) => `<div><span>${esc(STATUS[status])}</span><div class="report-status-track"><i style="width:${report.analysis.total ? count / report.analysis.total * 100 : 0}%"></i></div><b>${reportNumber(count)}건</b></div>`).join('')}</div></section>` },
+      'detail:units': { grid: `<section class="card"><h3>단위·품목별 합계</h3><div class="table-wrap"><table class="grid"><thead><tr><th>단위 / 미지정 품목</th><th class="r">입고</th><th class="r">생산계획</th><th class="r">완료 체크</th><th class="r">실제 생산</th><th class="r">계획 차이</th><th class="r">달성률</th><th class="r">출하</th></tr></thead><tbody>${report.units.map(value => { const r = report.receipts.by_unit.find(row => row.unit === value) || {}; const p = report.production.by_unit.find(row => row.unit === value) || {}; const s = report.shipments.by_unit.find(row => row.unit === value) || {}; return `<tr><td>${esc(value)}</td><td class="r">${reportNumber(r.qty)}</td><td class="r">${reportNumber(p.planned_qty)}</td><td class="r">${reportNumber(p.completed_qty)}</td><td class="r">${reportNumber(p.actual_qty)}</td><td class="r">${reportNumber(p.variance_qty)}</td><td class="r">${p.achievement_rate ?? '—'}%</td><td class="r">${reportNumber(s.qty)}</td></tr>`; }).join('') || '<tr><td colspan="8">수량 데이터가 없습니다.</td></tr>'}</tbody></table></div></section>` },
+      'detail:top:incoming': { grid: `<section class="card"><h3>입고수량 상위 10개 품목</h3><p class="small muted">${esc(unit || '단위 선택')}</p><div class="table-wrap">${ranking(report.receipts.items, 'qty')}</div></section>` },
+      'detail:top:production': { grid: `<section class="card"><h3>생산계획 상위 10개 품목</h3><p class="small muted">${esc(unit || '단위 선택')}</p><div class="table-wrap">${ranking(report.production.items, 'planned_qty')}</div></section>` },
+      'detail:periods': `<details class="card"><summary>기간별 상세 수치</summary><div class="table-wrap"><table class="grid"><thead><tr><th>기간 시작</th><th class="r">분석등록</th><th class="r">현재완료</th><th class="r">발주입고</th><th class="r">기타입고</th><th class="r">생산계획</th><th class="r">완료 체크</th><th class="r">실제 생산</th><th class="r">출하</th></tr></thead><tbody>${report.buckets.map((bucket, i) => `<tr><td>${esc(bucket)}</td><td class="r">${reportNumber(report.analysis.series[i].total)}</td><td class="r">${reportNumber(report.analysis.series[i].done)}</td><td class="r">${reportNumber(incoming[i].purchase)}</td><td class="r">${reportNumber(incoming[i].other)}</td><td class="r">${reportNumber(production[i].planned_qty)}</td><td class="r">${reportNumber(production[i].completed_qty)}</td><td class="r">${reportNumber(production[i].actual_qty)}</td><td class="r">${reportNumber(shipping[i].qty)}</td></tr>`).join('')}</tbody></table></div><p class="small muted">수량 열: ${esc(unit || '데이터 없음')}</p></details>`,
+      'detail:semi': semiReportSection(report),
+      'detail:definitions': `<details class="card report-definitions"><summary>집계 기준</summary>${Object.values(report.definitions).map(text => `<p class="small muted">${esc(text)}</p>`).join('')}</details>`,
+    };
+    let html = '', grid = []; const flush = () => { if (grid.length) { html += `<div class="report-chart-grid">${grid.join('')}</div>`; grid = []; } };
+    for (const { key } of applyWidgetPref(REPORT_DETAIL.map(([key, label]) => ({ key, label })), rp)) { const part = parts[key]; if (!part) continue; if (typeof part === 'object') grid.push(part.grid); else { flush(); html += part; } }
+    flush();
+    content.innerHTML = html || '<p class="muted small">표시 설정에서 수량 상세 항목을 모두 숨겼습니다.</p>';
   };
   const load = async () => {
-    loadDept().catch(fail);
+    dept.load().catch(fail);
+    if (!shownBlocks.includes('detail')) return;
     const id = ++requestId; const values = formObj(form);
     const button = $('button[type=submit]', form); button.disabled = true;
     $('#reportStamp', main).textContent = '리포트를 집계하고 있습니다…';
@@ -121,7 +156,7 @@ async function pageReports(main) {
       const report = await api('GET', '/api/reports?' + new URLSearchParams(values));
       if (id !== requestId || !main.isConnected) return;
       current = report;
-      if (!report.units.includes(selectedUnit)) selectedUnit = report.units.includes('EA') ? 'EA' : report.units[0] || '';
+      if (!report.units.includes(selectedUnit)) selectedUnit = rp.unit && report.units.includes(rp.unit) ? rp.unit : report.units.includes('EA') ? 'EA' : report.units[0] || ''; // 15.310 기본 단위(설정)
       unitSelect.innerHTML = report.units.length ? report.units.map(unit => `<option value="${esc(unit)}">${esc(unit)}</option>`).join('') : '<option value="">수량 데이터 없음</option>';
       unitSelect.value = selectedUnit; unitSelect.disabled = !report.units.length;
       $('#reportStamp', main).textContent = `${report.range.from} ~ ${report.range.to} · ${report.range.timezone} · 조회자 ${ME.name} · 집계 ${report.generated_at}`;
@@ -130,14 +165,31 @@ async function pageReports(main) {
     finally { if (id === requestId) button.disabled = false; }
   };
   rememberList(form);
+  // 15.310 이 탭에서 고른 기간이 없으면 기본 기간(설정) + 집계 단위에 맞춰 시작·종료일을 잡는다
+  if (!uxRead(uxKey('filters', (location.hash || '#/') + ':' + form.id))) { const [a, b] = reportPresetRange(rp.period || '14d', form.elements.grain.value); form.elements.from.value = a; form.elements.to.value = b; }
   form.onsubmit = event => { event.preventDefault(); load(); };
-  $('#reportGrain', main).onchange = () => { const [start, end] = reportRange(form.elements.grain.value); form.elements.from.value = start; form.elements.to.value = end; load(); };
+  $('#reportGrain', main).onchange = () => { const [start, end] = reportPresetRange(rp.period || '14d', form.elements.grain.value); form.elements.from.value = start; form.elements.to.value = end; load(); };
   unitSelect.onchange = () => { selectedUnit = unitSelect.value; draw(); };
   $$('[data-report-range]', main).forEach(button => button.onclick = () => {
     const today = reportRange('day')[1]; form.elements.from.value = button.dataset.reportRange === 'week' ? mondayOf(today) : button.dataset.reportRange === 'year' ? today.slice(0, 4) + '-01-01' : monthStart(today); form.elements.to.value = today; load();
   });
   $('#reportCsv', main).onclick = () => { if (current) exportReport(current); };
   $('#reportPrint', main).onclick = () => { document.body.classList.add('printing-report'); try { window.print(); } finally { document.body.classList.remove('printing-report'); } };
+  $('#reportSetup', main).onclick = () => {
+    const items = [];
+    for (const [key, label] of REPORT_BLOCKS) {
+      items.push({ key, label });
+      if (key === 'common' && dept.data.common) items.push(...deptSetupItems('common:', dept.data.common, 'common'));
+      if (key === 'dept' && dept.data.mine) items.push(...deptSetupItems(`dept:${dept.current()}:`, dept.data.mine, 'dept', `(${DEPT_TABS.find(([k]) => k === dept.current())?.[1] || ''} 탭)`));
+      if (key === 'detail') items.push(...REPORT_DETAIL.map(([k, l]) => ({ key: k, label: l, parent: 'detail' })));
+    }
+    widgetSetup({ title: '리포트 표시 설정', intro: '보일 구역·항목을 체크하고 ▲▼로 순서를 바꾸세요. 부서별 항목은 지금 고른 부서 탭 기준이며 부서마다 따로 저장됩니다. 내 계정에 저장되어 다른 기기에서도 같게 보입니다.', items, pref: rp,
+      extra: `<fieldset class="vendor-sec"><legend>기본 조건</legend><div class="ws-defaults">
+        <label>기본 기간<select name="period">${Object.entries(REPORT_PERIOD_LABEL).map(([k, l]) => `<option value="${k}"${(rp.period || '14d') === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label>부서별 기본 탭<select name="dept"><option value="">내 부서(마지막에 본 탭)</option>${DEPT_TABS.map(([k, l]) => `<option value="${k}"${rp.dept === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label>수량 차트 기본 단위<input name="unit" maxlength="20" value="${esc(rp.unit || '')}" placeholder="예) EA · BOX (비우면 EA)"></label></div></fieldset>`,
+      onSave: async (next, vals) => { await saveUiPref('report', next ? { ...next, period: vals.period === '14d' ? '' : vals.period, dept: vals.dept || '', unit: (vals.unit || '').trim() } : null); await pageReports(main); } });
+  };
   await load();
 }
 
@@ -153,11 +205,13 @@ function deptValue(v, type, unit = '') {
   return `${reportNumber(Math.round(Number(v) * 1000) / 1000)}${unit ? ' ' + esc(unit) : ''}`;
 }
 function deptCell(v, type) { if (v == null || v === '') return '<td class="muted">—</td>'; if (!type || type === 'text') return `<td>${esc(v)}</td>`; if (type === 'won') return `<td class="r">${reportNumber(Math.trunc(v))}</td>`; if (type === 'pct') return `<td class="r">${reportNumber(v)}%</td>`; return `<td class="r">${reportNumber(Math.round(Number(v) * 1000) / 1000)}</td>`; }
-function deptHtml(d) {
-  const kpis = `<div class="report-kpis">${d.kpis.map(k => `<a class="card report-kpi dept-kpi ${k.tone ? 'tone-' + k.tone : ''}" href="${k.href || '#/reports'}"><span class="muted">${esc(k.label)}</span><strong>${deptValue(k.value, k.type, k.unit)}</strong><span class="small muted">${esc(k.detail || '')}</span></a>`).join('')}</div>`;
-  const charts = d.charts.length ? `<div class="report-chart-grid">${d.charts.map(c => `<section class="card"><h3>${esc(c.title)}${c.type === 'won' ? ' <span class="tag">원</span>' : c.type === 'pct' ? ' <span class="tag">%</span>' : ''}</h3>${reportChart(c.title, c.rows, c.series, d.grain)}</section>`).join('')}</div>` : '';
-  const tables = d.tables.map(tb => `<section class="card"><h3>${esc(tb.title)}${tb.href ? ` <a class="small" href="${tb.href}">자세히 →</a>` : ''}</h3>${tb.rows.length ? `<div class="table-wrap"><table class="grid" data-keep-cols><thead><tr>${tb.columns.map(c => `<th${c.type && c.type !== 'text' ? ' class="r"' : ''}>${esc(c.label)}</th>`).join('')}</tr></thead><tbody>${tb.rows.map((r, i) => `<tr${tb.links?.[i] ? ` data-dept-link="${esc(tb.links[i])}" class="dept-link"` : ''}>${r.map((v, j) => deptCell(v, tb.columns[j]?.type)).join('')}</tr>`).join('')}</tbody></table></div>` : `<p class="muted small">${esc(tb.empty || '기간 안에 자료가 없습니다.')}</p>`}</section>`).join('');
-  return kpis + charts + `<div class="report-chart-grid dept-tables">${tables}</div>`;
+function deptHtml(d, hide = new Set(), pre = '') {
+  // 15.310 표시 설정에서 숨긴 항목(요약 카드·차트·표)은 뺀다. 이름은 `${구역}:kpi|chart|table:${제목}`.
+  const kp = d.kpis.filter(k => !hide.has(`${pre}kpi:${k.label}`)), ch = d.charts.filter(c => !hide.has(`${pre}chart:${c.title}`)), tbs = d.tables.filter(t => !hide.has(`${pre}table:${t.title}`));
+  const kpis = kp.length ? `<div class="report-kpis">${kp.map(k => `<a class="card report-kpi dept-kpi ${k.tone ? 'tone-' + k.tone : ''}" href="${k.href || '#/reports'}"><span class="muted">${esc(k.label)}</span><strong>${deptValue(k.value, k.type, k.unit)}</strong><span class="small muted">${esc(k.detail || '')}</span></a>`).join('')}</div>` : '';
+  const charts = ch.length ? `<div class="report-chart-grid">${ch.map(c => `<section class="card"><h3>${esc(c.title)}${c.type === 'won' ? ' <span class="tag">원</span>' : c.type === 'pct' ? ' <span class="tag">%</span>' : ''}</h3>${reportChart(c.title, c.rows, c.series, d.grain)}</section>`).join('')}</div>` : '';
+  const tables = tbs.map(tb => `<section class="card"><h3>${esc(tb.title)}${tb.href ? ` <a class="small" href="${tb.href}">자세히 →</a>` : ''}</h3>${tb.rows.length ? `<div class="table-wrap"><table class="grid" data-keep-cols><thead><tr>${tb.columns.map(c => `<th${c.type && c.type !== 'text' ? ' class="r"' : ''}>${esc(c.label)}</th>`).join('')}</tr></thead><tbody>${tb.rows.map((r, i) => `<tr${tb.links?.[i] ? ` data-dept-link="${esc(tb.links[i])}" class="dept-link"` : ''}>${r.map((v, j) => deptCell(v, tb.columns[j]?.type)).join('')}</tr>`).join('')}</tbody></table></div>` : `<p class="muted small">${esc(tb.empty || '기간 안에 자료가 없습니다.')}</p>`}</section>`).join('');
+  return (kpis + charts + (tables ? `<div class="report-chart-grid dept-tables">${tables}</div>` : '')) || '<p class="muted small">표시 설정에서 이 구역의 항목을 모두 숨겼습니다.</p>';
 }
 function deptXlsx(d, label) {
   const rows = [['구분', '항목', '값', '설명'], ...d.kpis.map(k => ['요약', k.label, k.type === 'text' ? k.value : k.value ?? '', k.detail || ''])];
@@ -173,29 +227,27 @@ async function reportSettingsWindow(after) {
   $('[data-close]', m.el).onclick = m.close;
   $('form', m.el).onsubmit = async e => { e.preventDefault(); try { await api('PUT', '/api/report-settings', formObj(e.target)); toast('기준값을 저장했습니다.'); m.close(); await after?.(); } catch (error) { fail(error); } };
 }
-function mountDeptReports(main, form) {
-  let dept = myDept(); try { dept = localStorage.getItem('wpa:report-dept') || dept; } catch { /* 편의 기능 */ }
+function mountDeptReports(main, form, { shown = ['common', 'dept', 'detail'], hide = new Set() } = {}) {
+  // 15.310 부서 탭: 표시 설정의 기본 탭 > 이 브라우저에서 마지막에 본 탭 > 내 부서
+  const rp = uiPref('report'); let dept = myDept(); try { dept = localStorage.getItem('wpa:report-dept') || dept; } catch { /* 편의 기능 */ }
+  if (rp.dept) dept = rp.dept;
   if (!DEPT_TABS.some(([k]) => k === dept)) dept = myDept();
-  const box = document.createElement('div'); box.id = 'deptReports';
-  box.innerHTML = `<section class="dept-sec" id="deptCommon"><div class="dept-head"><h2>공통</h2><span class="small muted" data-dept-range></span><button type="button" class="btn small" data-dept-xlsx="common">엑셀</button><button type="button" class="btn small" id="deptSettings">기준값${ME.is_admin ? ' 설정' : ''}</button></div><div data-dept-body><p class="muted">불러오는 중…</p></div></section>
-    <section class="dept-sec" id="deptMine"><div class="dept-head"><h2>부서별</h2><div class="seg" id="deptTabs" role="tablist">${DEPT_TABS.map(([k, l]) => `<button type="button" role="tab" data-dept="${k}">${l}${k === myDept() ? ' <span class="sub-count">내 부서</span>' : ''}</button>`).join('')}</div><button type="button" class="btn small" data-dept-xlsx="mine">엑셀</button></div><div data-dept-body><p class="muted">불러오는 중…</p></div></section>
-    <h2 class="dept-detail-title">수량 상세 <span class="small muted">입고·생산·출하·분석(기존 리포트)</span></h2>`;
-  form.after(box);
+  const box = $('#reportBlocks', main);
   const data = {}; let version = 0;
   const params = section => new URLSearchParams({ section, from: form.elements.from.value, to: form.elements.to.value, grain: form.elements.grain.value });
-  const draw = (sel, d) => { const body = $(`${sel} [data-dept-body]`, box); body.innerHTML = deptHtml(d); $$('[data-dept-link]', body).forEach(tr => tr.onclick = () => { location.hash = tr.dataset.deptLink; }); };
+  const draw = (sel, d, pre) => { const body = $(`${sel} [data-dept-body]`, box); if (!body) return; body.innerHTML = deptHtml(d, hide, pre); $$('[data-dept-link]', body).forEach(tr => tr.onclick = () => { location.hash = tr.dataset.deptLink; }); };
   const markTabs = () => $$('#deptTabs [data-dept]', box).forEach(b => { const on = b.dataset.dept === dept; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
-  const loadMine = async mine => { const d = await api('GET', '/api/reports/dept?' + params(dept)); if (mine !== version || !box.isConnected) return; data.mine = d; draw('#deptMine', d); };
+  const loadMine = async mine => { if (!shown.includes('dept')) return; const d = await api('GET', '/api/reports/dept?' + params(dept)); if (mine !== version || !box.isConnected) return; data.mine = d; draw('#deptMine', d, `dept:${dept}:`); };
   const load = async () => {
     const mine = ++version; markTabs();
-    const [c] = await Promise.all([api('GET', '/api/reports/dept?' + params('common')), loadMine(mine)]);
-    if (mine !== version || !box.isConnected) return; data.common = c; draw('#deptCommon', c);
-    $('[data-dept-range]', box).textContent = `${c.from} ~ ${c.to}`;
+    const [c] = await Promise.all([shown.includes('common') ? api('GET', '/api/reports/dept?' + params('common')) : null, loadMine(mine)]);
+    if (mine !== version || !box.isConnected) return;
+    if (c) { data.common = c; draw('#deptCommon', c, 'common:'); $('[data-dept-range]', box).textContent = `${c.from} ~ ${c.to}`; }
   };
   $$('#deptTabs [data-dept]', box).forEach(b => b.onclick = () => { dept = b.dataset.dept; try { localStorage.setItem('wpa:report-dept', dept); } catch { /* 편의 기능 */ } markTabs(); $('#deptMine [data-dept-body]', box).innerHTML = '<p class="muted">불러오는 중…</p>'; loadMine(version).catch(fail); });
   $$('[data-dept-xlsx]', box).forEach(b => b.onclick = () => { const d = data[b.dataset.deptXlsx]; if (d) deptXlsx(d, b.dataset.deptXlsx === 'common' ? '공통' : DEPT_TABS.find(([k]) => k === dept)[1]); });
   $('#deptSettings', box).onclick = () => reportSettingsWindow(load).catch(fail);
-  return load;
+  return { load, data, current: () => dept };
 }
 
 // ── 15.276 개발 스케줄 관리: 개발리스트 제품을 단기·중장기·장기로 나눠 공정표(단계)·현재 진행·다음 예정·완료예정일을 로드맵으로 ──

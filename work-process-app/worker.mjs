@@ -131,7 +131,7 @@ async function baseMenus(u, departments = null) { // 15.179 departments를 넘�
 const SKINS_ALLOWED = ['default', 'christmas', 'ribbon', 'cat', 'penguin', 'kha', 'pjh']; // 15.220 디자인 스킨(15.222 핑크 리본, 15.226 커스텀 캐릭터(cat)·방귀니(penguin))
 async function userPrefs(id) {
   const row = await db.prepare('SELECT value FROM settings WHERE key=?').get('prefs:' + id);
-  try { const v = row ? JSON.parse(row.value) : {}; return { favorites: Array.isArray(v.favorites) ? v.favorites : [], filters: v.filters && typeof v.filters === 'object' ? v.filters : {}, ...(SKINS_ALLOWED.includes(v.skin) ? { skin: v.skin } : {}), ...(v.grids && typeof v.grids === 'object' && !Array.isArray(v.grids) ? { grids: v.grids } : {}) }; } catch { return { favorites: [], filters: {} }; } // 15.220 skin · 15.239 grids(표 열 순서·너비·숨김)
+  try { const v = row ? JSON.parse(row.value) : {}; return { favorites: Array.isArray(v.favorites) ? v.favorites : [], filters: v.filters && typeof v.filters === 'object' ? v.filters : {}, ...(SKINS_ALLOWED.includes(v.skin) ? { skin: v.skin } : {}), ...(v.grids && typeof v.grids === 'object' && !Array.isArray(v.grids) ? { grids: v.grids } : {}), ...(v.dash && typeof v.dash === 'object' && !Array.isArray(v.dash) ? { dash: v.dash } : {}), ...(v.report && typeof v.report === 'object' && !Array.isArray(v.report) ? { report: v.report } : {}) }; } /* 15.310 dash·report(대시보드·리포트 표시 설정) */ catch { return { favorites: [], filters: {} }; } // 15.220 skin · 15.239 grids(표 열 순서·너비·숨김)
 }
 function cleanPrefs(body, prior) {
   const out = { ...prior };
@@ -170,6 +170,24 @@ function cleanPrefs(body, prior) {
     }
     if (Object.keys(grids).length > 120) throw bad('표 열 설정이 너무 많습니다. 쓰지 않는 표의 「열 배치 초기화」를 해 주세요.');
     out.grids = grids;
+  }
+  // 15.310 대시보드·리포트 표시 설정: 숨긴 위젯(hidden)·순서(order)·기본 조건. 위젯 이름은 영문·숫자·한글·몇 가지 기호 60자까지, 각 40개까지.
+  const widgetList = (v, label) => { if (v === undefined) return undefined; if (!Array.isArray(v) || v.length > 40) throw bad(`${label} 설정을 확인하세요.`); return [...new Set(v.map(x => String(x).slice(0, 60)).filter(x => /^[\w가-힣·:.()%/,+&→\- ]+$/.test(x)))]; };
+  for (const key of ['dash', 'report']) {
+    if (body[key] === undefined) continue;
+    if (body[key] === null) { delete out[key]; continue; }
+    if (!body[key] || typeof body[key] !== 'object' || Array.isArray(body[key])) throw bad('표시 설정 형식을 확인하세요.');
+    const prev = out[key] || {}, next = { ...prev }, b = body[key];
+    const hidden = widgetList(b.hidden, '숨긴 항목'), order = widgetList(b.order, '순서');
+    if (hidden !== undefined) { if (hidden.length) next.hidden = hidden; else delete next.hidden; }
+    if (order !== undefined) { if (order.length) next.order = order; else delete next.order; }
+    if (key === 'report') {
+      if (b.grain !== undefined) { if (b.grain && !['day', 'week', 'month'].includes(b.grain)) throw bad('집계 단위를 확인하세요.'); if (b.grain) next.grain = b.grain; else delete next.grain; }
+      if (b.period !== undefined) { if (b.period && !['14d', 'week', 'month', 'year', '12m'].includes(b.period)) throw bad('기본 기간을 확인하세요.'); if (b.period) next.period = b.period; else delete next.period; }
+      if (b.dept !== undefined) { if (b.dept && !SECTIONS.includes(b.dept)) throw bad('기본 부서를 확인하세요.'); if (b.dept) next.dept = b.dept; else delete next.dept; }
+      if (b.unit !== undefined) { const u = str(b.unit, 20); if (u) next.unit = u; else delete next.unit; }
+    }
+    if (Object.keys(next).length) out[key] = next; else delete out[key];
   }
   if (JSON.stringify(out).length > 60000) throw bad('저장할 화면 설정이 너무 큽니다.');
   if (body.skin !== undefined) { // 15.220 디자인 스킨(사용자별)
@@ -7526,20 +7544,36 @@ const DEPT = {
     const ana = await db.prepare("SELECT AVG(julianday(substr(updated_at,1,10)) - julianday(substr(created_at,1,10))) AS days, COUNT(*) AS n FROM requests WHERE type='analysis' AND status='done' AND substr(updated_at,1,10) BETWEEN ? AND ?").get(from, to);
     const vend = new Map(); for (const r of insp) { const k = r.customer || '(거래처 없음)', g = vend.get(k) || { n: 0, f: 0 }; g.n++; if (r.result === 'fail') g.f++; vend.set(k, g); }
     const items = new Map(); for (const r of fails) items.set(r.title, (items.get(r.title) || 0) + 1);
+    // 15.310 CAPA·공정 측정·변경·심사(품질 1~4단계)
+    const ncs = await db.prepare(`SELECT ${rb('found_date', grain)} AS bucket, CASE WHEN closed_at IS NULL THEN NULL ELSE ${rb('substr(closed_at,1,10)', grain)} END AS cbucket, status, source_type, due_date, closed_at FROM nonconformities WHERE found_date BETWEEN ? AND ? AND status<>'void'`).all(from, to);
+    const ncOpen = (await db.prepare("SELECT COUNT(*) c FROM nonconformities WHERE status NOT IN ('closed','void')").get()).c, ncOverdue = (await db.prepare("SELECT COUNT(*) c FROM nonconformities WHERE status NOT IN ('closed','void') AND due_date IS NOT NULL AND due_date<?").get(now)).c;
+    const ncClosed = await db.prepare("SELECT due_date, closed_at FROM nonconformities WHERE status='closed' AND substr(closed_at,1,10) BETWEEN ? AND ?").all(from, to);
+    const pqcRows = await db.prepare('SELECT p.place, p.item, COUNT(*) AS n, SUM(m.out_of_spec) AS out FROM process_measures m JOIN process_points p ON p.id=m.point_id WHERE m.measured_on BETWEEN ? AND ? GROUP BY p.id HAVING SUM(m.out_of_spec)>0 ORDER BY out DESC, n DESC LIMIT 10').all(from, to);
+    const pqcAgg = await db.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(out_of_spec),0) AS o FROM process_measures WHERE measured_on BETWEEN ? AND ?').get(from, to), pqcAll = pqcAgg.n, pqcOut = pqcAgg.o;
+    const chg = await db.prepare("SELECT status FROM quality_changes WHERE substr(created_at,1,10) BETWEEN ? AND ? AND status<>'void'").all(from, to);
+    const aud = await db.prepare("SELECT COUNT(DISTINCT a.id) AS n, COUNT(f.id) AS f, SUM(CASE WHEN f.grade='major' THEN 1 ELSE 0 END) AS major FROM quality_audits a LEFT JOIN audit_findings f ON f.audit_id=a.id WHERE COALESCE(a.done_date,a.plan_date) BETWEEN ? AND ? AND a.status<>'void'").get(from, to);
     return {
       kpis: [
         { label: '수입검사 합격률', value: rpct(pass, incoming.length), type: 'pct', detail: `판정 ${incoming.length}건 중 합격 ${pass}건`, href: '#/quality/inspections', tone: incoming.length && pass / incoming.length < 0.95 ? 'warn' : '' },
         { label: '불합격 검사', value: fails.length, type: 'count', unit: '건', detail: '수입·출하·공정 검사 전체', href: '#/quality/inspections', tone: fails.length ? 'bad' : '' },
         { label: 'VOC', value: voc.length, type: 'count', unit: '건 접수', detail: `지금 처리 중 ${vocOpen}건`, href: '#/quality/voc/list', tone: vocOpen ? 'warn' : '' },
         { label: '분석 평균 처리', value: ana.n ? Math.round(ana.days * 10) / 10 : null, type: 'num', unit: '일', detail: `완료 ${ana.n}건 · 등록 → 마지막 변경일`, href: '#/quality/list' },
+        // 15.310 품질 1~4단계 자료
+        { label: 'CAPA 등록', value: ncs.length, type: 'count', unit: '건', detail: `종결 ${ncs.filter(n => n.status === 'closed').length}건 · 지금 진행 중 ${ncOpen}건${ncOverdue ? ` · 기한 지남 ${ncOverdue}건` : ''}`, href: '#/quality/capa', tone: ncOverdue ? 'bad' : ncOpen ? 'warn' : '' },
+        { label: 'CAPA 기한 준수율', value: rpct(ncClosed.filter(n => !n.due_date || n.closed_at.slice(0, 10) <= n.due_date).length, ncClosed.length), type: 'pct', detail: `기간 안 종결 ${ncClosed.length}건 기준`, href: '#/quality/capa', tone: ncClosed.length && ncClosed.filter(n => !n.due_date || n.closed_at.slice(0, 10) <= n.due_date).length / ncClosed.length < 0.9 ? 'warn' : '' },
+        { label: '공정 기준 이탈', value: pqcOut, type: 'count', unit: '건', detail: `공정·환경 측정 ${pqcAll}건 중`, href: '#/quality/pqc', tone: pqcOut ? 'warn' : '' },
+        { label: '변경 · 심사 지적', value: chg.length, type: 'count', unit: '건 변경', detail: `심사 ${aud.n}건 · 지적 ${aud.f}건(중대 ${aud.major})`, href: '#/quality/changes' },
       ],
       charts: [
         { title: '검사 판정(합격 · 불합격)', type: 'count', series: [{ key: 'pass', label: '합격' }, { key: 'fail', label: '불합격' }], rows: rSeries(buckets, insp.map(r => ({ bucket: r.bucket, key: r.result, value: 1 })), ['pass', 'fail']) },
         { title: 'VOC 접수 · 완료', type: 'count', series: [{ key: 'in', label: '접수' }, { key: 'done', label: '완료' }], rows: rSeries(buckets, voc.flatMap(r => [{ bucket: r.bucket, key: 'in', value: 1 }, ...(r.status === 'done' ? [{ bucket: r.bucket, key: 'done', value: 1 }] : [])]), ['in', 'done']) },
+        { title: '부적합(CAPA) 등록 · 종결', type: 'count', series: [{ key: 'open', label: '등록' }, { key: 'closed', label: '종결' }], rows: rSeries(buckets, ncs.flatMap(n => [{ bucket: n.bucket, key: 'open', value: 1 }, ...(n.status === 'closed' && n.cbucket ? [{ bucket: n.cbucket, key: 'closed', value: 1 }] : [])]), ['open', 'closed']) },
       ],
       tables: [
         { title: '거래처별 불합격률', columns: [{ label: '거래처' }, { label: '판정', type: 'count' }, { label: '불합격', type: 'count' }, { label: '불합격률', type: 'pct' }], rows: [...vend].sort((a, b) => b[1].f - a[1].f || b[1].n - a[1].n).slice(0, 10).map(([k, g]) => [k, g.n, g.f, rpct(g.f, g.n)]) },
         { title: '불합격 품목 순위', columns: [{ label: '품목·검사' }, { label: '불합격', type: 'count' }], rows: [...items].sort((a, b) => b[1] - a[1]).slice(0, 10), href: '#/quality/inspections', empty: '기간 안에 불합격이 없습니다.' },
+        { title: '부적합 출처별(CAPA)', columns: [{ label: '출처' }, { label: '등록', type: 'count' }, { label: '종결', type: 'count' }, { label: '기한 지남', type: 'count' }], rows: Object.entries(NC_SOURCE).map(([k, l]) => { const g = ncs.filter(n => n.source_type === k); return g.length ? [l, g.length, g.filter(n => n.status === 'closed').length, g.filter(n => !['closed', 'void'].includes(n.status) && n.due_date && n.due_date < now).length] : null; }).filter(Boolean), href: '#/quality/capa', empty: '기간 안에 등록된 부적합이 없습니다.' },
+        { title: '공정 기준 이탈 항목', columns: [{ label: '공정 · 항목' }, { label: '측정', type: 'count' }, { label: '이탈', type: 'count' }, { label: '이탈률', type: 'pct' }], rows: pqcRows.map(r => [`${r.place} · ${r.item}`, r.n, r.out, rpct(r.out, r.n)]), href: '#/quality/pqc', empty: '기간 안에 공정 측정이 없습니다.' },
       ],
     };
   },
@@ -8772,6 +8806,29 @@ route('GET', '/api/dashboard', async ({ user }) => {
       }
       return out;
     })().catch(error => { console.error('Dashboard sales: ' + error.message); return null; }),
+    // 15.310 품질(QA·QC)과 공무(설비·예방보전): 지금 처리할 것과 이번 달 숫자
+    quality: await (async () => {
+      const month = t.slice(0, 7), in7 = addDaysISO(t, 7);
+      const insp = await db.prepare("SELECT SUM(CASE WHEN r.category='수입검사' AND m.result='fail' THEN 1 ELSE 0 END) AS iqc_fail, SUM(CASE WHEN r.category='수입검사' AND m.result IN ('pass','fail') THEN 1 ELSE 0 END) AS iqc, SUM(CASE WHEN r.category='출하검사' AND m.result='fail' THEN 1 ELSE 0 END) AS oqc_fail, SUM(CASE WHEN r.category='출하검사' AND m.result IN ('pass','fail') THEN 1 ELSE 0 END) AS oqc FROM requests r JOIN inspection_measurements m ON m.request_id=r.id WHERE r.type='analysis' AND substr(r.created_at,1,7)=?").get(month);
+      return {
+        capaOpen: await c("SELECT COUNT(*) c FROM nonconformities WHERE status NOT IN ('closed','void')"),
+        capaOverdue: await c("SELECT COUNT(*) c FROM nonconformities WHERE status NOT IN ('closed','void') AND due_date IS NOT NULL AND due_date<?", t),
+        capaVerify: await c("SELECT COUNT(*) c FROM nonconformities WHERE status='verify'"),
+        coaDraft: await c("SELECT COUNT(*) c FROM coas WHERE status='draft'"),
+        coaMonth: await c("SELECT COUNT(*) c FROM coas WHERE status='approved' AND substr(COALESCE(approved_at,created_at),1,7)=?", month),
+        changesOpen: await c("SELECT COUNT(*) c FROM quality_changes WHERE status IN ('requested','evaluating','approved','applied')"),
+        docsReview: await c("SELECT COUNT(*) c FROM quality_docs WHERE status='review'"),
+        auditsCorrecting: await c("SELECT COUNT(*) c FROM quality_audits WHERE status='correcting'"),
+        iqcFail: insp.iqc_fail || 0, iqc: insp.iqc || 0, oqcFail: insp.oqc_fail || 0, oqc: insp.oqc || 0,
+        calDue: await c("SELECT COUNT(*) c FROM instruments WHERE status='in_use' AND next_due IS NOT NULL AND next_due<=?", addDaysISO(t, 30)),
+        kpiMissed: await (async () => { try { return (await goalRows(Number(t.slice(0, 4)))).filter(g => g.met === false).length; } catch { return 0; } })(),
+        pmOverdue: await c("SELECT COUNT(*) c FROM equipment e, json_each(e.pm_items) j WHERE e.status<>'disposed' AND json_extract(j.value,'$.next_due')<?", t),
+        pmSoon: await c("SELECT COUNT(*) c FROM equipment e, json_each(e.pm_items) j WHERE e.status<>'disposed' AND json_extract(j.value,'$.next_due')>=? AND json_extract(j.value,'$.next_due')<=?", t, in7),
+        eqMaintenance: await c("SELECT COUNT(*) c FROM equipment WHERE status='maintenance'"),
+        eqFailMonth: await c("SELECT COUNT(*) c FROM equipment_logs WHERE kind='failure' AND substr(log_date,1,7)=?", month),
+        pqcOutMonth: await c("SELECT COUNT(*) c FROM process_measures WHERE out_of_spec=1 AND substr(measured_on,1,7)=?", month),
+      };
+    })().catch(error => { console.error('Dashboard quality: ' + error.message); return null; }),
   };
 });
 

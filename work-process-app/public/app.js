@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.309';
+const APP_VERSION = '15.310';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -366,7 +366,7 @@ async function saveNewAttachments(entity, row, draft, form) {
 // ───────────── 레이아웃 / 라우팅 ─────────────
 // 메뉴: 업무 → 하위 메뉴 → 화면. 입력과 목록(조회·검색)은 서로 다른 화면입니다(VIEW_SPLIT).
 const NAV = [
-  { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
+  { group: '홈', items: [['#/', '대시보드'], ['#/reports', '리포트 · 통계']] }, // 15.310 업무 흐름 안내는 각 화면 제목 아래로
   { group: '영업', items: [{ sub: '견적', items: [['#/sales/quotes', '견적서 관리']] }, { sub: '수주', items: [['#/sales/orders', '수주 관리']] }, { sub: '매출전표', items: [['#/sales/bills', '매출전표 관리'], ['#/sales/calendar', '매출 달력'], ['#/sales/reps', '영업담당자별 현황'], ['#/sales/returns', '반입(반품) 관리'], ['#/sales/delivery-status', '납품현황'], ['#/sales/closing', '매출 마감']] }, { sub: '생산의뢰', items: [['#/sales/mr', '생산의뢰 관리']] }, { sub: '구매의뢰', items: [['#/sales/pr', '구매의뢰 관리']] }, { sub: '샘플의뢰', items: [['#/sales/sample/product', '제품 샘플의뢰'], ['#/sales/sample/goods', '상품 샘플의뢰']] }] },
   { group: '구매', items: [
     { sub: '발주', items: [['#/purchase/po', '발주 관리'], ['#/purchase/stock', '구매 재고현황']] }, // 15.262
@@ -1753,77 +1753,124 @@ function labelSegGroups() {
 function scrollTabsIntoView() { if (!matchMedia('(max-width: 700px)').matches) return; $$('#main .seg.class-tabs, #main .tax-side, #main .receipt-tabs').forEach(bar => { const on = bar.querySelector('.on, [aria-current], [aria-pressed="true"]'); if (!on || bar.scrollWidth <= bar.clientWidth || bar.dataset.tabX === on.textContent) return; bar.dataset.tabX = on.textContent; bar.scrollLeft = Math.max(0, on.offsetLeft - bar.clientWidth / 2 + on.offsetWidth / 2); }); }
 new MutationObserver(() => { labelGridTables(); labelSegGroups(); pairDateRanges(); filterTools(); scrollTabsIntoView(); }).observe(document.body, { childList: true, subtree: true });
 
+// ── 15.310 사람별 화면 구성(대시보드·리포트): 숨길 위젯·순서를 내 설정(서버)에 저장해 다른 기기에서도 같게 ──
+const uiPref = key => (ME && ME.ui && ME.ui[key] && typeof ME.ui[key] === 'object') ? ME.ui[key] : {};
+async function saveUiPref(key, value) { ME.ui = await api('PUT', '/api/me/prefs', { [key]: value }); return ME.ui; }
+// order(저장한 순서)대로 먼저, 없는 것은 기본 순서대로 뒤에. hidden에 든 것은 뺀다(fixed는 항상).
+function applyWidgetPref(items, pref) {
+  const hidden = new Set(pref.hidden || []), order = pref.order || [];
+  const sorted = [...order.map(k => items.find(i => i.key === k)).filter(Boolean), ...items.filter(i => !order.includes(i.key))];
+  return sorted.filter(i => i.fixed || !hidden.has(i.key));
+}
+// 표시 설정 창: 체크(보이기)·▲▼(순서)·기본값. items: [{key,label,hint,fixed,parent}] — parent가 있으면 그 항목 아래 들여쓰기, 순서는 형제끼리만 바뀜.
+function widgetSetup({ title, intro = '', items, pref, extra = '', onSave }) {
+  const hidden = new Set(pref.hidden || []), order = pref.order || [];
+  const sortSib = list => [...order.map(k => list.find(i => i.key === k)).filter(Boolean), ...list.filter(i => !order.includes(i.key))];
+  const roots = sortSib(items.filter(i => !i.parent)), rowsOf = parent => sortSib(items.filter(i => i.parent === parent));
+  const row = i => `<li class="ws-row${i.parent ? ' ws-sub' : ''}" data-ws="${esc(i.key)}"><label class="chk"><input type="checkbox" data-ws-on${i.fixed ? ' checked disabled' : hidden.has(i.key) ? '' : ' checked'}> <b>${esc(i.label)}</b>${i.hint ? ` <span class="small muted">${esc(i.hint)}</span>` : ''}</label><span class="grow"></span><span class="ws-move"><button type="button" class="btn small" data-ws-up title="위로" aria-label="${esc(i.label)} 위로">▲</button><button type="button" class="btn small" data-ws-down title="아래로" aria-label="${esc(i.label)} 아래로">▼</button></span></li>`;
+  const m = modal(`<h3>${esc(title)}</h3>${intro ? `<p class="small muted">${intro}</p>` : ''}<form class="stack" data-ws-form>
+    <ul class="ws-list">${roots.map(r => row(r) + rowsOf(r.key).map(row).join('')).join('')}</ul>${extra}
+    <div class="actions"><button type="button" class="btn" data-ws-reset>기본값으로</button><span class="grow"></span><button type="button" class="btn" data-no>취소</button><button class="btn primary">저장</button></div></form>`, { wide: true });
+  const form = $('[data-ws-form]', m.el), list = $('.ws-list', form);
+  const siblings = li => { const key = li.dataset.ws, item = items.find(i => i.key === key); return $$('.ws-row', list).filter(x => (items.find(i => i.key === x.dataset.ws)?.parent || '') === (item?.parent || '')); };
+  const block = li => [li, ...(items.some(i => i.parent === li.dataset.ws) ? $$('.ws-row', list).filter(x => items.find(i => i.key === x.dataset.ws)?.parent === li.dataset.ws) : [])];
+  list.addEventListener('click', e => {
+    const up = e.target.closest('[data-ws-up]'), down = e.target.closest('[data-ws-down]'); if (!up && !down) return;
+    const li = e.target.closest('.ws-row'), sib = siblings(li), i = sib.indexOf(li), target = sib[i + (up ? -1 : 1)]; if (!target) return;
+    const mine = block(li), theirs = block(target);
+    if (up) theirs[0].before(...mine); else theirs.at(-1).after(...mine);
+    li.querySelector(up ? '[data-ws-up]' : '[data-ws-down]').focus();
+  });
+  $('[data-no]', form).onclick = () => m.close();
+  $('[data-ws-reset]', form).onclick = async () => { if (!await confirmBox('표시 설정을 기본값으로 되돌릴까요?')) return; try { await onSave(null, formObj(form)); toast('기본값으로 되돌렸습니다.'); m.close(); } catch (e) { fail(e); } };
+  form.onsubmit = async e => { e.preventDefault(); const rows = $$('.ws-row', list); const next = { hidden: rows.filter(r => !$('[data-ws-on]', r).checked && !items.find(i => i.key === r.dataset.ws)?.fixed).map(r => r.dataset.ws), order: rows.map(r => r.dataset.ws) };
+    try { await onSave(next, formObj(form)); toast('표시 설정을 저장했습니다.'); m.close(); } catch (err) { fail(err); } };
+  return m;
+}
+
 async function pageHome(main) {
   const [d, tasks, alerts] = await Promise.all([api('GET', '/api/dashboard'), api('GET', '/api/my-tasks'), api('GET', '/api/alerts').catch(() => null)]);
-  const r = d.requests;
-  const flow = (title, steps) => `<div class="flow"><h3>${title}</h3><ol>${steps.map((s) => `<li>${s}</li>`).join('')}</ol></div>`;
+  const r = d.requests, pref = uiPref('dash');
   // 15.36 대시보드 화면 구성: 같은 숫자·링크를 업무 묶음별로 나눠 보여 준다(값과 조건은 그대로).
   // tone: '' 보통, 'red' 문제, 'yellow' 확인 필요. 0건은 흐리게 보여 눈이 문제 숫자에 먼저 가게 한다.
-  const kpi = (href, value, label, tone = '', note = '') => `<a class="kpi ${tone} ${Number(value) === 0 ? 'is-zero' : ''}" href="${href}"><b>${value}</b><span>${label}</span>${note}</a>`;
-  const group = (title, tiles) => { const body = tiles.filter(Boolean).join(''); return body ? `<section class="kpi-group" aria-label="${title}"><h3>${title}</h3><div class="kpis">${body}</div></section>` : ''; };
   const num = v => Number(v) === 0 ? '<span class="zero">0</span>' : v;
   // 15.215 Overview: 부서 카드(위 색 띠) 안에 「이름 ··· 숫자」 줄. 0건은 흐리게, 처리할 것이 있는 줄만 색. 영업은 금액(담당자만) + 수주·출하 대기·계산서.
-  const sa = d.sales;
+  const sa = d.sales, q = d.quality;
   const row = (href, value, label, tone = '', note = '') => `<a class="dm-row ${tone} ${Number(String(value).replace(/,/g, '')) === 0 ? 'is-zero' : ''}" href="${href}"><span class="dm-l">${label}${note ? ` <em>${note}</em>` : ''}</span><b class="dm-v">${value}</b></a>`;
   const card = (dept, en, ko, href, rows) => { const body = rows.filter(Boolean).join(''); return body ? `<section class="dm-card" data-dept="${dept}" aria-label="${ko}"><h3><a href="${href}"><span class="dm-en">${en}</span><span class="dm-ko">${ko}</span></a></h3>${body}</section>` : ''; };
-  main.innerHTML = `
-  <div class="dash-head"><h1>대시보드</h1><p class="dash-date"><time datetime="${d.today}">${d.today} (${dow(d.today)})</time></p></div>
-  <div class="dash-top">${tasksCard(tasks)}${alertsCard(alerts)}</div>
-  ${d.stock === null ? '<p class="small red-text" role="status">재고 경고를 조회하지 못했습니다. 재고 현황을 확인하거나 잠시 후 새로고침해주세요.</p>' : ''}
-  <section class="dash-section" aria-labelledby="dashNow"><h2 id="dashNow">Overview <span class="dash-sub">부서별 지금 처리할 것</span></h2>
-  <div class="dash-overview">
-    ${card('sales', 'Sales', '영업', '#/sales/orders', [
+  // 15.310 Overview 카드와 구역을 위젯으로: 「표시 설정」에서 숨기거나 순서를 바꾼다(사람별, 다른 기기에서도 같게). 업무 흐름 안내는 화면마다 제목 아래 줄로 옮겨 대시보드에서는 뺐다.
+  const cards = [
+    { key: 'ov:sales', label: '영업', html: card('sales', 'Sales', '영업', '#/sales/orders', [
       sa && sa.canMoney ? `<a class="dm-hero" href="#/sales/bills"><span>이번 달 매출 <small>(확정 전표 ${fmtNum(sa.billsMonth)}장)</small></span><b>₩ ${won(sa.salesMonth)}</b><small>이번 달 입금 ₩ ${won(sa.paidMonth)}</small></a>` : '',
       sa ? row('#/sales/orders', sa.ordersOpen, '진행 중 수주', '', sa.ordersToday ? `오늘 ${sa.ordersToday}건` : '') : '',
       sa ? row('#/logistics/ship-orders', sa.shipPending, '출하 대기 지시', 'yellow', sa.shipHeld ? `보류 ${sa.shipHeld}` : '') : '',
       sa ? row('#/sales/bills', sa.untaxed, '세금계산서 안 담은 전표', 'yellow') : '',
       sa && !sa.canMoney ? row('#/sales/bills', sa.billsMonth, '이번 달 확정 전표') : '',
-    ])}
-    ${card('logistics', 'Purchasing · Logistics', '구매·물류', '#/logistics/receive', [
+    ]) },
+    { key: 'ov:logistics', label: '구매·물류', html: card('logistics', 'Purchasing · Logistics', '구매·물류', '#/logistics/receive', [
       row('#/logistics/receive', d.po.none, '미입고 발주', '', d.po.overdue ? `<span class="red-text">납기경과 ${d.po.overdue}</span>` : ''),
       row('#/logistics/receive', d.po.checking, '입고 확인중', 'yellow'),
       row('#/logistics/receive', d.po.mismatch, '수량상이', 'red'),
       d.po.partial ? row('#/logistics/receive', d.po.partial, '부분 입고 (남음)', 'yellow') : '',
       d.receiptChangesPending ? row('#/logistics/receive', d.receiptChangesPending, '입고 수량 수정 승인대기', 'yellow') : '',
       row('#/logistics/ship', d.shipmentsToday, '오늘 출하'),
-    ])}
-    ${card('production', 'Inventory · Production', '재고·생산', '#/logistics/stock', [
+    ]) },
+    { key: 'ov:production', label: '재고·생산', html: card('production', 'Inventory · Production', '재고·생산', '#/logistics/stock', [
       row('#/prod/finished/plan', d.schedulesToday, '오늘 생산 계획'),
       d.stock ? row('#/logistics/stock', d.stock.low, '안전재고 미달 품목', 'yellow') : '',
       d.stock ? row('#/logistics/stock', d.stock.negative, '재고 음수 품목 (기록 확인)', 'red') : '',
       d.actualChangesPending ? row('#/prod/finished', d.actualChangesPending, '생산실적 수정 승인대기', 'yellow') : '',
       row('#/purchase/laundry', fmtNum(d.laundryMonth), '이번 달 세탁 폐기'),
-    ])}
-    ${card('quality', 'Requests', '의뢰 접수 대기', '#/quality/list', [
+    ]) },
+    { key: 'ov:quality', label: '품질(QA·QC)', html: q ? card('quality', 'Quality', '품질', '#/quality/capa', [
+      row('#/quality/capa', q.capaOpen, '진행 중 부적합·CAPA', q.capaOverdue ? 'red' : '', q.capaOverdue ? `<span class="red-text">기한 지남 ${q.capaOverdue}</span>` : q.capaVerify ? `종결 대기 ${q.capaVerify}` : ''),
+      row('#/quality/coa', q.coaDraft, 'COA 승인 대기', 'yellow', q.coaMonth ? `이번 달 발행 ${q.coaMonth}` : ''),
+      row('#/quality/inspections', q.iqcFail, '이번 달 수입검사 불합격', 'red', `판정 ${q.iqc}건`),
+      row('#/quality/inspections', q.oqcFail, '이번 달 출하검사 불합격', 'red', `판정 ${q.oqc}건`),
+      row('#/quality/changes', q.changesOpen, '진행 중 변경', 'yellow'),
+      row('#/quality/docs', q.docsReview, '검토 대기 문서', 'yellow'),
+      q.auditsCorrecting ? row('#/quality/audits', q.auditsCorrecting, '심사 시정 중', 'yellow') : '',
+      row('#/quality/calibration', q.calDue, '교정 30일 안·지남', 'yellow'),
+      q.kpiMissed ? row('#/quality/kpi', q.kpiMissed, '올해 품질목표 미충족', 'red') : '',
+    ]) : '' },
+    { key: 'ov:plant', label: '공무·설비', html: q ? card('plant', 'Plant · Maintenance', '공무·설비', '#/prod/pm', [
+      row('#/prod/pm', q.pmOverdue, '예방보전(PM) 지남', 'red'),
+      row('#/prod/pm', q.pmSoon, 'PM 7일 안', 'yellow'),
+      row('#/prod/equipment', q.eqMaintenance, '정비 중 설비', 'yellow'),
+      row('#/prod/equipment', q.eqFailMonth, '이번 달 고장'),
+      row('#/quality/pqc', q.pqcOutMonth, '이번 달 공정 기준 이탈', 'red'),
+    ]) : '' },
+    { key: 'ov:requests', label: '의뢰 접수 대기', html: card('requests', 'Requests', '의뢰 접수 대기', '#/quality/list', [
       row('#/quality/request', r.analysis.pending, '분석 접수대기', 'yellow'),
       row('#/quality/voc/request', r.voc.pending, 'VOC 승인대기', 'yellow'),
       row('#/dev/request', r.development.pending, '개발 접수대기', 'yellow'),
       row('#/prod/list', r.sample.pending, '샘플 접수대기', 'yellow'),
-    ])}
-  </div></section>
-  <section class="dash-section" aria-labelledby="dashProgress"><h2 id="dashProgress">Request Pipeline <span class="dash-sub">의뢰 종류별 진행</span></h2>
+    ]) },
+  ];
+  const favs = ((ME.ui && ME.ui.favorites) || []).filter(f => canSeeRoute(f.href)), recent = readRecent().filter(x => canSeeRoute(x.href) && !favs.some(f => f.href === x.href)).slice(0, 8);
+  const widgets = [
+    { key: 'tasks', label: '내가 처리할 일', html: tasksCard(tasks) },
+    { key: 'alerts', label: '확인이 필요한 일', html: alertsCard(alerts) },
+    { key: 'overview', label: 'Overview(부서별 지금 처리할 것)', html: `<section class="dash-section" aria-labelledby="dashNow"><h2 id="dashNow">Overview <span class="dash-sub">부서별 지금 처리할 것</span></h2><div class="dash-overview">${applyWidgetPref(cards, pref).map(c => c.html).join('')}</div></section>` },
+    { key: 'pipeline', label: 'Request Pipeline(의뢰 종류별 진행)', html: `<section class="dash-section" aria-labelledby="dashProgress"><h2 id="dashProgress">Request Pipeline <span class="dash-sub">의뢰 종류별 진행</span></h2>
   <div class="table-wrap"><table class="grid keep-table progress-table">
     <caption class="sr-only">의뢰 종류별 진행 현황 (건수)</caption>
     <thead><tr><th scope="col">구분</th><th scope="col">접수대기</th><th scope="col">대기</th><th scope="col">진행</th><th scope="col">완료</th></tr></thead>
     <tbody>${['analysis', 'rnd_analysis', 'development', 'sample', 'sample_goods', 'voc'].filter(t => r[t]).map((t) => `<tr><th scope="row"><a href="${REQ[t].list}">${REQ[t].label}의뢰</a></th><td>${num(r[t].pending)}</td><td>${num(r[t].waiting)}</td><td>${num(r[t].progress)}</td><td>${num(r[t].done)}</td></tr>`).join('')}</tbody>
-  </table></div></section>
-  <section class="dash-section" aria-labelledby="dashFlows">
-  <details class="dash-flows" data-flows><summary><h2 id="dashFlows">업무 흐름</h2><span class="small muted">부서별 처리 순서 안내</span></summary>
-  <div class="flows">
-    ${flow('구매 → 물류 (발주·입고)', ['<b>구매</b> 발주서 발송 후 <a href="#/purchase/po">발주목록</a> 입력', '<b>물류</b> 입고 시 <a href="#/logistics/receive">입고목록 → 발주입고</a>에서 체크', '정상 입고 → <span class="chip green">초록</span>', '수량 다름 → <span class="chip red">빨강</span> (실입고 수량 기록)', '확인 중 → <span class="chip yellow">노랑</span>'])}
-    ${flow('품질 (분석)', ['<b>누구나</b> <a href="#/quality/request">분석의뢰</a> 양식 작성', '접수대기 목록에 등록', '<b>품질담당자</b> 승인 → 접수번호 발급', '<a href="#/quality/list">분석리스트</a>에서 대기 → 진행 → 완료', '수입·의뢰·출하·공정검사 구분'])}
-    ${flow('품질 (VOC)', ['<b>누구나</b> <a href="#/quality/voc/request">VOC 접수</a> (고객사·제품·수량·LOT·사진)', '<b>품질팀장(품질책임자)</b> 승인', '<a href="#/quality/voc/list">VOC 처리목록</a>에서 대기 → 진행 → 완료', '진행 코멘트에 처리사항 기록'])}
-    ${flow('품질 (부적합 개선·CAPA)', ['검사·분석 불합격, 공정 이상, VOC, 심사 지적 → <a href="#/quality/capa">부적합·CAPA</a> 등록', '<b>품질</b> 원인분석 → 조치(4M 변경이면 <a href="#/quality/changes">변경관리</a>)', '변경 영향에 따라 <a href="#/quality/docs">문서 개정</a> · <a href="#/quality/training">개정 교육</a> · <a href="#/quality/validation">재밸리데이션</a>', '<b>품질책임자</b> 유효성검증 「유효」 확인 후 종결'])}
-    ${flow('품질 (COA·협력업체)', ['출하검사 합격 LOT → <a href="#/quality/coa">COA 발행</a> → <b>품질책임자</b> 승인 → 인쇄·PDF', '입고 → 수입검사·<b>공급사 COA</b> 첨부', '<a href="#/quality/suppliers">협력업체 품질</a>: 연 1회 평가(A~D)·변경점 접수'])}
-    ${flow('공무 (설비·예방보전)', ['<a href="#/prod/equipment">설비 대장</a>에 설비·PM 항목 등록', '<a href="#/prod/pm">PM 일정</a>에서 「수행」(점검표) → 다음 예정일 자동', '고장·수리는 설비 이력에 기록(비가동 시간)'])}
-    ${flow('개발', ['<b>누구나</b> <a href="#/dev/request">개발의뢰</a> 작성 (타겟제품·타겟단가)', '접수대기 목록에 등록', '<b>연구소담당자</b> 승인', '<a href="#/dev/list">개발리스트</a>에서 대기 → 진행 → 완료'])}
-    ${flow('생산', ['<b>누구나</b> <a href="#/prod/request">샘플의뢰</a> 작성', '<b>생산담당자</b> 승인 → <a href="#/prod/list">샘플리스트</a>', '<a href="#/prod/finished">완제품</a> / <a href="#/prod/semi">반제품</a> 생산일정 일·주·월 입력'])}
-    ${flow('구매 (세탁) · 물류 (출하)', ['세탁 입고분 불량 폐기 → <a href="#/purchase/laundry">세탁관리</a>에 사진·수량', '매일 출고 품목 → <a href="#/logistics/ship">출하목록</a> 입력'])}
-  </div></details></section>
-  <p class="muted small dash-note">※ 샘플 및 개발제품의 출고(or 제출)는 제조/품질본부장 승인 후 출고 가능</p>`;
-  // 업무 흐름 안내는 넓은 화면에서는 펼치고, 휴대폰에서는 접어 둔다(내용은 그대로, 눌러서 열기).
-  const flows = $('[data-flows]', main); if (flows && !matchMedia('(max-width: 700px)').matches) flows.open = true;
-  // 15.62: 휴대폰에서는 할 일·알림을 먼저 보도록 「현황 한눈에」「진행 현황」을 접어 둔다(눌러서 열기).
+  </table></div></section>` },
+    { key: 'mymenu', label: '마이메뉴 · 최근 연 화면', html: `<section class="dash-section" aria-labelledby="dashMenu"><h2 id="dashMenu">My Menu <span class="dash-sub">마이메뉴 · 최근 연 화면</span></h2><div class="dash-links">${favs.map(f => `<a class="dash-link fav" href="${esc(f.href)}">★ ${esc(f.label)}</a>`).join('')}${recent.map(x => `<a class="dash-link" href="${esc(x.href)}">${esc(x.label)}</a>`).join('')}${favs.length || recent.length ? '' : '<p class="small muted">화면 제목 옆 ☆를 누르면 여기와 메뉴 맨 위 「마이메뉴」에 고정됩니다.</p>'}</div></section>` },
+    { key: 'note', label: '안내 문구(샘플·개발제품 출고)', html: '<p class="muted small dash-note">※ 샘플 및 개발제품의 출고(or 제출)는 제조/품질본부장 승인 후 출고 가능</p>' },
+  ];
+  const shown = applyWidgetPref(widgets, pref), top = shown.filter(w => ['tasks', 'alerts'].includes(w.key)), rest = shown.filter(w => !['tasks', 'alerts'].includes(w.key));
+  main.innerHTML = `
+  <div class="dash-head"><h1>대시보드</h1><p class="dash-date"><time datetime="${d.today}">${d.today} (${dow(d.today)})</time></p><span class="grow"></span><button type="button" class="btn small" id="dashSetup" title="보일 위젯·순서(사람별)">⚙ 표시 설정</button></div>
+  ${top.length ? `<div class="dash-top">${top.map(w => w.html).join('')}</div>` : ''}
+  ${d.stock === null ? '<p class="small red-text" role="status">재고 경고를 조회하지 못했습니다. 재고 현황을 확인하거나 잠시 후 새로고침해주세요.</p>' : ''}
+  ${rest.map(w => w.html).join('')}`;
+  $('#dashSetup', main).onclick = () => widgetSetup({ title: '대시보드 표시 설정', intro: '보일 위젯을 체크하고 ▲▼로 순서를 바꾸세요. 내 계정에 저장되어 다른 기기에서도 같게 보입니다. 메뉴 권한이 없는 부서 카드는 체크해도 보이지 않습니다.',
+    items: [...widgets.map(w => ({ key: w.key, label: w.label })), ...cards.map(c => ({ key: c.key, label: c.label, parent: 'overview' }))], pref,
+    onSave: async next => { await saveUiPref('dash', next); await pageHome(main); applyMenuAccess(main); } });
+  // 15.62: 휴대폰에서는 할 일·알림을 먼저 보도록 「진행 현황」을 접어 둔다(눌러서 열기).
   if (matchMedia('(max-width: 700px)').matches) for (const id of ['dashProgress']) { // 15.215 Overview는 휴대폰에서도 펼쳐 둠
     const section = $(`[aria-labelledby="${id}"]`, main), heading = section && $('#' + id, section); if (!section || !heading) continue;
     const fold = document.createElement('details'); fold.className = 'dash-fold';

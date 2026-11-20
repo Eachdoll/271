@@ -1029,3 +1029,22 @@ test('15.309 review fixes: losing concurrent writes leave nothing, negative valu
   // COA 승인: 오래된 판이면 409
   assert.equal((await admin('POST', '/api/coas/999999/approve', { revision: 1 })).status, 404);
 });
+
+test('15.310 per-user display prefs for dashboard/report are validated and kept; dashboard has quality/plant numbers; quality dept report adds CAPA/process stats', async () => {
+  const p1 = await admin('PUT', '/api/me/prefs', { dash: { hidden: ['pipeline', 'ov:requests'], order: ['alerts', 'tasks', 'overview'] } });
+  assert.equal(p1.status, 200, JSON.stringify(p1.body)); assert.deepEqual(p1.body.dash, { hidden: ['pipeline', 'ov:requests'], order: ['alerts', 'tasks', 'overview'] });
+  assert.deepEqual((await admin('GET', '/api/me')).body.user.ui.dash.hidden, ['pipeline', 'ov:requests']);
+  const p2 = await admin('PUT', '/api/me/prefs', { report: { hidden: ['common:kpi:매출액(공급가액)', 'dept:quality:table:거래처별 불합격률', 'detail:semi'], period: 'month', dept: 'quality', unit: 'BOX' } });
+  assert.equal(p2.status, 200, JSON.stringify(p2.body)); assert.equal(p2.body.report.period, 'month'); assert.equal(p2.body.report.dept, 'quality'); assert.equal(p2.body.report.unit, 'BOX'); assert.equal(p2.body.report.hidden.length, 3);
+  assert.equal((await admin('PUT', '/api/me/prefs', { report: { period: 'yesterday' } })).status, 400);
+  assert.equal((await admin('PUT', '/api/me/prefs', { report: { dept: 'nope' } })).status, 400);
+  assert.equal((await admin('PUT', '/api/me/prefs', { dash: { hidden: 'x' } })).status, 400);
+  const p3 = await admin('PUT', '/api/me/prefs', { report: { period: '', hidden: [] } }); assert.equal(p3.body.report.period, undefined); assert.equal(p3.body.report.hidden, undefined); assert.equal(p3.body.report.dept, 'quality', 'other keys kept');
+  const p4 = await admin('PUT', '/api/me/prefs', { dash: null }); assert.equal(p4.body.dash, undefined); assert.ok(p4.body.report, 'report kept');
+  const p5 = await admin('PUT', '/api/me/prefs', { dash: { hidden: ['ov:sales', '<script>'] } }); assert.deepEqual(p5.body.dash.hidden, ['ov:sales'], 'bad names dropped');
+  const d = (await admin('GET', '/api/dashboard')).body; assert.ok(d.quality, 'quality block'); assert.ok(d.quality.capaOpen >= 1); assert.equal(typeof d.quality.pmOverdue, 'number'); assert.equal(typeof d.quality.iqcFail, 'number'); assert.equal(typeof d.quality.kpiMissed, 'number');
+  const q = (await admin('GET', `/api/reports/dept?section=quality&from=${today.slice(0, 4)}-01-01&to=${today}&grain=month`)).body;
+  assert.ok(q.kpis.some(k => k.label === 'CAPA 등록' && k.value >= 1), JSON.stringify(q.kpis.map(k => k.label))); assert.ok(q.kpis.some(k => k.label === 'CAPA 기한 준수율')); assert.ok(q.kpis.some(k => k.label === '공정 기준 이탈' && k.value >= 1));
+  assert.ok(q.charts.some(c => c.title === '부적합(CAPA) 등록 · 종결')); assert.ok(q.tables.some(t => t.title === '부적합 출처별(CAPA)' && t.rows.length >= 1)); assert.ok(q.tables.some(t => t.title === '공정 기준 이탈 항목' && t.rows.length >= 1));
+  await admin('PUT', '/api/me/prefs', { report: null, dash: null });
+});

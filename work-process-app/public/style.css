@@ -3993,3 +3993,20 @@ table.risk-matrix td.on { outline: 2px solid var(--text); }
 .risk-ax { margin-top: 4px; } .risk-score { align-self: end; padding-bottom: 8px; }
 .kpi-tbl th, .kpi-tbl td:last-child, .rel-pts th, .val-st th, .aud-cl th, .pm-edit th, .pqc-grid th, .tr-att th, .chg-imp th { white-space: nowrap; }
 .modal table.grid.kpi-tbl > thead > tr > th, .modal table.grid.kpi-tbl > tbody > tr > th { white-space: nowrap !important; overflow-wrap: normal !important; min-width: 64px; }
+
+/* 15.310 대시보드·리포트 표시 설정 */
+.dash-head .grow { flex: 1; }
+.dm-card[data-dept="requests"] { --dept: #7048e8; } .dm-card[data-dept="plant"] { --dept: #5c7cfa; } .dm-card[data-dept="quality"] { --dept: #12b886; }
+.dash-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.dash-link { display: inline-flex; align-items: center; min-height: 36px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--text); text-decoration: none; font-size: 13.5px; }
+.dash-link.fav { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); font-weight: 600; }
+.dash-link:hover { border-color: var(--accent); text-decoration: none; }
+.ws-list { list-style: none; margin: 0 0 10px; padding: 0; max-height: min(60vh, 520px); overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.ws-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-top: 1px solid var(--line); }
+.ws-row:first-child { border-top: 0; }
+.ws-row.ws-sub { padding-left: 34px; background: color-mix(in srgb, var(--bg) 60%, var(--panel)); }
+.ws-row .chk { display: flex; align-items: center; gap: 8px; }
+.ws-move { display: inline-flex; gap: 4px; } .ws-move .btn { padding: 2px 8px; min-width: 0; }
+.ws-defaults { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin: 0 0 6px; }
+#reportBlocks .dept-sec[hidden] { display: none; }
+.report-heading .actions { flex-wrap: wrap; }
