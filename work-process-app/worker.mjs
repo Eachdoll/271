@@ -3533,7 +3533,7 @@ route('GET', '/api/dev-roadmap', async ({ query }) => {
     FROM requests r LEFT JOIN dev_plans p ON p.request_id=r.id WHERE ${where.join(' AND ')} ORDER BY COALESCE(NULLIF(p.target_date,''), r.due_date, '9999') , r.id LIMIT 500`).all(...args);
   const steps = new Map(); for (const st of await db.prepare(`SELECT * FROM dev_plan_steps ${query.id ? 'WHERE request_id=? ' : ''}ORDER BY request_id, sort, id`).all(...(query.id ? [Number(query.id)] : []))) { if (!steps.has(st.request_id)) steps.set(st.request_id, []); steps.get(st.request_id).push(st); }
   const ana = new Map(); // 15.286 연결된 연구 분석(단계·결과)
-  for (const a of await db.prepare(`SELECT id, req_no, title, category, status, result_note, requester_name, created_at, updated_at, CAST(json_extract(data,'$.dev_request_id') AS INTEGER) AS dev_id, COALESCE(json_extract(data,'$.dev_step'),'') AS dev_step, COALESCE(json_extract(data,'$.analysis_date'),'') AS analysis_date FROM requests WHERE type='rnd_analysis' AND status<>'rejected' AND json_extract(data,'$.dev_request_id') IS NOT NULL ${query.id ? "AND json_extract(data,'$.dev_request_id')=?" : ''} ORDER BY id`).all(...(query.id ? [Number(query.id)] : []))) { if (!ana.has(a.dev_id)) ana.set(a.dev_id, []); ana.get(a.dev_id).push(a); }
+  for (const a of await db.prepare(`SELECT id, req_no, title, category, status, result_note, requester_name, created_at, updated_at, CAST(json_extract(data,'$.dev_request_id') AS INTEGER) AS dev_id, COALESCE(json_extract(data,'$.dev_step'),'') AS dev_step, COALESCE(json_extract(data,'$.analysis_date'),'') AS analysis_date, (SELECT m.result FROM inspection_measurements m WHERE m.request_id=requests.id) AS judge FROM requests WHERE type='rnd_analysis' AND status<>'rejected' AND json_extract(data,'$.dev_request_id') IS NOT NULL ${query.id ? "AND json_extract(data,'$.dev_request_id')=?" : ''} ORDER BY id`).all(...(query.id ? [Number(query.id)] : []))) { if (!ana.has(a.dev_id)) ana.set(a.dev_id, []); ana.get(a.dev_id).push(a); }
   return { rows: rows.map(r => ({ ...r, term: r.term || '', progress: r.progress || 0, steps: steps.get(r.id) || [], analyses: ana.get(r.id) || [] })) };
 });
 // 15.277 담당자(개발·영업): 개발 담당·개발 승인권자·영업·관리자가 지정. 바뀌면 소통 내역에 [담당자] 한 줄을 같이 남김.
@@ -3667,10 +3667,38 @@ route('POST', '/api/requests/:id/status', async ({ user, params, body }) => {
   return decodeRequest((await getRequest(r.id)));
 });
 // 15.287·15.288 분석데이터 직접 입력(연구원만): 승인 없이 완료된 연구 분석(RA-분석일 번호)으로 저장. 개발건·단계는 골랐을 때만 연결하고 이력을 남긴다.
+// 15.292 연구 분석 측정값: 검사규격 형식(항목·단위·하한·상한·측정 횟수) + 측정값 → 항목별 평균·판정, 전체 판정. 하한·상한이 없으면 판정 없이 기록만.
+function rndMeasure(itemsIn, valuesIn) {
+  if (!Array.isArray(itemsIn) || !itemsIn.length) return null;
+  if (itemsIn.length > 30) throw bad('측정 항목은 30개까지입니다.');
+  const num = (v, label) => { if (v === '' || v == null) return null; if (!['string', 'number'].includes(typeof v) || !Number.isFinite(Number(v))) throw bad(`${label}은(는) 숫자로 입력하세요.`); return Number(v); };
+  const items = itemsIn.map((it, i) => { const o = it && typeof it === 'object' ? it : {}; const min = num(o.min, '하한'), max = num(o.max, '상한'), count = Number(o.count) || 1;
+    if (min !== null && max !== null && min > max) throw bad(`${o.name || i + 1}: 하한이 상한보다 큽니다.`); if (!Number.isInteger(count) || count < 1 || count > 10) throw bad('측정 횟수는 1~10회입니다.');
+    return { key: 'i' + i, name: reqStr(o.name, `${i + 1}번째 측정 항목`, 100), unit: str(o.unit, 30), min, max, count }; });
+  const vals = valuesIn && typeof valuesIn === 'object' ? valuesIn : {};
+  let filled = 0, missing = false, failed = false; const summary = [];
+  const values = {};
+  for (const it of items) {
+    const list = (Array.isArray(vals[it.key]) ? vals[it.key] : []).slice(0, it.count); while (list.length < it.count) list.push(null);
+    values[it.key] = list.map(v => num(v, `${it.name} 측정값`));
+    const got = values[it.key].filter(v => v !== null); filled += got.length; if (got.length < it.count) missing = true;
+    const bad1 = got.some(v => (it.min !== null && v < it.min) || (it.max !== null && v > it.max)); if (bad1) failed = true;
+    const avg = got.length ? Math.round(got.reduce((t, v) => t + v, 0) / got.length * 1000) / 1000 : null;
+    const spec = it.min !== null && it.max !== null ? `${it.min}~${it.max}` : it.min !== null ? `≥${it.min}` : it.max !== null ? `≤${it.max}` : '';
+    if (avg !== null) summary.push(`${it.name} ${got.length > 1 ? '평균 ' : ''}${avg}${it.unit ? ' ' + it.unit : ''}${spec ? ` (${spec}) ${bad1 ? '불합격' : '합격'}` : ''}`);
+  }
+  if (!filled) throw bad('측정값을 하나 이상 넣으세요.');
+  const judged = items.some(it => it.min !== null || it.max !== null);
+  const result = failed ? 'fail' : missing ? 'pending' : 'pass';
+  return { snapshot: { kind: '연구분석', items }, rows: [{ lot: '', values }], result, judged, summary: summary.join(' · ') + (judged ? ` → ${failed ? '불합격' : missing ? '측정 중' : '합격'}` : '') };
+}
 const isResearcher = user => hasRole(user, 'dev') || hasRole(user, 'dev_approver');
 async function createRndData(user, body, devId) {
   if (!isResearcher(user)) throw new HttpError(403, '분석데이터는 연구원(개발·개발책임자)만 입력합니다.');
-  const result = reqStr(body.result_note, '분석 결과', 1000);
+  const meas = rndMeasure(body.spec_items, body.values); // 15.292 측정값(검사규격 형식)
+  const memo = str(body.result_note, 1000);
+  if (!meas && !memo) throw bad('측정값을 넣거나 분석 결과를 적으세요.');
+  const result = (meas ? meas.summary + (memo ? ` / 의견: ${memo}` : '') : memo).slice(0, 1000);
   const date = body.analysis_date ? dateStr(body.analysis_date, '분석일') : today();
   const items = (Array.isArray(body.items) ? body.items : []).map(x => str(x, 50)).filter(Boolean).slice(0, 30);
   const data = { items, sample_qty: str(body.sample_qty, 50), extra: str(body.note, 2000), analysis_date: date, entered_directly: 1, dev_request_id: devId ?? body.dev_request_id, dev_step: body.dev_step };
@@ -3679,17 +3707,41 @@ async function createRndData(user, body, devId) {
   const token = 'ad:' + crypto.randomUUID(), ymd = date.slice(2).replace(/-/g, ''), prefix = `${REQUEST_PREFIX.rnd_analysis}-${ymd}-`;
   await db.batch([
     { sql: 'INSERT INTO requests(type,title,customer,due_date,category,target_price,data,requester_id,requester_name,status,result_note,approver_name,approved_at,req_no) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-      args: ['rnd_analysis', f.title, f.customer, '', f.category, '', JSON.stringify({ ...f.data, token }), user.id, user.name, 'done', result, user.name, now(), token] },
+      args: ['rnd_analysis', f.title, f.customer, '', f.category, '', JSON.stringify({ ...f.data, memo, token }), user.id, user.name, 'done', result, user.name, now(), token] },
     { sql: "UPDATE requests SET req_no=? || printf('%02d', (SELECT COALESCE(MAX(CAST(substr(req_no, length(?) + 1) AS INTEGER)),0)+1 FROM requests WHERE req_no LIKE ?)) WHERE req_no=?", args: [prefix, prefix, prefix + '%', token] },
   ]);
   const row = await db.prepare("SELECT * FROM requests WHERE type='rnd_analysis' AND json_extract(data,'$.token')=?").get(token);
   row.data = JSON.stringify({ ...JSON.parse(row.data), token: undefined });
   const cmds = [{ sql: "UPDATE requests SET data=json_remove(data,'$.token') WHERE id=?", args: [row.id] },
+    ...(meas ? [{ sql: 'UPDATE requests SET inspection_snapshot=? WHERE id=?', args: [JSON.stringify(meas.snapshot), row.id] },
+      { sql: 'INSERT INTO inspection_measurements(request_id,values_json,result,save_token,updated_by) VALUES(?,?,?,?,?)', args: [row.id, JSON.stringify(meas.rows), meas.result, randomHex(16), user.name] },
+      { sql: "INSERT INTO inspection_measurement_history(request_id,revision,values_json,result,reason,saved_by) VALUES(?,1,?,?,'분석데이터 입력',?)", args: [row.id, JSON.stringify(meas.rows), meas.result, user.name] }] : []),
     { sql: 'INSERT INTO progress_comments(entity_type,entity_id,content,author_id,author_name) VALUES(?,?,?,?,?)', args: ['request', row.id, `[분석결과] 분석데이터 입력 · 분석일 ${date} · ${result}`.slice(0, 2000), user.id, user.name] }];
   if (dev) cmds.push(rndDevNote(user, dev.id, `분석데이터 · ${row.req_no} ${f.title} (${f.category})${data.dev_step ? ` · 단계 「${data.dev_step}」` : ''} · 분석일 ${date} · 결과: ${result}`));
   await db.batch(cmds);
   return decodeRequest(row);
 }
+route('GET', '/api/requests/:id/rnd-measure', async ({ params }) => {
+  const r = await getRequest(params.id); if (r.type !== 'rnd_analysis') throw bad('연구 분석만 볼 수 있습니다.');
+  const m = await db.prepare('SELECT * FROM inspection_measurements WHERE request_id=?').get(r.id);
+  return { spec: r.inspection_snapshot ? JSON.parse(r.inspection_snapshot) : null, measurement: m ? { ...m, rows: JSON.parse(m.values_json) } : null, memo: JSON.parse(r.data || '{}').memo || '' };
+});
+route('PUT', '/api/requests/:id/rnd-measure', async ({ user, params, body }) => {
+  if (!isResearcher(user)) throw new HttpError(403, '측정값은 연구원(개발·개발책임자)만 고칩니다.');
+  const r = await getRequest(params.id); if (r.type !== 'rnd_analysis') throw bad('연구 분석만 고칠 수 있습니다.');
+  const meas = rndMeasure(body.spec_items, body.values); if (!meas) throw bad('측정 항목을 넣으세요.');
+  const prior = await db.prepare('SELECT * FROM inspection_measurements WHERE request_id=?').get(r.id);
+  const reason = prior ? reqStr(body.reason, '수정 사유', 300) : str(body.reason, 300) || '측정값 입력';
+  const d = JSON.parse(r.data || '{}'), memo = body.result_note !== undefined ? str(body.result_note, 1000) : d.memo || '';
+  const result = (meas.summary + (memo ? ` / 의견: ${memo}` : '')).slice(0, 1000), token = randomHex(16);
+  const cmds = [{ sql: "UPDATE requests SET inspection_snapshot=?, result_note=?, data=json_set(data,'$.memo',?), updated_at=datetime('now','+9 hours') WHERE id=?", args: [JSON.stringify(meas.snapshot), result, memo, r.id] },
+    { sql: `INSERT INTO inspection_measurements(request_id,values_json,result,save_token,updated_by) VALUES(?,?,?,?,?) ON CONFLICT(request_id) DO UPDATE SET values_json=excluded.values_json,result=excluded.result,save_token=excluded.save_token,updated_by=excluded.updated_by,revision=inspection_measurements.revision+1,updated_at=datetime('now','+9 hours')`, args: [r.id, JSON.stringify(meas.rows), meas.result, token, user.name] },
+    { sql: 'INSERT INTO inspection_measurement_history(request_id,revision,values_json,result,reason,saved_by) SELECT request_id,revision,values_json,result,?,updated_by FROM inspection_measurements WHERE request_id=? AND save_token=?', args: [reason, r.id, token] },
+    { sql: 'INSERT INTO progress_comments(entity_type,entity_id,content,author_id,author_name) VALUES(?,?,?,?,?)', args: ['request', r.id, `[분석결과] 측정값 ${prior ? '수정' : '입력'}${prior ? ` · 사유: ${reason}` : ''} · ${result}`.slice(0, 2000), user.id, user.name] }];
+  if (d.dev_request_id) cmds.push(rndDevNote(user, d.dev_request_id, `${r.req_no} ${r.title} 측정값 ${prior ? '수정' : '입력'}${d.dev_step ? ` · 단계 「${d.dev_step}」` : ''} · ${result}`));
+  await db.batch(cmds);
+  return decodeRequest(await getRequest(r.id));
+});
 route('POST', '/api/dev-roadmap/:id/analysis-data', async ({ user, params, body }) => createRndData(user, body, params.id));
 route('POST', '/api/rnd-analysis-data', async ({ user, body }) => createRndData(user, body, body.dev_request_id ?? '')); // 15.288 연구 분석 관리 › 분석데이터 입력
 // 15.286 이미 있는 연구 분석을 개발건·단계에 연결(바꾸기·끊기). 연구 담당·승인권자·의뢰자.

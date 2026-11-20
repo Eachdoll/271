@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.291';
+const APP_VERSION = '15.292';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -2316,6 +2316,7 @@ function requestDetail(type, r, reload) {
       ${type === 'rnd_analysis' ? `<div class="rq-kv full"><span>연결 개발건</span><b>${r.data?.dev_request_id ? `${esc(r.data.dev_title || '')}${r.data.dev_step ? ` · 단계 「${esc(r.data.dev_step)}」` : ''}` : '<span class="muted">연결 안 됨</span>'}</b></div>` : ''}
       ${type === 'voc' && r.data?.lot ? `<div class="rq-kv full"><span>LOT 연결</span><b><button type="button" class="link-btn" data-lt-open="${esc(r.data.lot)}">${esc(r.data.lot)} · LOT 연결 조회 →</button></b></div>` : ''}
     </div>
+    ${type === 'rnd_analysis' ? '<div class="rq-meas" data-rnd-meas></div>' : ''}
     <details class="rq-more"><summary>더보기 · 상세 내용 <span class="small muted">(${filled}개 항목${r.source_type ? ' · 입고 출처' : ''}${['development','sample','sample_goods','rnd_analysis'].includes(type) ? ' · 사진' : ''}${r.approver_name ? ' · 접수 기록' : ''})</span></summary>
     <table class="kv">
       ${r.source_type ? `<tr><th>입고 출처</th><td><a href="${r.source_type === 'purchase_order' ? '#/logistics/receive' : '#/logistics/other'}">${r.source_type === 'purchase_order' ? '발주입고' : '기타입고'} #${esc(r.source_id)}</a>${r.data.purchase_req_no ? ' · 구매의뢰번호 ' + esc(r.data.purchase_req_no) : ''}</td></tr>
@@ -2337,15 +2338,18 @@ function requestDetail(type, r, reload) {
       ${(mine && ['pending', 'rejected'].includes(r.status)) || mgr ? '<button class="btn danger" data-a="del">삭제</button>' : ''}
       ${approver && r.status === 'pending' ? '<button class="btn red" data-a="reject">반려</button><button class="btn primary" data-a="approve">승인</button>' : ''}
       ${approver && r.status === 'rejected' ? '<button class="btn primary" data-a="approve">승인</button>' : ''}
+      ${type === 'rnd_analysis' && (hasRole('dev') || hasRole('dev_approver')) ? '<button class="btn primary" data-a="measure">측정값 수정</button>' : ''}
       ${type === 'rnd_analysis' && (mgr || mine || hasRole('dev_approver')) ? '<button class="btn" data-a="devlink">개발건 연결</button>' : ''}
-      ${mgr && ['waiting', 'progress', 'done'].includes(r.status) ? `<button class="btn${type === 'rnd_analysis' ? ' primary' : ''}" data-a="status">${type === 'rnd_analysis' ? '분석결과 입력' : '상태/결과 변경'}</button>` : ''}
+      ${mgr && ['waiting', 'progress', 'done'].includes(r.status) ? `<button class="btn" data-a="status">${type === 'rnd_analysis' ? '상태·의견' : '상태/결과 변경'}</button>` : ''}
     </div>`, { wide: true });
   if (['development','sample','sample_goods','voc','rnd_analysis'].includes(type)) renderAttachmentPreview($('[data-request-photos]', m.el), 'request', r.id);
+  if (type === 'rnd_analysis') api('GET', `/api/requests/${r.id}/rnd-measure`).then(x => { const b = $('[data-rnd-meas]', m.el); if (b) b.innerHTML = x.spec ? `<h4>측정값</h4>${rndMeasureTable(x.spec, x.measurement)}${x.memo ? `<p><span class="muted">종합 의견</span> ${esc(x.memo)}</p>` : ''}` : ''; }).catch(() => {}); // 15.292
   else if (r.source_type) renderAttachmentPreview($('[data-request-photos]', m.el), r.source_type, r.source_id);
   const act = async (a) => {
     try {
       if (a === 'inspection') { m.close(); await openInspection(r.id, reload); return; }
       if (a === 'devlink') { m.close(); await rndDevLinkBox(r, reload); return; } // 15.286
+      if (a === 'measure') { m.close(); await rndMeasureEdit(r, reload); return; } // 15.292
       if (a === 'photos') { await openAttachments('request', r.id, r.title, { editable: (mine && ['pending','rejected'].includes(r.status)) || mgr }); return; }
       if (a === 'print') { const more = $('.rq-more', m.el), was = more?.open; if (more) more.open = true; document.body.classList.add('printing'); window.print(); document.body.classList.remove('printing'); if (more) more.open = was; return; } // 15.282 인쇄는 상세까지
       if (a === 'approve') { await api('POST', `/api/requests/${r.id}/approve`); toast(`승인했습니다. ${cfg.listTitle || cfg.label + '리스트'}에 등록됨`); }

@@ -3795,3 +3795,20 @@ label.inline { width: fit-content; max-width: 100%; justify-self: start; }
 .form-grid label .hint, .form-grid legend .hint, .form-grid span.opt[data-fx-mark] { font-weight: 400; color: var(--muted); font-size: 12.5px; }
 .st-mv-pick { max-height: 420px; overflow: auto; }
 #stockAdjustSlot { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; } /* 15.291 */
+
+/* 15.292 검사규격 · 측정값(연구 분석) */
+.rnd-meas .rm-tools { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; margin-bottom: 8px; }
+.rnd-meas .rm-tools label { font-size: 13px; font-weight: 600; }
+.rm-table input { width: 100%; min-width: 0; }
+.rm-table td:nth-child(1) { min-width: 140px; } .rm-table td:nth-child(2) { width: 80px; } .rm-table td:nth-child(3), .rm-table td:nth-child(4) { width: 90px; } .rm-table td:nth-child(5) { width: 64px; }
+.rm-vals { display: flex; flex-wrap: wrap; gap: 4px; } .rm-vals input { width: 76px; flex: 0 0 76px; text-align: right; }
+.rm-vals input.rm-out { border-color: #e03131; background: #fff5f5; color: #c92a2a; font-weight: 700; }
+.rm-total { margin: 6px 0 0; font-weight: 600; }
+.rq-meas h4 { margin: 10px 0 6px; }
+/* 15.292 로드맵 끌어서 이동 */
+.dr-scroll { cursor: grab; }
+.dr-scroll.dragging { cursor: grabbing; user-select: none; }
+.dr-scroll.dragging * { pointer-events: none; }
+.dr-pan { display: inline-flex; gap: 4px; }
+.dr-drag-hint { margin-left: 2px; }
+@media (max-width: 700px) { .dr-drag-hint { display: none; } }
