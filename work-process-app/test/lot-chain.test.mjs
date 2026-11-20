@@ -1129,3 +1129,25 @@ test('15.314 org chart (CEO, department head and duties) and designated officers
   assert.equal((await prod('GET', '/api/org/duties')).body.rows.length, 1); assert.equal((await admin('GET', '/api/org/duties')).body.rows.length, 2);
   assert.equal((await admin('DELETE', `/api/admin/org-duties/${f.id}?revision=${f.revision}`)).status, 200);
 });
+
+test('15.315 review fixes: find keeps underscore, %/_ alone empty; reliability when always down; revise clears re-review date; done only via result route, not in review', async () => {
+  const lotNc = (await admin('POST', '/api/ncs', { title: 'LOT 261121_NX808_P1 부적합', request_id: rid() })).body;
+  assert.ok((await admin('GET', '/api/find?q=' + encodeURIComponent('261121_NX808'))).body.rows.some(x => x.id === lotNc.id));
+  assert.ok(!(await admin('GET', '/api/find?q=' + encodeURIComponent('261121NX808'))).body.rows.some(x => x.id === lotNc.id), '_ is literal, not dropped');
+  for (const q of ['__', '%%', '%_ ']) assert.deepEqual((await admin('GET', '/api/find?q=' + encodeURIComponent(q))).body.rows, []);
+  // 기간 내내 멈춘 설비: MTBF 0 → 고장률 계산 불가(null), 신뢰도 0%
+  const from = new Date(Date.parse(today) - 1 * 86400000).toISOString().slice(0, 10);
+  let e = (await prod('POST', '/api/equipment', { name: '항상 고장 설비', install_date: from, request_id: rid() })).body;
+  await prod('POST', `/api/equipment/${e.id}/logs`, { kind: 'failure', log_date: today, description: '고장', downtime_hours: 999, revision: e.revision, request_id: rid() });
+  const er = (await prod('GET', `/api/equipment-reliability?from=${from}&to=${today}&hours=24`)).body.rows.find(x => x.id === e.id);
+  assert.deepEqual([er.planned, er.down, er.mtbf, er.lambda, er.reliability, er.availability], [48, 48, 0, null, 0, 0]);
+  // 조치 완료는 「조치 결과」로만 · 검토 요청 중에는 안 됨 · 개정하면 재평가 예정일 비움
+  let k = (await prod('POST', '/api/risk-assess', { method: 'kosha', title: '15.315', scale: 3, assess_date: today, rows: [{ hazard: '끼임', f: 3, s: 3, action: '덮개', owner: '생산', due: today }], request_id: rid() })).body;
+  k = (await prod('PUT', `/api/risk-assess/${k.id}`, { revision: k.revision, rows: k.rows.map(r => ({ ...r, done: today, f2: 1, s2: 1 })) })).body;
+  assert.deepEqual([k.rows[0].done, k.rows[0].f2], [null, null], 'worksheet PUT cannot mark done');
+  k = (await prod('POST', `/api/risk-assess/${k.id}/step`, { to: 'review', revision: k.revision })).body;
+  const r1 = await prod('PUT', `/api/risk-assess/${k.id}/rows/${k.rows[0].key}`, { revision: k.revision, done: today, f2: 1, s2: 1 }); assert.equal(r1.status, 400); assert.match(r1.body.error, /검토 요청 중/);
+  k = (await admin('POST', `/api/risk-assess/${k.id}/step`, { to: 'approved', revision: k.revision })).body; assert.ok(k.next_review);
+  const bad = await prod('PUT', `/api/risk-assess/${k.id}/rows/${k.rows[0].key}`, { revision: k.revision, done: today, f2: 9, s2: 1 }); assert.match(bad.body.error, /^1번 줄/);
+  k = (await prod('POST', `/api/risk-assess/${k.id}/step`, { to: 'draft', revision: k.revision, rev_note: '설비 교체' })).body; assert.equal(k.next_review, null);
+});

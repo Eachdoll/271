@@ -299,7 +299,7 @@ async function pageOrgChart(main) {
   const subCount = d => byDept(d.name).length + kids(d.id).reduce((n, k) => n + subCount(k), 0);
   main.innerHTML = `<h1>조직 구성 <span class="dept">관리</span></h1>
     <p class="muted">부서 트리(「부서·직급」 탭)와 구성원의 부서·직급으로 그립니다. 이름 옆 색 배지는 지정 담당 업무(정보보호·소방 등, 「부」는 대리자)입니다.${can ? ' 맨 위 상자를 누르면 회사명·대표를, 부서 상자를 누르면 부서장·부서 업무를 정합니다.' : ''}</p>
-    <form class="toolbar oc-tools" id="ocTools"><label class="chk"><input type="checkbox" name="members" checked> 구성원</label><label class="chk"><input type="checkbox" name="badges" checked> 지정 담당 배지</label><label class="chk"><input type="checkbox" name="tasks"> 부서 업무</label>
+    <form class="toolbar oc-tools" id="ocTools" data-read-only><label class="chk"><input type="checkbox" name="members" checked> 구성원</label><label class="chk"><input type="checkbox" name="badges" checked> 지정 담당 배지</label><label class="chk"><input type="checkbox" name="tasks"> 부서 업무</label>
       <label class="list-search">찾기<input type="search" name="q" placeholder="이름·부서·담당 업무"></label><span class="grow"></span>
       <span class="seg" role="group" aria-label="보기"><button type="button" class="btn" data-oc-layout="tree">트리</button><button type="button" class="btn" data-oc-layout="list">목록</button></span><button type="button" class="btn" data-oc-print>인쇄</button>${can ? '<a class="btn" href="#/admin/org/duties">지정 담당자</a>' : ''}</form>
     <div class="oc-scroll"><div id="ocChart" class="oc-chart"></div></div>

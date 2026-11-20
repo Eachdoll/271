@@ -2349,8 +2349,11 @@ async function pageRisks(main) {
 // (1) 목록 공통 도구: 오른쪽 도구 묶음(.ip-tools)이 있는 조회 줄에 「N건」·조건 초기화(↻)·엑셀을 한 번 붙인다(기존 목록 화면과 같은 사용법).
 function tableToXlsx(table, name) {
   const ths = [...(table.tHead?.rows[0]?.cells || [])], keep = ths.map((th, i) => [i, th.textContent.replace(/[▾▴▼▲☆]/g, '').replace(/\s+/g, ' ').trim()]).filter(([, l]) => l);
-  const rows = [...(table.tBodies[0]?.rows || [])].filter(tr => !tr.hidden && tr.cells.length === ths.length).map(tr => keep.map(([i]) => { const t = tr.cells[i].textContent.replace(/\s+/g, ' ').trim(); return /^-?[\d,]+(\.\d+)?$/.test(t) ? Number(t.replace(/,/g, '')) : t; }));
-  const types = keep.map((_, j) => rows.length && rows.every(r => r[j] === '' || typeof r[j] === 'number') ? 'number' : 'text');
+  const raw = [...(table.tBodies[0]?.rows || [])].filter(tr => !tr.hidden && tr.cells.length === ths.length).map(tr => keep.map(([i]) => tr.cells[i].textContent.replace(/\s+/g, ' ').trim()));
+  // 15.315 열 전체가 숫자일 때만 숫자로(LOT 007123·「1,2」 같은 글자는 그대로). 앞자리 0은 글자로 본다.
+  const isNum = t => /^-?(\d{1,3}(,\d{3})+|\d+)(\.\d+)?$/.test(t) && !/^-?0\d/.test(t);
+  const types = keep.map((_, j) => raw.length && raw.some(r => r[j] !== '') && raw.every(r => r[j] === '' || isNum(r[j])) ? 'number' : 'text');
+  const rows = raw.map(r => r.map((t, j) => types[j] === 'number' && t !== '' ? Number(t.replace(/,/g, '')) : t));
   xlsxDownload(`${name}_${todayStr()}.xlsx`, { sheet: name.slice(0, 30), titles: [name, `${todayStr()} · ${rows.length}건`], columns: keep.map(([, label], j) => ({ label, type: types[j] })), rows });
 }
 function listAutoTools(form) {
@@ -2420,14 +2423,16 @@ async function bulkApprove(kind, rtype = '') {
   $('[data-no]', form).onclick = () => m.close();
   form.onsubmit = async e => {
     e.preventDefault(); const picked = $$('[name=pick]:checked', form).map(c => items[Number(c.value)]); if (!picked.length) return toast('고른 건이 없습니다.', 'err');
-    form.inert = true; let ok = 0; const bad = [];
+    form.inert = true; let ok = 0; const bad = [], train = [];
     for (const [i, x] of picked.entries()) {
       $('[data-bulk-msg]', form).textContent = `${i + 1}/${picked.length} 승인 중…`;
-      try { if (kind === 'coa') await api('POST', `/api/coas/${x.id}/approve`, { revision: x.rev }); else if (kind === 'docs') await api('POST', `/api/qdocs/${x.id}/step`, { to: 'approved', revision: x.rev }); else await api('POST', `/api/requests/${x.id}/approve`); ok++; }
+      try { if (kind === 'coa') await api('POST', `/api/coas/${x.id}/approve`, { revision: x.rev }); else if (kind === 'docs') { const r = await api('POST', `/api/qdocs/${x.id}/step`, { to: 'approved', revision: x.rev }); if (r.training_suggest) train.push(r); } else await api('POST', `/api/requests/${x.id}/approve`); ok++; }
       catch (err) { bad.push(`${x.text}: ${err.message}`); }
     }
     m.close(); toast(bad.length ? `${ok}건 승인, ${bad.length}건 실패 — ${bad[0]}` : `${ok}건을 승인했습니다.`, bad.length ? 'err' : 'ok');
     if (location.hash === '#/' || location.hash === '' || location.hash === '#/tasks') render(); refreshNavBadges();
+    // 15.315 하나씩 승인할 때처럼 「교육 필요」 문서는 개정 교육 계획을 권함
+    for (const r of train) { if (!await confirmBox(`${r.doc_no} Rev.${r.rev} 교육이 필요한 문서입니다. 교육 계획을 지금 만들까요?${train.length > 1 ? ` (${train.indexOf(r) + 1}/${train.length})` : ''}`)) continue; await trNew({ doc_id: r.id, kind: '문서 개정 교육', title: `${r.doc_no} ${r.title} Rev.${r.rev} 개정 교육`, change_id: r.change_id }); break; }
   };
 }
 
@@ -2446,14 +2451,14 @@ async function notifyCheck(first = false) {
   if (!ME || !notifyOn()) return;
   try {
     const [tasks, alerts] = await Promise.all([api('GET', '/api/my-tasks'), api('GET', '/api/alerts')]);
-    const lines = [];
-    for (const [type, g] of Object.entries(tasks.approvals.requests || {})) if (g.count) lines.push(`${REQ[type]?.label || type} 승인 대기 ${g.count}건`);
-    for (const q of tasks.approvals.quality || []) lines.push(`${q.label} ${q.count}건`);
-    if (tasks.approvals.training_attend?.count) lines.push(`교육 참석 확인 ${tasks.approvals.training_attend.count}건`);
-    for (const q of alerts.quality_alerts || []) lines.push(`${q.label} ${q.count}건`);
-    if (alerts.overdue_po_count) lines.push(`납기 지난 미입고 발주 ${alerts.overdue_po_count}건`);
-    let seen = []; try { seen = JSON.parse(localStorage.getItem(NOTIFY_SEEN()) || '[]'); } catch {}
-    const fresh = lines.filter(l => !seen.includes(l)); try { localStorage.setItem(NOTIFY_SEEN(), JSON.stringify(lines)); } catch {}
+    const now = {}; // 15.315 항목 이름별 건수: 새로 생기거나 늘었을 때만 알림(줄어든 것은 알리지 않음)
+    for (const [type, g] of Object.entries(tasks.approvals.requests || {})) if (g.count) now[`${REQ[type]?.label || type} 승인 대기`] = g.count;
+    for (const q of tasks.approvals.quality || []) now[q.label] = q.count;
+    if (tasks.approvals.training_attend?.count) now['교육 참석 확인'] = tasks.approvals.training_attend.count;
+    for (const q of alerts.quality_alerts || []) now[q.label] = q.count;
+    if (alerts.overdue_po_count) now['납기 지난 미입고 발주'] = alerts.overdue_po_count;
+    let seen = {}; try { seen = JSON.parse(localStorage.getItem(NOTIFY_SEEN()) || '{}'); if (Array.isArray(seen)) seen = {}; } catch {}
+    const lines = Object.entries(now).map(([l, c]) => `${l} ${c}건`), fresh = Object.entries(now).filter(([l, c]) => c > (seen[l] || 0)).map(([l, c]) => `${l} ${c}건`); try { localStorage.setItem(NOTIFY_SEEN(), JSON.stringify(now)); } catch {}
     if (!fresh.length || (first && !lines.length)) return;
     const n = new Notification('서울세미텍 · 확인할 일', { body: fresh.slice(0, 6).join('\n') + (fresh.length > 6 ? `\n외 ${fresh.length - 6}건` : ''), tag: 'wpa-tasks' });
     n.onclick = () => { window.focus(); location.hash = '#/'; n.close(); };

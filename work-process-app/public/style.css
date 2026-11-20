@@ -4128,3 +4128,22 @@ table.rpt-list.ra-print thead th { white-space: normal; text-align: center; }
 .rpt-sheet .oc-print { overflow: visible; } .rpt-sheet .oc-print .oc-node { box-shadow: none; } .rpt-sheet .oc-print .oc-root { color: #fff; }
 .duty-decl { text-align: center; }
 @media print { .oc-node { break-inside: avoid; } }
+
+/* 15.315 오류·디자인 전수 검사 후 정리 */
+/* 업무 흐름: 지금 아닌 단계 글자·번호가 흐려 다크 모드에서 거의 안 보이던 것(대비 1.3 → 3 이상) */
+.proc-guide .pg-step a, .proc-guide .pg-step .pg-in { color: var(--muted); }
+.proc-guide .pg-step:not(.cur) .pg-no { background: color-mix(in srgb, var(--muted) 70%, var(--panel)); color: var(--panel); }
+/* 세탁 검수·성적서: 흰색·하늘색 머리글 칸은 다크 모드에서도 진한 글자 */
+.lr-grid thead th.lr-c-op_white, .lr-grid thead th.lr-c-tp_white, .lr-grid thead th.lr-c-gown_lab, .lr-grid thead th.lr-c-op_sky, .lr-grid thead th.lr-c-gown_zip { color: #1b1f24; }
+/* 안내 문장 속 작은 단추는 한 줄로(「매출전표 입력으로」가 두 줄로 꺾이던 것) */
+p a.btn.small, p .btn.small { white-space: nowrap; }
+/* 휴대폰 입고목록 일괄 단추: 3칸에서 글자가 두 줄로 꺾여 2칸으로 */
+@media (max-width: 440px) { .actionbar { grid-template-columns: repeat(2, 1fr); } .actionbar > .btn { white-space: nowrap; } }
+/* 휴대폰 재고현황 보기 단추 4개가 3+1로 어긋나던 것 → 2×2 */
+@media (max-width: 600px) {
+  .result-seg:has(> label:nth-child(4)) { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
+  .result-seg:has(> label:nth-child(4)) label { border: 1px solid var(--line); border-radius: 8px; justify-content: center; }
+}
+/* 다크 모드: 지정 담당 배지·구분 카드 제목 글자를 밝게(전기 주황 등 대비 2.6 → 4.5 이상) */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .oc-badge, :root:not([data-theme="light"]) .duty-card h3 { color: color-mix(in srgb, var(--c) 55%, #fff); } }
+:root[data-theme="dark"] .oc-badge, :root[data-theme="dark"] .duty-card h3 { color: color-mix(in srgb, var(--c) 55%, #fff); }
