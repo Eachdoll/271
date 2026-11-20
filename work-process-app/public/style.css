@@ -4010,3 +4010,22 @@ table.risk-matrix td.on { outline: 2px solid var(--text); }
 .ws-defaults { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin: 0 0 6px; }
 #reportBlocks .dept-sec[hidden] { display: none; }
 .report-heading .actions { flex-wrap: wrap; }
+
+/* ── 15.311 디자인 정리: 조회 줄·체크 상자·오른쪽 도구 묶음·표 칸·업무 흐름 막대 ── */
+/* 조회·도구 줄의 체크 상자: 상자 왼쪽·글자 오른쪽 한 줄, 입력칸 줄(32px)에 맞춤 */
+#main form.list-filters > label:has(> input[type=checkbox]), #main form.toolbar > label:has(> input[type=checkbox]), #main .toolbar > label:has(> input[type=checkbox]) { flex-direction: row !important; align-items: center; gap: 6px; min-width: 0; min-height: 32px; align-self: flex-end; white-space: nowrap; color: var(--text); font-size: 13px; }
+#main form.list-filters > label:has(> input[type=checkbox]) > input, #main .toolbar > label:has(> input[type=checkbox]) > input { width: auto; margin: 0; }
+/* 「＋ 등록」 같은 도구 묶음은 조회 줄 오른쪽 끝(모든 화면 같은 자리) */
+#main form.list-filters > .grow, #main .toolbar > .grow { flex: 1 1 0; min-width: 0; }
+#main form.list-filters > .ip-tools, #main .toolbar > .ip-tools { margin-left: auto; display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; align-self: flex-end; min-height: 32px; }
+/* 표 안 단추: 높이 통일(작은 단추 26px), 칸 안 세로 가운데 */
+@media (min-width: 701px) { :root[data-density="compact"] body:not(.operator-mode) #main table.grid td .btn.small, :root[data-density="compact"] body:not(.operator-mode) #main table.grid td button.btn:not(.link-btn) { min-height: 26px; } } /* 휴대폰은 손가락 크기(36px) 규칙 그대로 */
+#main table.grid td .btn { vertical-align: middle; }
+/* 표 머리글: 숫자 열은 오른쪽, 가운데 열은 가운데(정렬·필터 표시가 있어도 글자가 칸 정렬을 따르게) */
+#main table.grid th.r { text-align: right; } #main table.grid th.c { text-align: center; }
+#main table.grid td.c .chip, #main table.grid td.c .badge { margin: 0 auto; }
+/* 업무 흐름 막대: 낮게(제목 아래 공간 줄이기) */
+.proc-guide { padding: 8px 12px 8px; margin: 6px 0 10px; }
+.proc-guide .pg-head { margin-bottom: 6px; }
+.proc-guide .pg-steps { padding: 0; }
+.proc-guide .pg-step a, .proc-guide .pg-step .pg-in { padding: 4px 10px; font-size: 13px; min-height: 28px; }

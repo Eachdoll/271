@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.310';
+const APP_VERSION = '15.311';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -1567,6 +1567,21 @@ function autoGridSpec(table) {
   const roles = heads.map((h, i) => i === a ? ['a', ''] : i === b ? ['b', ''] : kind[i] ? [kind[i], ''] : ['c', h && !/^no$/i.test(h) ? short(h) : '']);
   return { roles };
 }
+// 15.311 칸 정렬 통일: 화면마다 손으로 정하던 정렬을 내용으로 정한다. 숫자(단위·%·원 포함) 열은 오른쪽, 날짜 열과 상태·구분 칩만 있는 열은 가운데,
+// 머리글은 그 열 내용과 같은 정렬. 이미 r/c를 정한 칸·입력 칸이 있는 열·번호(No) 열·달력은 건드리지 않는다.
+const AUTO_NUM = /^[-+]?(₩\s?)?[\d,]+(\.\d+)?\s*(%|원|건|개|kg|g|ea|EA|BOX|box|h|시간|일|매|켤레|yd|m|롤|벌|회|명|점|장|줄|만원)?$/;
+const AUTO_DATE = /^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}(:\d{2})?)?$|^\d{4}-\d{2}$|^\d{2}-\d{2}$/;
+function autoAlignColumn(table, head, th, cells) {
+  if (!th || !cells.length || table.hasAttribute('data-no-autoalign') || table.matches('.sc-cal, .erp-grid, .taxf-items') || /^(no\.?|번호|순번)$/i.test(head)) return;
+  if (th.classList.contains('r') || th.classList.contains('c') || cells.some(td => td.querySelector('input, select, textarea, button:not(.link-btn), .btn'))) return;
+  const filled = cells.filter(td => { const t = td.textContent.replace(/\s+/g, ' ').trim(); return t && t !== '—' && t !== '-'; }); if (filled.length < 1) return;
+  const text = td => td.textContent.replace(/\s+/g, ' ').trim();
+  const chipOnly = td => td.children.length === 1 && td.firstElementChild.matches('.chip, .badge, .tag') && text(td) === td.firstElementChild.textContent.replace(/\s+/g, ' ').trim();
+  const share = test => filled.filter(test).length / filled.length;
+  const cls = share(td => AUTO_NUM.test(text(td))) >= 0.8 ? 'r' : share(td => AUTO_DATE.test(text(td))) >= 0.8 || share(chipOnly) >= 0.8 ? 'c' : '';
+  if (!cls) return;
+  for (const c of [th, ...cells]) if (c && !c.classList.contains('r') && !c.classList.contains('c')) c.classList.add(cls);
+}
 function labelGridTables() {
   $$('table.grid:not([data-labeled])').forEach(table => {
     table.dataset.labeled = 'true';
@@ -1585,6 +1600,7 @@ function labelGridTables() {
       if (ITEM_HEADS.has(head)) ths[i]?.classList.add('item-col'); // 15.177
       if (head.replace(/\s/g, '').length >= 5 && table.closest('.modal')) ths[i]?.classList.add('th-long'); // 15.183 팝업: 긴 머리글만 두 줄 허용
       if (CENTER_HEADS.test(head) && !cells.some(td => td.querySelector('input, select, button:not(.link-btn)'))) [ths[i], ...cells].forEach(c => c && !c.classList.contains('r') && c.classList.add('c')); // 15.180
+      autoAlignColumn(table, head, ths[i], cells); // 15.311 숫자는 오른쪽 · 날짜·상태 칩은 가운데(머리글도 같이)
     });
     gridLayout(table); // 15.173 열 너비·순서(빈 열 숨긴 뒤)
     if (rows.length > 15 && !table.closest('.modal-wrap')) { const tw = table.closest('.table-wrap'); if (tw) { tw.classList.add('tw-fill'); twRestore(tw); } } // 15.180 긴 목록: 머리글 고정 · 15.299 다시 그려도 보던 자리
