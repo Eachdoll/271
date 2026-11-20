@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.287';
+const APP_VERSION = '15.288';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -576,7 +576,7 @@ const PAGES = {
   '#/dev/request': () => pageIntake('development'),
   '#/dev/list': () => pageWorkList('development'),
   '#/dev/analysis': () => pageWorkList('rnd_analysis'), // 15.285 연구팀 분석 관리
-  '#/dev/analysis/request': () => pageIntake('rnd_analysis'),
+  '#/dev/analysis/request': main => pageRndData(main), // 15.288 분석데이터 입력(연구원)
   '#/dev/schedule': main => pageDevRoadmap(main), // 15.276 개발 스케줄 관리(로드맵)
   '#/prod/request': () => { location.replace('#/sales/sample/product'); }, // 15.183 영업으로 옮김(예전 즐겨찾기)
   '#/sales/sample/product': () => pageIntake('sample'), // 15.183 제품 샘플의뢰(영업)
@@ -712,7 +712,7 @@ const MANAGE = {
   '#/quality/list': { title: '분석 관리', tabs: [['#/quality/request', '분석의뢰'], ['#/quality/list', '분석리스트']] },
   '#/quality/voc/list': { title: 'VOC 관리', tabs: [['#/quality/voc/request', 'VOC 접수'], ['#/quality/voc/list', 'VOC 처리목록']] },
   '#/dev/list': { title: '개발 관리', tabs: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
-  '#/dev/analysis': { title: '연구 분석 관리', tabs: [['#/dev/analysis/request', '분석의뢰'], ['#/dev/analysis', '분석리스트']] }, // 15.285
+  '#/dev/analysis': { title: '연구 분석 관리', tabs: [['#/dev/analysis/request', '분석데이터 입력'], ['#/dev/analysis', '분석리스트']] }, // 15.285 · 15.288
 };
 const ROUTE_ALIAS = { '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/calendar': '#/sales/bills', '#/logistics/qr': '#/logistics/lots', '#/logistics/pallets': '#/logistics/lots', '#/logistics/scan': '#/logistics/lots', '#/sales/reps': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users', '#/logistics/receipt/new': '#/logistics/receive', '#/logistics/receipt/other': '#/logistics/receive', '#/logistics/receipts': '#/logistics/receive', '#/logistics/ship/new': '#/logistics/ship', '#/purchase/laundry/new': '#/purchase/laundry', '#/prod/semi/new': '#/prod/semi', '#/prod/semi/cut/new': '#/prod/semi/cut', '#/prod/semi/wash/new': '#/prod/semi/wash', '#/quality/request': '#/quality/list', '#/quality/voc/request': '#/quality/voc/list', '#/dev/request': '#/dev/list', '#/dev/analysis/request': '#/dev/analysis' };
 const navRoute = r => ROUTE_ALIAS[String(r || '#/').split('?')[0]] || String(r || '#/').split('?')[0];
@@ -2458,7 +2458,7 @@ async function pageWorkList(type) {
   let status = ''; let category = ''; let qc = ''; // qc: 15.78 판정 칩
   main.innerHTML = `
   <h1>${cfg.listTitle || cfg.label + '리스트'} <span class="dept">${cfg.dept}</span></h1>
-  <p class="muted">${type === 'analysis' ? '승인된 분석의뢰와 입고에서 자동 등록된 수입검사 목록입니다.' : type === 'rnd_analysis' ? '연구팀에 들어온 분석의뢰(연구책임자가 승인한 것) 목록입니다.' : `승인된 ${cfg.label}의뢰 목록입니다.`} ${mgr ? '상태 칸에서 바로 대기/진행/완료를 바꿀 수 있습니다.' : `상태 변경은 ${cfg.mgr}가 합니다.`} 행을 누르면 의뢰서를 봅니다. 표 제목을 끌어 다른 제목 위에 놓으면 열 순서가 바뀌고 내 계정에 저장됩니다(다른 기기에서도 같음, ⚙에서 숨김·초기화).</p>
+  <p class="muted">${type === 'analysis' ? '승인된 분석의뢰와 입고에서 자동 등록된 수입검사 목록입니다.' : type === 'rnd_analysis' ? '연구원이 입력한 분석데이터 목록입니다(「분석데이터 입력」에서 넣음). 개발건·단계 연결은 분석을 열어 「개발건 연결」로.' : `승인된 ${cfg.label}의뢰 목록입니다.`} ${mgr ? '상태 칸에서 바로 대기/진행/완료를 바꿀 수 있습니다.' : `상태 변경은 ${cfg.mgr}가 합니다.`} 행을 누르면 의뢰서를 봅니다. 표 제목을 끌어 다른 제목 위에 놓으면 열 순서가 바뀌고 내 계정에 저장됩니다(다른 기기에서도 같음, ⚙에서 숨김·초기화).</p>
   <div class="toolbar seg-groups">
     <div class="seg-box"><span class="seg-label">상태</span><div class="seg" id="stSeg" role="group" aria-label="상태">${['', 'waiting', 'progress', 'done'].map((s) => `<button data-s="${s}" class="${s === status ? 'on' : ''}">${s ? STATUS[s] : '전체'}</button>`).join('')}</div></div>
     ${type === 'rnd_analysis' ? `<div class="seg-box"><span class="seg-label">분석구분</span><div class="seg" id="catSeg" role="group" aria-label="분석구분">${['', ...cfg.fields.find(f => f.k === 'category').opts].map((c) => `<button data-c="${c}" class="${c === category ? 'on' : ''}">${c || '전체'}</button>`).join('')}</div></div>` : ''}

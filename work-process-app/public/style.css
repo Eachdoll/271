@@ -3767,3 +3767,9 @@ tr.book-memo > td { background: var(--bg); font-style: italic; }
 .dc-ana-none { margin: 2px 0; }
 .dc-ana-checks { display: flex; flex-wrap: wrap; gap: 4px 14px; }
 .dr-ana { font-size: 12px; color: #0c8599; white-space: nowrap; }
+
+/* 15.288 분석데이터: 불러오기 · 새로 입력 */
+.ad-mode { margin-bottom: 10px; }
+.ad-imp { max-height: 340px; overflow: auto; }
+.ad-imp tr[data-imp-row] { cursor: pointer; }
+.rnd-data-form .actions { justify-content: flex-end; }

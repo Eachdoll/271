@@ -634,3 +634,21 @@ test('15.287 analysis data entered directly on a development step: done RA- reco
   assert.ok(talk.some(c => /^\[분석\] 분석데이터 · RA-261118-\d{2} 시제품 A \(시제품분석\) · 단계 「시제품」 · 분석일 2026-11-18 · 결과: 파티클 80/.test(c)), JSON.stringify(talk));
   assert.equal((await admin('PUT', `/api/attachments/request/${r.body.id}`, { photos: [] })).status === 404, false, 'attachments allowed for research analysis');
 });
+
+test('15.288 research analysis data entry is researcher-only; unlinked data can later be matched to a roadmap step', async () => {
+  assert.equal((await prod('POST', '/api/requests', { type: 'rnd_analysis', title: 'x', category: '원료분석', data: {} })).status, 403, 'not a researcher');
+  assert.equal((await prod('POST', '/api/rnd-analysis-data', { title: 'x', category: '원료분석', result_note: 'y' })).status, 403);
+  const free = await admin('POST', '/api/rnd-analysis-data', { title: '원료 롤 C', category: '원료분석', items: ['규격'], result_note: '평량 40.2g/㎡', analysis_date: '2026-11-15', customer: '자체' });
+  assert.equal(free.status, 200, JSON.stringify(free.body)); assert.equal(free.body.status, 'done'); assert.match(free.body.req_no, /^RA-261115-\d{2}$/);
+  assert.equal(free.body.data.dev_request_id, undefined, 'no development link chosen');
+  const dev = (await admin('POST', '/api/requests', { type: 'development', title: '원료 변경 과제', customer: 'C사', due_date: '2027-02-28', target_price: '1', data: { extra: 'x' } })).body;
+  await admin('POST', `/api/requests/${dev.id}/approve`);
+  await admin('PUT', `/api/dev-roadmap/${dev.id}`, { term: 'long', steps: [{ name: '원료 검토', start_date: '2026-11-01', end_date: '2026-12-31', status: 'doing' }] });
+  const done = (await admin('GET', '/api/requests?type=rnd_analysis&status=done')).body; assert.ok(done.some(a => a.id === free.body.id));
+  // 로드맵 단계에서 불러와 맞추기 = dev-link
+  assert.equal((await admin('POST', `/api/requests/${free.body.id}/dev-link`, { dev_request_id: dev.id, dev_step: '원료 검토' })).status, 200);
+  const row = (await admin('GET', '/api/dev-roadmap?id=' + dev.id)).body.rows[0];
+  assert.deepEqual(row.analyses.map(a => [a.title, a.dev_step, a.result_note, a.analysis_date]), [['원료 롤 C', '원료 검토', '평량 40.2g/㎡', '2026-11-15']]);
+  const linkedAtEntry = (await admin('POST', '/api/rnd-analysis-data', { title: '원료 롤 D', category: '원료분석', result_note: '평량 39.8', dev_request_id: dev.id, dev_step: '원료 검토' })).body;
+  assert.equal(linkedAtEntry.customer, 'C사', 'customer from the development item'); assert.equal(linkedAtEntry.data.dev_step, '원료 검토');
+});
