@@ -343,3 +343,31 @@ test('15.262 purchase stock: price and incoming POs for purchase only; purchase 
   assert.equal((await buyer('GET', '/api/purchase/stock-extra')).status, 200);
   assert.equal((await buyer('PUT', '/api/inventory/levels', { item: '리뷰원단', unit: 'yd', min_qty: 10 })).status, 200);
 });
+
+test('15.265 stock adjustment by LOT and location: count and +/- change LOT, place and item stock; cutting usage leaves the place', async () => {
+  const g = (await admin('POST', '/api/boms', { product: '조정상품', product_code: 'AJ-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  await admin('POST', '/api/warehouses', { name: '조정창고', locations: 'A,B' });
+  await admin('POST', '/api/receipts', { receipt_date: today, vendor: '조정상사', request_id: rid(), lines: [{ bom_id: g.id, lot: 'AJ-L', qty: 30, warehouse: '조정창고', location: 'A' }] });
+  const lotBal = async () => (await prod('GET', '/api/inventory/lots?q=AJ-L')).body.rows.find(r => r.lot === 'AJ-L').balance;
+  const placeQty = async loc => (await prod('GET', '/api/inventory/places?q=AJ-L')).body.rows.filter(r => r.lot === 'AJ-L' && r.location === loc).reduce((t, r) => t + r.qty, 0);
+  const itemStock = async () => (await prod('GET', '/api/inventory?q=' + encodeURIComponent('조정상품'))).body.rows.find(r => r.item === '조정상품').stock;
+  assert.equal((await prod('POST', '/api/inventory/adjustments', { item: '조정상품', unit: 'EA', lot: 'AJ-L', kind: 'adjust', qty: -1, reason: 'x', request_id: rid() })).status, 403, 'logistics lead/admin only');
+  // 위치 실사: A에서 센 수량 27 → −3
+  const c = await admin('POST', '/api/inventory/adjustments', { item: '조정상품', unit: 'EA', lot: 'AJ-L', warehouse: '조정창고', location: 'A', kind: 'count', counted_qty: 27, by_item: true, reason: '실사', request_id: rid() });
+  assert.equal(c.status, 200, JSON.stringify(c.body)); assert.equal(c.body.qty, -3);
+  assert.equal(await lotBal(), 27); assert.equal(await placeQty('A'), 27); assert.equal(await itemStock(), 27);
+  // LOT 증감 +5(위치 없이)
+  assert.equal((await admin('POST', '/api/inventory/adjustments', { item: '조정상품', unit: 'EA', lot: 'AJ-L', kind: 'adjust', qty: 5, reason: '찾음', request_id: rid() })).status, 200);
+  assert.equal(await lotBal(), 32); assert.equal(await itemStock(), 32);
+  assert.equal((await admin('POST', '/api/inventory/adjustments', { item: '조정상품', unit: 'EA', lot: 'AJ-L', warehouse: '조정창고', location: 'A', kind: 'count', counted_qty: 32, by_item: true, reason: '같음', request_id: rid() })).status, 400, 'no difference');
+  assert.equal(await placeQty('A'), 32, 'LOT in one place: change without a location lands there');
+  const h = (await prod('GET', '/api/inventory/lot-history?' + new URLSearchParams({ item: '조정상품', lot: 'AJ-L' }))).body.rows.map(r => [r.src, r.kind, r.qty]);
+  assert.deepEqual(h.filter(r => /실사|조정/.test(r[0])).sort(), [['재고 실사', 'out', 3], ['재고 조정', 'in', 5]]);
+  // 커팅 투입은 창고·위치 수량에서도 빠짐
+  const raw = (await admin('POST', '/api/boms', { product: '위치원단', product_code: 'WC-R', item_category: '원자재', kind: 'finished', base_qty: 1, unit: 'yd', materials: [] })).body;
+  const semi = (await admin('POST', '/api/boms', { product: '위치반', product_code: 'WCS', item_category: '반제품', kind: 'semi', semi_type: '천와이퍼', base_qty: 1, unit: '매', materials: [{ item: '위치원단', item_category: '원자재', qty: 0.01, unit: 'yd' }] })).body;
+  await admin('POST', '/api/receipts', { receipt_date: today, vendor: '조정상사', request_id: rid(), lines: [{ bom_id: raw.id, lot: 'WC-L', qty: 50, pieces: 2, warehouse: '조정창고', location: 'B' }] });
+  const line = (await prod('GET', '/api/production-units?kind=line')).body[0];
+  assert.equal((await prod('POST', '/api/semi-batches', { process: 'cut', common: { work_date: today, unit_id: line.id }, request_id: rid(), items: [{ entry_mode: 'code', bom_id: semi.id, product_group: 'wiper', product_type: '천와이퍼', start_time: '08:00', end_time: '09:00', qty: 1000, inputs: [{ item: '위치원단', lot: 'WC-L', piece_nos: [1] }] }] })).status, 200);
+  assert.equal((await prod('GET', '/api/inventory/places?q=WC-L')).body.rows.filter(r => r.lot === 'WC-L').reduce((t, r) => t + r.qty, 0), 40);
+});

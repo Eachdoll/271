@@ -498,6 +498,13 @@
       "when": 1798023213000,
       "tag": "0070_lot_concession",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "6",
+      "when": 1798109613000,
+      "tag": "0071_adjust_lot_place",
+      "breakpoints": true
     }
   ]
 }

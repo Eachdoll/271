@@ -4244,6 +4244,7 @@ route('GET', '/api/inventory/lot-history', async ({ query }) => {
     q(`SELECT a.production_date AS d, 'in' AS kind, '생산' AS src, a.work_order AS doc, '' AS party, a.qty, '' AS place, a.note FROM production_actuals a JOIN schedules s ON s.id=a.schedule_id WHERE TRIM(s.product)=TRIM(?) AND a.lot=? AND a.voided_at IS NULL`, item, lot),
     q(`SELECT a.production_date AS d, 'out' AS kind, '생산 투입' AS src, a.work_order AS doc, s.product AS party, i.qty, '' AS place, a.lot AS note FROM production_lot_inputs i JOIN production_actuals a ON a.id=i.actual_id JOIN schedules s ON s.id=a.schedule_id WHERE TRIM(i.item)=TRIM(?) AND i.lot=? AND a.voided_at IS NULL`, item, lot),
     q(`SELECT r.work_date AS d, 'out' AS kind, CASE WHEN r.work_status='progress' THEN '커팅 투입(작업중)' ELSE '커팅 투입' END AS src, r.lot AS doc, r.unit_name AS party, CASE WHEN r.work_status='progress' THEN 0 ELSE i.qty END AS qty, '' AS place, CASE WHEN i.piece_nos<>'' THEN '절 ' || i.piece_nos WHEN i.pieces IS NOT NULL THEN i.pieces || '절' ELSE '' END AS note FROM semi_lot_inputs i JOIN semi_records r ON r.id=i.record_id WHERE TRIM(i.item)=TRIM(?) AND i.lot=?`, item, lot),
+    q(`SELECT adj_date AS d, CASE WHEN qty>0 THEN 'in' ELSE 'out' END AS kind, CASE kind WHEN 'count' THEN '재고 실사' WHEN 'opening' THEN '기초재고' ELSE '재고 조정' END AS src, '' AS doc, created_by AS party, ABS(qty) AS qty, TRIM(warehouse || ' ' || location) AS place, reason || CASE WHEN counted_qty IS NOT NULL THEN ' (센 수량 ' || printf('%g', counted_qty) || ')' ELSE '' END AS note FROM stock_adjustments WHERE TRIM(item)=TRIM(?) AND lot=?`, item, lot), // 15.265
     q(`SELECT transfer_date AS d, 'move' AS kind, '이동' AS src, '' AS doc, from_place AS party, qty, to_place AS place, note FROM stock_transfers WHERE TRIM(item)=TRIM(?) AND lot=? AND status='confirmed'`, item, lot),
   ]);
   const KO = { in: 0, out: 1, move: 2 }, rows = parts.flat().sort((a, b) => stockCompare(a.d, b.d) || KO[a.kind] - KO[b.kind] || stockCompare(a.src, b.src) || stockCompare(String(a.doc || ''), String(b.doc || '')));
@@ -5423,10 +5424,11 @@ route('POST', '/api/pallets/:id/ship', async ({ user, params, body }) => {
 });
 // 15.230 창고·위치별 재고: LOT마다 위치별 잔량(위치가 적힌 입고 + 이동 들어옴 − 나감, 출고·생산 투입·반출은 먼저 들어온 위치부터 뺌).
 // LOT별 재고와 같은 원천을 쓰고 위치 없이 들어온 것(생산·반입·예전 발주)은 「위치 미지정」. ?warehouse=창고, ?q=품목·LOT·위치
-route('GET', '/api/inventory/places', async ({ query }) => {
+route('GET', '/api/inventory/places', async ({ query }) => inventoryPlaces(query));
+async function inventoryPlaces(query) {
   const asof = stockAsOf(query.asof), q = str(query.q, 200).toLowerCase(), whF = str(query.warehouse, 50);
   const LOT = "CASE WHEN l.lot='' THEN '(LOT 미지정)' ELSE l.lot END";
-  const [a, b, c, d, e, f, g, h, t, w] = await db.batch([
+  const [a, b, c, d, e, f, g, h, t, w, adj, cutIn] = await db.batch([
     { sql: `SELECT TRIM(p.item) AS item, TRIM(p.unit) AS unit, ${LOT} AS lot, l.warehouse AS wh, l.location AS loc, l.qty, l.received_date AS d, p.product_code AS code FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id WHERE l.voided_at IS NULL AND p.recv_status IN ('ok','mismatch') AND l.received_date<=?`, args: [asof] },
     { sql: `SELECT TRIM(item) AS item, TRIM(unit) AS unit, lot, '' AS wh, '' AS loc, recv_qty AS qty, COALESCE(substr(recv_at,1,10), due_date) AS d, product_code AS code FROM purchase_orders WHERE lot<>'' AND recv_status IN ('ok','mismatch') AND recv_qty IS NOT NULL AND NOT EXISTS(SELECT 1 FROM po_receipt_lots l WHERE l.po_id=purchase_orders.id AND l.voided_at IS NULL) AND COALESCE(substr(recv_at,1,10), due_date)<=?`, args: [asof] },
     { sql: `SELECT TRIM(item) AS item, TRIM(COALESCE(NULLIF(unit,''), json_extract(bom_snapshot,'$.unit'), '')) AS unit, lot, warehouse AS wh, location AS loc, qty, received_date AS d, COALESCE(json_extract(bom_snapshot,'$.product_code'),'') AS code FROM other_receipts WHERE lot<>'' AND received_date<=?`, args: [asof] },
@@ -5437,8 +5439,10 @@ route('GET', '/api/inventory/places', async ({ query }) => {
     { sql: `SELECT TRIM(l.item) AS item, l.lot AS lot, SUM(l.qty) AS q FROM stock_return_lines l JOIN stock_returns r ON r.id=l.return_id WHERE l.lot<>'' AND r.status='confirmed' AND r.process IN ('stock_amount','stock') AND r.side<>'in' AND r.return_date<=? GROUP BY TRIM(l.item), l.lot`, args: [asof] },
     { sql: `SELECT item, lot, from_place, to_place, to_warehouse, to_location, qty, transfer_date AS d FROM stock_transfers WHERE status='confirmed' AND transfer_date<=? ORDER BY transfer_date, id`, args: [asof] },
     { sql: 'SELECT name, locations, sort FROM warehouses ORDER BY sort, name', args: [] },
+    { sql: "SELECT TRIM(item) AS item, TRIM(unit) AS unit, lot, warehouse AS wh, location AS loc, qty, adj_date AS d, '' AS code FROM stock_adjustments WHERE lot<>'' AND (warehouse<>'' OR qty>0) AND adj_date<=?", args: [asof] }, // 15.265 LOT·위치 조정(+/−), 위치 없는 감소는 아래 outs로
+    { sql: "SELECT TRIM(i.item) AS item, i.lot AS lot, SUM(i.qty) AS q FROM semi_lot_inputs i JOIN semi_records r ON r.id=i.record_id WHERE r.work_date<=? GROUP BY TRIM(i.item), i.lot UNION ALL SELECT TRIM(item), lot, SUM(-qty) FROM stock_adjustments WHERE lot<>'' AND warehouse='' AND qty<0 AND adj_date<=? GROUP BY TRIM(item), lot", args: [asof, asof] }, // 15.265 커팅 투입·위치 없는 LOT 감소도 빠지게(먼저 들어온 위치부터)
   ]);
-  const ins = [...a.results, ...b.results, ...c.results, ...d.results, ...e.results];
+  const ins = [...a.results, ...b.results, ...c.results, ...d.results, ...e.results, ...adj.results];
   if (ins.length > 50000) throw bad('기록이 너무 많습니다. 기준일이나 검색으로 범위를 좁히세요.');
   const lots = new Map(), placeOf = new Map(); // 위치 글자 → [창고, 위치]
   const key = (item, lot) => item + '\u0001' + lot;
@@ -5449,7 +5453,7 @@ route('GET', '/api/inventory/places', async ({ query }) => {
   };
   for (const r of ins) { const wh = String(r.wh || '').trim(), loc = String(r.loc || '').trim(), place = `${wh} ${loc}`.trim(); if (place) placeOf.set(place, [wh, loc]); at(key(r.item, r.lot), r.item, r.unit, r.lot, place, wh, loc, r.d, r.code).qty += Number(r.qty) || 0; }
   for (const r of t.results) { placeOf.set(r.to_place, [r.to_warehouse, r.to_location]); const k = key(String(r.item).trim(), r.lot); if (!lots.has(k)) continue; const L = lots.get(k); const fr = placeOf.get(r.from_place) || [r.from_place.split(' ')[0] || '', r.from_place.split(' ').slice(1).join(' ')]; at(k, L.item, L.unit, L.lot, r.from_place, fr[0], fr[1], r.d).qty -= r.qty; at(k, L.item, L.unit, L.lot, r.to_place, r.to_warehouse, r.to_location, r.d).qty += r.qty; }
-  const outs = new Map(); for (const r of [...f.results, ...g.results, ...h.results]) { const k = key(r.item, r.lot); outs.set(k, (outs.get(k) || 0) + (Number(r.q) || 0)); }
+  const outs = new Map(); for (const r of [...f.results, ...g.results, ...h.results, ...cutIn.results]) { const k = key(r.item, r.lot); outs.set(k, (outs.get(k) || 0) + (Number(r.q) || 0)); }
   const rows = [];
   for (const [k, L] of lots) {
     let out = outs.get(k) || 0; const ps = [...L.places.values()].sort((x, y) => stockCompare(x.first, y.first) || stockCompare(x.place, y.place));
@@ -5462,7 +5466,7 @@ route('GET', '/api/inventory/places', async ({ query }) => {
   out.sort((x, y) => (!x.warehouse) - (!y.warehouse) || (order.get(x.warehouse) ?? 999) - (order.get(y.warehouse) ?? 999) || stockCompare(x.warehouse, y.warehouse) || stockCompare(x.location, y.location) || stockCompare(x.item, y.item) || stockCompare(x.first_date, y.first_date));
   const warehouses = w.results.map(x => ({ name: x.name, locations: x.locations ? x.locations.split(',') : [] }));
   return { asof, rows: out.slice(0, 3000), more: out.length > 3000, warehouses };
-});
+}
 async function lotStockReport(query) {
   const asof = stockAsOf(query.asof), q = str(query.q, 200);
   const like = q ? '%' + q.replace(/[\\%_]/g, m => '\\' + m) + '%' : null;
@@ -5482,6 +5486,7 @@ async function lotStockReport(query) {
     wrap(`SELECT TRIM(i.item) AS item, TRIM(i.unit) AS unit, i.lot AS lot, 'out' AS kind, i.qty AS qty, a.production_date AS d, '' AS place FROM production_lot_inputs i JOIN production_actuals a ON a.id=i.actual_id WHERE a.voided_at IS NULL`),
     wrap(`SELECT TRIM(i.item) AS item, TRIM(i.unit) AS unit, i.lot AS lot, 'out' AS kind, i.qty AS qty, r.work_date AS d, '' AS place FROM semi_lot_inputs i JOIN semi_records r ON r.id=i.record_id`), // 15.249 커팅·융착에 투입한 원자재 LOT
     wrap(`SELECT item, unit, lot, 'move' AS kind, 0 AS qty, transfer_date AS d, to_place AS place FROM stock_transfers WHERE status='confirmed'`), // 15.114 이동한 위치
+    wrap(`SELECT TRIM(item) AS item, TRIM(unit) AS unit, lot, CASE WHEN qty>0 THEN 'in' ELSE 'out' END AS kind, ABS(qty) AS qty, adj_date AS d, TRIM(warehouse || ' ' || location) AS place FROM stock_adjustments WHERE lot<>''`), // 15.265 LOT 재고 조정
   ]);
   const map = new Map(); let truncated = false;
   for (const result of results) {
@@ -5518,6 +5523,8 @@ route('POST', '/api/inventory/adjustments', async ({ user, body }) => {
   const kind = String(body.kind || ''); if (!['opening', 'count', 'adjust'].includes(kind)) throw bad('조정 종류를 선택하세요.');
   const date = dateStr(body.adj_date || today(), '기준일'); if (date > today()) throw bad('기준일은 오늘 이전으로 선택하세요.');
   const reason = reqStr(body.reason, '사유', 500);
+  const lot = str(body.lot, 100); let warehouse = lot ? str(body.warehouse, 50) : '', location = warehouse ? str(body.location, 50) : ''; // 15.265
+  if (lot && !warehouse) { const at = new Set((await inventoryPlaces({ asof: date, q: lot })).rows.filter(r => r.item === item.trim() && r.lot === lot && r.qty > 0).map(r => (r.warehouse || '') + '\u0001' + (r.location || ''))); if (at.size === 1 && ![...at][0].startsWith('\u0001')) [warehouse, location] = [...at][0].split('\u0001'); } // 한 곳에만 있으면 그 위치로
   const key = body.request_id === undefined ? randomHex(16) : String(body.request_id);
   if (!/^[a-zA-Z0-9-]{16,80}$/.test(key)) throw bad('요청 번호를 확인하세요.');
   const old = await db.prepare('SELECT * FROM stock_adjustments WHERE request_id=?').get(key);
@@ -5526,12 +5533,17 @@ route('POST', '/api/inventory/adjustments', async ({ user, body }) => {
   if (kind === 'count') {
     // A stock count records the difference between what was counted and what the records say on that date.
     counted = num(body.counted_qty, '실사 수량');
-    qty = stockRound(counted - await stockQuantity(item, unit, body.spec === undefined || body.by_item ? null : spec, date));
+    if (lot) { // 15.265 LOT(위치) 실사: 그 LOT·위치 잔량과의 차이
+      const now = warehouse ? stockRound((await inventoryPlaces({ asof: date, q: lot })).rows.filter(r => r.item === item.trim() && r.lot === lot && r.warehouse === warehouse && (r.location || '') === location).reduce((t, r) => t + r.qty, 0))
+        : ((await lotStockReport({ q: lot, asof: date })).rows.find(r => r.item === item.trim() && r.lot === lot)?.balance ?? 0);
+      qty = stockRound(counted - now);
+    } else qty = stockRound(counted - await stockQuantity(item, unit, body.spec === undefined || body.by_item ? null : spec, date));
+    if (qty === 0) throw bad('센 수량이 장부와 같습니다. 조정할 것이 없습니다.');
   } else {
     qty = Number(body.qty); if (body.qty === '' || body.qty == null || !Number.isFinite(qty) || qty === 0) throw bad('조정 수량을 입력하세요. (감소는 음수)');
     if (kind === 'opening' && qty < 0) throw bad('기초재고는 0보다 커야 합니다.');
   }
-  let r; try { r = await db.prepare('INSERT INTO stock_adjustments(adj_date,item,spec,unit,qty,kind,counted_qty,reason,request_id,created_by_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(date, item, spec, unit, qty, kind, counted, reason, key, user.id, user.name); }
+  let r; try { r = await db.prepare('INSERT INTO stock_adjustments(adj_date,item,spec,unit,qty,kind,counted_qty,reason,request_id,created_by_id,created_by,lot,warehouse,location) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(date, item, spec, unit, qty, kind, counted, reason, key, user.id, user.name, lot, warehouse, location); }
   catch (error) { if (/UNIQUE/i.test(String(error && error.message))) { const again = await db.prepare('SELECT * FROM stock_adjustments WHERE request_id=?').get(key); if (again && again.created_by_id === user.id) return again; throw new HttpError(409, '이미 사용된 요청 번호입니다.'); } throw error; } // 15.209
   return db.prepare('SELECT * FROM stock_adjustments WHERE id=?').get(r.lastInsertRowid);
 });
