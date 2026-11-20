@@ -3906,3 +3906,4 @@ table.grid thead th:has(> input[type=checkbox]), table.grid thead th:has(> label
 table.ip-table tr.ip-soon > td { background-color: color-mix(in srgb, #f59f00 7%, var(--panel)); }
 table.ip-table tr.ip-over > td { background-color: color-mix(in srgb, #e03131 7%, var(--panel)); }
 .ip-calc { display: flex; align-items: flex-end; }
+#ipTools { display: inline-flex; gap: 8px; align-items: center; }
