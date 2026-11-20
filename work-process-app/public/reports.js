@@ -226,19 +226,80 @@ async function devPlanEditor(r, done) {
     submit: async v => { if (!canEdit) throw new Error('개발 담당자만 고칠 수 있습니다.'); const steps = [...root.querySelectorAll('[data-step]')].map(tr => Object.fromEntries([...tr.querySelectorAll('[data-s]')].map(i => [i.dataset.s, i.value.trim()]))).filter(x => x.name); return api('PUT', `/api/dev-roadmap/${r.id}`, { ...v, steps }); } });
   if (saved) { toast('개발 스케줄을 저장했습니다.'); await done?.(); }
 }
+// 15.277 개발 진행건 팝업: 담당자(개발·영업) 지정 + 스케줄 요약 + 소통(진행내용·영업 코멘트·요청/질문). 소통은 진행 코멘트(request)와 같은 기록.
+const DEV_TALK = [['진행', '진행내용', '#1c7ed6'], ['영업', '영업 코멘트', '#e8590c'], ['요청', '요청·질문', '#c2255c'], ['', '일반', '#868e96']];
+const devTalkKind = text => { const m = /^\[(진행|영업|요청|담당자)\]\s?/.exec(text || ''); return m ? [m[1], text.slice(m[0].length)] : ['', text || '']; };
+let DEV_DIRECTORY = null;
+async function devCaseWindow(id, done) {
+  const load1 = async () => (await api('GET', '/api/dev-roadmap?id=' + id)).rows[0];
+  let r = await load1(); if (!r) throw new Error('개발 의뢰를 찾을 수 없습니다.');
+  DEV_DIRECTORY ||= await api('GET', '/api/directory').catch(() => []);
+  const canOwn = hasRole('dev') || hasRole('dev_approver') || hasRole('sales'), canPlan = hasRole('dev') || hasRole('dev_approver');
+  const defKind = hasRole('sales') && !hasRole('dev') && !ME?.is_admin ? '영업' : '진행';
+  const opt = (sel) => `<option value="">미지정</option>${DEV_DIRECTORY.map(u => `<option value="${u.id}"${Number(sel) === u.id ? ' selected' : ''}>${esc(u.name)}${u.department ? ` · ${esc(u.department)}` : ''}${u.position ? ` ${esc(u.position)}` : ''}</option>`).join('')}`;
+  let changed = false;
+  const m = modal(`<div class="dev-case"><h3>${esc(r.title)} <span class="small muted">${esc(r.req_no || '')}</span></h3><div data-dc-summary></div>
+    <fieldset class="vendor-sec dc-owners"><legend>담당자</legend><div class="form-grid">
+      <label>개발 담당자<select name="dev_owner_id" ${canOwn ? '' : 'disabled'}>${opt(r.dev_owner_id)}</select></label>
+      <label>영업 담당자<select name="sales_owner_id" ${canOwn ? '' : 'disabled'}>${opt(r.sales_owner_id)}</select></label>
+      <div class="dc-owner-act">${canOwn ? '<button type="button" class="btn small primary" data-dc-owner-save>담당자 저장</button>' : '<span class="small muted">개발·영업 담당자가 지정합니다.</span>'}</div></div></fieldset>
+    <fieldset class="vendor-sec"><legend>소통 <span class="hint">(진행내용·영업 코멘트·요청을 남기면 모두가 봅니다 · Ctrl+Enter 등록)</span></legend>
+      <div class="dc-filter seg" role="group" aria-label="소통 구분">${[['all', '전체'], ...DEV_TALK.slice(0, 3).map(([k, l]) => [k, l])].map(([k, l]) => `<button type="button" data-dc-f="${k}" class="${k === 'all' ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <div class="dc-thread" data-dc-thread aria-live="polite"><p class="muted">불러오는 중…</p></div>
+      <button type="button" class="btn small" data-dc-older hidden>이전 기록 더 보기</button>
+      <form class="dc-send" data-dc-form><div class="seg dc-kind" role="radiogroup" aria-label="글 구분">${DEV_TALK.slice(0, 3).map(([k, l, c]) => `<label style="--c:${c}"><input type="radio" name="kind" value="${k}"${k === defKind ? ' checked' : ''}> ${l}</label>`).join('')}</div>
+        <textarea name="content" rows="3" maxlength="1990" required placeholder="예) 고객사 2차 샘플 평가 결과 다음 주 회신 예정"></textarea>
+        <button type="submit" class="btn primary">등록</button></form></fieldset>
+    <div class="actions"><button type="button" class="btn" data-dc-req>의뢰서 보기</button><button type="button" class="btn" data-dc-plan>${canPlan ? '스케줄·공정표 입력' : '스케줄·공정표 보기'}</button><button type="button" class="btn" data-dc-close>닫기</button></div></div>`,
+    { wide: true, onClose: () => { if (changed) done?.(); } });
+  const el = m.el; el.classList.add('vendor-modal');
+  const summary = () => { const end = r.target_date || r.due_date || '', dd = end ? devDays(todayStr(), end) : null, t = DEV_TERM.find(x => x[0] === (r.term || '')) || DEV_TERM[3];
+    $('[data-dc-summary]', el).innerHTML = `<div class="dc-sum"><span class="chip" style="border-color:${t[2]};color:${t[2]}">${t[1]}</span> ${statusChip(r.status)} <span>${esc(r.customer || '')}</span>${r.target_price ? `<span class="small muted">타겟단가 ${esc(r.target_price)}</span>` : ''}<span class="small muted">의뢰 ${esc(r.requester_name || '')}</span></div>
+      <div class="dc-prog"><div class="dc-bar" style="--c:${t[2]}"><b style="width:${r.progress || 0}%"></b></div><b>${r.progress || 0}%</b>${end ? `<span>완료예정 <b>${esc(end)}</b>${dd != null && r.status !== 'done' ? ` <span class="${dd < 0 ? 'red-text' : ''}">(${dd >= 0 ? 'D-' + dd : 'D+' + -dd})</span>` : ''}</span>` : ''}</div>
+      <div class="small dr-now">${r.current_stage ? `<span>현재 <b>${esc(r.current_stage)}</b></span>` : '<span class="muted">현재 진행현황 미입력</span>'}${r.next_step ? `<span>다음 <b>${esc(r.next_step)}</b>${r.next_date ? ` ${esc(r.next_date)}` : ''}</span>` : ''}${r.steps.length ? `<span>공정 ${r.steps.filter(x => x.status === 'done').length}/${r.steps.length}</span>` : ''}</div>`; };
+  summary();
+  const endpoint = `/api/comments/request/${id}`; let rows = [], next = null, filter = 'all';
+  const thread = $('[data-dc-thread]', el);
+  const draw = () => {
+    const list = rows.slice().sort((a, b) => a.id - b.id).filter(c => filter === 'all' || devTalkKind(c.content)[0] === filter);
+    thread.innerHTML = list.length ? list.map(c => { const [k, body] = devTalkKind(c.content), info = k === '담당자' ? ['담당자', '담당자 변경', '#5f3dc4'] : DEV_TALK.find(x => x[0] === k) || DEV_TALK[3], mine = c.author_id === ME?.id;
+      return `<div class="dc-msg${mine ? ' mine' : ''}${k === '담당자' ? ' sys' : ''}" style="--c:${info[2]}"><div class="dc-meta"><span class="dc-kind-chip">${info[1]}</span><b>${esc(c.author_name)}</b><time>${esc(c.created_at.slice(0, 16))}</time>${mine && c.content !== '(삭제됨)' && k !== '담당자' ? `<button type="button" class="linklike small" data-dc-del="${c.id}">지우기</button>` : ''}</div><div class="dc-body">${esc(body)}</div></div>`; }).join('')
+      : `<p class="muted">${rows.length ? '이 구분의 글이 없습니다.' : '아직 소통 내역이 없습니다. 첫 진행내용이나 코멘트를 남겨 주세요.'}</p>`;
+    $('[data-dc-older]', el).hidden = next === null; thread.scrollTop = thread.scrollHeight;
+  };
+  const loadTalk = async (older = false) => { const res = await api('GET', endpoint + (older ? '?before=' + next : '')); rows = older ? rows.concat(res.rows) : res.rows; next = res.next; if (el.isConnected) draw(); };
+  el.addEventListener('click', async e => {
+    const f = e.target.closest('[data-dc-f]'); if (f) { filter = f.dataset.dcF; $$('[data-dc-f]', el).forEach(b => b.classList.toggle('on', b === f)); draw(); return; }
+    if (e.target.closest('[data-dc-older]')) { loadTalk(true).catch(fail); return; }
+    if (e.target.closest('[data-dc-close]')) { m.close(); return; }
+    const del = e.target.closest('[data-dc-del]'); if (del) { if (!(await confirmBox('이 글을 지울까요? 쓴 지 10분 안에만 지울 수 있고 자리에 「(삭제됨)」이 남습니다.'))) return; try { await api('DELETE', `${endpoint}/${del.dataset.dcDel}`); changed = true; await loadTalk(); } catch (err) { fail(err); } return; }
+    if (e.target.closest('[data-dc-owner-save]')) { try { const res = await api('PUT', `/api/dev-roadmap/${id}/owners`, { dev_owner_id: $('[name=dev_owner_id]', el).value, sales_owner_id: $('[name=sales_owner_id]', el).value }); toast(res.changed ? '담당자를 저장했습니다.' : '바뀐 담당자가 없습니다.'); if (res.changed) { changed = true; r = await load1(); await loadTalk(); } } catch (err) { fail(err); } return; }
+    if (e.target.closest('[data-dc-plan]')) { await devPlanEditor(r, async () => { changed = true; r = await load1(); summary(); }); return; }
+    if (e.target.closest('[data-dc-req]')) { try { const full = (await api('GET', '/api/requests?' + new URLSearchParams({ type: 'development', q: r.req_no || r.title }))).find(x => x.id === r.id); if (full) requestDetail('development', full, async () => { changed = true; }); else toast('의뢰서를 찾지 못했습니다.'); } catch (err) { fail(err); } }
+  });
+  const form = $('[data-dc-form]', el);
+  form.elements.content.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); form.requestSubmit(); } });
+  form.onsubmit = async e => { e.preventDefault(); const text = form.elements.content.value.trim(); if (!text) return; const kind = form.elements.kind.value;
+    const btn = form.querySelector('button[type=submit]'); btn.disabled = true;
+    try { await api('POST', endpoint, { content: kind ? `[${kind}] ${text}` : text }); form.elements.content.value = ''; changed = true; filter = 'all'; $$('[data-dc-f]', el).forEach(b => b.classList.toggle('on', b.dataset.dcF === 'all')); await loadTalk(); toast('등록했습니다.'); }
+    catch (err) { fail(err); } finally { btn.disabled = false; form.elements.content.focus(); } };
+  await loadTalk();
+  return m;
+}
 async function pageDevRoadmap(main) {
   let termSel = 'all'; try { termSel = localStorage.getItem('wpa:dev-term') ?? 'all'; } catch { /* 편의 */ }
   main.innerHTML = `<h1>스케줄 관리 <span class="dept">개발</span></h1>
-  <p class="muted">개발리스트의 제품마다 <b>구분(단기·중장기·장기)</b>, 공정표, 현재 진행현황·다음 진행예정·완료예정일을 넣으면 아래 로드맵에 표시됩니다. 막대를 누르면 입력 창이 열립니다.</p>
+  <p class="muted">개발리스트의 제품마다 <b>구분(단기·중장기·장기)</b>, 공정표, 현재 진행현황·다음 진행예정·완료예정일을 넣으면 아래 로드맵에 표시됩니다. 줄을 누르면(더블클릭) 진행건 창이 열려 담당자 지정·스케줄 입력·소통(진행내용·영업 코멘트)을 할 수 있습니다.</p>
   <form class="toolbar list-filters" id="drForm" data-read-only="true"><div class="seg" role="group" aria-label="구분" data-dr-terms>${[['all', '전체'], ...DEV_TERM.map(([k, l]) => [k, l])].map(([k, l]) => `<button type="button" data-dr-term="${k}">${l}</button>`).join('')}</div>
-    <label class="list-search">검색<input type="search" name="q" maxlength="100" placeholder="제품·거래처·의뢰번호"></label><label class="inline"><input type="checkbox" name="done" value="1"> 완료 포함</label><button type="submit" class="btn primary">조회</button></form>
+    <label class="list-search">검색<input type="search" name="q" maxlength="100" placeholder="제품·거래처·의뢰번호"></label><label class="inline"><input type="checkbox" name="mine" value="1"> 내 담당만</label><label class="inline"><input type="checkbox" name="done" value="1"> 완료 포함</label><button type="submit" class="btn primary">조회</button></form>
   <div class="dr-legend small"><span><i style="background:#2f9e44"></i>단기</span><span><i style="background:#1c7ed6"></i>중장기</span><span><i style="background:#7048e8"></i>장기</span><span class="dr-sep"></span>${Object.values(DEV_STEP_STATE).map(([l, c]) => `<span><i class="dr-step-i" style="background:${c}"></i>공정 ${l}</span>`).join('')}<span><b class="dr-next-i">◆</b> 다음 예정</span><span><i class="dr-today-i"></i> 오늘</span></div>
   <div id="drMap"><p class="muted">불러오는 중…</p></div><div id="drTable"></div>`;
   const form = $('#drForm', main); let rows = [];
   const today = todayStr();
   const draw = () => {
     const q = (form.elements.q.value || '').trim().toLowerCase();
-    const list = rows.filter(r => (termSel === 'all' || (r.term || '') === termSel) && (!q || `${r.title} ${r.customer} ${r.req_no}`.toLowerCase().includes(q)));
+    const mine = form.elements.mine.checked;
+    const list = rows.filter(r => (termSel === 'all' || (r.term || '') === termSel) && (!mine || r.dev_owner_id === ME?.id || r.sales_owner_id === ME?.id) && (!q || `${r.title} ${r.customer} ${r.req_no} ${r.dev_owner_name} ${r.sales_owner_name}`.toLowerCase().includes(q)));
     $$('[data-dr-term]', main).forEach(b => b.classList.toggle('on', b.dataset.drTerm === termSel));
     // 기간: 계획 날짜들 + 오늘(앞 1달 · 뒤 3달), 달 단위로
     const dates = list.flatMap(r => [r.start_date, r.target_date || r.due_date, r.next_date, ...r.steps.flatMap(s => [s.start_date, s.end_date])]).filter(Boolean);
@@ -257,21 +318,22 @@ async function pageDevRoadmap(main) {
         : end ? `<div class="dr-pin" style="left:${pct(end)}%;--c:${color}" title="완료예정 ${esc(end)}">▼</div>` : '<span class="dr-empty">일정 미입력 — 눌러서 입력</span>';
       const steps = r.steps.filter(s => s.start_date && s.end_date).map(s => `<i class="dr-step" style="left:${pct(s.start_date)}%;width:${Math.max(0.6, pct(s.end_date) - pct(s.start_date))}%;background:${DEV_STEP_STATE[s.status]?.[1] || '#adb5bd'}" title="${esc(`${s.name} · ${s.start_date}~${s.end_date} · ${DEV_STEP_STATE[s.status]?.[0] || ''}`)}"></i>`).join('');
       const next = r.next_date ? `<em class="dr-next" style="left:${pct(r.next_date)}%" title="${esc(`다음: ${r.next_step || ''} (${r.next_date})`)}">◆</em>` : '';
-      return `<div class="dr-row" data-dr="${r.id}" tabindex="0" title="눌러서 스케줄 입력"><div class="dr-label"><b>${esc(r.title)}</b> ${r.status === 'done' ? '<span class="chip green">완료</span>' : late ? '<span class="chip red">지연</span>' : ''}<div class="small muted">${esc([r.customer, r.req_no].filter(Boolean).join(' · '))}${end ? ` · 완료예정 ${esc(end)}${dd != null && r.status !== 'done' ? ` (${dd >= 0 ? 'D-' + dd : 'D+' + -dd})` : ''}` : ''}</div>${r.current_stage || r.next_step ? `<div class="small dr-now">${r.current_stage ? `<span>현재 <b>${esc(r.current_stage)}</b></span>` : ''}${r.next_step ? `<span>다음 <b>${esc(r.next_step)}</b>${r.next_date ? ` ${esc(r.next_date.slice(5))}` : ''}</span>` : ''}</div>` : ''}</div>
+      const owners = r.dev_owner_name || r.sales_owner_name ? `<div class="small dr-owners">${r.dev_owner_name ? `<span>개발 <b>${esc(r.dev_owner_name)}</b></span>` : ''}${r.sales_owner_name ? `<span>영업 <b>${esc(r.sales_owner_name)}</b></span>` : ''}</div>` : '<div class="small muted">담당자 미지정</div>';
+      return `<div class="dr-row" data-dr="${r.id}" tabindex="0" title="눌러서 진행건 열기(담당자·스케줄·소통)"><div class="dr-label"><b>${esc(r.title)}</b> ${r.status === 'done' ? '<span class="chip green">완료</span>' : late ? '<span class="chip red">지연</span>' : ''}${r.comment_count ? ` <span class="dr-talk" title="${esc(r.last_comment || '')}">💬 ${r.comment_count}</span>` : ''}<div class="small muted">${esc([r.customer, r.req_no].filter(Boolean).join(' · '))}${end ? ` · 완료예정 ${esc(end)}${dd != null && r.status !== 'done' ? ` (${dd >= 0 ? 'D-' + dd : 'D+' + -dd})` : ''}` : ''}</div>${r.current_stage || r.next_step ? `<div class="small dr-now">${r.current_stage ? `<span>현재 <b>${esc(r.current_stage)}</b></span>` : ''}${r.next_step ? `<span>다음 <b>${esc(r.next_step)}</b>${r.next_date ? ` ${esc(r.next_date.slice(5))}` : ''}</span>` : ''}</div>` : ''}${owners}</div>
         <div class="dr-track">${todayLine}<div class="dr-steps">${steps}</div>${bar}${next}</div></div>`;
     };
     const lanes = DEV_TERM.map(([k, l, c]) => [l, c, list.filter(r => (r.term || '') === k)]).filter(([, , rs]) => rs.length);
     $('#drMap', main).innerHTML = list.length ? `<div class="dr-map"><div class="dr-head"><div class="dr-label"></div><div class="dr-track">${head}${todayLine}</div></div>${lanes.map(([l, c, rs]) => `<div class="dr-lane" style="--c:${c}"><div class="dr-lane-h">${l} <span class="small muted">${rs.length}건</span></div>${rs.map(rowHtml).join('')}</div>`).join('')}</div>`
       : '<div class="empty">조건에 맞는 개발 제품이 없습니다. 개발리스트에 진행 중인 의뢰가 있어야 합니다.</div>';
-    $('#drTable', main).innerHTML = list.length ? `<h3 class="dr-h3">진행 현황표</h3><div class="table-wrap"><table class="grid"><thead><tr><th>구분</th><th>제품</th><th>거래처</th><th>현재 진행현황</th><th>다음 진행예정</th><th>다음 예정일</th><th>완료예정일</th><th class="r">D-day</th><th class="r">진행률</th><th>공정</th><th>입력자</th></tr></thead><tbody>${list.map(r => { const end = r.target_date || r.due_date || '', dd = end ? devDays(today, end) : null, t = DEV_TERM.find(x => x[0] === (r.term || '')) || DEV_TERM[3]; return `<tr data-dr="${r.id}" style="cursor:pointer"><td><span class="chip" style="border-color:${t[2]};color:${t[2]}">${t[1]}</span></td><td><b>${esc(r.title)}</b><div class="small muted">${esc(r.req_no || '')}</div></td><td>${esc(r.customer || '')}</td><td>${esc(r.current_stage || '')}</td><td>${esc(r.next_step || '')}</td><td class="nowrap">${esc(r.next_date || '')}</td><td class="nowrap">${esc(end)}</td><td class="r${dd != null && dd < 0 && r.status !== 'done' ? ' red-text' : ''}">${dd == null || r.status === 'done' ? '' : dd >= 0 ? 'D-' + dd : 'D+' + -dd}</td><td class="r">${r.progress || 0}%</td><td class="small">${r.steps.length ? `${r.steps.filter(s => s.status === 'done').length}/${r.steps.length}` : ''}</td><td class="small muted">${esc(r.updated_by || '')}</td></tr>`; }).join('')}</tbody></table></div>` : '';
+    $('#drTable', main).innerHTML = list.length ? `<h3 class="dr-h3">진행 현황표</h3><div class="table-wrap"><table class="grid"><thead><tr><th>구분</th><th>제품</th><th>거래처</th><th>현재 진행현황</th><th>다음 진행예정</th><th>다음 예정일</th><th>완료예정일</th><th class="r">D-day</th><th class="r">진행률</th><th>공정</th><th>개발 담당</th><th>영업 담당</th><th>최근 소통</th></tr></thead><tbody>${list.map(r => { const end = r.target_date || r.due_date || '', dd = end ? devDays(today, end) : null, t = DEV_TERM.find(x => x[0] === (r.term || '')) || DEV_TERM[3]; return `<tr data-dr="${r.id}" style="cursor:pointer"><td><span class="chip" style="border-color:${t[2]};color:${t[2]}">${t[1]}</span></td><td><b>${esc(r.title)}</b><div class="small muted">${esc(r.req_no || '')}</div></td><td>${esc(r.customer || '')}</td><td>${esc(r.current_stage || '')}</td><td>${esc(r.next_step || '')}</td><td class="nowrap">${esc(r.next_date || '')}</td><td class="nowrap">${esc(end)}</td><td class="r${dd != null && dd < 0 && r.status !== 'done' ? ' red-text' : ''}">${dd == null || r.status === 'done' ? '' : dd >= 0 ? 'D-' + dd : 'D+' + -dd}</td><td class="r">${r.progress || 0}%</td><td class="small">${r.steps.length ? `${r.steps.filter(s => s.status === 'done').length}/${r.steps.length}` : ''}</td><td>${esc(r.dev_owner_name || '')}</td><td>${esc(r.sales_owner_name || '')}</td><td class="small muted dr-last">${r.comment_count ? `💬 ${r.comment_count} · ${esc(r.last_comment || '')}` : ''}</td></tr>`; }).join('')}</tbody></table></div>` : '';
   };
   const load = async () => { rows = (await api('GET', '/api/dev-roadmap?' + new URLSearchParams({ done: form.elements.done.checked ? '1' : '' }))).rows; if (main.isConnected) draw(); };
   if (!['all', 'short', 'mid', 'long', ''].includes(termSel)) termSel = 'all';
   main.addEventListener('click', e => {
     const t = e.target.closest('[data-dr-term]'); if (t) { termSel = t.dataset.drTerm; try { localStorage.setItem('wpa:dev-term', termSel); } catch { /* 편의 */ } draw(); return; }
-    const row = e.target.closest('[data-dr]'); if (row) { const r = rows.find(x => x.id === Number(row.dataset.dr)); if (r) devPlanEditor(r, load).catch(fail); }
+    const row = e.target.closest('[data-dr]'); if (row && !$('.modal-wrap')) devCaseWindow(Number(row.dataset.dr), load).catch(fail);
   });
   main.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches?.('.dr-row')) e.target.click(); });
-  form.onsubmit = e => { e.preventDefault(); load().catch(fail); }; form.elements.done.onchange = () => load().catch(fail); form.elements.q.oninput = () => draw();
+  form.onsubmit = e => { e.preventDefault(); load().catch(fail); }; form.elements.done.onchange = () => load().catch(fail); form.elements.mine.onchange = () => draw(); form.elements.q.oninput = () => draw();
   await load();
 }

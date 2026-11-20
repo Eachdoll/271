@@ -3586,3 +3586,31 @@ tr.book-memo > td { background: var(--bg); font-style: italic; }
 .dr-h3 { margin: 18px 0 8px; }
 .dev-steps input, .dev-steps select { width: 100%; min-width: 90px; }
 @media (max-width: 760px) { .dr-head, .dr-row { grid-template-columns: 170px minmax(520px, 1fr); } }
+
+/* 15.277 개발 진행건 창: 담당자·소통 */
+.dr-owners { display: flex; gap: 10px; color: var(--muted, #666); }
+.dr-owners b { color: var(--text, #222); font-weight: 600; }
+.dr-talk { font-size: 12px; color: #1c7ed6; white-space: nowrap; }
+.dr-last { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dev-case h3 { margin: 0 0 6px; }
+.dc-sum { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 6px; }
+.dc-prog { display: flex; align-items: center; gap: 10px; margin: 4px 0; flex-wrap: wrap; }
+.dc-bar { flex: 0 1 260px; height: 10px; border-radius: 6px; background: color-mix(in srgb, var(--c) 18%, #fff); overflow: hidden; min-width: 120px; }
+.dc-bar b { display: block; height: 100%; background: var(--c); }
+.dc-owner-act { display: flex; align-items: flex-end; }
+.dc-filter { margin-bottom: 6px; }
+.dc-thread { max-height: 340px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 8px; background: var(--ns-panel, #f6f7f9); border-radius: 8px; border: 1px solid var(--line, #e3e5e8); }
+.dc-msg { max-width: 82%; align-self: flex-start; background: var(--panel, #fff); border: 1px solid var(--line, #e3e5e8); border-left: 4px solid var(--c); border-radius: 8px; padding: 6px 10px; }
+.dc-msg.mine { align-self: flex-end; background: color-mix(in srgb, var(--c) 7%, #fff); }
+.dc-msg.sys { align-self: center; max-width: 100%; background: transparent; border: 1px dashed var(--line, #ccc); font-size: 12px; }
+.dc-meta { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--muted, #666); flex-wrap: wrap; }
+.dc-meta b { color: var(--text, #222); }
+.dc-kind-chip { color: var(--c); border: 1px solid var(--c); border-radius: 10px; padding: 0 6px; font-size: 11px; font-weight: 600; }
+.dc-body { white-space: pre-wrap; word-break: break-word; margin-top: 2px; }
+.dc-send { display: grid; grid-template-columns: 1fr auto; gap: 6px; margin-top: 8px; }
+.dc-send .dc-kind { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; }
+.dc-send .dc-kind label { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line, #ccc); border-radius: 14px; padding: 2px 10px; cursor: pointer; font-size: 13px; }
+.dc-send .dc-kind label:has(input:checked) { border-color: var(--c); color: var(--c); font-weight: 600; background: color-mix(in srgb, var(--c) 8%, #fff); }
+.dc-send textarea { min-height: 64px; }
+.dc-send > button { align-self: stretch; }
+@media (max-width: 700px) { .dc-msg { max-width: 100%; } .dc-send { grid-template-columns: 1fr; } }

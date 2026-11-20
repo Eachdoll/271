@@ -487,3 +487,25 @@ test('15.276 development roadmap: term, dates, progress, current/next and proces
   assert.equal(row.term, 'mid'); assert.equal(row.progress, 40); assert.equal(row.next_step, '2차 샘플'); assert.deepEqual(row.steps.map(s => [s.name, s.status]), [['샘플 제작', 'done'], ['고객 평가', 'doing']]);
   assert.equal((await prod('PUT', `/api/dev-roadmap/${id}`, { term: 'long' })).status, 403);
 });
+
+test('15.277 development owners (dev/sales) and the communication thread on a development request', async () => {
+  const dev = await admin('POST', '/api/requests', { type: 'development', title: '항균 마스크', customer: '한솔', due_date: '2027-05-31', target_price: '50', data: { extra: 'x' } });
+  const id = dev.body.id;
+  const users = (await admin('GET', '/api/directory')).body, me = users.find(x => x.name !== '생산'), p = users.find(x => x.name === '생산');
+  assert.equal((await prod('PUT', `/api/dev-roadmap/${id}/owners`, { dev_owner_id: p.id })).status, 403, 'production cannot assign');
+  assert.equal((await admin('PUT', `/api/dev-roadmap/${id}/owners`, { dev_owner_id: 999999 })).status, 400);
+  const ok = await admin('PUT', `/api/dev-roadmap/${id}/owners`, { dev_owner_id: me.id, sales_owner_id: p.id });
+  assert.equal(ok.status, 200, JSON.stringify(ok.body)); assert.equal(ok.body.changed, true);
+  assert.equal((await admin('PUT', `/api/dev-roadmap/${id}/owners`, { dev_owner_id: me.id, sales_owner_id: p.id })).body.changed, false);
+  // 스케줄 저장은 담당자를 지우지 않는다
+  assert.equal((await admin('PUT', `/api/dev-roadmap/${id}`, { term: 'short', progress: 10 })).status, 200);
+  let row = (await admin('GET', '/api/dev-roadmap?id=' + id)).body.rows[0];
+  assert.equal(row.dev_owner_name, me.name); assert.equal(row.sales_owner_name, '생산'); assert.equal(row.term, 'short');
+  assert.equal(row.comment_count, 1, 'owner change logged'); assert.match(row.last_comment, /\[담당자\] 개발 없음 → /);
+  assert.equal((await prod('POST', `/api/comments/request/${id}`, { content: '[영업] 고객 2차 샘플 요청' })).status, 200);
+  row = (await admin('GET', '/api/dev-roadmap?id=' + id)).body.rows[0];
+  assert.equal(row.comment_count, 2); assert.match(row.last_comment, /고객 2차 샘플 요청/);
+  const list = (await admin('GET', '/api/requests?type=development')).body.find(r => r.id === id);
+  assert.equal(list.dev_owner_name, me.name); assert.equal(list.comment_count, 2);
+  assert.equal((await admin('GET', '/api/dev-roadmap?id=abc')).status, 400);
+});
