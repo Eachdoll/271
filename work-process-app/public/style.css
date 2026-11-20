@@ -4029,3 +4029,28 @@ table.risk-matrix td.on { outline: 2px solid var(--text); }
 .proc-guide .pg-head { margin-bottom: 6px; }
 .proc-guide .pg-steps { padding: 0; }
 .proc-guide .pg-step a, .proc-guide .pg-step .pg-in { padding: 4px 10px; font-size: 13px; min-height: 28px; }
+
+/* 15.312 목록 공통 도구 · 줄 눌러 열기 · 기록 찾기 · 보고서 출력 */
+#main form.list-filters > .lf-auto { display: inline-flex; align-items: center; gap: 6px; align-self: flex-end; min-height: 32px; margin-left: auto; }
+#main form.list-filters > .lf-auto + .ip-tools { margin-left: 0; }
+#main form.list-filters > .lf-auto [data-auto-count] { white-space: nowrap; padding: 0 4px; }
+#main table.ip-table > tbody > tr:has(button) { cursor: pointer; }
+.nav-find-list .nf-sec { padding: 6px 10px 2px; font-size: 11.5px; font-weight: 700; color: var(--muted); border-top: 1px solid var(--line); }
+.nav-find-list .nf-none { padding: 8px 10px; }
+.tasks h2 .notify-btn { margin-left: auto; font-weight: 600; }
+.modal.wide.rpt-modal { width: min(880px, calc(100vw - 32px)); }
+.rpt-sheet { color: var(--text); padding: 4px; }
+.rpt-top { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid var(--text); padding-bottom: 6px; }
+.rpt-title { text-align: center; font-size: 21px; letter-spacing: 2px; margin: 14px 0 12px; }
+table.rpt-head, table.rpt-list { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 10px; }
+table.rpt-head th, table.rpt-head td, table.rpt-list th, table.rpt-list td { border: 1px solid var(--line-strong, #9aa6b8); padding: 5px 8px; vertical-align: top; }
+table.rpt-head th, table.rpt-list thead th { background: var(--erp-head, var(--bg)); font-weight: 600; text-align: left; white-space: nowrap; }
+table.rpt-head th { width: 14%; }
+table.rpt-list td.c { text-align: center; } table.rpt-list td.r { text-align: right; }
+.rpt-signcell { min-width: 90px; height: 28px; }
+.rpt-block { margin: 8px 0; break-inside: avoid; } .rpt-block h3 { font-size: 14px; margin: 0 0 4px; padding: 3px 8px; background: var(--erp-head, var(--bg)); border-left: 3px solid var(--accent); }
+.rpt-text { white-space: pre-line; margin: 2px 8px 6px; font-size: 13px; line-height: 1.55; }
+.rpt-block ul { margin: 2px 0 6px 24px; padding: 0; font-size: 13px; }
+.rpt-sign { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 16px; border: 1px solid var(--line-strong, #9aa6b8); }
+.rpt-sign span { padding: 4px 8px 44px; font-size: 12.5px; border-left: 1px solid var(--line-strong, #9aa6b8); } .rpt-sign span:first-child { border-left: 0; }
+@media print { .rpt-sheet { color: #000; } .no-print { display: none !important; } }

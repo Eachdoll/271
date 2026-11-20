@@ -5058,6 +5058,25 @@ route('PUT', '/api/risks/:id', async ({ user, params, body }) => {
   if (!r.changes) throw conflict();
   return riskRow(await mustGet('quality_risks', prior.id));
 });
+// 15.312 통합 번호 검색(메뉴 찾기 칸): NC-·COA-·CHG-·AUD-·VAL-·REL-·RSK-·문서번호·설비번호·시험법·의뢰 번호와 제목으로 기록을 찾는다.
+// 열람 제한이 있는 품질 문서는 qdocVisible로 거르고, 나머지는 화면(메뉴 권한)에서 다시 거른다. 종류마다 5건, 모두 25건까지.
+route('GET', '/api/find', async ({ user, query }) => {
+  const q = str(query.q, 60); if (q.length < 2) return { rows: [] };
+  const like = '%' + q.replace(/[%_\\]/g, '') + '%', rows = [];
+  const add = async (type, sub, href, sql, map) => { for (const r of await db.prepare(sql).all(like, like)) rows.push({ type, sub, href, ...map(r) }); };
+  await add('nc', '부적합·CAPA', '#/quality/capa', "SELECT id, nc_no, title, status FROM nonconformities WHERE nc_no LIKE ? OR title LIKE ? ORDER BY id DESC LIMIT 5", r => ({ id: r.id, no: r.nc_no, label: r.title, state: NC_STATUS[r.status] }));
+  await add('coa', 'COA 발행', '#/quality/coa', "SELECT id, coa_no, lot, item, status FROM coas WHERE coa_no LIKE ? OR lot LIKE ? ORDER BY id DESC LIMIT 5", r => ({ id: r.id, no: r.coa_no, label: `${r.item} · LOT ${r.lot}`, state: { draft: '작성', approved: '발행', void: '무효' }[r.status] }));
+  await add('change', '변경관리', '#/quality/changes', "SELECT id, change_no, title, status FROM quality_changes WHERE change_no LIKE ? OR title LIKE ? ORDER BY id DESC LIMIT 5", r => ({ id: r.id, no: r.change_no, label: r.title, state: CHG_STATUS[r.status] }));
+  for (const r of await db.prepare('SELECT * FROM quality_docs WHERE doc_no LIKE ? OR title LIKE ? ORDER BY doc_no LIMIT 20').all(like, like)) if (qdocVisible(r, user) && rows.filter(x => x.type === 'doc').length < 5) rows.push({ type: 'doc', sub: '문서관리', href: '#/quality/docs', id: r.id, no: r.doc_no, label: r.title, state: QDOC_STATUS[r.status] });
+  await add('audit', '심사 관리', '#/quality/audits', "SELECT id, audit_no, title, status FROM quality_audits WHERE audit_no LIKE ? OR title LIKE ? ORDER BY id DESC LIMIT 5", r => ({ id: r.id, no: r.audit_no, label: r.title, state: AUD_STATUS[r.status] }));
+  await add('validation', '밸리데이션', '#/quality/validation', "SELECT id, val_no, title, status FROM validations WHERE val_no LIKE ? OR title LIKE ? ORDER BY id DESC LIMIT 5", r => ({ id: r.id, no: r.val_no, label: r.title, state: VAL_STATUS[r.status] }));
+  await add('reliability', '신뢰성평가', '#/quality/methods', "SELECT id, test_no, title, status FROM reliability_tests WHERE test_no LIKE ? OR title LIKE ? ORDER BY id DESC LIMIT 5", r => ({ id: r.id, no: r.test_no, label: r.title, state: REL_STATUS[r.status] }));
+  await add('risk', '리스크 관리', '#/quality/risks', "SELECT id, risk_no, content, status FROM quality_risks WHERE risk_no LIKE ? OR content LIKE ? ORDER BY id DESC LIMIT 5", r => ({ id: r.id, no: r.risk_no, label: r.content, state: RISK_STATUS[r.status] }));
+  await add('equipment', '설비 대장', '#/prod/equipment', "SELECT id, equip_no, name, status FROM equipment WHERE equip_no LIKE ? OR name LIKE ? ORDER BY equip_no LIMIT 5", r => ({ id: r.id, no: r.equip_no, label: r.name, state: EQ_STATUS[r.status] }));
+  await add('method', '시험법', '#/quality/methods', "SELECT id, method_no, name, status FROM test_methods WHERE method_no LIKE ? OR name LIKE ? ORDER BY method_no LIMIT 5", r => ({ id: r.id, no: r.method_no, label: r.name, state: r.status === 'active' ? '사용' : '폐지' }));
+  await add('request', '의뢰', '', "SELECT id, req_no, type, title, status FROM requests WHERE req_no LIKE ? OR (req_no IS NOT NULL AND title LIKE ?) ORDER BY id DESC LIMIT 5", r => ({ id: r.id, no: r.req_no, label: r.title, rtype: r.type, state: r.status }));
+  return { rows: rows.slice(0, 25) };
+});
 route('GET', '/api/rnd-specs', async ({ user }) => { const { raw, ...lib } = await rndSpecLibrary(); return { ...lib, can_manage: isResearcher(user) }; });
 route('PUT', '/api/rnd-specs', async ({ user, body }) => {
   if (!isResearcher(user)) throw new HttpError(403, '연구소 검사규격은 연구원(개발·개발책임자)만 설정합니다.');

@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.311';
+const APP_VERSION = '15.312';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -183,9 +183,14 @@ function modal(html, { wide = false, onClose = () => {} } = {}) {
   wrap.innerHTML = `<div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true"><button class="modal-x" aria-label="닫기">×</button>${html}</div>`;
   const opener = document.activeElement;
   const close = () => { if (!wrap.isConnected) return; wrap.remove(); syncModalInert(); document.removeEventListener('keydown', onKey); window.removeEventListener('hashchange', close); onClose(); const top = $$('.modal-wrap').at(-1); if (top) { if (!top.contains(document.activeElement)) ($('.modal', top)?.focus?.()); } else if (opener?.isConnected) opener.focus?.(); };
+  // 15.312 입력 보호: 사람이 글·숫자·날짜·선택을 바꾼 창은 창 밖 누르기·Esc·×로 닫기 전에 한 번 묻는다(체크·검색칸은 빼고). 저장·취소 단추로 닫는 것은 그대로.
+  let dirty = false, asking = false;
+  const touch = e => { if (e.isTrusted && e.target.matches?.('input:not([type=checkbox]):not([type=radio]):not([type=search]):not([readonly]), textarea:not([readonly]), select') && e.target.closest('form')) { dirty = true; wrap.dataset.dirty = '1'; } };
+  wrap.addEventListener('input', touch, true); wrap.addEventListener('change', touch, true);
+  const userClose = async () => { if (asking) return; if (dirty && wrap.isConnected) { asking = true; const ok = await confirmBox('입력한 내용이 저장되지 않았습니다. 창을 닫을까요?'); asking = false; if (!ok) return; } close(); };
   const onKey = (e) => {
     if (wrap !== $$('.modal-wrap').at(-1)) return; // only the top dialog reacts
-    if (e.key === 'Escape') close();
+    if (e.key === 'Escape') userClose();
     // Keyboard users stay inside the dialog: Tab from the last control goes back to the first (15.35).
     if (e.key === 'Tab') {
       const items = $$('button:not([disabled]),[href],input:not([type=hidden]):not([disabled]),select:not([disabled]),textarea:not([disabled]),summary,[tabindex]:not([tabindex="-1"])', wrap).filter(el => el.offsetParent !== null || el === document.activeElement);
@@ -195,8 +200,8 @@ function modal(html, { wide = false, onClose = () => {} } = {}) {
       else if (!e.shiftKey && (document.activeElement === last || !wrap.contains(document.activeElement))) { e.preventDefault(); first.focus(); }
     }
   };
-  wrap.addEventListener('mousedown', (e) => { if (e.target === wrap) close(); });
-  $('.modal-x', wrap).onclick = close;
+  wrap.addEventListener('mousedown', (e) => { if (e.target === wrap) userClose(); });
+  $('.modal-x', wrap).onclick = userClose;
   document.addEventListener('keydown', onKey);
   window.addEventListener('hashchange', close); // 15.299 다른 화면으로 가면(메뉴·뒤로 가기) 열린 창을 닫음 — 예전 창이 새 화면 위에 남던 문제
   document.body.appendChild(wrap); syncModalInert();
@@ -807,11 +812,16 @@ function bindNavFind() {
     const path = [a.closest('.nav-group')?.querySelector('.nav-title')?.textContent.trim(), a.closest('.nav-sub')?.querySelector('summary')?.textContent.trim()].filter(Boolean);
     return { href: a.getAttribute('href'), label: [...a.childNodes].filter(n => !(n.classList && n.classList.contains('nav-star'))).map(n => n.textContent).join('').trim(), path };
   }).filter((x, i, arr) => arr.findIndex(y => y.href === x.href) === i);
-  let hits = [], at = 0;
+  let hits = [], at = 0, findTimer = 0;
   const go = h => { input.value = ''; list.hidden = true; document.body.classList.remove('nav-open'); location.hash = h; };
+  const goHit = x => { if (!x.open) return go(x.href); input.value = ''; list.hidden = true; document.body.classList.remove('nav-open'); openFound(x); }; // 15.312 기록이면 그 화면을 열고 그 건을 바로 연다
+  const paint = () => { const menu = hits.filter(x => !x.open), rec = hits.filter(x => x.open), row = (x, i) => `<a href="${esc(x.href)}" class="${i === at ? 'on' : ''}" data-i="${i}"><b>${esc(x.label)}</b><span>${esc(x.path.join(' › '))}</span></a>`;
+    list.innerHTML = (menu.map(row).join('') + (rec.length ? `<div class="nf-sec">기록</div>${rec.map((x, j) => row(x, menu.length + j)).join('')}` : '')) || '<div class="small muted nf-none">맞는 메뉴·기록이 없습니다.</div>'; };
   const show = () => {
     const q = input.value.replace(/\s+/g, '').toLowerCase(); if (!q) { list.hidden = true; return; }
     hits = all().filter(x => (x.path.join('') + x.label).replace(/\s+/g, '').toLowerCase().includes(q)).slice(0, 12); at = 0;
+    clearTimeout(findTimer); const raw = input.value; if (raw.trim().length >= 2) findTimer = setTimeout(async () => { const rec = await findRecords(raw); if (input.value !== raw) return; hits = [...hits.filter(x => !x.open), ...rec]; paint(); list.hidden = false; }, 250);
+    if (!hits.length && raw.trim().length >= 2) { list.innerHTML = '<div class="small muted nf-none">찾는 중…</div>'; list.hidden = false; return; }
     list.innerHTML = hits.length ? hits.map((x, i) => `<a href="${esc(x.href)}" class="${i === at ? 'on' : ''}" data-i="${i}"><b>${esc(x.label)}</b><span>${esc(x.path.join(' › '))}</span></a>`).join('') : '<div class="small muted">찾는 메뉴가 없습니다.</div>';
     list.hidden = false;
   };
@@ -820,9 +830,9 @@ function bindNavFind() {
     if (e.key === 'Escape') { input.value = ''; list.hidden = true; return; }
     if (!hits.length || list.hidden) return;
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); at = (at + (e.key === 'ArrowDown' ? 1 : hits.length - 1)) % hits.length; $$('a', list).forEach((a, i) => a.classList.toggle('on', i === at)); }
-    if (e.key === 'Enter') { e.preventDefault(); go(hits[at].href); }
+    if (e.key === 'Enter') { e.preventDefault(); goHit(hits[at]); }
   });
-  list.addEventListener('click', e => { const a = e.target.closest('a[href]'); if (a) { e.preventDefault(); go(a.getAttribute('href')); } });
+  list.addEventListener('click', e => { const a = e.target.closest('a[href]'); if (a) { e.preventDefault(); const h = hits[Number(a.dataset.i)]; if (h) goHit(h); else go(a.getAttribute('href')); } });
   if (!bindNavFind.once) { bindNavFind.once = true; // 문서 이벤트는 한 번만(화면마다 메뉴를 다시 그려도 쌓이지 않게). 누른 단추 글자가 바뀌어 떨어져도 경로로 판단.
     document.addEventListener('click', e => { const path = e.composedPath(); if (!path.some(n => n.classList?.contains('nav-search'))) $$('.nav-find-list').forEach(l => { l.hidden = true; }); if (!path.some(n => n.classList?.contains('prefs-menu'))) $$('.prefs-menu[open]').forEach(d => { d.open = false; }); }); }
   // 화면 설정: 언어·화면 모드·메뉴 위치·밀도 단추를 「⚙ 화면 설정」 안으로 모은다(theme.js·i18n.js가 머리줄에 넣는 단추를 옮김)
@@ -861,7 +871,7 @@ function shell() {
     <div class="who"><details class="prefs-menu"><summary class="btn small" title="언어·화면 모드·메뉴 위치·화면 밀도">⚙ 화면 설정</summary><div class="prefs-pop"></div></details><a href="#/me" title="내 정보">${esc(ME.name)}${ME.is_admin ? ' <span class="tag">관리자</span>' : ''}${roles ? ` <span class="tag soft">${esc(roles)}</span>` : ''}</a>
       <button class="btn small" id="logout">로그아웃</button></div>
   </header>
-  <div class="layout"><nav class="side"><div class="nav-search" role="search"><input type="search" id="navFind" placeholder="메뉴 찾기" aria-label="메뉴 찾기" autocomplete="off"><div class="nav-find-list" hidden></div></div>${nav}<div class="side-account"><a href="#/me">내 정보</a><button type="button" class="btn small" id="logoutSide">로그아웃</button></div></nav><main id="main"></main></div>
+  <div class="layout"><nav class="side"><div class="nav-search" role="search"><input type="search" id="navFind" placeholder="메뉴·번호 찾기" aria-label="메뉴·번호 찾기(NC-·COA-·CHG-·LOT 등)" autocomplete="off"><div class="nav-find-list" hidden></div></div>${nav}<div class="side-account"><a href="#/me">내 정보</a><button type="button" class="btn small" id="logoutSide">로그아웃</button></div></nav><main id="main"></main></div>
   <nav class="tabbar" aria-label="빠른 이동">
     <a href="#/" class="${cur === '#/' ? 'active' : ''}"><svg class="tab-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg><span>홈</span></a>
     <a href="#/tasks" class="${cur === '#/tasks' ? 'active' : ''}"><svg class="tab-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/></svg><span>할 일</span><b class="tab-badge" data-task-badge hidden></b></a>
@@ -1296,7 +1306,7 @@ async function refreshNavBadges() {
 function tasksCard(tasks) {
   const a = tasks.approvals, m = tasks.mine; const todo = [], mine = [];
   const more = (count, shown) => count > shown ? ` <span class="small muted">외 ${count - shown}건</span>` : '';
-  for (const [type, group] of Object.entries(a.requests)) if (group.count) todo.push(`<li><a href="${REQ[type].approve || REQ[type].intake}"><b>${esc(REQ[type].label)} 승인 대기 ${group.count}건</b></a><div class="small muted">${group.items.map(r => `${esc(r.title)} · ${esc(r.requester_name)}`).join(' / ')}${more(group.count, group.items.length)}</div></li>`);
+  for (const [type, group] of Object.entries(a.requests)) if (group.count) todo.push(`<li><a href="${REQ[type].approve || REQ[type].intake}"><b>${esc(REQ[type].label)} 승인 대기 ${group.count}건</b></a>${group.count > 1 ? ` <button type="button" class="btn small" data-bulk="request" data-bulk-type="${esc(type)}">한꺼번에 승인</button>` : ''}<div class="small muted">${group.items.map(r => `${esc(r.title)} · ${esc(r.requester_name)}`).join(' / ')}${more(group.count, group.items.length)}</div></li>`);
   if (a.actual_changes?.count) todo.push(`<li><a href="${a.actual_changes.finished ? '#/prod/finished' : '#/prod/semi'}"><b>생산실적 수정·취소 승인 대기 ${a.actual_changes.count}건</b></a><div class="small muted">${a.actual_changes.items.map(c => `${esc(c.product)} ${changeSummary(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.actual_changes.count, a.actual_changes.items.length)}</div></li>`);
   if (a.receipt_changes?.count) todo.push(`<li><a href="#/logistics/receive"><b>입고 수량 수정·취소 승인 대기 ${a.receipt_changes.count}건</b></a><div class="small muted">${a.receipt_changes.items.map(c => `${esc(c.item)} ${receiptChangeText(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.receipt_changes.count, a.receipt_changes.items.length)}</div></li>`);
   if (a.semi_changes?.count) todo.push(`<li><a href="${a.semi_changes.cut ? '#/prod/semi/cut' : '#/prod/semi/wash'}"><b>반제품 기록 수정·삭제 승인 대기 ${a.semi_changes.count}건</b></a><div class="small muted">${a.semi_changes.items.map(c => `${semiChangeText(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.semi_changes.count, a.semi_changes.items.length)}</div></li>`);
@@ -1304,7 +1314,7 @@ function tasksCard(tasks) {
   if (a.production_requests?.count) todo.push(`<li><a href="#/prod/orders"><b>생산의뢰 접수 대기 ${a.production_requests.count}건</b></a><div class="small muted">${a.production_requests.items.map(r => `<button type="button" class="link-btn" data-open-mr="${r.id}">${esc(r.req_no)}</button> ${esc(r.customer)}${r.ship_text || r.ship_date ? ' · 출고 ' + esc(r.ship_text || r.ship_date) : ''}`).join(' / ')}${more(a.production_requests.count, a.production_requests.items.length)}</div></li>`);
   if (a.purchase_requests?.count) todo.push(`<li><a href="#/sales/pr"><b>구매의뢰 결재 차례 ${a.purchase_requests.count}건</b></a><div class="small muted">${a.purchase_requests.items.map(r => `<button type="button" class="link-btn" data-task-pr="${r.id}">${esc(r.doc_no)}</button> ${esc(r.title || r.first_item || '')}${r.item_count > 1 ? ` 외 ${r.item_count - 1}건` : ''} · ${esc(r.author_name)}`).join(' / ')}${more(a.purchase_requests.count, a.purchase_requests.items.length)}</div></li>`);
   if (a.purchase_orders_waiting?.count) todo.push(`<li><a href="#/purchase/po/new"><b>발주 대기 구매의뢰 ${a.purchase_orders_waiting.count}건</b></a><div class="small muted">${a.purchase_orders_waiting.items.map(r => `<button type="button" class="link-btn" data-task-pr="${r.id}">${esc(r.doc_no)}</button> ${esc(r.title || r.first_item || '')} · ${esc(r.author_name)}`).join(' / ')}${more(a.purchase_orders_waiting.count, a.purchase_orders_waiting.items.length)}</div></li>`);
-  for (const q of a.quality || []) todo.push(`<li><a href="${q.href}"><b>${esc(q.label)} ${q.count}건</b></a></li>`); // 15.309 품질 승인·처리 대기
+  for (const q of a.quality || []) todo.push(`<li><a href="${q.href}"><b>${esc(q.label)} ${q.count}건</b></a>${['coa', 'docs'].includes(q.key) && q.count > 1 ? ` <button type="button" class="btn small" data-bulk="${q.key}">한꺼번에 승인</button>` : ''}</li>`); // 15.309 품질 승인·처리 대기 · 15.312 일괄 승인
   if (a.training_attend?.count) todo.push(`<li><a href="#/quality/training"><b>교육 참석 확인 ${a.training_attend.count}건</b></a><div class="small muted">${a.training_attend.items.map(t => `${esc(t.plan_date)} ${esc(t.title)}`).join(' / ')} — 교육·자격관리에서 「참석 확인」을 누르세요.</div></li>`);
   if (a.temp_items?.count) todo.push(`<li><a href="#/admin/bom"><b>임시 제품코드 정리 ${a.temp_items.count}건</b></a><div class="small muted">직접 입력된 품목에 정식 코드를 주거나 기존 품목으로 합치세요.</div></li>`);
   const state = c => `<span class="chip ${c.status === 'rejected' ? 'red' : 'yellow'}">${c.status === 'rejected' ? '반려' : '승인 대기'}</span>`;
@@ -1314,7 +1324,7 @@ function tasksCard(tasks) {
   for (const r of m.purchase_requests || []) mine.push(`<li>${state(r)} <a href="#/sales/pr">구매의뢰 · ${esc(r.doc_no)} ${esc(r.title || r.first_item || '')}</a>${r.status === 'pending' && r.current_user_name ? ` <span class="small muted">${esc(r.current_user_name)} 결재 차례</span>` : ''}${r.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(r.reject_reason)} (${esc(r.rejected_by || '')}) · 고쳐서 다시 상신하세요.</div>` : ''}</li>`);
   for (const c of m.receipt_changes) mine.push(`<li>${state(c)} <a href="#/logistics/receive">입고 · ${esc(c.item)}</a> <span class="small">${receiptChangeText(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
   const canApprove = Object.keys(a.requests).length || a.actual_changes || a.receipt_changes || a.semi_changes || a.temp_items || a.purchase_requests || a.production_requests || a.purchase_orders_waiting || a.plans_waiting || a.quality || a.training_attend; // 15.309
-  return `<section class="card tasks" aria-labelledby="dashTasks"><h2 id="dashTasks">내가 처리할 일</h2><div class="tasks-grid">
+  return `<section class="card tasks" aria-labelledby="dashTasks"><h2 id="dashTasks">내가 처리할 일 ${typeof Notification !== 'undefined' ? `<button type="button" class="btn small notify-btn" data-notify title="새 승인 대기·기한 알림을 컴퓨터·휴대폰 알림으로(앱이 열려 있는 동안)">${notifyOn() ? '🔔 알림 켜짐' : '🔕 알림 받기'}</button>` : ''}</h2><div class="tasks-grid">
     ${canApprove ? `<section><h3>승인할 일 ${todo.length ? `<span class="chip yellow">${todo.length}</span>` : ''}</h3>${todo.length ? `<ul>${todo.join('')}</ul>` : '<p class="small muted">승인 대기 중인 건이 없습니다.</p>'}</section>` : ''}
     <section><h3>내가 올린 요청 ${mine.length ? `<span class="chip">${mine.length}</span>` : ''}</h3>${mine.length ? `<ul>${mine.join('')}</ul>` : '<p class="small muted">대기 중이거나 최근 반려된 요청이 없습니다.</p>'}</section>
   </div></section>`;

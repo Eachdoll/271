@@ -1219,7 +1219,7 @@ async function pageCoa(main) {
     const rows = data.rows;
     $('#coaTiles', main).innerHTML = [['전체', rows.length, ''], ['승인 대기', rows.filter(r => r.status === 'draft').length, rows.some(r => r.status === 'draft') ? 'yellow' : ''], ['발행', rows.filter(r => r.status === 'approved').length, 'green'], ['무효', rows.filter(r => r.status === 'void').length, '']].map(([l, n, c], i) => `<button type="button" class="ip-tile ${c}" data-coa-tile="${i}"><span>${l}</span><b>${n}</b></button>`).join('');
     $('#coaTools', main).innerHTML = data.can_manage ? '<button type="button" class="btn primary" id="coaNewBtn">＋ LOT로 COA 작성</button>' : '';
-    $('#coaList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>발행번호</th><th>LOT</th><th>품목</th><th>고객사</th><th>제조일</th><th>유효기간</th><th>근거</th><th>상태</th><th>승인</th><th></th></tr></thead><tbody>${rows.map(r => `<tr data-coa-row="${r.id}"${r.status === 'void' ? ' class="row-off"' : ''}><td class="nowrap" data-card-primary><b>${esc(r.coa_no)}</b>${r.rev ? ` <span class="chip">Rev.${r.rev}</span>` : ''}</td><td class="nowrap">${esc(r.lot)}</td><td>${esc(r.item)}${r.product_code ? `<div class="small muted">${esc(r.product_code)}</div>` : ''}</td><td>${esc(r.customer)}</td><td class="nowrap">${esc(r.mfg_date || '')}</td><td class="nowrap">${esc(r.exp_date || '')}</td><td class="small">${esc(r.source_no)}</td><td><span class="chip ${COA_STATUS_CHIP[r.status] || ''}">${esc(COA_STATUS_LABEL[r.status] || r.status)}</span></td><td class="small">${esc(r.approved_by || '')}${r.approved_at ? `<div class="muted">${esc(String(r.approved_at).slice(0, 10))}</div>` : ''}</td><td><button type="button" class="btn small" data-coa-open="${r.id}">열기</button></td></tr>`).join('')}</tbody></table></div>`
+    $('#coaList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>발행번호</th><th>LOT</th><th>품목</th><th>고객사</th><th>제조일</th><th>유효기간</th><th>근거</th><th>상태</th><th>승인</th><th></th></tr></thead><tbody>${rows.map(r => `<tr data-coa-row="${r.id}"${r.status === 'void' ? ' class="row-off"' : ''}><td class="nowrap" data-card-primary><b>${esc(r.coa_no)}</b>${r.rev ? ` <span class="chip">Rev.${r.rev}</span>` : ''}</td><td class="nowrap">${esc(r.lot)}</td><td>${esc(r.item)}${r.product_code ? `<div class="small muted">${esc(r.product_code)}</div>` : ''}</td><td>${esc(r.customer)}</td><td class="nowrap">${esc(r.mfg_date || '')}</td><td class="nowrap">${esc(r.exp_date || '')}</td><td class="small">${esc(r.source_no)}</td><td><span class="chip ${COA_STATUS_CHIP[r.status] || ''}">${esc(COA_STATUS_LABEL[r.status] || r.status)}</span></td><td class="small">${esc(r.approved_by || '')}${r.approved_at ? `<div class="muted">${esc(String(r.approved_at).slice(0, 10))}</div>` : ''}</td><td><button type="button" class="btn small" data-coa-open="${r.id}">열기</button></td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">COA가 없습니다. 「＋ LOT로 COA 작성」에 출하검사 합격 LOT를 넣으면 측정값으로 성적서를 만듭니다.</div>';
   };
   main.addEventListener('click', e => {
@@ -1227,7 +1227,6 @@ async function pageCoa(main) {
     if (e.target.closest('#coaNewBtn')) return coaNew().catch(fail);
     const o = e.target.closest('[data-coa-open]') || (e.type === 'click' && null); if (o) coaOpen(Number(o.dataset.coaOpen), load).catch(fail);
   });
-  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-coa-row]'); if (tr) coaOpen(Number(tr.dataset.coaRow), load).catch(fail); });
   form.addEventListener('change', () => load().catch(fail)); let tm = null; form.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(() => load().catch(fail), 250); }); form.onsubmit = e => e.preventDefault();
   await load();
 }
@@ -1276,7 +1275,7 @@ async function ncOpen(id) {
         <label class="span3">근본 원인<input data-cause="root" maxlength="300" value="${esc(c.root || '')}"${dis}></label></div></fieldset>
       <fieldset class="vendor-sec"><legend>조치</legend><div class="form-grid">${ta('correction', '시정(이번 건 처리: 재작업·폐기·특채 등)', n.correction)}${ta('corrective', '시정조치(재발 방지)', n.corrective)}${ta('preventive', '예방조치(다른 품목·공정에도)', n.preventive)}${f('action_date', '조치 완료일', n.action_date, " type='date'")}</div></fieldset>
       <fieldset class="vendor-sec"><legend>유효성검증</legend><div class="form-grid">${f('verify_date', '검증일', n.verify_date, " type='date'")}<label>결과<select name="verify_result"${dis}><option value="">—</option><option${n.verify_result === '유효' ? ' selected' : ''}>유효</option><option${n.verify_result === '효과 없음' ? ' selected' : ''}>효과 없음</option></select></label>${ta('verify_note', '검증 내용(재발 여부·확인 데이터)', n.verify_note, 'span3')}</div></fieldset>
-      <div class="actions"><button type="button" class="btn" data-nc-hist>이력</button>${can && !closed ? '<button type="button" class="btn danger" data-nc-void>취소</button><span class="grow"></span><button class="btn">저장</button>' : ''}${can && !closed && next && next !== 'closed' ? `<button type="button" class="btn primary" data-nc-next="${next}">저장하고 「${NC_STATUS_LABEL[next]}」로 →</button>` : ''}${list.can_close && n.status === 'verify' ? '<button type="button" class="btn primary" data-nc-next="closed">종결</button>' : ''}${list.can_close && closed ? '<button type="button" class="btn" data-nc-reopen>다시 열기</button>' : ''}${can && ['action', 'verify', 'closed'].includes(n.status) ? '<button type="button" class="btn" data-nc-chg title="조치가 4M(사람·설비·자재·방법) 변경이면 변경관리로">변경 요청 만들기</button>' : ''}</div>
+      <div class="actions"><button type="button" class="btn" data-nc-hist>이력</button><button type="button" class="btn" data-nc-8d>8D 보고서</button>${can && !closed ? '<button type="button" class="btn danger" data-nc-void>취소</button><span class="grow"></span><button class="btn">저장</button>' : ''}${can && !closed && next && next !== 'closed' ? `<button type="button" class="btn primary" data-nc-next="${next}">저장하고 「${NC_STATUS_LABEL[next]}」로 →</button>` : ''}${list.can_close && n.status === 'verify' ? '<button type="button" class="btn primary" data-nc-next="closed">종결</button>' : ''}${list.can_close && closed ? '<button type="button" class="btn" data-nc-reopen>다시 열기</button>' : ''}${can && ['action', 'verify', 'closed'].includes(n.status) ? '<button type="button" class="btn" data-nc-chg title="조치가 4M(사람·설비·자재·방법) 변경이면 변경관리로">변경 요청 만들기</button>' : ''}</div>
     </form>`, { wide: true });
   const form = $('[data-nc-form]', m.el);
   const body = () => { const v = formObj(form); v.cause_json = Object.fromEntries($$('[data-cause]', form).map(i => [i.dataset.cause, i.value.trim()]).filter(([, x]) => x)); return { ...v, revision: n.revision }; };
@@ -1286,6 +1285,7 @@ async function ncOpen(id) {
   $('[data-nc-void]', m.el)?.addEventListener('click', async () => { const v = await promptBox('부적합 취소', '<label>취소 사유 *<input name="reason" required maxlength="300" placeholder="예) 측정 오류로 확인 — 실제 부적합 아님"></label>'); if (v) save('void', v); });
   $('[data-nc-reopen]', m.el)?.addEventListener('click', async () => { const v = await promptBox('다시 열기', '<label>사유 *<input name="reason" required maxlength="300"></label>'); if (v) save('verify', v); });
   $('[data-nc-chg]', m.el)?.addEventListener('click', () => { m.close(); chgNew({ source_type: 'capa', source_id: n.id, source_no: n.nc_no, title: n.corrective || n.title, item: n.item, kind: 'method' }).catch(fail); }); // 15.306 CAPA → 변경관리
+  $('[data-nc-8d]', m.el).onclick = () => nc8D(n).catch(fail); // 15.312
   $('[data-nc-hist]', m.el).onclick = () => modal(`<h3>이력 · ${esc(n.nc_no)}</h3><div class="table-wrap"><table class="grid"><thead><tr><th>일시</th><th>담당</th><th>내용</th></tr></thead><tbody>${[...n.history].reverse().map(h => `<tr><td class="nowrap">${esc(String(h.at || '').slice(0, 16))}</td><td>${esc(h.by || '')}</td><td>${esc(h.what || '')}${h.status ? ` · ${esc(NC_STATUS_LABEL[h.status[0]] || '')} → ${esc(NC_STATUS_LABEL[h.status[1]] || '')}` : ''}${(h.fields || []).length ? ` · ${h.fields.length}칸` : ''}${h.reason ? ` · ${esc(h.reason)}` : ''}${h.source ? ` · 출처 ${esc(h.source)}` : ''}</td></tr>`).join('')}</tbody></table></div>`, { wide: true });
 }
 async function pageNcs(main) {
@@ -1312,7 +1312,6 @@ async function pageNcs(main) {
     if (e.target.closest('#ncNewBtn')) return ncNew().catch(fail);
     const o = e.target.closest('[data-nc-open]'); if (o) ncOpen(Number(o.dataset.ncOpen)).catch(fail);
   });
-  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-nc-row]'); if (tr) ncOpen(Number(tr.dataset.ncRow)).catch(fail); });
   form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }
@@ -1454,7 +1453,6 @@ async function pageQDocs(main) {
     if (e.target.closest('#qdExt')) return qdocNew({ scope: 'external', kind: 'std' }).catch(fail);
     const o = e.target.closest('[data-qd-open]'); if (o) qdocOpen(Number(o.dataset.qdOpen)).catch(fail);
   });
-  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-qd-row]'); if (tr && !e.target.closest('a,button')) qdocOpen(Number(tr.dataset.qdRow)).catch(fail); });
   form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }
@@ -1546,7 +1544,6 @@ async function pageChanges(main) {
     if (e.target.closest('#chgNewBtn')) return chgNew().catch(fail);
     const o = e.target.closest('[data-chg-open]'); if (o) chgOpen(Number(o.dataset.chgOpen)).catch(fail);
   });
-  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-chg-row]'); if (tr) chgOpen(Number(tr.dataset.chgRow)).catch(fail); });
   form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }
@@ -1598,7 +1595,7 @@ async function trOpen(id) {
       <fieldset class="vendor-sec"><legend>대상자 · 참석 · 평가 <span class="hint">(${t.attendees.filter(a => a.attended).length}/${t.attendees.length}명 참석)</span></legend>
         <div class="table-wrap"><table class="grid tr-att" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>이름</th><th>부서</th><th>참석</th><th>본인 확인</th><th>점수</th><th>결과</th><th>메모</th>${can ? '<th></th>' : ''}</tr></thead><tbody>${t.attendees.map(a => `<tr data-att="${esc(a.user_name)}"><td class="nowrap"><b>${esc(a.user_name)}</b></td><td>${esc(a.dept)}</td><td><input type="checkbox" data-a-att${a.attended ? ' checked' : ''}${dis}></td><td class="small nowrap">${esc(String(a.confirmed_at || '').slice(0, 16))}</td><td><input type="number" min="0" max="100" step="any" data-a-score value="${a.score ?? ''}" class="tr-score"${dis}></td><td><select data-a-result${dis}>${['', '이수', '미이수', '재교육'].map(x => `<option value="${x}"${a.result === x ? ' selected' : ''}>${x || '—'}</option>`).join('')}</select></td><td><input data-a-note maxlength="300" value="${esc(a.note)}"${dis}></td>${can ? '<td><button type="button" class="btn small danger" data-a-del>×</button></td>' : ''}</tr>`).join('') || `<tr><td colspan="8" class="muted">대상자가 없습니다.</td></tr>`}</tbody></table></div>
         ${can ? '<div class="actions"><button type="button" class="btn small" data-tr-add>＋ 대상자 추가</button><button type="button" class="btn small" data-tr-allok>참석자 모두 「이수」</button></div>' : ''}</fieldset>
-      <div class="actions"><button type="button" class="btn" data-tr-hist>이력</button>${can && t.status !== 'evaluated' ? '<button type="button" class="btn danger" data-tr-void>취소</button>' : ''}<span class="grow"></span>${can ? '<button class="btn">저장</button>' : ''}${can && next ? `<button type="button" class="btn primary" data-tr-next="${next}">저장하고 「${TR_STATUS_LABEL[next]}」로 →</button>` : ''}</div>
+      <div class="actions"><button type="button" class="btn" data-tr-hist>이력</button><button type="button" class="btn" data-tr-rpt>결과 보고서</button>${can && t.status !== 'evaluated' ? '<button type="button" class="btn danger" data-tr-void>취소</button>' : ''}<span class="grow"></span>${can ? '<button class="btn">저장</button>' : ''}${can && next ? `<button type="button" class="btn primary" data-tr-next="${next}">저장하고 「${TR_STATUS_LABEL[next]}」로 →</button>` : ''}</div>
     </form>`, { wide: true });
   const form = $('[data-tr-form]', m.el);
   const atts = () => $$('[data-att]', form).map(tr => ({ user_name: tr.dataset.att, attended: $('[data-a-att]', tr).checked ? 1 : 0, score: $('[data-a-score]', tr).value, result: $('[data-a-result]', tr).value, note: $('[data-a-note]', tr).value }));
@@ -1607,6 +1604,7 @@ async function trOpen(id) {
   $('[data-tr-next]', m.el)?.addEventListener('click', e => { if (e.currentTarget.dataset.trNext === 'done' && !form.elements.done_date.value) form.elements.done_date.value = todayStr(); save(e.currentTarget.dataset.trNext); });
   $('[data-tr-void]', m.el)?.addEventListener('click', async () => { const v = await promptBox('교육 취소', '<label>사유 *<input name="reason" required maxlength="300"></label>'); if (v) save('void', v); });
   $('[data-tr-hist]', m.el).onclick = () => qHistory(t.title, t.history, TR_STATUS_LABEL);
+  $('[data-tr-rpt]', m.el).onclick = () => trReport(t).catch(fail); // 15.312
   $('[data-tr-allok]', m.el)?.addEventListener('click', () => $$('[data-att]', form).forEach(tr => { if ($('[data-a-att]', tr).checked && !$('[data-a-result]', tr).value) $('[data-a-result]', tr).value = '이수'; }));
   form.addEventListener('click', e => { const d = e.target.closest('[data-a-del]'); if (d) d.closest('tr').remove(); });
   $('[data-tr-attend]', m.el)?.addEventListener('click', async () => { try { await api('POST', `/api/trainings/${t.id}/attend`); toast('참석을 확인했습니다.'); m.close(); qReload(); } catch (e) { fail(e); } });
@@ -1678,7 +1676,6 @@ async function pageTraining(main) {
     const qe = e.target.closest('[data-ql-edit]'); if (qe) return qualEdit(ql.rows.find(r => r.id === Number(qe.dataset.qlEdit))).catch(fail);
     const qd = e.target.closest('[data-ql-del]'); if (qd) { const r = ql.rows.find(x => x.id === Number(qd.dataset.qlDel)); if (!await confirmBox(`${r.user_name} · ${r.kind} 자격을 지울까요?`)) return; try { await api('DELETE', `/api/qualifications/${r.id}?revision=${r.revision}`); toast('지웠습니다.'); load(); } catch (err) { fail(err); } }
   });
-  main.addEventListener('dblclick', e => { const r = e.target.closest('[data-tr-row]'); if (r && !e.target.closest('button')) trOpen(Number(r.dataset.trRow)).catch(fail); });
   form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }
@@ -1746,7 +1743,6 @@ async function pageSuppliers(main) {
     const ev = e.target.closest('[data-sup-eval]'); if (ev) return supEval(data.rows.find(r => r.vendor === ev.dataset.supEval), data.year).catch(fail);
     const t = e.target.closest('[data-q-tile]'); if (t) { form.elements.show.value = ['active', 'active', 'active', 'coa', 'noeval', 'low'][Number(t.dataset.qTile)]; draw(); }
   });
-  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-sup-row]'); if (tr && !e.target.closest('button')) supOpen(tr.dataset.supRow, data.year).catch(fail); });
   form.elements.year.addEventListener('change', () => load().catch(fail)); form.addEventListener('input', e => { if (e.target.name !== 'year') draw(); }); form.elements.show.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }
@@ -1833,7 +1829,6 @@ async function pageEquipment(main) {
     if (e.target.closest('#eqNewBtn')) return eqEdit().catch(fail);
     const o = e.target.closest('[data-eq-open]'); if (o) eqOpen(Number(o.dataset.eqOpen)).catch(fail);
   });
-  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-eq-row]'); if (tr && !e.target.closest('button')) eqOpen(Number(tr.dataset.eqRow)).catch(fail); });
   form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }
@@ -2080,7 +2075,6 @@ async function pageMethods(main) {
     const th = e.target.closest('[data-tm-hist]'); if (th) { const t = tm.rows.find(x => x.id === Number(th.dataset.tmHist)); return qHistory(`${t.method_no} ${t.name}`, t.history); }
     const ro = e.target.closest('[data-rel-open]'); if (ro) relOpen(Number(ro.dataset.relOpen)).catch(fail);
   });
-  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-rel-row]'); if (tr && !e.target.closest('button')) relOpen(Number(tr.dataset.relRow)).catch(fail); });
   form.addEventListener('input', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }
@@ -2110,7 +2104,7 @@ async function audOpen(id = null, pre = {}) {
       ${a ? `<fieldset class="vendor-sec"><legend>지적사항 <span class="hint">(중대·경미는 CAPA가 자동으로 만들어지고, CAPA를 종결하면 닫힙니다)</span></legend>${a.findings.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>등급</th><th>조항</th><th>지적 내용</th><th>부서</th><th>시정 기한</th><th>CAPA</th><th></th></tr></thead><tbody>${a.findings.map(f => `<tr class="${f.closed ? 'row-off' : f.due_date && f.due_date < list.today ? 'ip-over' : ''}"><td class="nowrap"><span class="chip ${f.grade === 'major' ? 'red' : f.grade === 'minor' ? 'yellow' : ''}">${esc(f.grade_label)}</span></td><td>${esc(f.clause)}</td><td>${esc(f.content)}</td><td>${esc(f.dept)}</td><td class="nowrap">${esc(f.due_date || '')}${f.closed ? '' : qDd(f.due_date, list.today, true, 7)}</td><td class="nowrap">${f.nc_id ? `<a href="#/quality/capa" data-aud-nc="${f.nc_id}">${esc(f.nc_no)}</a> <span class="chip ${NC_STATUS_CHIP[f.nc_status] || ''}">${esc(f.nc_status_label)}</span>` : ''}</td><td>${f.grade === 'obs' && can && !end ? `<label class="chk"><input type="checkbox" data-obs="${f.id}"${f.obs_done ? ' checked' : ''}> 확인</label>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted small">지적사항이 없습니다.</p>'}${can && !end ? '<button type="button" class="btn small" data-fnd-add>＋ 지적사항</button>' : ''}</fieldset>` : ''}
       <fieldset class="vendor-sec"><legend>결과 요약 · 보고서</legend><label>요약<textarea name="summary" rows="2" maxlength="2000"${dis}>${esc(v0.summary || '')}</textarea></label>
         ${v0.files.length ? `<div class="scoa-files">${v0.files.map(f => `<label class="chk">${can && !end ? `<input type="checkbox" name="keep_files" value="${esc(f.file)}" checked> ` : ''}${qFileLink(f)}</label>`).join('')}</div>` : ''}${can && !end ? '<label>보고서·대응보고서 파일 추가 (PDF·사진)<input type="file" multiple data-q-file accept="application/pdf,image/jpeg,image/png,image/webp"></label>' : ''}</fieldset>
-      <div class="actions">${a ? '<button type="button" class="btn" data-aud-hist>이력</button>' : ''}${a && can && !end && !a.findings.length ? '<button type="button" class="btn danger" data-aud-to="void">취소</button>' : ''}${a && a.cert_id ? '<a class="btn" href="#/quality/certs">인증서 관리</a>' : ''}<span class="grow"></span>${can && !end ? '<button class="btn">저장</button>' : ''}${a && can && a.status === 'planned' ? '<button type="button" class="btn primary" data-aud-to="done">저장하고 실시 완료</button>' : ''}${a && can && ['done', 'correcting'].includes(a.status) ? '<button type="button" class="btn primary" data-aud-to="closed">종결</button>' : ''}${a && list.can_manage && end && hasRole('quality_approver') && a.status === 'closed' ? '<button type="button" class="btn" data-aud-to="planned">다시 열기</button>' : ''}</div>
+      <div class="actions">${a ? '<button type="button" class="btn" data-aud-hist>이력</button><button type="button" class="btn" data-aud-rpt>심사 보고서</button>' : ''}${a && can && !end && !a.findings.length ? '<button type="button" class="btn danger" data-aud-to="void">취소</button>' : ''}${a && a.cert_id ? '<a class="btn" href="#/quality/certs">인증서 관리</a>' : ''}<span class="grow"></span>${can && !end ? '<button class="btn">저장</button>' : ''}${a && can && a.status === 'planned' ? '<button type="button" class="btn primary" data-aud-to="done">저장하고 실시 완료</button>' : ''}${a && can && ['done', 'correcting'].includes(a.status) ? '<button type="button" class="btn primary" data-aud-to="closed">종결</button>' : ''}${a && list.can_manage && end && hasRole('quality_approver') && a.status === 'closed' ? '<button type="button" class="btn" data-aud-to="planned">다시 열기</button>' : ''}</div>
     </form>`, { wide: true });
   const form = $('[data-aud-form]', m.el), tb = $('.aud-cl tbody', form);
   const certVis = () => { $('[data-aud-cert]', form).hidden = form.elements.kind.value !== 'cert'; }; certVis(); form.elements.kind.addEventListener('change', certVis);
@@ -2123,6 +2117,7 @@ async function audOpen(id = null, pre = {}) {
   form.onsubmit = e => { e.preventDefault(); save(null); };
   $$('[data-aud-to]', m.el).forEach(b => b.addEventListener('click', async () => { const to = b.dataset.audTo; if (to === 'void') { const v = await promptBox('심사 취소', '<label>사유 *<input name="reason" required maxlength="300"></label>'); if (v) save(to, v); return; } save(to); }));
   $('[data-aud-hist]', m.el)?.addEventListener('click', () => qHistory(a.audit_no, a.history, AUD_STATUS_LABEL));
+  $('[data-aud-rpt]', m.el)?.addEventListener('click', () => audReport(a).catch(fail)); // 15.312
   $('[data-fnd-add]', m.el)?.addEventListener('click', async () => {
     const v = await promptBox('지적사항 등록', `<p class="small muted">중대·경미 지적은 부적합·CAPA(출처: 심사 지적)가 자동으로 만들어집니다. 시정 기한 기본값은 중대 30일, 경미 60일입니다.</p><div class="form-grid"><label>등급 *<select name="grade">${Object.entries(FND_GRADE_LABEL).map(([k, l]) => `<option value="${k}"${k === 'minor' ? ' selected' : ''}>${l}</option>`).join('')}</select></label><label>조항<input name="clause" maxlength="100" placeholder="예) ISO 9001 7.5.3"></label><label>부서<input name="dept" maxlength="50"></label><label class="span3">지적 내용 *<textarea name="content" required rows="2" maxlength="1000"></textarea></label><label>시정 기한<input type="date" name="due_date"></label><label>CAPA 담당<input name="owner_name" maxlength="50"></label></div>`, { wide: true,
       submit: async vals => api('POST', `/api/audits/${a.id}/findings`, { ...vals, request_id: crypto.randomUUID() }) });
@@ -2152,7 +2147,6 @@ async function pageAudits(main) {
     if (e.target.closest('#audNewBtn')) return audOpen().catch(fail);
     const o = e.target.closest('[data-aud-open]'); if (o) audOpen(Number(o.dataset.audOpen)).catch(fail);
   });
-  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-aud-row]'); if (tr && !e.target.closest('button')) audOpen(Number(tr.dataset.audRow)).catch(fail); });
   form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }
@@ -2220,7 +2214,6 @@ async function pageValidations(main) {
     if (e.target.closest('#valNewBtn')) return valOpen().catch(fail);
     const o = e.target.closest('[data-val-open]'); if (o) valOpen(Number(o.dataset.valOpen)).catch(fail);
   });
-  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-val-row]'); if (tr && !e.target.closest('button')) valOpen(Number(tr.dataset.valRow)).catch(fail); });
   form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }
@@ -2287,7 +2280,6 @@ async function pageKpi(main) {
     if (e.target.closest('#kpiAuto')) { const defaults = { iqc_fail_rate: 2, oqc_fail_rate: 0.5, voc_count: 1, capa_ontime: 90 }; try { for (const k of Object.keys(data.metrics).filter(k => !data.rows.some(g => g.metric === k))) await api('POST', '/api/kpi/goals', { year: form.elements.year.value, title: data.metrics[k].label, metric: k, target: defaults[k], status: 'progress', request_id: crypto.randomUUID() }); toast('자동 지표를 넣었습니다. 목표값은 「열기」에서 고치세요.'); load(); } catch (err) { fail(err); } return; }
     const o = e.target.closest('[data-goal-open]'); if (o) goalOpen(Number(o.dataset.goalOpen), Number(form.elements.year.value)).catch(fail);
   });
-  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-goal-row]'); if (tr && !e.target.closest('button')) goalOpen(Number(tr.dataset.goalRow), Number(form.elements.year.value)).catch(fail); });
   form.addEventListener('change', () => load().catch(fail)); form.onsubmit = e => e.preventDefault();
   await load();
 }
@@ -2349,7 +2341,171 @@ async function pageRisks(main) {
     if (e.target.closest('#riskNew')) return riskOpen().catch(fail);
     const o = e.target.closest('[data-risk-open]'); if (o) riskOpen(data.rows.find(r => r.id === Number(o.dataset.riskOpen))).catch(fail);
   });
-  main.addEventListener('dblclick', e => { const tr = e.target.closest('[data-risk-row]'); if (tr && !e.target.closest('button')) riskOpen(data.rows.find(r => r.id === Number(tr.dataset.riskRow))).catch(fail); });
   form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }
+
+// ── 15.312 사용 편의 ──
+// (1) 목록 공통 도구: 오른쪽 도구 묶음(.ip-tools)이 있는 조회 줄에 「N건」·조건 초기화(↻)·엑셀을 한 번 붙인다(기존 목록 화면과 같은 사용법).
+function tableToXlsx(table, name) {
+  const ths = [...(table.tHead?.rows[0]?.cells || [])], keep = ths.map((th, i) => [i, th.textContent.replace(/[▾▴▼▲☆]/g, '').replace(/\s+/g, ' ').trim()]).filter(([, l]) => l);
+  const rows = [...(table.tBodies[0]?.rows || [])].filter(tr => !tr.hidden && tr.cells.length === ths.length).map(tr => keep.map(([i]) => { const t = tr.cells[i].textContent.replace(/\s+/g, ' ').trim(); return /^-?[\d,]+(\.\d+)?$/.test(t) ? Number(t.replace(/,/g, '')) : t; }));
+  const types = keep.map((_, j) => rows.length && rows.every(r => r[j] === '' || typeof r[j] === 'number') ? 'number' : 'text');
+  xlsxDownload(`${name}_${todayStr()}.xlsx`, { sheet: name.slice(0, 30), titles: [name, `${todayStr()} · ${rows.length}건`], columns: keep.map(([, label], j) => ({ label, type: types[j] })), rows });
+}
+function listAutoTools(form) {
+  if (form.dataset.autoTools) return; const list = form.nextElementSibling; if (!list) return;
+  form.dataset.autoTools = '1';
+  const tools = form.querySelector(':scope > .ip-tools'), bar = document.createElement('span'); bar.className = 'lf-auto';
+  bar.innerHTML = '<span class="small muted" data-auto-count role="status"></span><button type="button" class="btn icon-reset" data-auto-reset title="조건 초기화" aria-label="조건 초기화">↻</button><button type="button" class="btn" data-auto-xlsx title="지금 보이는 목록을 엑셀로">엑셀</button>';
+  tools.before(bar);
+  const table = () => list.querySelector('table');
+  const update = () => {
+    const t = table(), n = t ? [...(t.tBodies[0]?.rows || [])].filter(tr => !tr.hidden && !tr.querySelector('td[colspan]')).length : 0;
+    $('[data-auto-count]', bar).textContent = `${n}건`;
+    const own = [...tools.querySelectorAll('.btn')].some(b => b.textContent.trim() === '엑셀'); $('[data-auto-xlsx]', bar).hidden = own || !n;
+  };
+  new MutationObserver(update).observe(list, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  new MutationObserver(update).observe(tools, { childList: true });
+  $('[data-auto-reset]', bar).onclick = () => { form.reset(); form.querySelectorAll('select').forEach(s => s.dispatchEvent(new Event('change', { bubbles: true }))); form.dispatchEvent(new Event('input', { bubbles: true })); };
+  $('[data-auto-xlsx]', bar).onclick = () => { const t = table(); if (t) tableToXlsx(t, screenTitle(document.querySelector('#main')) || '목록'); };
+  update();
+}
+if (typeof document !== "undefined" && typeof MutationObserver !== "undefined") new MutationObserver(() => { for (const f of document.querySelectorAll('#main form.list-filters:not([data-auto-tools])')) if (f.querySelector(':scope > .ip-tools')) listAutoTools(f); }).observe(document.body, { childList: true, subtree: true });
+
+// (2) 목록 줄 한 번 누르면 열기: 줄 안의 「열기」·「카드」 단추와 같은 동작(단추·링크·입력칸을 누른 것은 그대로).
+if (typeof document !== "undefined") document.addEventListener('click', e => {
+  const tr = e.target.closest?.('#main table.ip-table > tbody > tr'); if (!tr || e.target.closest('a, button, input, select, textarea, label, summary, .chip-btn')) return;
+  if (getSelection && String(getSelection()).length) return; // 글자를 끌어 고르는 중이면 열지 않음
+  const b = [...tr.querySelectorAll('button')].find(x => /^(열기|카드)$/.test(x.textContent.trim())); if (b) b.click();
+});
+
+// (3) 기록 찾기: 메뉴 찾기 칸에 번호·제목을 치면 그 기록을 바로 연다.
+const FIND_OPEN = {
+  nc: id => ncOpen(id), coa: id => coaOpen(id), change: id => chgOpen(id), doc: id => qdocOpen(id), audit: id => audOpen(id), validation: id => valOpen(id), reliability: id => relOpen(id), equipment: id => eqOpen(id),
+  risk: async id => { const r = (await api('GET', '/api/risks')).rows.find(x => x.id === id); if (r) riskOpen(r); },
+  method: async id => { const t = (await api('GET', '/api/test-methods')).rows.find(x => x.id === id); if (t && hasRole('quality')) tmEdit(t); },
+  request: async (id, hit) => { const rows = await api('GET', '/api/requests?type=' + encodeURIComponent(hit.rtype)); const r = rows.find(x => x.id === id); if (r) requestDetail(hit.rtype, r, () => {}); },
+  lot: (_, hit) => { const f = document.querySelector('#ltForm'); if (f) { f.elements.lot.value = hit.no; f.requestSubmit(); } },
+};
+const REQ_STATE = { pending: '접수대기', waiting: '대기', progress: '진행', done: '완료', rejected: '반려' };
+async function findRecords(q) {
+  q = q.trim(); if (q.length < 2) return [];
+  let rows = []; try { rows = (await api('GET', '/api/find?q=' + encodeURIComponent(q))).rows; } catch { return []; }
+  const hits = rows.map(r => { const href = r.type === 'request' ? (REQ[r.rtype]?.list || '') : r.href; return href && canSeeRoute(href) ? { href, label: `${r.no || ''} ${r.label || ''}`.trim(), path: [r.sub + (r.state ? ` · ${REQ_STATE[r.state] || r.state}` : '')], open: { type: r.type, id: r.id }, rtype: r.rtype, no: r.no } : null; }).filter(Boolean);
+  if (/\d/.test(q) && q.length >= 4 && canSeeRoute('#/prod/lot-trace')) hits.push({ href: '#/prod/lot-trace', label: `LOT 「${q}」 연결 조회`, path: ['LOT 연결 조회'], open: { type: 'lot' }, no: q });
+  return hits;
+}
+async function openFound(hit) {
+  const run = () => FIND_OPEN[hit.open.type]?.(hit.open.id, hit);
+  if ((location.hash || '#/').split('?')[0] === hit.href) return run();
+  location.hash = hit.href;
+  for (let i = 0; i < 40; i++) { await new Promise(r => setTimeout(r, 100)); const h = document.querySelector('#main h1'); if (h && (location.hash || '#/').split('?')[0] === hit.href && !document.querySelector('#main .loading')) break; }
+  await new Promise(r => setTimeout(r, 250)); try { await run(); } catch (e) { fail(e); }
+}
+
+// (4) 한꺼번에 승인(내가 처리할 일): COA 승인 · 문서 승인·배포 · 의뢰 접수 승인. 고른 건을 차례로 승인하고 결과를 보여 준다.
+async function bulkApprove(kind, rtype = '') {
+  let items = [], label = '';
+  if (kind === 'coa') { label = 'COA 승인'; items = (await api('GET', '/api/coas')).rows.filter(c => c.status === 'draft').map(c => ({ id: c.id, rev: c.revision, text: `${c.coa_no} · ${c.item} · LOT ${c.lot}`, sub: `작성 ${c.created_by}` })); }
+  else if (kind === 'docs') { label = '문서 승인·배포'; items = (await api('GET', '/api/qdocs')).rows.filter(d => d.status === 'review').map(d => ({ id: d.id, rev: d.revision, text: `${d.doc_no} Rev.${d.rev} ${d.title}`, sub: d.summary || '' })); }
+  else { label = `${REQ[rtype]?.label || ''} 의뢰 승인`; items = (await api('GET', '/api/requests?type=' + encodeURIComponent(rtype))).filter(r => r.status === 'pending').map(r => ({ id: r.id, text: `${r.title}${r.customer ? ' · ' + r.customer : ''}`, sub: `의뢰 ${r.requester_name || ''} ${String(r.created_at || '').slice(0, 10)}` })); }
+  if (!items.length) return toast('승인할 건이 없습니다.');
+  const m = modal(`<h3>한꺼번에 ${esc(label)} <span class="chip yellow">${items.length}건</span></h3><p class="small muted">승인할 건을 고르세요. 내용을 봐야 하는 건은 체크를 풀고 화면에서 하나씩 여세요.</p>
+    <form class="stack" data-bulk-form><div class="table-wrap"><table class="grid keep-table" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th><input type="checkbox" data-bulk-all checked aria-label="모두"></th><th>건</th><th>정보</th></tr></thead><tbody>${items.map((x, i) => `<tr><td><input type="checkbox" name="pick" value="${i}" checked></td><td><b>${esc(x.text)}</b></td><td class="small muted">${esc(x.sub)}</td></tr>`).join('')}</tbody></table></div>
+    <div class="actions"><span class="small muted" data-bulk-msg role="status"></span><span class="grow"></span><button type="button" class="btn" data-no>취소</button><button class="btn primary">고른 건 승인</button></div></form>`, { wide: true });
+  const form = $('[data-bulk-form]', m.el);
+  $('[data-bulk-all]', form).onchange = e => $$('[name=pick]', form).forEach(c => { c.checked = e.target.checked; });
+  $('[data-no]', form).onclick = () => m.close();
+  form.onsubmit = async e => {
+    e.preventDefault(); const picked = $$('[name=pick]:checked', form).map(c => items[Number(c.value)]); if (!picked.length) return toast('고른 건이 없습니다.', 'err');
+    form.inert = true; let ok = 0; const bad = [];
+    for (const [i, x] of picked.entries()) {
+      $('[data-bulk-msg]', form).textContent = `${i + 1}/${picked.length} 승인 중…`;
+      try { if (kind === 'coa') await api('POST', `/api/coas/${x.id}/approve`, { revision: x.rev }); else if (kind === 'docs') await api('POST', `/api/qdocs/${x.id}/step`, { to: 'approved', revision: x.rev }); else await api('POST', `/api/requests/${x.id}/approve`); ok++; }
+      catch (err) { bad.push(`${x.text}: ${err.message}`); }
+    }
+    m.close(); toast(bad.length ? `${ok}건 승인, ${bad.length}건 실패 — ${bad[0]}` : `${ok}건을 승인했습니다.`, bad.length ? 'err' : 'ok');
+    if (location.hash === '#/' || location.hash === '' || location.hash === '#/tasks') render(); refreshNavBadges();
+  };
+}
+
+// (5) 기한 알림(브라우저 알림): 켜 두면 앱이 열려 있는 동안 10분마다 확인해, 새로 생긴 승인 대기·기한 알림을 컴퓨터·휴대폰 알림으로 띄운다.
+const NOTIFY_KEY = () => `wpa:notify:${ME?.id || 0}`, NOTIFY_SEEN = () => `wpa:notify-seen:${ME?.id || 0}`;
+const notifyOn = () => { try { return typeof Notification !== 'undefined' && Notification.permission === 'granted' && localStorage.getItem(NOTIFY_KEY()) === '1'; } catch { return false; } };
+async function notifyToggle() {
+  if (typeof Notification === 'undefined') return toast('이 브라우저는 알림을 지원하지 않습니다.', 'err');
+  if (notifyOn()) { try { localStorage.setItem(NOTIFY_KEY(), '0'); } catch {} toast('알림을 껐습니다.'); return render(); }
+  const p = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+  if (p !== 'granted') return toast('브라우저에서 알림을 허용해야 받을 수 있습니다(주소창 왼쪽 자물쇠 → 알림 허용).', 'err');
+  try { localStorage.setItem(NOTIFY_KEY(), '1'); localStorage.removeItem(NOTIFY_SEEN()); } catch {}
+  toast('알림을 켰습니다. 앱이 열려 있는 동안 새 승인 대기·기한 알림을 알려 드립니다.'); notifyCheck(true); render();
+}
+async function notifyCheck(first = false) {
+  if (!ME || !notifyOn()) return;
+  try {
+    const [tasks, alerts] = await Promise.all([api('GET', '/api/my-tasks'), api('GET', '/api/alerts')]);
+    const lines = [];
+    for (const [type, g] of Object.entries(tasks.approvals.requests || {})) if (g.count) lines.push(`${REQ[type]?.label || type} 승인 대기 ${g.count}건`);
+    for (const q of tasks.approvals.quality || []) lines.push(`${q.label} ${q.count}건`);
+    if (tasks.approvals.training_attend?.count) lines.push(`교육 참석 확인 ${tasks.approvals.training_attend.count}건`);
+    for (const q of alerts.quality_alerts || []) lines.push(`${q.label} ${q.count}건`);
+    if (alerts.overdue_po_count) lines.push(`납기 지난 미입고 발주 ${alerts.overdue_po_count}건`);
+    let seen = []; try { seen = JSON.parse(localStorage.getItem(NOTIFY_SEEN()) || '[]'); } catch {}
+    const fresh = lines.filter(l => !seen.includes(l)); try { localStorage.setItem(NOTIFY_SEEN(), JSON.stringify(lines)); } catch {}
+    if (!fresh.length || (first && !lines.length)) return;
+    const n = new Notification('서울세미텍 · 확인할 일', { body: fresh.slice(0, 6).join('\n') + (fresh.length > 6 ? `\n외 ${fresh.length - 6}건` : ''), tag: 'wpa-tasks' });
+    n.onclick = () => { window.focus(); location.hash = '#/'; n.close(); };
+  } catch { /* 알림은 편의 기능 */ }
+}
+if (typeof setInterval !== "undefined") setInterval(() => notifyCheck(), 10 * 60 * 1000);
+if (typeof setTimeout !== "undefined") setTimeout(() => notifyCheck(), 8000);
+
+// (6) 보고서 출력: 8D 보고서(CAPA) · 교육 결과 보고서 · 심사 보고서. 창 안 양식을 그대로 인쇄·PDF로.
+async function rptCompany() { try { return (await api('GET', '/api/coas')).company || {}; } catch { return {}; } }
+function rptWindow(title, body, co = {}) {
+  const m = modal(`<div class="rpt-sheet"><div class="rpt-top"><b>${esc(co.biz_name || '')}</b><span class="small">${esc(todayStr())} 출력 · ${esc(ME?.name || '')}</span></div><h2 class="rpt-title">${esc(title)}</h2>${body}</div>
+    <div class="actions no-print"><span class="grow"></span><button type="button" class="btn" data-no>닫기</button><button type="button" class="btn primary" data-rpt-print>인쇄 · PDF</button></div>`, { wide: true });
+  m.el.classList.add('rpt-modal');
+  $('[data-no]', m.el).onclick = () => m.close();
+  $('[data-rpt-print]', m.el).onclick = () => { document.body.classList.add('printing'); window.print(); document.body.classList.remove('printing'); };
+  return m;
+}
+const rptRow = (pairs) => `<table class="rpt-head">${pairs.map(row => `<tr>${row.map(([k, v]) => `<th>${esc(k)}</th><td>${v == null || v === '' ? '<span class="muted">—</span>' : esc(v)}</td>`).join('')}</tr>`).join('')}</table>`;
+const rptBlock = (t, html) => `<section class="rpt-block"><h3>${esc(t)}</h3>${html}</section>`;
+const rptText = v => v ? `<p class="rpt-text">${esc(v)}</p>` : '<p class="muted">—</p>';
+async function nc8D(n) {
+  const c = n.cause || {}, co = await rptCompany();
+  const whys = ['why1', 'why2', 'why3', 'why4', 'why5'].filter(k => c[k]).map((k, i) => `<li>Why ${i + 1}: ${esc(c[k])}</li>`).join('');
+  const m4 = [['man', '사람'], ['machine', '설비'], ['material', '자재'], ['method', '방법'], ['env', '환경']].filter(([k]) => c[k]).map(([k, l]) => `<li>${l}: ${esc(c[k])}</li>`).join('');
+  rptWindow('8D 보고서', rptRow([[['번호', n.nc_no], ['단계', n.status_label]], [['출처', `${n.source_label}${n.source_no ? ' ' + n.source_no : ''}`], ['유형·등급', `${n.kind} · ${n.grade_label}`]], [['품목', n.item], ['LOT · 수량', `${n.lot || '—'} · ${n.qty ?? '—'}`]], [['발생일', n.found_date], ['조치 기한', n.due_date]]])
+    + rptBlock('D1 팀 구성', rptText(`담당 ${n.owner_name || '—'} · 등록 ${n.created_by}`))
+    + rptBlock('D2 문제 기술', rptText(`${n.title}${n.detail ? '\n' + n.detail : ''}`))
+    + rptBlock('D3 임시 조치(격리·선별)', rptText(n.containment))
+    + rptBlock('D4 근본 원인', (whys || m4 || c.root) ? `${whys ? `<ul>${whys}</ul>` : ''}${m4 ? `<ul>${m4}</ul>` : ''}${c.root ? `<p><b>근본 원인</b> ${esc(c.root)}</p>` : ''}` : '<p class="muted">—</p>')
+    + rptBlock('D5 영구 시정조치', rptText(n.corrective))
+    + rptBlock('D6 실행 · 시정', rptText(`${n.correction || ''}${n.action_date ? `\n조치 완료일 ${n.action_date}` : ''}`))
+    + rptBlock('D7 재발 방지(예방조치)', rptText(n.preventive))
+    + rptBlock('D8 유효성 확인 · 종결', rptText(`${n.verify_result ? `검증 ${n.verify_result}` : '검증 전'}${n.verify_date ? ` (${n.verify_date})` : ''}${n.verify_note ? '\n' + n.verify_note : ''}${n.closed_by ? `\n종결 ${n.closed_by} ${String(n.closed_at || '').slice(0, 10)}` : ''}`))
+    + '<div class="rpt-sign"><span>작성</span><span>검토</span><span>승인</span></div>', co);
+}
+async function trReport(t) {
+  const co = await rptCompany(), att = t.attendees || [];
+  rptWindow('교육 결과 보고서', rptRow([[['교육명', t.title], ['유형', t.kind]], [['예정일', t.plan_date], ['실시일', t.done_date]], [['시간(h)', t.hours], ['장소', t.place]], [['강사', t.instructor], ['평가 방법', t.eval_method]], [['관련 문서', t.doc_label], ['상태', t.status_label]]])
+    + rptBlock('교육 내용', rptText(t.content))
+    + rptBlock(`참석자 (${att.filter(a => a.attended).length}/${att.length}명)`, `<table class="rpt-list"><thead><tr><th>No</th><th>이름</th><th>부서</th><th>참석</th><th>점수</th><th>결과</th><th>서명</th></tr></thead><tbody>${att.map((a, i) => `<tr><td class="c">${i + 1}</td><td>${esc(a.user_name)}</td><td>${esc(a.dept)}</td><td class="c">${a.attended ? '○' : '×'}</td><td class="r">${a.score ?? ''}</td><td class="c">${esc(a.result)}</td><td class="rpt-signcell"></td></tr>`).join('') || '<tr><td colspan="7" class="muted">대상자가 없습니다.</td></tr>'}</tbody></table>`)
+    + '<div class="rpt-sign"><span>작성</span><span>검토</span><span>승인</span></div>', co);
+}
+async function audReport(a) {
+  const co = await rptCompany(), cl = a.checklist || [], f = a.findings || [];
+  rptWindow('심사 보고서', rptRow([[['번호', a.audit_no], ['유형', a.kind_label]], [['심사명', a.title], ['대상', a.target]], [['예정일', a.plan_date], ['실시일', a.done_date]], [['심사원', a.auditors], ['단계', a.status_label]], [['범위', a.scope], ['인증서', a.cert_label]]])
+    + rptBlock(`체크리스트 (${cl.length}문항 · 부적합 ${cl.filter(x => x.result === '부적합').length})`, cl.length ? `<table class="rpt-list"><thead><tr><th>No</th><th>질문·확인 사항</th><th>결과</th><th>메모·증거</th></tr></thead><tbody>${cl.map((x, i) => `<tr><td class="c">${i + 1}</td><td>${esc(x.q)}</td><td class="c">${esc(x.result || '—')}</td><td>${esc(x.note)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">—</p>')
+    + rptBlock(`지적사항 (${f.length}건)`, f.length ? `<table class="rpt-list"><thead><tr><th>등급</th><th>조항</th><th>지적 내용</th><th>시정 기한</th><th>CAPA</th><th>상태</th></tr></thead><tbody>${f.map(x => `<tr><td>${esc(x.grade_label)}</td><td>${esc(x.clause)}</td><td>${esc(x.content)}</td><td class="c">${esc(x.due_date || '')}</td><td>${esc(x.nc_no || '')}</td><td class="c">${x.closed ? '닫힘' : esc(x.nc_status_label || '열림')}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">지적사항이 없습니다.</p>')
+    + rptBlock('결과 요약', rptText(a.summary))
+    + '<div class="rpt-sign"><span>심사원</span><span>피심사 부서</span><span>품질책임자</span></div>', co);
+}
+
+if (typeof document !== "undefined") document.addEventListener('click', e => {
+  const b = e.target.closest?.('button[data-bulk]'); if (b) { e.preventDefault(); bulkApprove(b.dataset.bulk, b.dataset.bulkType || '').catch(fail); return; }
+  if (e.target.closest?.('[data-notify]')) { e.preventDefault(); notifyToggle().catch(fail); }
+});

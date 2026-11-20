@@ -1048,3 +1048,14 @@ test('15.310 per-user display prefs for dashboard/report are validated and kept;
   assert.ok(q.charts.some(c => c.title === '부적합(CAPA) 등록 · 종결')); assert.ok(q.tables.some(t => t.title === '부적합 출처별(CAPA)' && t.rows.length >= 1)); assert.ok(q.tables.some(t => t.title === '공정 기준 이탈 항목' && t.rows.length >= 1));
   await admin('PUT', '/api/me/prefs', { report: null, dash: null });
 });
+
+test('15.312 find API: record numbers and titles across quality tables, restricted documents hidden, short query empty', async () => {
+  const n = (await admin('POST', '/api/ncs', { title: '찾기용 부적합 XQ7', request_id: rid() })).body;
+  const d = (await admin('POST', '/api/qdocs', { kind: 'form', title: '찾기용 양식 XQ7', access_depts: ['연구소'], request_id: rid() })).body;
+  const r = (await admin('GET', '/api/find?q=' + encodeURIComponent(n.nc_no))).body.rows; assert.ok(r.some(x => x.type === 'nc' && x.id === n.id && x.href === '#/quality/capa'), JSON.stringify(r));
+  const t = (await admin('GET', '/api/find?q=XQ7')).body.rows; assert.ok(t.some(x => x.type === 'nc') && t.some(x => x.type === 'doc'));
+  assert.ok(!(await prod('GET', '/api/find?q=XQ7')).body.rows.some(x => x.type === 'doc'), 'draft/restricted doc hidden from others');
+  assert.deepEqual((await admin('GET', '/api/find?q=X')).body.rows, []);
+  assert.equal((await admin('GET', '/api/find?q=' + encodeURIComponent("%' OR 1=1 --"))).status, 200);
+  void d;
+});
