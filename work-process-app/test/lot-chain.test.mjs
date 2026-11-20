@@ -1244,3 +1244,24 @@ test('15.319 price impact preview works without a reason; bulk rejects rows with
   assert.match(bulk.errors.join(' '), /단가를 넣으세요/); assert.match(bulk.errors.join(' '), /GBP/);
   const ok = (await admin('GET', '/api/cost/materials')).body.rows.find(m => m.code === 'T319-OK'); assert.equal(ok.current.currency, 'USD'); assert.equal(ok.current.krw_price, 1400);
 });
+test('15.320 product spec is stored with the item and its revision header; spec-built lines reproduce the Excel CF707 per pack', async () => {
+  const film = (await admin('POST', '/api/cost/materials', { code: 'T320-FILM', name: '개별 포장 필름', unit: 'M', price: '245000/1500', effective_date: '2026-01-01', request_id: rid() }));
+  assert.equal(film.status, 400, 'price must be a plain number'); // 백데이터 단가는 숫자(식 아님)
+  const f2 = (await admin('POST', '/api/cost/materials', { code: 'T320-FILM', name: '개별 포장 필름', unit: 'M', price: 163.3333, effective_date: '2026-01-01', request_id: rid() })).body;
+  // 화면이 사양(이중 포장, 포장당 200sh, 박스당 50포장=10,000sh, 원단 폭 140mm·시트 139.7×114mm)으로 만든 줄
+  const build = { on: true, pack: 'triple', unit: 'pack', dim: 'mm', fdim: 'mm', sw: '139.7', sl: '114', fw: '140', fprice: '584.2691', floss: '1', spp: '200', pmat: f2.id, puse: '0.32', spo: '10000', oprice: '187', spb: '10000', bprice: '2050', cut_capa: '9000*4', pk_capa: '750/4', bogus: 'x' };
+  const lines = [
+    { auto: 'fabric', type: 'mat', name: '원단', price: '584.2691', qty: '0.14*0.114*200', loss: 1 }, { auto: 'pack', type: 'mat', name: '속포장재', material_id: f2.id, qty: '0.32' },
+    { auto: 'outer', type: 'mat', name: '외포장재', price: '187', qty: '200/10000' }, { auto: 'box', type: 'mat', name: '박스', price: '2050', qty: '200/10000' },
+    { auto: 'cut', type: 'labor', name: '재단(절단)', qty: '200', capa: '9000*4' }, { auto: 'packing', type: 'labor', name: '포장', qty: '1', capa: '750/4' }];
+  await admin('POST', '/api/cost/rates', { effective_date: '2026-01-01', labor_rate: 13853.3979, mfg_rate: 10, sga_rate: 12, defect_rate: 0, fx: { USD: 1400 }, reason: '320', request_id: rid() });
+  const it = (await admin('POST', '/api/cost/items', { item_code: 'T320-CF707', name: 'CF707 200SH', unit: 'PK', pieces: 200, build, lines, effective_date: '2026-01-02', request_id: rid() })).body;
+  assert.equal(it.build.on, true); assert.equal(it.build.spp, '200'); assert.equal(it.build.pmat, f2.id); assert.equal(it.build.bogus, undefined);
+  assert.deepEqual(it.lines.map(l => l.auto), ['fabric', 'pack', 'outer', 'box', 'cut', 'packing']);
+  assert.equal(it.totals.material, 1980.64); assert.equal(it.totals.labor, 150.85);
+  const revs = (await admin('GET', `/api/cost/items/${it.id}/revs`)).body.rows; assert.equal(revs[0].header.build.spb, '10000');
+  // 사양 연결을 끊어도(auto 표시만 빠짐) 원가가 같으면 리비전 없음
+  const off = (await admin('PUT', `/api/cost/items/${it.id}`, { revision: it.revision, effective_date: '2026-01-02', build: { ...build, on: false }, lines: it.lines.map(({ auto, ...l }) => (void auto, l)) })).body;
+  assert.equal(off.rev, 0); assert.equal(off.build.on, false);
+  assert.equal((await admin('POST', '/api/cost/items', { item_code: 'T320-BAD', name: 'x', build: { on: true, spp: 'alert(1)' }, lines: [{ type: 'mat', name: 'a', price: '1' }] })).status, 400);
+});

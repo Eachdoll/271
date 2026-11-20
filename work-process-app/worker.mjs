@@ -5397,6 +5397,18 @@ function costCompute(item0, rates, prices) {
     sale_price: sale, margin: sale == null ? null : cr2(sale - total), margin_rate: sale ? cr2((sale - total) / sale * 100) : null, missing_price: lines.some(l => l.price_src === 'missing') };
   return { lines, totals, rates: used };
 }
+// 15.320 제품 사양(포장 구조·포장당/외포장당/박스당 sh·시트·원단 폭·자재 매입가) — 화면이 이 값으로 원가 줄(auto)을 만든다. 정해진 칸만 받는다.
+const COST_AUTO = ['fabric', 'pack', 'outer', 'box', 'cut', 'packing'];
+const COST_BUILD_ENUM = { pack: ['double', 'triple'], unit: ['pack', 'sheet', 'box'], dim: ['in', 'mm'], fdim: ['in', 'mm'], fbasis: ['', 'yd', 'sqm', 'm'], pk_cu: ['pack', 'sh'] };
+const COST_BUILD_VAL = ['sw', 'sl', 'fw', 'floss', 'spy', 'spp', 'spo', 'spb', 'puse', 'ouse', 'buse', 'fprice', 'pprice', 'oprice', 'bprice', 'cut_capa', 'cut_workers', 'pk_capa', 'pk_workers'];
+function costBuildClean(v0) {
+  let v = v0; if (typeof v === 'string') { try { v = JSON.parse(v || '{}'); } catch { v = {}; } } if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+  const o = { on: !!v.on };
+  for (const [k, list] of Object.entries(COST_BUILD_ENUM)) if (list.includes(v[k])) o[k] = v[k];
+  for (const k of COST_BUILD_VAL) if (v[k] !== undefined && v[k] !== null && String(v[k]).trim() !== '') { const x = str(String(v[k]), 40); costExpr(x, `제품 사양(${k}) `); o[k] = x; }
+  for (const k of ['fmat', 'pmat', 'omat', 'bmat']) { const id = optId(v[k]); if (id) o[k] = id; }
+  return o;
+}
 function costLinesClean(list, matIds) {
   if (!Array.isArray(list)) throw bad('원가 줄이 올바르지 않습니다.'); if (list.length > 200) throw bad('원가 줄은 200줄까지입니다.');
   const keys = new Set();
@@ -5409,6 +5421,7 @@ function costLinesClean(list, matIds) {
     const loss = o.loss === '' || o.loss == null ? 0 : Number(o.loss); if (!(loss >= 0 && loss <= 100)) throw bad(n + '로스(%)는 0~100으로 넣으세요.');
     const line = { key, type, material_id: mid, manual_price: !!(mid && o.manual_price), name: str(o.name, 100), spec: str(o.spec, 100), unit: str(o.unit, 20), qty: ex('qty', '소요량·작업량'), price: ex('price', '단가'), loss: type === 'mat' ? loss : 0,
       capa: type === 'labor' ? ex('capa', '시간당 처리량') : '', workers: type === 'labor' ? ex('workers', '인원') : '', note: str(o.note, 200) };
+    if (COST_AUTO.includes(o.auto)) line.auto = o.auto; /* 15.320 제품 사양에서 만든 줄 */
     if (!line.name && !mid) throw bad(n + '항목 이름을 넣으세요.');
     return line;
   });
@@ -5422,17 +5435,17 @@ async function costItemBody(o0, prior = {}) {
   const matIds = new Set((await db.prepare('SELECT id FROM cost_materials').all()).map(r => r.id));
   return { name: reqStr(pick('name'), '품목명', 150), spec: str(pick('spec'), 150), kind: COST_KIND[pick('kind')] ? pick('kind') : 'product', category: str(pick('category'), 50), bom_id: bom, unit: str(pick('unit'), 20),
     pieces: nOrNull(pick('pieces'), '낱개 수', 0.0001), pack_spec: str(pick('pack_spec'), 100), customer: str(pick('customer'), 100), sale_price: nOrNull(pick('sale_price'), '판매가'), sga_base: pick('sga_base') === 'mfg' ? 'mfg' : 'direct',
-    overrides: JSON.stringify(ov), lines: JSON.stringify(costLinesClean(o.lines === undefined ? JSON.parse(prior.lines || '[]') : o.lines, matIds)), note: str(pick('note'), 1000) };
+    overrides: JSON.stringify(ov), lines: JSON.stringify(costLinesClean(o.lines === undefined ? JSON.parse(prior.lines || '[]') : o.lines, matIds)), note: str(pick('note'), 1000), build: JSON.stringify(costBuildClean(o.build === undefined ? prior.build : o.build)) };
 }
-const COST_ITEM_COLS = ['name', 'spec', 'kind', 'category', 'bom_id', 'unit', 'pieces', 'pack_spec', 'customer', 'sale_price', 'sga_base', 'overrides', 'lines', 'note'];
-const costHeader = f => ({ name: f.name, spec: f.spec, kind: f.kind, unit: f.unit, pieces: f.pieces, pack_spec: f.pack_spec, customer: f.customer, sale_price: f.sale_price, sga_base: f.sga_base, overrides: JSON.parse(f.overrides || '{}') });
+const COST_ITEM_COLS = ['name', 'spec', 'kind', 'category', 'bom_id', 'unit', 'pieces', 'pack_spec', 'customer', 'sale_price', 'sga_base', 'overrides', 'lines', 'note', 'build'];
+const costHeader = f => ({ name: f.name, spec: f.spec, kind: f.kind, unit: f.unit, pieces: f.pieces, pack_spec: f.pack_spec, customer: f.customer, sale_price: f.sale_price, sga_base: f.sga_base, overrides: JSON.parse(f.overrides || '{}'), build: JSON.parse(f.build || '{}') });
 const costRevSql = (itemId, rev, date, reason, cause, f, calc, by) => ({ sql: 'INSERT INTO cost_item_revs(item_id,rev,effective_date,reason,cause,header,lines,rates,totals,created_by) VALUES(?,?,?,?,?,?,?,?,?,?)', args: [itemId, rev, date, reason, cause, JSON.stringify(costHeader(f)), JSON.stringify(calc.lines), JSON.stringify(calc.rates), JSON.stringify(calc.totals), by] });
-const costCostKey = f => JSON.stringify([f.lines, f.overrides, f.sga_base, f.pieces ?? null, f.kind]);
+const costCostKey = f => JSON.stringify([JSON.parse(f.lines || '[]').map(({ auto, ...l }) => (void auto, l)), f.overrides, f.sga_base, f.pieces ?? null, f.kind]);
 async function costItemsAll() { return (await db.prepare('SELECT * FROM cost_items ORDER BY active DESC, item_code').all()); }
 async function costLive(rows, date) { const [rates, prices] = [await costRatesAt(date), await costPricesAt(date)]; return rows.map(r => { try { return costCompute(r, rates, prices); } catch { return null; } }); }
 function costRowOut(r, live, revs) {
   const totals = JSON.parse(r.totals || '{}'), mine = revs.filter(x => x.item_id === r.id), prev = mine.filter(x => x.rev < r.rev).at(-1), pt = prev ? JSON.parse(prev.totals || '{}') : null;
-  return { ...r, lines: JSON.parse(r.lines || '[]'), overrides: JSON.parse(r.overrides || '{}'), history: JSON.parse(r.history || '[]'), active: !!r.active, kind_label: COST_KIND[r.kind], totals,
+  return { ...r, lines: JSON.parse(r.lines || '[]'), overrides: JSON.parse(r.overrides || '{}'), build: JSON.parse(r.build || '{}'), history: JSON.parse(r.history || '[]'), active: !!r.active, kind_label: COST_KIND[r.kind], totals,
     live: live?.totals || null, stale: !!live && Math.abs((live.totals.total || 0) - (totals.total || 0)) > 0.005, prev_total: pt?.total ?? null, prev_date: prev?.effective_date || null,
     change_pct: pt?.total ? cr2(((totals.total || 0) - pt.total) / pt.total * 100) : null, rev_count: mine.length };
 }
