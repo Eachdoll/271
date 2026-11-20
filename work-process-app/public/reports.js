@@ -197,3 +197,81 @@ function mountDeptReports(main, form) {
   $('#deptSettings', box).onclick = () => reportSettingsWindow(load).catch(fail);
   return load;
 }
+
+// ── 15.276 개발 스케줄 관리: 개발리스트 제품을 단기·중장기·장기로 나눠 공정표(단계)·현재 진행·다음 예정·완료예정일을 로드맵으로 ──
+const DEV_TERM = [['short', '단기', '#2f9e44'], ['mid', '중장기', '#1c7ed6'], ['long', '장기', '#7048e8'], ['', '구분 미지정', '#868e96']];
+const DEV_STEP_STATE = { todo: ['예정', '#adb5bd'], doing: ['진행 중', '#1c7ed6'], done: ['완료', '#2f9e44'] };
+const devDays = (a, b) => Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 864e5);
+async function devPlanEditor(r, done) {
+  const canEdit = hasRole('dev') || hasRole('dev_approver');
+  const stepRow = (x = {}) => `<tr data-step><td><input data-s="name" maxlength="100" value="${esc(x.name || '')}" placeholder="예) 샘플 제작" aria-label="공정명"></td><td><input type="date" data-s="start_date" value="${esc(x.start_date || '')}" aria-label="시작"></td><td><input type="date" data-s="end_date" value="${esc(x.end_date || '')}" aria-label="종료"></td><td><select data-s="status" aria-label="상태">${Object.entries(DEV_STEP_STATE).map(([k, [l]]) => `<option value="${k}"${(x.status || 'todo') === k ? ' selected' : ''}>${l}</option>`).join('')}</select></td><td><input data-s="note" maxlength="200" value="${esc(x.note || '')}" aria-label="메모"></td><td><button type="button" class="btn small danger" data-step-del aria-label="빼기">×</button></td></tr>`;
+  let root = null;
+  const saved = await promptBox(`개발 스케줄 · ${r.title}`, `<p class="small muted">${esc([r.req_no, r.customer, r.requester_name && '의뢰 ' + r.requester_name].filter(Boolean).join(' · '))}${r.due_date ? ` · 의뢰 납기 ${esc(r.due_date)}` : ''}</p>
+    <div class="form-grid">
+      <label>구분<select name="term">${DEV_TERM.map(([k, l]) => `<option value="${k}"${(r.term || '') === k ? ' selected' : ''}>${k ? l : '선택'}</option>`).join('')}</select></label>
+      <label>시작일<input type="date" name="start_date" value="${esc(r.start_date || '')}"></label>
+      <label>완료예정일<input type="date" name="target_date" value="${esc(r.target_date || r.due_date || '')}"></label>
+      <label>진행률 (%)<input type="number" name="progress" min="0" max="100" step="5" value="${r.progress || 0}"></label>
+      <label class="span2">현재 진행현황<input name="current_stage" maxlength="300" value="${esc(r.current_stage || '')}" placeholder="예) 1차 샘플 고객 평가 중"></label>
+      <label>다음 진행예정<input name="next_step" maxlength="300" value="${esc(r.next_step || '')}" placeholder="예) 2차 샘플 제작"></label>
+      <label>다음 예정일<input type="date" name="next_date" value="${esc(r.next_date || '')}"></label>
+      <label class="span2">메모<input name="note" maxlength="500" value="${esc(r.note || '')}"></label>
+    </div>
+    <fieldset class="vendor-sec"><legend>공정표 <span class="hint">(단계별 기간·상태 — 로드맵 막대 안에 표시)</span></legend>
+      <div class="table-wrap"><table class="grid keep-table dev-steps" data-no-sort data-no-filter data-keep-cols><thead><tr><th>공정</th><th>시작</th><th>종료</th><th>상태</th><th>메모</th><th></th></tr></thead><tbody data-steps>${(r.steps?.length ? r.steps : [{}]).map(stepRow).join('')}</tbody></table></div>
+      <div class="actions" style="justify-content:flex-start"><button type="button" class="btn small" data-step-add>＋ 공정 추가</button></div></fieldset>`, { wide: true,
+    onOpen: el => { root = el; el.classList.add('vendor-modal'); if (!canEdit) el.querySelectorAll('input, select').forEach(i => { i.disabled = true; });
+      el.addEventListener('click', e => { if (e.target.closest('[data-step-add]')) { const b = el.querySelector('[data-steps]'); b.insertAdjacentHTML('beforeend', stepRow()); b.lastElementChild.querySelector('input').focus(); }
+        const del = e.target.closest('[data-step-del]'); if (del) { const tr = del.closest('tr'); if (tr.parentElement.children.length > 1) tr.remove(); else tr.querySelectorAll('input').forEach(i => { i.value = ''; }); } }); },
+    submit: async v => { if (!canEdit) throw new Error('개발 담당자만 고칠 수 있습니다.'); const steps = [...root.querySelectorAll('[data-step]')].map(tr => Object.fromEntries([...tr.querySelectorAll('[data-s]')].map(i => [i.dataset.s, i.value.trim()]))).filter(x => x.name); return api('PUT', `/api/dev-roadmap/${r.id}`, { ...v, steps }); } });
+  if (saved) { toast('개발 스케줄을 저장했습니다.'); await done?.(); }
+}
+async function pageDevRoadmap(main) {
+  let termSel = 'all'; try { termSel = localStorage.getItem('wpa:dev-term') ?? 'all'; } catch { /* 편의 */ }
+  main.innerHTML = `<h1>스케줄 관리 <span class="dept">개발</span></h1>
+  <p class="muted">개발리스트의 제품마다 <b>구분(단기·중장기·장기)</b>, 공정표, 현재 진행현황·다음 진행예정·완료예정일을 넣으면 아래 로드맵에 표시됩니다. 막대를 누르면 입력 창이 열립니다.</p>
+  <form class="toolbar list-filters" id="drForm" data-read-only="true"><div class="seg" role="group" aria-label="구분" data-dr-terms>${[['all', '전체'], ...DEV_TERM.map(([k, l]) => [k, l])].map(([k, l]) => `<button type="button" data-dr-term="${k}">${l}</button>`).join('')}</div>
+    <label class="list-search">검색<input type="search" name="q" maxlength="100" placeholder="제품·거래처·의뢰번호"></label><label class="inline"><input type="checkbox" name="done" value="1"> 완료 포함</label><button type="submit" class="btn primary">조회</button></form>
+  <div class="dr-legend small"><span><i style="background:#2f9e44"></i>단기</span><span><i style="background:#1c7ed6"></i>중장기</span><span><i style="background:#7048e8"></i>장기</span><span class="dr-sep"></span>${Object.values(DEV_STEP_STATE).map(([l, c]) => `<span><i class="dr-step-i" style="background:${c}"></i>공정 ${l}</span>`).join('')}<span><b class="dr-next-i">◆</b> 다음 예정</span><span><i class="dr-today-i"></i> 오늘</span></div>
+  <div id="drMap"><p class="muted">불러오는 중…</p></div><div id="drTable"></div>`;
+  const form = $('#drForm', main); let rows = [];
+  const today = todayStr();
+  const draw = () => {
+    const q = (form.elements.q.value || '').trim().toLowerCase();
+    const list = rows.filter(r => (termSel === 'all' || (r.term || '') === termSel) && (!q || `${r.title} ${r.customer} ${r.req_no}`.toLowerCase().includes(q)));
+    $$('[data-dr-term]', main).forEach(b => b.classList.toggle('on', b.dataset.drTerm === termSel));
+    // 기간: 계획 날짜들 + 오늘(앞 1달 · 뒤 3달), 달 단위로
+    const dates = list.flatMap(r => [r.start_date, r.target_date || r.due_date, r.next_date, ...r.steps.flatMap(s => [s.start_date, s.end_date])]).filter(Boolean);
+    const addM = (d, m) => { const x = new Date(d.slice(0, 7) + '-01T00:00:00Z'); x.setUTCMonth(x.getUTCMonth() + m); return x.toISOString().slice(0, 10); };
+    let from = [addM(today, -1), ...dates].sort()[0].slice(0, 7) + '-01', to = addM([addM(today, 3), ...dates].sort().at(-1), 1);
+    if (devDays(from, to) > 365 * 4) to = addM(from, 48);
+    const span = devDays(from, to), pct = d => Math.max(0, Math.min(100, devDays(from, d) / span * 100));
+    const months = []; for (let m = from; m < to; m = addM(m, 1)) months.push(m);
+    const head = `<div class="dr-months">${months.map(m => `<span style="left:${pct(m)}%;width:${pct(addM(m, 1)) - pct(m)}%"${m.slice(5, 7) === '01' ? ' class="dr-year"' : ''}>${m.slice(5, 7) === '01' || m === months[0] ? m.slice(2, 4) + '.' : ''}${Number(m.slice(5, 7))}월</span>`).join('')}</div>`;
+    const todayLine = `<i class="dr-today" style="left:${pct(today)}%"></i>`;
+    const rowHtml = r => {
+      const [, , color] = DEV_TERM.find(t => t[0] === (r.term || '')) || DEV_TERM[3], end = r.target_date || r.due_date || '', start = r.start_date || (r.steps.map(s => s.start_date).filter(Boolean).sort()[0]) || '';
+      const late = end && end < today && (r.progress || 0) < 100 && r.status !== 'done', left = start && end ? pct(start) : 0, width = start && end ? Math.max(0.8, pct(end) - pct(start)) : 0;
+      const dd = end ? devDays(today, end) : null;
+      const bar = start && end ? `<div class="dr-bar${late ? ' late' : ''}" style="left:${left}%;width:${width}%;--c:${color}" title="${esc(`${start} ~ ${end} · 진행 ${r.progress || 0}%`)}"><b style="width:${r.progress || 0}%"></b><span>${r.progress || 0}%</span></div>`
+        : end ? `<div class="dr-pin" style="left:${pct(end)}%;--c:${color}" title="완료예정 ${esc(end)}">▼</div>` : '<span class="dr-empty">일정 미입력 — 눌러서 입력</span>';
+      const steps = r.steps.filter(s => s.start_date && s.end_date).map(s => `<i class="dr-step" style="left:${pct(s.start_date)}%;width:${Math.max(0.6, pct(s.end_date) - pct(s.start_date))}%;background:${DEV_STEP_STATE[s.status]?.[1] || '#adb5bd'}" title="${esc(`${s.name} · ${s.start_date}~${s.end_date} · ${DEV_STEP_STATE[s.status]?.[0] || ''}`)}"></i>`).join('');
+      const next = r.next_date ? `<em class="dr-next" style="left:${pct(r.next_date)}%" title="${esc(`다음: ${r.next_step || ''} (${r.next_date})`)}">◆</em>` : '';
+      return `<div class="dr-row" data-dr="${r.id}" tabindex="0" title="눌러서 스케줄 입력"><div class="dr-label"><b>${esc(r.title)}</b> ${r.status === 'done' ? '<span class="chip green">완료</span>' : late ? '<span class="chip red">지연</span>' : ''}<div class="small muted">${esc([r.customer, r.req_no].filter(Boolean).join(' · '))}${end ? ` · 완료예정 ${esc(end)}${dd != null && r.status !== 'done' ? ` (${dd >= 0 ? 'D-' + dd : 'D+' + -dd})` : ''}` : ''}</div>${r.current_stage || r.next_step ? `<div class="small dr-now">${r.current_stage ? `<span>현재 <b>${esc(r.current_stage)}</b></span>` : ''}${r.next_step ? `<span>다음 <b>${esc(r.next_step)}</b>${r.next_date ? ` ${esc(r.next_date.slice(5))}` : ''}</span>` : ''}</div>` : ''}</div>
+        <div class="dr-track">${todayLine}<div class="dr-steps">${steps}</div>${bar}${next}</div></div>`;
+    };
+    const lanes = DEV_TERM.map(([k, l, c]) => [l, c, list.filter(r => (r.term || '') === k)]).filter(([, , rs]) => rs.length);
+    $('#drMap', main).innerHTML = list.length ? `<div class="dr-map"><div class="dr-head"><div class="dr-label"></div><div class="dr-track">${head}${todayLine}</div></div>${lanes.map(([l, c, rs]) => `<div class="dr-lane" style="--c:${c}"><div class="dr-lane-h">${l} <span class="small muted">${rs.length}건</span></div>${rs.map(rowHtml).join('')}</div>`).join('')}</div>`
+      : '<div class="empty">조건에 맞는 개발 제품이 없습니다. 개발리스트에 진행 중인 의뢰가 있어야 합니다.</div>';
+    $('#drTable', main).innerHTML = list.length ? `<h3 class="dr-h3">진행 현황표</h3><div class="table-wrap"><table class="grid"><thead><tr><th>구분</th><th>제품</th><th>거래처</th><th>현재 진행현황</th><th>다음 진행예정</th><th>다음 예정일</th><th>완료예정일</th><th class="r">D-day</th><th class="r">진행률</th><th>공정</th><th>입력자</th></tr></thead><tbody>${list.map(r => { const end = r.target_date || r.due_date || '', dd = end ? devDays(today, end) : null, t = DEV_TERM.find(x => x[0] === (r.term || '')) || DEV_TERM[3]; return `<tr data-dr="${r.id}" style="cursor:pointer"><td><span class="chip" style="border-color:${t[2]};color:${t[2]}">${t[1]}</span></td><td><b>${esc(r.title)}</b><div class="small muted">${esc(r.req_no || '')}</div></td><td>${esc(r.customer || '')}</td><td>${esc(r.current_stage || '')}</td><td>${esc(r.next_step || '')}</td><td class="nowrap">${esc(r.next_date || '')}</td><td class="nowrap">${esc(end)}</td><td class="r${dd != null && dd < 0 && r.status !== 'done' ? ' red-text' : ''}">${dd == null || r.status === 'done' ? '' : dd >= 0 ? 'D-' + dd : 'D+' + -dd}</td><td class="r">${r.progress || 0}%</td><td class="small">${r.steps.length ? `${r.steps.filter(s => s.status === 'done').length}/${r.steps.length}` : ''}</td><td class="small muted">${esc(r.updated_by || '')}</td></tr>`; }).join('')}</tbody></table></div>` : '';
+  };
+  const load = async () => { rows = (await api('GET', '/api/dev-roadmap?' + new URLSearchParams({ done: form.elements.done.checked ? '1' : '' }))).rows; if (main.isConnected) draw(); };
+  if (!['all', 'short', 'mid', 'long', ''].includes(termSel)) termSel = 'all';
+  main.addEventListener('click', e => {
+    const t = e.target.closest('[data-dr-term]'); if (t) { termSel = t.dataset.drTerm; try { localStorage.setItem('wpa:dev-term', termSel); } catch { /* 편의 */ } draw(); return; }
+    const row = e.target.closest('[data-dr]'); if (row) { const r = rows.find(x => x.id === Number(row.dataset.dr)); if (r) devPlanEditor(r, load).catch(fail); }
+  });
+  main.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches?.('.dr-row')) e.target.click(); });
+  form.onsubmit = e => { e.preventDefault(); load().catch(fail); }; form.elements.done.onchange = () => load().catch(fail); form.elements.q.oninput = () => draw();
+  await load();
+}

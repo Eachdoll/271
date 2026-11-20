@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.275';
+const APP_VERSION = '15.276';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -384,7 +384,7 @@ const NAV = [
     ['#/quality/list', '분석 관리'],
     ['#/quality/voc/list', 'VOC 관리'],
   ] },
-  { group: '개발', items: [['#/dev/list', '개발 관리']] },
+  { group: '개발', items: [['#/dev/list', '개발 관리'], ['#/dev/schedule', '스케줄 관리']] }, // 15.276
   { group: '생산', items: [
     { sub: '샘플(제품)', items: [['#/prod/list', '제품 샘플리스트']] },
     ['#/prod/orders', '생산의뢰 접수'],
@@ -575,6 +575,7 @@ const PAGES = {
   '#/quality/voc/list': () => pageWorkList('voc'),
   '#/dev/request': () => pageIntake('development'),
   '#/dev/list': () => pageWorkList('development'),
+  '#/dev/schedule': main => pageDevRoadmap(main), // 15.276 개발 스케줄 관리(로드맵)
   '#/prod/request': () => { location.replace('#/sales/sample/product'); }, // 15.183 영업으로 옮김(예전 즐겨찾기)
   '#/sales/sample/product': () => pageIntake('sample'), // 15.183 제품 샘플의뢰(영업)
   '#/sales/sample/goods': () => pageIntake('sample_goods'), // 15.183 상품 샘플의뢰(영업)

@@ -3503,6 +3503,32 @@ function decodeRequest(r) { return { ...r, data: JSON.parse(r.data || '{}') }; }
 async function getRequest(id) { const r = (await db.prepare('SELECT * FROM requests WHERE id=?').get(id)); if (!r) throw new HttpError(404, '의뢰를 찾을 수 없습니다.'); return r; }
 function roleLabel(type) { return { voc: '품질', analysis: '품질', development: '연구소', sample: '생산', sample_goods: '구매' }[type]; }
 
+// 15.276 개발 스케줄 관리(로드맵): 개발 의뢰 + 계획(구분·기간·진행률·현재·다음) + 공정표
+const DEV_TERMS = ['', 'short', 'mid', 'long'], DEV_STEP = ['todo', 'doing', 'done'];
+route('GET', '/api/dev-roadmap', async ({ query }) => {
+  const where = ["r.type='development'", "r.status<>'rejected'"]; if (query.done !== '1') where.push("r.status<>'done'");
+  const rows = await db.prepare(`SELECT r.id, r.req_no, r.title, r.customer, r.status, r.due_date, r.requester_name, r.created_at, p.term, p.start_date, p.target_date, p.progress, p.current_stage, p.next_step, p.next_date, p.note, p.updated_by, p.updated_at
+    FROM requests r LEFT JOIN dev_plans p ON p.request_id=r.id WHERE ${where.join(' AND ')} ORDER BY COALESCE(NULLIF(p.target_date,''), r.due_date, '9999') , r.id LIMIT 500`).all();
+  const steps = new Map(); for (const st of await db.prepare('SELECT * FROM dev_plan_steps ORDER BY request_id, sort, id').all()) { if (!steps.has(st.request_id)) steps.set(st.request_id, []); steps.get(st.request_id).push(st); }
+  return { rows: rows.map(r => ({ ...r, term: r.term || '', progress: r.progress || 0, steps: steps.get(r.id) || [] })) };
+});
+route('PUT', '/api/dev-roadmap/:id', async ({ user, params, body }) => {
+  if (!hasRole(user, 'dev') && !hasRole(user, 'dev_approver')) throw new HttpError(403, '개발 스케줄은 개발 담당자가 고칩니다.');
+  const r = await mustGet('requests', params.id); if (r.type !== 'development') throw bad('개발 의뢰가 아닙니다.');
+  const d = (v, label) => v === '' || v == null ? '' : dateStr(v, label);
+  const term = DEV_TERMS.includes(body.term) ? body.term : bad('구분을 다시 고르세요.'); if (term instanceof Error) throw term;
+  const start = d(body.start_date, '시작일'), target = d(body.target_date, '완료예정일'), next = d(body.next_date, '다음 예정일');
+  if (start && target && target < start) throw bad('완료예정일은 시작일 이후여야 합니다.');
+  const progress = Math.round(Number(body.progress) || 0); if (progress < 0 || progress > 100) throw bad('진행률은 0~100입니다.');
+  const steps = (Array.isArray(body.steps) ? body.steps : []).slice(0, 40).map((x, i) => { const name = str(x?.name, 100); if (!name) return null; const s1 = d(x.start_date, `공정 ${i + 1} 시작일`), s2 = d(x.end_date, `공정 ${i + 1} 종료일`); if (s1 && s2 && s2 < s1) throw bad(`공정 「${name}」 종료일이 시작일보다 빠릅니다.`); return { name, start_date: s1, end_date: s2, status: DEV_STEP.includes(x.status) ? x.status : 'todo', note: str(x.note, 200), sort: i }; }).filter(Boolean);
+  await db.batch([
+    { sql: `INSERT INTO dev_plans(request_id,term,start_date,target_date,progress,current_stage,next_step,next_date,note,updated_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(request_id) DO UPDATE SET term=excluded.term,start_date=excluded.start_date,target_date=excluded.target_date,progress=excluded.progress,current_stage=excluded.current_stage,next_step=excluded.next_step,next_date=excluded.next_date,note=excluded.note,updated_by=excluded.updated_by,updated_at=excluded.updated_at`,
+      args: [r.id, term, start, target, progress, str(body.current_stage, 300), str(body.next_step, 300), next, str(body.note, 500), user.name, now()] },
+    { sql: 'DELETE FROM dev_plan_steps WHERE request_id=?', args: [r.id] },
+    ...steps.map(x => ({ sql: 'INSERT INTO dev_plan_steps(request_id,name,start_date,end_date,status,note,sort) VALUES(?,?,?,?,?,?,?)', args: [r.id, x.name, x.start_date, x.end_date, x.status, x.note, x.sort] }))]);
+  return { ok: true };
+});
 route('GET', '/api/requests', async ({ query }) => {
   const type = String(query.type || ''); if (!Object.hasOwn(REQUEST_TYPES, type)) throw bad('의뢰 종류가 올바르지 않습니다.');
   const where = ['type=?']; const args = [type];

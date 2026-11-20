@@ -473,3 +473,17 @@ test('15.274 vendor contacts list: several contacts per site/role, replaced on e
   assert.equal((await admin('GET', '/api/vendors?q=' + encodeURIComponent('한솔'))).body[0].contacts.length, 1, 'edit without contacts keeps them');
   assert.equal((await admin('PUT', `/api/vendors/${v.body.id}`, { name: '한솔아이원스', contacts: [{ name: 'x', email: 'bad' }] })).status, 400);
 });
+
+test('15.276 development roadmap: term, dates, progress, current/next and process steps per development request', async () => {
+  const dev = await admin('POST', '/api/requests', { type: 'development', title: '저분진 와이퍼 9인치', customer: '삼성SDI', due_date: '2027-03-31', target_price: '100', data: { extra: 'x' } });
+  assert.equal(dev.status, 200, JSON.stringify(dev.body));
+  const id = dev.body.id;
+  let row = (await admin('GET', '/api/dev-roadmap')).body.rows.find(r => r.id === id); assert.ok(row); assert.equal(row.term, '');
+  assert.equal((await admin('PUT', `/api/dev-roadmap/${id}`, { term: 'x' })).status, 400);
+  assert.equal((await admin('PUT', `/api/dev-roadmap/${id}`, { term: 'mid', start_date: '2026-12-01', target_date: '2026-11-01' })).status, 400, 'target before start');
+  const ok = await admin('PUT', `/api/dev-roadmap/${id}`, { term: 'mid', start_date: '2026-11-01', target_date: '2027-03-31', progress: 40, current_stage: '1차 샘플 평가', next_step: '2차 샘플', next_date: '2026-12-15', steps: [{ name: '샘플 제작', start_date: '2026-11-01', end_date: '2026-11-20', status: 'done' }, { name: '고객 평가', start_date: '2026-11-21', end_date: '2026-12-10', status: 'doing' }, { name: '' }] });
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+  row = (await admin('GET', '/api/dev-roadmap')).body.rows.find(r => r.id === id);
+  assert.equal(row.term, 'mid'); assert.equal(row.progress, 40); assert.equal(row.next_step, '2차 샘플'); assert.deepEqual(row.steps.map(s => [s.name, s.status]), [['샘플 제작', 'done'], ['고객 평가', 'doing']]);
+  assert.equal((await prod('PUT', `/api/dev-roadmap/${id}`, { term: 'long' })).status, 403);
+});
