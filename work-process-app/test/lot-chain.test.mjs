@@ -652,3 +652,23 @@ test('15.288 research analysis data entry is researcher-only; unlinked data can 
   const linkedAtEntry = (await admin('POST', '/api/rnd-analysis-data', { title: '원료 롤 D', category: '원료분석', result_note: '평량 39.8', dev_request_id: dev.id, dev_step: '원료 검토' })).body;
   assert.equal(linkedAtEntry.customer, 'C사', 'customer from the development item'); assert.equal(linkedAtEntry.data.dev_step, '원료 검토');
 });
+
+test('15.292 research analysis data in inspection format: spec items + readings, automatic judgement and summary, edit with history', async () => {
+  const items = [{ name: '파티클', unit: 'ea/ft²', min: '', max: 150, count: 3 }, { name: '흡수속도', unit: '초', min: 0, max: 60, count: 2 }, { name: '평량', unit: 'g/㎡', min: '', max: '', count: 1 }];
+  assert.equal((await admin('POST', '/api/rnd-analysis-data', { title: 'x', category: '시제품분석', spec_items: items, values: {} })).status, 400, 'at least one reading');
+  const r = await admin('POST', '/api/rnd-analysis-data', { title: '시제품 C', category: '시제품분석', spec_items: items, values: { i0: [90, 100, 110], i1: [40, 45], i2: [40.2] }, result_note: '양호' });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.match(r.body.result_note, /^파티클 평균 100 ea\/ft² \(≤150\) 합격 · 흡수속도 평균 42\.5 초 \(0~60\) 합격 · 평량 40\.2 g\/㎡ → 합격 \/ 의견: 양호$/, r.body.result_note);
+  const m = (await admin('GET', `/api/requests/${r.body.id}/rnd-measure`)).body;
+  assert.equal(m.measurement.result, 'pass'); assert.deepEqual(m.spec.items.map(i => [i.name, i.min, i.max, i.count]), [['파티클', null, 150, 3], ['흡수속도', 0, 60, 2], ['평량', null, null, 1]]);
+  assert.equal(m.memo, '양호');
+  // 수정: 사유 필요, 불합격으로
+  assert.equal((await admin('PUT', `/api/requests/${r.body.id}/rnd-measure`, { spec_items: items, values: { i0: [90, 200, 110], i1: [40, 45], i2: [40.2] } })).status, 400, 'reason required');
+  assert.equal((await prod('PUT', `/api/requests/${r.body.id}/rnd-measure`, { spec_items: items, values: { i0: [1, 1, 1] }, reason: 'x' })).status, 403);
+  const e = await admin('PUT', `/api/requests/${r.body.id}/rnd-measure`, { spec_items: items, values: { i0: [90, 200, 110], i1: [40, 45], i2: [40.2] }, reason: '재측정' });
+  assert.equal(e.status, 200, JSON.stringify(e.body)); assert.match(e.body.result_note, /파티클 평균 133\.333 ea\/ft² \(≤150\) 불합격.*→ 불합격/);
+  const m2 = (await admin('GET', `/api/requests/${r.body.id}/rnd-measure`)).body; assert.equal(m2.measurement.result, 'fail'); assert.equal(m2.measurement.revision, 2);
+  // 메모만으로도(측정 없이) 저장 가능
+  assert.equal((await admin('POST', '/api/rnd-analysis-data', { title: '관찰', category: '기타', result_note: '외관 이상 없음' })).status, 200);
+  assert.equal((await admin('POST', '/api/rnd-analysis-data', { title: '빈', category: '기타' })).status, 400);
+});
