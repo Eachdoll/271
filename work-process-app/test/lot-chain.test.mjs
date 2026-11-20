@@ -404,3 +404,28 @@ test('15.267 vendor keeps system name apart from tax-invoice business name, plus
   assert.equal((await admin('POST', '/api/vendors', { name: '메일틀림', contact_email: 'nope' })).status, 400);
   assert.equal((await admin('GET', '/api/vendors?q=' + encodeURIComponent('메일틀림'))).body.length, 0, 'nothing saved on a bad email');
 });
+
+test('15.268 a note payment from the partner book registers the note; cancelling the payment removes it', async () => {
+  await admin('POST', '/api/vendors', { name: '어음거래처', is_sales: true, is_purchase: true });
+  const pay = b => admin('POST', '/api/sales-payments', { customer: '어음거래처', pay_date: today, kind: 'payment', amount: 9981400, method: '', note: '외상매출금 입금', request_id: rid(), ...b });
+  assert.equal((await pay({ note_info: { note_no: 'N-1' } })).status, 400, 'due date needed');
+  const r = await pay({ note_info: { note_no: 'N-1', note_type: '자수어음', issue_date: today, due_date: '2027-02-20', bank: '하나은행', endorser: '어음거래처', storage: '금고' } });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.method, '어음 N-1'); assert.equal(r.body.bill_note.kind, 'receivable'); assert.equal(r.body.bill_note.amount, 9981400); assert.equal(r.body.bill_note.payment_id, r.body.id);
+  const notes = (await admin('GET', '/api/notes?kind=receivable')).body; const list = Array.isArray(notes) ? notes : notes.rows;
+  const n = list.find(x => x.note_no === 'N-1'); assert.ok(n); assert.equal(n.note_type, '자수어음'); assert.equal(n.storage, '금고');
+  // 같은 어음번호 → 409, 입금도 안 생김
+  const before = sqlite.prepare('SELECT COUNT(*) c FROM sales_payments').get().c;
+  assert.equal((await pay({ note_info: { note_no: 'N-1', due_date: '2027-02-20' } })).status, 409);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) c FROM sales_payments').get().c, before);
+  // 어음 관리에서 바로 지우기는 막힘, 입금 취소하면 함께 삭제
+  assert.equal((await admin('POST', `/api/notes/${n.id}/cancel`, {})).status, 400);
+  assert.equal((await admin('POST', `/api/sales-payments/${r.body.id}/cancel`, { reason: '잘못' })).status, 200);
+  assert.equal(sqlite.prepare('SELECT status FROM bill_notes WHERE id=?').get(n.id).status, 'cancelled');
+  // 지급어음
+  const p = await admin('POST', '/api/purchase-payments', { vendor: '어음거래처', pay_date: today, kind: 'payment', amount: 500000, request_id: rid(), note_info: { note_no: 'P-1', due_date: '2027-01-31' } });
+  assert.equal(p.status, 200, JSON.stringify(p.body)); assert.equal(p.body.bill_note.kind, 'payable');
+  // 만기회수한 어음의 지급은 취소 막힘
+  assert.equal((await admin('POST', `/api/notes/${p.body.bill_note.id}/collect`, { date: today })).status, 200);
+  assert.equal((await admin('POST', `/api/purchase-payments/${p.body.id}/cancel`, { reason: 'x' })).status, 400);
+});

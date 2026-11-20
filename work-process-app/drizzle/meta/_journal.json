@@ -512,6 +512,13 @@
       "when": 1798196013000,
       "tag": "0072_vendor_details",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "6",
+      "when": 1798282413000,
+      "tag": "0073_note_payment_link",
+      "breakpoints": true
     }
   ]
 }

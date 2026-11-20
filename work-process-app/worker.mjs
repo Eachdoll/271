@@ -1548,6 +1548,12 @@ route('POST', '/api/purchase-payments', async ({ user, body }) => {
   const amount = num(body.amount, '금액'); if (!(amount > 0)) throw bad('금액은 0보다 커야 합니다.');
   if (await closedPeriod(vendor, date)) throw bad(`${vendor}의 ${date.slice(0, 7)} 매입은 마감되었습니다. 마감 취소(관리자) 뒤에 등록하세요.`);
   await ensureVendor(vendor, user, 'purchase');
+  const noteInfo = kind === 'payment' ? await paymentNoteInfo(body.note_info, 'purchase', vendor, date, billTrunc(amount)) : null; // 15.268 어음이면 어음 관리에도
+  if (noteInfo) { requirePayments(user);
+    try { await db.batch([{ sql: 'INSERT INTO purchase_payments(pay_date,vendor,kind,amount,method,note,created_by,created_by_id,request_id) VALUES(?,?,?,?,?,?,?,?,?)', args: [date, vendor, kind, billTrunc(amount), str(body.method, 50) || `어음 ${noteInfo.note_no}`, str(body.note, 200), user.name, user.id, token] }, ...paymentNoteCmds(noteInfo, 'purchase', 'purchase_payments', token, user)]); }
+    catch (error) { if (isGuardError(error)) throw new HttpError(409, `${NOTE_KIND[noteInfo.kind]} ${noteInfo.note_no}는 이미 등록되어 있습니다.`); const saved = await db.prepare('SELECT * FROM purchase_payments WHERE request_id=?').get(token); if (saved && saved.created_by_id === user.id) return { ...saved, duplicate: true }; throw error; }
+    return { ...await db.prepare('SELECT * FROM purchase_payments WHERE request_id=?').get(token), bill_note: await db.prepare('SELECT * FROM bill_notes WHERE request_id=?').get('pay:' + token) };
+  }
   try { await db.prepare('INSERT INTO purchase_payments(pay_date,vendor,kind,amount,method,note,created_by,created_by_id,request_id) VALUES(?,?,?,?,?,?,?,?,?)').run(date, vendor, kind, billTrunc(amount), str(body.method, 50), str(body.note, 200), user.name, user.id, token); }
   catch (error) { const saved = await db.prepare('SELECT * FROM purchase_payments WHERE request_id=?').get(token); if (saved && saved.created_by_id === user.id) return { ...saved, duplicate: true }; throw error; }
   return db.prepare('SELECT * FROM purchase_payments WHERE request_id=?').get(token);
@@ -1559,8 +1565,11 @@ route('POST', '/api/purchase-payments/:id/cancel', async ({ user, params, body }
   const ret = await db.prepare("SELECT return_no FROM stock_returns WHERE side='out' AND payment_id=? AND status='confirmed'").get(row.id); if (ret) throw bad(`반출 ${ret.return_no}의 현금 환불입니다. 반출 목록에서 그 반출을 취소하세요.`); // 15.141
   if (await closedPeriod(row.vendor, row.pay_date)) throw bad(`${row.vendor}의 ${row.pay_date.slice(0, 7)} 매입은 마감되었습니다. 마감 취소(관리자) 뒤에 취소하세요.`);
   const reason = reqStr(body.reason, '취소 사유', 200);
+  const linked = await db.prepare("SELECT * FROM bill_notes WHERE payment_side='purchase' AND payment_id=? AND status<>'cancelled'").get(row.id); // 15.268
+  if (linked?.status === 'collected') throw bad(`이 지급의 어음 ${linked.note_no}는 만기회수 처리되었습니다. 어음 관리에서 미처리로 되돌린 뒤 취소하세요.`);
   const r = await db.prepare("UPDATE purchase_payments SET status='cancelled',cancelled_at=?,cancelled_by=?,cancel_reason=? WHERE id=? AND status='confirmed'").run(now(), user.name, reason, row.id);
   if (!r.changes) throw new HttpError(409, '이미 처리된 지급입니다.');
+  if (linked) await db.batch([{ sql: "UPDATE bill_notes SET status='cancelled',updated_by=?,updated_at=? WHERE id=? AND status<>'cancelled'", args: [user.name, now(), linked.id] }, docChange('note', linked.id, `지급 취소로 함께 삭제 · ${reason}`, user)]);
   return mustGet('purchase_payments', row.id);
 });
 route('GET', '/api/purchase-ledger', async ({ user, query }) => {
@@ -1682,6 +1691,18 @@ async function noteFields(body, old = {}) {
   const partner = reqStr(body.partner ?? old.partner, '거래처', 100), v = await vendorByName(partner);
   return { kind, issue_date: issue, note_no: noteNo, partner: v?.name || partner, amount: billTrunc(amount), due_date: due, bank: str(body.bank ?? old.bank, 50), memo: str(body.memo ?? old.memo, 300) };
 }
+// 15.268 입금·지급과 함께 들어온 어음(body.note_info): 받을어음(입금)·지급어음(지급). 금액·거래처·발행일은 입금과 같게.
+const NOTE_TYPES = ['자수어음', '타수어음', '전자어음', '약속어음', '당좌수표', '가계수표'];
+async function paymentNoteInfo(info, side, party, date, amount) {
+  if (!info || typeof info !== 'object') return null;
+  const n = await noteFields({ kind: side === 'sales' ? 'receivable' : 'payable', issue_date: info.issue_date || date, due_date: info.due_date, note_no: info.note_no, partner: party, amount, bank: info.bank, memo: info.memo });
+  const type = str(info.note_type, 20); if (type && !NOTE_TYPES.includes(type)) throw bad('어음 종류를 다시 고르세요.');
+  if (await noteDup(n)) throw new HttpError(409, `${NOTE_KIND[n.kind]} ${n.note_no}는 이미 등록되어 있습니다.`);
+  return { ...n, note_type: type, endorser: str(info.endorser, 100), storage: str(info.storage, 100) };
+}
+const paymentNoteCmds = (n, side, table, token, user) => [
+  { sql: `INSERT INTO bill_notes(kind,issue_date,note_no,partner,amount,due_date,bank,memo,created_by,created_by_id,request_id,payment_side,payment_id,note_type,endorser,storage) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,(SELECT id FROM ${table} WHERE request_id=?),?,?,? WHERE NOT EXISTS(SELECT 1 FROM bill_notes WHERE kind=? AND note_no=? AND status<>'cancelled')`,
+    args: [n.kind, n.issue_date, n.note_no, n.partner, n.amount, n.due_date, n.bank, n.memo, user.name, user.id, 'pay:' + token, side, token, n.note_type, n.endorser, n.storage, n.kind, n.note_no] }, RC_GUARD];
 const noteDup = (n, id = 0) => db.prepare("SELECT 1 FROM bill_notes WHERE kind=? AND note_no=? AND status<>'cancelled' AND id<>?").get(n.kind, n.note_no, id);
 route('GET', '/api/notes', async ({ user, query }) => {
   requirePayments(user);
@@ -1729,7 +1750,7 @@ route('POST', '/api/notes/:id/:action', async ({ user, params, body }) => {
   let sql, args, summary;
   if (action === 'collect') { if (n.status !== 'open') throw bad('미처리 어음만 만기회수로 처리할 수 있습니다.'); const d = dateStr(body.date || today(), '처리일자'); sql = "UPDATE bill_notes SET status='collected',processed_date=?,updated_by=?,updated_at=? WHERE id=? AND status='open'"; args = [d, user.name, now(), n.id]; summary = `만기회수 ${d}`; }
   else if (action === 'reopen') { if (n.status !== 'collected') throw bad('만기회수한 어음만 미처리로 되돌릴 수 있습니다.'); sql = "UPDATE bill_notes SET status='open',processed_date=NULL,updated_by=?,updated_at=? WHERE id=? AND status='collected'"; args = [user.name, now(), n.id]; summary = '미처리로 되돌림'; }
-  else if (action === 'cancel') { if (n.status === 'cancelled') throw bad('이미 삭제된 어음입니다.'); sql = "UPDATE bill_notes SET status='cancelled',updated_by=?,updated_at=? WHERE id=? AND status<>'cancelled'"; args = [user.name, now(), n.id]; summary = '삭제'; }
+  else if (action === 'cancel') { if (n.status === 'cancelled') throw bad('이미 삭제된 어음입니다.'); if (n.payment_id && await db.prepare(`SELECT 1 FROM ${n.payment_side === 'purchase' ? 'purchase_payments' : 'sales_payments'} WHERE id=? AND status='confirmed'`).get(n.payment_id)) throw bad(`거래처 장부의 ${n.payment_side === 'purchase' ? '지급' : '입금'}으로 들어온 어음입니다. 장부(또는 ${n.payment_side === 'purchase' ? '지급확인' : '입금확인'})에서 그 ${n.payment_side === 'purchase' ? '지급' : '입금'}을 취소하면 함께 삭제됩니다.`); sql = "UPDATE bill_notes SET status='cancelled',updated_by=?,updated_at=? WHERE id=? AND status<>'cancelled'"; args = [user.name, now(), n.id]; summary = '삭제'; }
   else throw new HttpError(404, '없는 동작입니다.');
   await db.batch([{ sql, args }, RC_GUARD, docChange('note', n.id, summary, user)]).catch(error => { if (isGuardError(error)) throw new HttpError(409, '그 사이 어음 상태가 바뀌었습니다. 새로 불러오세요.'); throw error; });
   return mustGet('bill_notes', n.id);
@@ -2108,6 +2129,12 @@ route('POST', '/api/sales-payments', async ({ user, body }) => {
   const amount = num(body.amount, '금액'); if (!(amount > 0)) throw bad('금액은 0보다 커야 합니다.');
   if (await salesClosed(customer, date)) throw bad(closedMessage(customer, date, '등록하세요'));
   await ensureVendor(customer, user, 'sales');
+  const noteInfo = kind === 'payment' ? await paymentNoteInfo(body.note_info, 'sales', customer, date, billTrunc(amount)) : null; // 15.268 어음이면 어음 관리에도
+  if (noteInfo) { requirePayments(user);
+    try { await db.batch([{ sql: 'INSERT INTO sales_payments(pay_date,customer,kind,amount,method,note,created_by,created_by_id,request_id) VALUES(?,?,?,?,?,?,?,?,?)', args: [date, customer, kind, billTrunc(amount), str(body.method, 50) || `어음 ${noteInfo.note_no}`, str(body.note, 200), user.name, user.id, token] }, ...paymentNoteCmds(noteInfo, 'sales', 'sales_payments', token, user)]); }
+    catch (error) { if (isGuardError(error)) throw new HttpError(409, `${NOTE_KIND[noteInfo.kind]} ${noteInfo.note_no}는 이미 등록되어 있습니다.`); const saved = await db.prepare('SELECT * FROM sales_payments WHERE request_id=?').get(token); if (saved && saved.created_by_id === user.id) return { ...saved, duplicate: true }; throw error; }
+    return { ...await db.prepare('SELECT * FROM sales_payments WHERE request_id=?').get(token), bill_note: await db.prepare('SELECT * FROM bill_notes WHERE request_id=?').get('pay:' + token) };
+  }
   try { await db.prepare('INSERT INTO sales_payments(pay_date,customer,kind,amount,method,note,created_by,created_by_id,request_id) VALUES(?,?,?,?,?,?,?,?,?)').run(date, customer, kind, billTrunc(amount), str(body.method, 50), str(body.note, 200), user.name, user.id, token); }
   catch (error) { const saved = await db.prepare('SELECT * FROM sales_payments WHERE request_id=?').get(token); if (saved && saved.created_by_id === user.id) return { ...saved, duplicate: true }; throw error; }
   return db.prepare('SELECT * FROM sales_payments WHERE request_id=?').get(token);
@@ -2119,8 +2146,11 @@ route('POST', '/api/sales-payments/:id/cancel', async ({ user, params, body }) =
   const ret = await db.prepare("SELECT return_no FROM stock_returns WHERE side='in' AND payment_id=? AND status='confirmed'").get(row.id); if (ret) throw bad(`반입 ${ret.return_no}의 현금 환불입니다. 반입 목록에서 그 반입을 취소하세요.`); // 15.141
   if (await salesClosed(row.customer, row.pay_date)) throw bad(closedMessage(row.customer, row.pay_date, '취소하세요'));
   const reason = reqStr(body.reason, '취소 사유', 200);
+  const linked = await db.prepare("SELECT * FROM bill_notes WHERE payment_side='sales' AND payment_id=? AND status<>'cancelled'").get(row.id); // 15.268
+  if (linked?.status === 'collected') throw bad(`이 입금의 어음 ${linked.note_no}는 만기회수 처리되었습니다. 어음 관리에서 미처리로 되돌린 뒤 취소하세요.`);
   const r = await db.prepare("UPDATE sales_payments SET status='cancelled',cancelled_at=?,cancelled_by=?,cancel_reason=? WHERE id=? AND status='confirmed'").run(now(), user.name, reason, row.id);
   if (!r.changes) throw new HttpError(409, '이미 처리된 입금입니다.');
+  if (linked) await db.batch([{ sql: "UPDATE bill_notes SET status='cancelled',updated_by=?,updated_at=? WHERE id=? AND status<>'cancelled'", args: [user.name, now(), linked.id] }, docChange('note', linked.id, `입금 취소로 함께 삭제 · ${reason}`, user)]);
   return mustGet('sales_payments', row.id);
 });
 // 기간별 거래보고(거래처 원장): 기초잔액 + 기간 안의 매출(전표 줄)·입금·기초 미수금, 줄마다 잔액. 거래처가 없으면 거래처별 요약.
