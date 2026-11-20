@@ -1185,3 +1185,5 @@ INVITE_CODE=local-test-code npm start
 - 15.270 입력칸 자동 제안(일부 일치, 새 마이그레이션 없음): item-picker.js attachSuggest(input,{source,match,label,value,onPick,max}) — 칸 아래 고정 위치 상자(body에 붙여 표·창에 안 잘림), 글자 일부가 들어간 항목, ↑↓·Enter·클릭 고르기, Esc 닫기, 일치 글자 노랑 표시. 적용: 모든 거래처 칸(bindPartnerPicker — 이름·사업자상호·영문명·코드·담당자, 조회 줄·입력 화면 공통), 품목 칸(itemSuggest — 품명·제품코드·SST제품명: sales.js bindItemPick, multi-items 품목 줄(고르면 품목 선택과 같게), 커팅/세탁 제품코드·품명(datalist 대신), 제품등록 구성자재). 「품목 찾기」 창의 검색은 원래 일부 일치. 단위 테스트는 attachSuggest 없이도 돌도록 typeof 확인.
 
 - 15.271 거래처 장부 「＋ 추가」(새 마이그레이션 0074_book_memos: book_memos). 거래처를 고른 장부 머리줄의 단추 → 거래구분 매출·매입·반입·반출·입금·출금·메모. 매출/매입 = POST /api/book-entries kind bill: 조정 전표(적요·과세/영세·공급가액·부가세 자동 10%(고칠 수 있음), − 가능, 원 단위) — 매출은 sales_bills+manual 줄, 매입은 purchase_bills+'other' 줄(겹치지 않는 음수 source_id, 반출과 같은 방식), 마감 확인, 비고 「장부 조정」. 입금/출금 = 기존 sales/purchase-payments. 반입/반출 = 반입·반출 입력 화면으로(wpa:ret-party로 거래처 채움). 메모 = book_memos(금액 없음, 장부에 「메모」 줄, 지우기 /api/book-memos/:id/delete — status만). 다른 쪽 장부에 들어가는 구분은 안내.
+
+- 15.272 거래처 관리 목록: 줄 더블클릭 → 수정 창(버튼·링크 위는 제외), 「등록」(입력자) 열 없앰, 「전화」(직통·대표)·「팩스」 열. 팩스는 15.267부터 등록·수정 양식 기본 정보에 있음.
