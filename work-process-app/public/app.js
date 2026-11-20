@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.279';
+const APP_VERSION = '15.280';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -722,6 +722,34 @@ function managedTabs(main, route) {
   const anchor = h1.nextElementSibling?.matches('.tax-side, .class-tabs.tax-side') ? h1.nextElementSibling : h1; // 15.180 매출/매입 탭 아래 둘째 줄
   anchor.insertAdjacentHTML('afterend', `<nav class="manage-tabs${anchor !== h1 ? ' sub' : ''}" aria-label="${esc(m.title)}">${m.tabs.filter(([h]) => canSeeRoute(h)).map(([h, l]) => `<a href="${h}" class="${h === route ? 'on' : ''}"${h === route ? ' aria-current="page"' : ''}>${esc(l)}</a>`).join('')}</nav>`);
 }
+// 15.280 업무 흐름 안내(가이드 스테이터스): 이 화면이 어느 업무 흐름의 몇 번째 단계인지 제목 아래 한 줄로.
+// 지금 화면 단계만 색, 나머지는 회색(누르면 그 화면으로). 두 흐름에 걸친 화면은 위 칩으로 흐름을 바꿔 봄(이 기기에 기억).
+const PROCESS_FLOWS = [
+  { key: 'order', name: '주문 · 출하 · 매출', steps: [['#/sales/quotes', '견적'], ['#/sales/orders', '수주'], ['#/sales/mr', '생산의뢰'], ['#/prod/orders', '생산의뢰 접수'], ['#/prod/finished/plan', '생산계획'], ['#/prod/finished', '생산실적'], ['#/logistics/ship-orders', '출하지시'], ['#/logistics/ship', '출하'], ['#/sales/bills', '매출전표'], ['#/sales/tax', '세금계산서'], ['#/purchase/payments', '입금확인']] },
+  { key: 'buy', name: '구매 · 입고 · 매입', steps: [['#/sales/orders', '수주'], ['#/sales/pr', '구매의뢰'], ['#/purchase/po', '발주'], ['#/logistics/receive', '입고확인'], ['#/quality/inspections', '수입검사'], ['#/purchase/bills', '매입전표'], ['#/purchase/tax', '매입 세금계산서'], ['#/purchase/disbursements', '지급확인']] },
+  { key: 'semi', name: '반제품 · 포장 생산', steps: [['#/prod/semi', '반제품 계획'], ['#/prod/semi/cut', '커팅/융착'], ['#/prod/semi/wash', '세탁'], ['#/prod/finished', '포장(완제품 실적)'], ['#/logistics/ship', '출하']] },
+];
+const FLOW_KEY = 'wpa:flow', FLOW_FOLD = 'wpa:flow-fold';
+const flowStore = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } return null; };
+function processGuide(main, route) {
+  $('.proc-guide', main)?.remove();
+  const r = navRoute(TAB_ON[route] || route), flows = PROCESS_FLOWS.filter(f => f.steps.some(([h]) => h === r)); if (!flows.length) return;
+  const anchor = $('.manage-tabs', main) || $('h1', main); if (!anchor || anchor.closest('.modal')) return;
+  const box = document.createElement('nav'); box.className = 'proc-guide'; box.setAttribute('aria-label', '업무 흐름 안내');
+  const draw = () => {
+    const want = flowStore(FLOW_KEY), f = flows.find(x => x.key === want) || flows[0], at = f.steps.findIndex(([h]) => h === r), fold = flowStore(FLOW_FOLD) === '1';
+    box.classList.toggle('folded', fold);
+    box.innerHTML = `<div class="pg-head"><span class="pg-title">업무 흐름</span>${flows.length > 1 ? flows.map(x => `<button type="button" class="pg-flow${x === f ? ' on' : ''}" data-pg-flow="${x.key}" aria-pressed="${x === f}">${esc(x.name)}</button>`).join('') : `<span class="pg-flow on">${esc(f.name)}</span>`}<span class="pg-pos small">${at + 1} / ${f.steps.length} 단계 · <b>${esc(f.steps[at][1])}</b></span><button type="button" class="pg-fold" data-pg-fold aria-expanded="${!fold}" title="${fold ? '흐름 펼치기' : '흐름 접기'}">${fold ? '펼치기 ▾' : '접기 ▴'}</button></div>
+      <ol class="pg-steps">${f.steps.map(([h, l], i) => { const cls = i === at ? 'cur' : i < at ? 'before' : 'after', inner = `<span class="pg-no">${i + 1}</span><span class="pg-label">${esc(l)}</span>`;
+        return `<li class="pg-step ${cls}"${i === at ? ' aria-current="step"' : ''}>${i !== at && canSeeRoute(h) ? `<a href="${h}" title="${esc(l)} 화면으로">${inner}</a>` : `<span class="pg-in">${inner}</span>`}</li>`; }).join('')}</ol>`;
+    requestAnimationFrame(() => { const ol = $('.pg-steps', box), cur = $('.pg-step.cur', box); if (ol && cur && ol.scrollWidth > ol.clientWidth) ol.scrollLeft = Math.max(0, cur.offsetLeft - ol.clientWidth / 2 + cur.offsetWidth / 2); });
+  };
+  box.addEventListener('click', e => {
+    const fb = e.target.closest('[data-pg-flow]'); if (fb) { flowStore(FLOW_KEY, fb.dataset.pgFlow); draw(); return; }
+    if (e.target.closest('[data-pg-fold]')) { flowStore(FLOW_FOLD, flowStore(FLOW_FOLD) === '1' ? '0' : '1'); draw(); }
+  });
+  draw(); anchor.after(box);
+}
 // 15.213 메뉴 찾기: 화면 이름 일부를 치면 「부서 › 묶음 › 화면」 목록이 뜨고, Enter·누르면 그 화면으로.
 function bindNavFind() {
   const box = $('.nav-search'), input = $('#navFind'), list = $('.nav-find-list'); if (!input) return;
@@ -866,6 +894,7 @@ async function render() {
   const page = canSeeRoute(route) ? PAGES[location.hash || '#/'] || pageHome : pageNoMenu;
   try { await page($('#main')); if (page === pageHome || page === pageTasks) applyMenuAccess($('#main')); if (page !== pageNoMenu) favoriteTools($('#main'), route); applyView($('#main'), route); foldHelp($('#main')); erpEntryBar($('#main'), route); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   try { managedTabs($('#main'), route.split('?')[0]); } catch { /* 15.213 */ }
+  try { processGuide($('#main'), route.split('?')[0]); } catch { /* 15.280 업무 흐름 안내는 편의 기능 */ }
   try { pageTabs($('#main'), route); } catch { /* 탭은 편의 기능 */ }
   uxAfterRender(route);
 }

@@ -3637,3 +3637,30 @@ tr.book-memo > td { background: var(--bg); font-style: italic; }
 #main > .manage-tabs { margin-bottom: 12px; }
 #main > h1 .dept { vertical-align: middle; }
 @media (max-width: 700px) { #main > form.stack.quote-form, #main > form.stack.bill-form, #main > form.stack.rc-form, #main > form.stack.pbill-form { padding: 14px 12px; } #main > form.stack.quote-form > .actionbar, #main > form.stack.bill-form > .actionbar, #main > form.stack.rc-form > .actionbar { margin-left: -12px; margin-right: -12px; margin-bottom: -14px; } }
+
+/* 15.280 업무 흐름 안내(가이드 스테이터스): 지금 단계만 색, 나머지 회색 */
+.proc-guide { background: var(--panel); border-radius: var(--radius-xl, var(--radius)); padding: 10px 14px 12px; margin: 8px 0 12px; }
+.proc-guide .pg-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; margin-bottom: 8px; }
+.proc-guide .pg-title { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .3px; }
+.proc-guide .pg-flow { border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 12px; padding: 2px 10px; font-size: 12.5px; cursor: pointer; }
+.proc-guide span.pg-flow { cursor: default; }
+.proc-guide .pg-flow.on { border-color: var(--accent); color: var(--accent); font-weight: 700; background: var(--accent-soft); }
+.proc-guide .pg-pos { margin-left: auto; color: var(--muted); }
+.proc-guide .pg-pos b { color: var(--accent); }
+.proc-guide .pg-fold { border: 0; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; padding: 2px 4px; }
+.proc-guide .pg-steps { list-style: none; margin: 0; padding: 2px 0 4px; display: flex; overflow-x: auto; scrollbar-width: thin; }
+.proc-guide .pg-step { flex: 1 0 auto; position: relative; display: flex; }
+.proc-guide .pg-step + .pg-step::before { content: ''; position: absolute; left: 1px; top: 50%; width: 6px; border-top: 2px solid var(--line); }
+.proc-guide .pg-step a, .proc-guide .pg-step .pg-in { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; margin-left: 8px; padding: 6px 12px; border-radius: 18px; background: color-mix(in srgb, var(--muted, #888) 10%, var(--panel)); color: color-mix(in srgb, var(--muted, #888) 85%, var(--panel)); font-size: 13px; white-space: nowrap; text-decoration: none; border: 1px solid transparent; }
+.proc-guide .pg-step:first-child a, .proc-guide .pg-step:first-child .pg-in { margin-left: 0; }
+.proc-guide .pg-step a:hover { color: var(--text); border-color: var(--line); }
+.proc-guide .pg-no { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; font-size: 11px; font-weight: 700; background: color-mix(in srgb, var(--muted, #888) 22%, var(--panel)); color: var(--panel); }
+.proc-guide .pg-step.cur .pg-in { background: var(--accent); color: #fff; font-weight: 700; box-shadow: 0 2px 6px color-mix(in srgb, var(--accent) 35%, transparent); }
+.proc-guide .pg-step.cur .pg-no { background: #fff; color: var(--accent); }
+.proc-guide.folded { padding-bottom: 8px; }
+.proc-guide.folded .pg-steps { display: none; }
+.proc-guide.folded .pg-head { margin-bottom: 0; }
+@media (max-width: 700px) { .proc-guide { padding: 8px 10px 10px; } .proc-guide .pg-pos { margin-left: 0; } .proc-guide .pg-fold { margin-left: auto; } .proc-guide .pg-step { flex: 0 0 auto; } .proc-guide .pg-step a, .proc-guide .pg-step .pg-in { padding: 5px 10px; font-size: 12.5px; } }
+@media print { .proc-guide { display: none !important; } }
+
+.proc-guide .pg-no { border-radius: 50% !important; }
