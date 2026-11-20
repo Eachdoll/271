@@ -3877,3 +3877,15 @@ label.inline { width: fit-content; max-width: 100%; justify-self: start; }
 .rnd-meas .rm-grid th.insp-samp-c { width: 130px; }
 .rnd-meas .rm-samples { width: auto; }
 .rnd-meas .rm-grid tr { height: 1px; } .rnd-meas .rm-grid td.insp-cell { height: 100%; } .rnd-meas .rm-grid td.insp-cell input { height: 100%; }
+/* 15.299 연구 분석: 불합격 항목은 옅은 빨강 음영(측정 항목 칸 · 불합격 줄) */
+.rm-grid tr.rm-fail-row > td, .rm-view tr.rm-fail-row > td, .rm-view tr.rm-fail-row > th.insp-samp-c, .rm-grid tr.rm-fail-row > th.insp-samp-c { background-color: color-mix(in srgb, #e03131 9%, var(--panel, #fff)) !important; }
+.rm-grid tr.rm-fail-row td.insp-cell input { background: transparent; }
+.rm-view tbody.rm-fail th.insp-item-c, .rm-grid th.rm-item-ed.rm-fail-c, .rm-grid tbody th.insp-item-c.rm-fail-c { background: color-mix(in srgb, #e03131 14%, var(--panel, #fff)) !important; box-shadow: inset 3px 0 0 #e03131; }
+.rm-view tbody.rm-fail th.insp-item-c b { color: #c92a2a; }
+.rm-grid tr.rm-fail-row > th.insp-item-c { background-color: color-mix(in srgb, #e03131 9%, var(--panel, #fff)) !important; }
+/* 15.299 로드맵 연결 분석: 불합격이면 빨강(왼쪽 줄·옅은 배경·결과 글자) */
+.dc-ana-item.j-fail { border-left-color: #e03131; background: color-mix(in srgb, #e03131 7%, var(--panel)); }
+.dc-ana-item.j-fail:hover { background: color-mix(in srgb, #e03131 12%, var(--panel)); }
+.dc-ana-item.j-fail .dc-ana-res b { color: #c92a2a; }
+.modal table.rm-view th, .modal table.rm-view td { padding: 6px 10px !important; }
+.modal table.rm-view th.insp-item-c { vertical-align: top; }

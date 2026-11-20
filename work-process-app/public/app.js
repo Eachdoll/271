@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.298';
+const APP_VERSION = '15.299';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -2313,7 +2313,7 @@ function requestDetail(type, r, reload) {
       ${kv('접수번호', esc(r.req_no || '(승인 시 발급)'))}${keyRows}
       ${kv('의뢰자', `${esc(r.requester_name)} <span class="muted small">${esc(r.created_at.slice(0, 10))}</span>`)}
       ${r.reject_reason ? `<div class="rq-kv full"><span>반려 사유</span><b class="red-text">${esc(r.reject_reason)}</b></div>` : ''}
-      ${r.result_note ? `<div class="rq-kv full"><span>결과/메모</span><b>${esc(r.result_note)}</b></div>` : ''}
+      ${r.result_note ? `<div class="rq-kv full"><span>결과/메모</span><b data-rq-result>${esc(r.result_note)}</b></div>` : ''}
       ${type === 'rnd_analysis' ? `<div class="rq-kv full"><span>연결 개발건</span><b>${r.data?.dev_request_id ? `${esc(r.data.dev_title || '')}${r.data.dev_step ? ` · 단계 「${esc(r.data.dev_step)}」` : ''}` : '<span class="muted">연결 안 됨</span>'}</b></div>` : ''}
       ${type === 'voc' && r.data?.lot ? `<div class="rq-kv full"><span>LOT 연결</span><b><button type="button" class="link-btn" data-lt-open="${esc(r.data.lot)}">${esc(r.data.lot)} · LOT 연결 조회 →</button></b></div>` : ''}
     </div>
@@ -2344,7 +2344,9 @@ function requestDetail(type, r, reload) {
       ${mgr && ['waiting', 'progress', 'done'].includes(r.status) ? `<button class="btn" data-a="status">${type === 'rnd_analysis' ? '상태·의견' : '상태/결과 변경'}</button>` : ''}
     </div>`, { wide: true });
   if (['development','sample','sample_goods','voc','rnd_analysis'].includes(type)) renderAttachmentPreview($('[data-request-photos]', m.el), 'request', r.id);
-  if (type === 'rnd_analysis') api('GET', `/api/requests/${r.id}/rnd-measure`).then(x => { const b = $('[data-rnd-meas]', m.el); if (b) b.innerHTML = x.spec ? `<h4>측정값</h4>${rndMeasureTable(x.spec, x.measurement)}${x.memo ? `<p><span class="muted">종합 의견</span> ${esc(x.memo)}</p>` : ''}` : ''; }).catch(() => {}); // 15.292
+  if (type === 'rnd_analysis') api('GET', `/api/requests/${r.id}/rnd-measure`).then(x => { const b = $('[data-rnd-meas]', m.el); if (b) b.innerHTML = x.spec ? `<h4>측정값</h4>${rndMeasureTable(x.spec, x.measurement)}${x.memo ? `<p><span class="muted">종합 의견</span> ${esc(x.memo)}</p>` : ''}` : '';
+    const rb = $('[data-rq-result]', m.el); if (rb && x.summary) { rb.innerHTML = `${/^(시료 \d+개 · )?불합격/.test(x.summary) ? '<span class="chip red">불합격</span> ' : /전 항목 합격/.test(x.summary) ? '<span class="chip green">합격</span> ' : ''}${esc(x.summary.replace(/^(시료 \d+개 · )?불합격 \d+항목: /, '$1').replace(/^(시료 \d+개 · )?전 항목 합격/, '$1전 항목 합격'))}${x.memo ? ` <span class="muted">/ 의견:</span> ${esc(x.memo)}` : ''}`; } // 15.299 측정값에서 짧은 요약(불합격 항목만)
+  }).catch(() => {}); // 15.292
   else if (r.source_type) renderAttachmentPreview($('[data-request-photos]', m.el), r.source_type, r.source_id);
   const act = async (a) => {
     try {

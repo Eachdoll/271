@@ -3533,7 +3533,7 @@ route('GET', '/api/dev-roadmap', async ({ query }) => {
     FROM requests r LEFT JOIN dev_plans p ON p.request_id=r.id WHERE ${where.join(' AND ')} ORDER BY COALESCE(NULLIF(p.target_date,''), r.due_date, '9999') , r.id LIMIT 500`).all(...args);
   const steps = new Map(); for (const st of await db.prepare(`SELECT * FROM dev_plan_steps ${query.id ? 'WHERE request_id=? ' : ''}ORDER BY request_id, sort, id`).all(...(query.id ? [Number(query.id)] : []))) { if (!steps.has(st.request_id)) steps.set(st.request_id, []); steps.get(st.request_id).push(st); }
   const ana = new Map(); // 15.286 연결된 연구 분석(단계·결과)
-  for (const a of await db.prepare(`SELECT id, req_no, title, category, status, result_note, requester_name, created_at, updated_at, CAST(json_extract(data,'$.dev_request_id') AS INTEGER) AS dev_id, COALESCE(json_extract(data,'$.dev_step'),'') AS dev_step, COALESCE(json_extract(data,'$.analysis_date'),'') AS analysis_date, (SELECT m.result FROM inspection_measurements m WHERE m.request_id=requests.id) AS judge FROM requests WHERE type='rnd_analysis' AND status<>'rejected' AND json_extract(data,'$.dev_request_id') IS NOT NULL ${query.id ? "AND json_extract(data,'$.dev_request_id')=?" : ''} ORDER BY id`).all(...(query.id ? [Number(query.id)] : []))) { if (!ana.has(a.dev_id)) ana.set(a.dev_id, []); ana.get(a.dev_id).push(a); }
+  for (const a of await db.prepare(`SELECT id, req_no, title, category, status, result_note, requester_name, created_at, updated_at, CAST(json_extract(data,'$.dev_request_id') AS INTEGER) AS dev_id, COALESCE(json_extract(data,'$.dev_step'),'') AS dev_step, COALESCE(json_extract(data,'$.analysis_date'),'') AS analysis_date, (SELECT m.result FROM inspection_measurements m WHERE m.request_id=requests.id) AS judge, inspection_snapshot AS snap, (SELECT m.values_json FROM inspection_measurements m WHERE m.request_id=requests.id) AS mvals, COALESCE(json_extract(data,'$.memo'),'') AS memo FROM requests WHERE type='rnd_analysis' AND status<>'rejected' AND json_extract(data,'$.dev_request_id') IS NOT NULL ${query.id ? "AND json_extract(data,'$.dev_request_id')=?" : ''} ORDER BY id`).all(...(query.id ? [Number(query.id)] : []))) { const short = rndShort(a.snap, a.mvals, a.memo); if (short) a.result_note = short; delete a.snap; delete a.mvals; delete a.memo; if (!ana.has(a.dev_id)) ana.set(a.dev_id, []); ana.get(a.dev_id).push(a); } // 15.299 짧은 요약
   return { rows: rows.map(r => ({ ...r, term: r.term || '', progress: r.progress || 0, steps: steps.get(r.id) || [], analyses: ana.get(r.id) || [] })) };
 });
 // 15.277 담당자(개발·영업): 개발 담당·개발 승인권자·영업·관리자가 지정. 바뀌면 소통 내역에 [담당자] 한 줄을 같이 남김.
@@ -3677,7 +3677,7 @@ function rndMeasure(itemsIn, valuesIn, samplesIn) { // 15.293 samplesIn: [{lot, 
     return { key: 'i' + i, name: reqStr(o.name, `${i + 1}번째 측정 항목`, 100), unit: str(o.unit, 30), min, max, count }; });
   const srcs = Array.isArray(samplesIn) && samplesIn.length ? samplesIn : [{ lot: '', values: valuesIn }];
   if (srcs.length > 20) throw bad('시료는 20개까지입니다.');
-  let filled = 0, missing = false, failed = false; const summary = [];
+  let filled = 0, missing = false, failed = false; const summary = [], fails = []; let judgedN = 0, passN = 0;
   const rows = srcs.map((src, n) => { const vals = src && typeof src.values === 'object' && src.values ? src.values : {}, values = {};
     for (const it of items) { const list = (Array.isArray(vals[it.key]) ? vals[it.key] : []).slice(0, it.count); while (list.length < it.count) list.push(null); values[it.key] = list.map(v => num(v, `${it.name} 측정값`)); }
     return { lot: str(src?.lot, 100) || (srcs.length > 1 ? `시료 ${n + 1}` : ''), values }; });
@@ -3687,11 +3687,17 @@ function rndMeasure(itemsIn, valuesIn, samplesIn) { // 15.293 samplesIn: [{lot, 
     const avg = got.length ? Math.round(got.reduce((t, v) => t + v, 0) / got.length * 1000) / 1000 : null;
     const spec = it.min !== null && it.max !== null ? `${it.min}~${it.max}` : it.min !== null ? `≥${it.min}` : it.max !== null ? `≤${it.max}` : '';
     if (avg !== null) summary.push(`${it.name} ${got.length > 1 ? '평균 ' : ''}${avg}${it.unit ? ' ' + it.unit : ''}${spec ? ` (${spec}) ${bad1 ? '불합격' : '합격'}` : ''}`);
+    // 15.299 요약은 불합격 항목만(어느 시료인지 함께), 불합격이 없으면 「전 항목 합격」
+    if (spec && got.length) { judgedN++; if (!bad1) passN++; }
+    if (bad1) { const out = v => v !== null && ((it.min !== null && v < it.min) || (it.max !== null && v > it.max)); const who = rows.length > 1 ? rows.filter(r => r.values[it.key].some(out)).map(r => r.lot) : [];
+      fails.push(`${it.name} ${got.length > 1 ? '평균 ' : ''}${avg}${it.unit ? ' ' + it.unit : ''} (${spec})${who.length ? ` [${who.join(', ')}]` : ''}`); }
   }
   if (!filled) throw bad('측정값을 하나 이상 넣으세요.');
   const judged = items.some(it => it.min !== null || it.max !== null);
   const result = failed ? 'fail' : missing ? 'pending' : 'pass';
-  return { snapshot: { kind: '연구분석', items }, rows, result, judged, summary: (rows.length > 1 ? `시료 ${rows.length}개 · ` : '') + summary.join(' · ') + (judged ? ` → ${failed ? '불합격' : missing ? '측정 중' : '합격'}` : '') };
+  const head = rows.length > 1 ? `시료 ${rows.length}개 · ` : '';
+  const short = !judged ? `규격 없이 기록 · ${summary.join(' · ')}` : failed ? `불합격 ${fails.length}항목: ${fails.join(' · ')}` : missing ? `측정 중 · 합격 ${passN}/${items.filter(it => it.min !== null || it.max !== null).length}항목 (빈 칸 있음)` : `전 항목 합격 (${judgedN}항목)`;
+  return { snapshot: { kind: '연구분석', items }, rows, result, judged, summary: head + short, detail: head + summary.join(' · ') };
 }
 const isResearcher = user => hasRole(user, 'dev') || hasRole(user, 'dev_approver');
 async function createRndData(user, body, devId) {
@@ -3760,10 +3766,19 @@ route('DELETE', '/api/rnd-specs/:id', async ({ user, params, query }) => {
   const id = Number(params.id); if (!prior.specs.some(x => x.id === id)) throw new HttpError(404, '검사규격을 찾을 수 없습니다.');
   return { ...(await rndSpecWrite(prior, prior.specs.filter(x => x.id !== id))), can_manage: true };
 });
+// 15.299 저장된 측정값(규격 스냅숏 + 값)으로 짧은 요약: 불합격 항목만, 없으면 「전 항목 합격」. 예전 긴 결과 글도 화면에서는 이것으로.
+function rndShort(snapshot, valuesJson, memo = '') {
+  try { const spec = typeof snapshot === 'string' ? JSON.parse(snapshot) : snapshot, rows = typeof valuesJson === 'string' ? JSON.parse(valuesJson) : valuesJson;
+    if (!spec?.items?.length || !rows?.length) return '';
+    const sum = rndMeasure(spec.items, null, rows.map(x => ({ lot: x.lot, values: Object.fromEntries(spec.items.map((it, i) => ['i' + i, x.values?.[it.key || 'i' + i] || []])) }))).summary;
+    return sum + (memo ? ` / 의견: ${memo}` : ''); } catch { return ''; }
+}
 route('GET', '/api/requests/:id/rnd-measure', async ({ params }) => {
   const r = await getRequest(params.id); if (r.type !== 'rnd_analysis') throw bad('연구 분석만 볼 수 있습니다.');
   const m = await db.prepare('SELECT * FROM inspection_measurements WHERE request_id=?').get(r.id);
-  return { spec: r.inspection_snapshot ? JSON.parse(r.inspection_snapshot) : null, measurement: m ? { ...m, rows: JSON.parse(m.values_json) } : null, memo: JSON.parse(r.data || '{}').memo || '' };
+  const spec = r.inspection_snapshot ? JSON.parse(r.inspection_snapshot) : null, rows = m ? JSON.parse(m.values_json) : null;
+  const summary = rndShort(spec, rows); // 15.299
+  return { spec, measurement: m ? { ...m, rows } : null, memo: JSON.parse(r.data || '{}').memo || '', summary };
 });
 route('PUT', '/api/requests/:id/rnd-measure', async ({ user, params, body }) => {
   if (!isResearcher(user)) throw new HttpError(403, '측정값은 연구원(개발·개발책임자)만 고칩니다.');
