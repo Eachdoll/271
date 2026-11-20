@@ -3586,6 +3586,7 @@ route('GET', '/api/requests', async ({ query }) => {
 });
 route('POST', '/api/requests', async ({ user, body }) => {
   const type = String(body.type || ''); if (!Object.hasOwn(REQUEST_TYPES, type)) throw bad('의뢰 종류가 올바르지 않습니다.');
+  if (type === 'rnd_analysis' && !isResearcher(user)) throw new HttpError(403, '연구 분석데이터는 연구원(개발·개발책임자)만 입력합니다.'); // 15.288
   const f = requestFields(type, body);
   const dev = type === 'rnd_analysis' ? await rndDevLink(f.data) : null; // 15.286
   const r = (await db.prepare('INSERT INTO requests(type,title,customer,due_date,category,target_price,data,requester_id,requester_name,inspection_snapshot) VALUES(?,?,?,?,?,?,?,?,?,?)')
@@ -3665,15 +3666,16 @@ route('POST', '/api/requests/:id/status', async ({ user, params, body }) => {
   await db.batch(cmds);
   return decodeRequest((await getRequest(r.id)));
 });
-// 15.287 개발건 단계에 분석데이터 바로 입력(연구 담당): 승인 없이 완료된 연구 분석(RA- 번호)으로 저장하고 단계에 연결, 이력 남김
-route('POST', '/api/dev-roadmap/:id/analysis-data', async ({ user, params, body }) => {
-  if (!hasRole(user, 'dev') && !hasRole(user, 'dev_approver')) throw new HttpError(403, '분석데이터는 연구(개발) 담당자가 입력합니다.');
+// 15.287·15.288 분석데이터 직접 입력(연구원만): 승인 없이 완료된 연구 분석(RA-분석일 번호)으로 저장. 개발건·단계는 골랐을 때만 연결하고 이력을 남긴다.
+const isResearcher = user => hasRole(user, 'dev') || hasRole(user, 'dev_approver');
+async function createRndData(user, body, devId) {
+  if (!isResearcher(user)) throw new HttpError(403, '분석데이터는 연구원(개발·개발책임자)만 입력합니다.');
   const result = reqStr(body.result_note, '분석 결과', 1000);
   const date = body.analysis_date ? dateStr(body.analysis_date, '분석일') : today();
   const items = (Array.isArray(body.items) ? body.items : []).map(x => str(x, 50)).filter(Boolean).slice(0, 30);
-  const data = { items, sample_qty: str(body.sample_qty, 50), extra: str(body.note, 2000), analysis_date: date, entered_directly: 1, dev_request_id: params.id, dev_step: body.dev_step };
+  const data = { items, sample_qty: str(body.sample_qty, 50), extra: str(body.note, 2000), analysis_date: date, entered_directly: 1, dev_request_id: devId ?? body.dev_request_id, dev_step: body.dev_step };
   const dev = await rndDevLink(data);
-  const f = requestFields('rnd_analysis', { title: body.title, customer: (await getRequest(dev.id)).customer || '', due_date: '', category: body.category, data });
+  const f = requestFields('rnd_analysis', { title: body.title, customer: dev ? (await getRequest(dev.id)).customer || '' : str(body.customer, 100), due_date: '', category: body.category, data });
   const token = 'ad:' + crypto.randomUUID(), ymd = date.slice(2).replace(/-/g, ''), prefix = `${REQUEST_PREFIX.rnd_analysis}-${ymd}-`;
   await db.batch([
     { sql: 'INSERT INTO requests(type,title,customer,due_date,category,target_price,data,requester_id,requester_name,status,result_note,approver_name,approved_at,req_no) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
@@ -3682,13 +3684,14 @@ route('POST', '/api/dev-roadmap/:id/analysis-data', async ({ user, params, body 
   ]);
   const row = await db.prepare("SELECT * FROM requests WHERE type='rnd_analysis' AND json_extract(data,'$.token')=?").get(token);
   row.data = JSON.stringify({ ...JSON.parse(row.data), token: undefined });
-  const label = `${row.req_no} ${f.title} (${f.category})${data.dev_step ? ` · 단계 「${data.dev_step}」` : ''}`;
-  await db.batch([
-    { sql: "UPDATE requests SET data=json_remove(data,'$.token') WHERE id=?", args: [row.id] },
-    { sql: 'INSERT INTO progress_comments(entity_type,entity_id,content,author_id,author_name) VALUES(?,?,?,?,?)', args: ['request', row.id, `[분석결과] 분석데이터 입력 · 분석일 ${date} · ${result}`.slice(0, 2000), user.id, user.name] },
-    rndDevNote(user, dev.id, `분석데이터 · ${label} · 분석일 ${date} · 결과: ${result}`)]);
+  const cmds = [{ sql: "UPDATE requests SET data=json_remove(data,'$.token') WHERE id=?", args: [row.id] },
+    { sql: 'INSERT INTO progress_comments(entity_type,entity_id,content,author_id,author_name) VALUES(?,?,?,?,?)', args: ['request', row.id, `[분석결과] 분석데이터 입력 · 분석일 ${date} · ${result}`.slice(0, 2000), user.id, user.name] }];
+  if (dev) cmds.push(rndDevNote(user, dev.id, `분석데이터 · ${row.req_no} ${f.title} (${f.category})${data.dev_step ? ` · 단계 「${data.dev_step}」` : ''} · 분석일 ${date} · 결과: ${result}`));
+  await db.batch(cmds);
   return decodeRequest(row);
-});
+}
+route('POST', '/api/dev-roadmap/:id/analysis-data', async ({ user, params, body }) => createRndData(user, body, params.id));
+route('POST', '/api/rnd-analysis-data', async ({ user, body }) => createRndData(user, body, body.dev_request_id ?? '')); // 15.288 연구 분석 관리 › 분석데이터 입력
 // 15.286 이미 있는 연구 분석을 개발건·단계에 연결(바꾸기·끊기). 연구 담당·승인권자·의뢰자.
 route('POST', '/api/requests/:id/dev-link', async ({ user, params, body }) => {
   const r = await getRequest(params.id); if (r.type !== 'rnd_analysis') throw bad('연구 분석의뢰만 개발건에 연결합니다.');

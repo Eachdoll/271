@@ -43,7 +43,7 @@ window.REQ = {
   },
   rnd_analysis: { // 15.285 연구팀 분석의뢰(품질 분석의뢰와 같은 양식, 처리·승인은 연구팀)
     label: '연구 분석', dept: '개발', role: 'dev', mgr: '연구책임자(개발책임자)',
-    intakeTitle: '연구 분석의뢰', listTitle: '연구 분석리스트', documentTitle: '연구 분석의뢰서', submitLabel: '분석의뢰',
+    intakeTitle: '분석데이터 입력', listTitle: '연구 분석리스트', documentTitle: '연구 분석데이터', submitLabel: '분석데이터 저장',
     intake: '#/dev/analysis/request', list: '#/dev/analysis',
     titleLabel: '샘플명',
     fields: [

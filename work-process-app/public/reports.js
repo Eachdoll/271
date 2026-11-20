@@ -246,23 +246,59 @@ const DEV_TALK = [['진행', '진행내용', '#1c7ed6'], ['영업', '영업 코�
 const DEV_ANA = ['분석', '분석 결과', '#0c8599']; // 15.286 연구 분석 이력
 const devTalkKind = text => { const m = /^\[(진행|영업|요청|담당자|분석)\]\s?/.exec(text || ''); return m ? [m[1], text.slice(m[0].length)] : ['', text || '']; };
 let DEV_DIRECTORY = null;
-// 15.287 개발건 단계에 분석데이터 바로 입력(연구 담당): 승인 없이 완료된 연구 분석(RA-)으로 저장 · 단계 연결 · 이력
-async function rndAnalysisData(dev, step = '') {
+// 15.288 분석데이터 입력 칸(연구원): 개발건 단계 창과 연구 분석 관리 › 분석데이터 입력이 같이 쓴다.
+function rndDataFields({ step = '', steps = [], title = '', devs = null, devId = '' } = {}) {
   const cfg = REQ.rnd_analysis, cats = cfg.fields.find(f => f.k === 'category').opts, items = cfg.fields.find(f => f.k === 'items').opts;
-  let root = null;
-  const v = await promptBox(`분석데이터 입력 · ${dev.title}`, `<p class="small muted">이 개발건${step ? `의 「${esc(step)}」 단계` : ''}에서 분석한 데이터를 넣습니다. 완료된 연구 분석(RA- 번호)으로 저장되고 단계별 분석 결과·소통 이력에 남습니다. 그래프·성적서는 저장 뒤 분석을 열어 「사진 보기·첨부」로 붙이세요.</p>
-    <div class="form-grid"><label>분석일 *<input type="date" name="analysis_date" required value="${todayStr()}"></label>
-      <label>단계<select name="dev_step"><option value="">단계 미지정</option>${dev.steps.map(s => `<option${s.name === step ? ' selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label>
-      <label>분석 구분 *<select name="category" required>${cats.map(c => `<option${c === '시제품분석' ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
-      <label class="span2">샘플·시료명 *<input name="title" required maxlength="200" value="${esc(dev.title)}${step ? ' ' + esc(step) : ''}"></label>
-      <label>샘플수량<input name="sample_qty" maxlength="50"></label></div>
+  return `<div class="form-grid"><label>분석일 *<input type="date" name="analysis_date" data-ad-req required value="${todayStr()}"></label>
+      ${devs ? `<label>개발건 <span class="hint">(선택)</span><select name="dev_request_id"><option value="">연결 안 함</option>${devs.map(d => `<option value="${d.id}"${d.id === Number(devId) ? ' selected' : ''}>${esc(d.req_no || '')} ${esc(d.title)}${d.customer ? ` · ${esc(d.customer)}` : ''}</option>`).join('')}</select></label>` : ''}
+      <label>단계<select name="dev_step"><option value="">단계 미지정</option>${steps.map(s => `<option${s.name === step ? ' selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label>
+      <label>분석 구분 *<select name="category" data-ad-req required>${cats.map(c => `<option${c === '시제품분석' ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
+      <label class="span2">샘플·시료명 *<input name="title" data-ad-req required maxlength="200" value="${esc(title)}"></label>
+      <label>샘플수량<input name="sample_qty" maxlength="50"></label>${devs ? '<label>고객사<input name="customer" maxlength="100" placeholder="개발건을 고르면 그 고객사"></label>' : ''}</div>
     <fieldset class="vendor-sec"><legend>분석 항목</legend><div class="dc-ana-checks">${items.map(i => `<label class="inline"><input type="checkbox" data-ad-item value="${esc(i)}"> ${esc(i)}</label>`).join('')}</div></fieldset>
-    <label>분석 결과 * <span class="hint">(측정값·판정·비교 등)</span><textarea name="result_note" required rows="4" maxlength="1000" placeholder="예) 파티클 95/ft² (기준 150 이하) 합격 · 흡수성능 4.2g/g"></textarea></label>
-    <label>비고<input name="note" maxlength="300"></label>`, { wide: true,
-    onOpen: el => { root = el; },
-    submit: async val => api('POST', `/api/dev-roadmap/${dev.id}/analysis-data`, { ...val, items: $$('[data-ad-item]:checked', root).map(i => i.value) }) });
-  if (v) toast(`분석데이터를 저장했습니다 · ${v.req_no}`);
+    <label>분석 결과 * <span class="hint">(측정값·판정·비교 등)</span><textarea name="result_note" data-ad-req required rows="4" maxlength="1000" placeholder="예) 파티클 95/ft² (기준 150 이하) 합격 · 흡수성능 4.2g/g"></textarea></label>
+    <label>비고<input name="note" maxlength="300"></label>`;
+}
+// 15.287·15.288 개발건 단계 「＋ 분석데이터」: ① 완료된 분석 불러와 이 단계에 맞추기 ② 새로 입력(연구원)
+async function rndAnalysisData(dev, step = '') {
+  const done = (await api('GET', '/api/requests?' + new URLSearchParams({ type: 'rnd_analysis', status: 'done' }))).filter(a => !(a.data?.dev_request_id === dev.id && (a.data?.dev_step || '') === step));
+  let root = null, mode = done.length ? 'import' : 'new';
+  const rows = done.map(a => `<tr data-imp-row data-q="${esc(`${a.req_no} ${a.title} ${a.category} ${a.result_note} ${a.data?.dev_title || ''}`.toLowerCase())}"><td class="c"><input type="checkbox" data-imp="${a.id}" aria-label="${esc(a.req_no)}"></td><td class="nowrap"><b>${esc(a.req_no || '')}</b><div class="small muted">${esc(a.data?.analysis_date || String(a.updated_at || '').slice(0, 10))}</div></td><td><b>${esc(a.title)}</b> <span class="chip">${esc(a.category)}</span><div class="small">${esc(a.result_note || '')}</div></td><td class="small">${a.data?.dev_request_id ? `<span class="chip yellow">연결됨</span> ${esc(a.data.dev_title || '')}${a.data.dev_step ? ` · ${esc(a.data.dev_step)}` : ''}` : '<span class="muted">연결 안 됨</span>'}</td></tr>`).join('');
+  const v = await promptBox(`분석데이터 · ${dev.title}${step ? ` · ${step}` : ''}`, `<div class="seg ad-mode" role="group" aria-label="방식"><button type="button" data-ad-mode="import">완료된 분석 불러오기 <span class="small muted">${done.length}</span></button><button type="button" data-ad-mode="new">새로 입력</button></div>
+    <section data-ad-sec="import"><p class="small muted">연구 분석 관리에서 입력해 둔 <b>완료된 분석</b>을 골라 이 단계${step ? `(「${esc(step)}」)` : ''}에 맞춥니다. 다른 개발건·단계에 연결된 것을 고르면 이 단계로 옮겨집니다.</p>
+      ${done.length ? `<label class="list-search">찾기<input type="search" data-imp-q placeholder="번호·시료명·구분·결과"></label><div class="table-wrap ad-imp"><table class="grid keep-table" data-no-sort data-no-filter data-keep-cols><thead><tr><th></th><th>번호 · 분석일</th><th>시료 · 결과</th><th>지금 연결</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="muted">불러올 완료된 분석이 없습니다. 「새로 입력」으로 넣으세요.</p>'}</section>
+    <section data-ad-sec="new">${rndDataFields({ step, steps: dev.steps, title: `${dev.title}${step ? ' ' + step : ''}` })}</section>`, { wide: true,
+    onOpen: el => { root = el;
+      const setMode = m => { mode = m; $$('[data-ad-mode]', el).forEach(b => b.classList.toggle('on', b.dataset.adMode === m)); $$('[data-ad-sec]', el).forEach(x => { x.hidden = x.dataset.adSec !== m; }); $$('[data-ad-req]', el).forEach(i => { i.required = m === 'new'; }); };
+      el.addEventListener('click', e => { const b = e.target.closest('[data-ad-mode]'); if (b) setMode(b.dataset.adMode); const tr = e.target.closest('[data-imp-row]'); if (tr && !e.target.closest('input')) { const c = $('[data-imp]', tr); c.checked = !c.checked; } });
+      $('[data-imp-q]', el)?.addEventListener('input', e => { const q = e.target.value.trim().toLowerCase(); $$('[data-imp-row]', el).forEach(tr => { tr.hidden = q && !tr.dataset.q.includes(q); }); });
+      setMode(mode); },
+    submit: async val => {
+      if (mode === 'import') { const ids = $$('[data-imp]:checked', root).map(c => Number(c.dataset.imp)); if (!ids.length) throw new Error('불러올 분석을 고르세요.'); for (const id of ids) await api('POST', `/api/requests/${id}/dev-link`, { dev_request_id: dev.id, dev_step: step }); return { imported: ids.length }; }
+      return api('POST', `/api/dev-roadmap/${dev.id}/analysis-data`, { ...val, items: $$('[data-ad-item]:checked', root).map(i => i.value) }); } });
+  if (v) toast(v.imported ? `완료된 분석 ${v.imported}건을 이 단계에 맞췄습니다.` : `분석데이터를 저장했습니다 · ${v.req_no}`);
   return !!v;
+}
+// 15.288 개발 › 연구 분석 관리 › 분석데이터 입력(연구원만): 의뢰·승인 없이 완료된 분석으로 저장, 개발건·단계는 골라서 연결
+async function pageRndData(main) {
+  const can = hasRole('dev') || hasRole('dev_approver');
+  main.innerHTML = `<h1>연구 분석 관리 <span class="dept">개발</span></h1>
+    <p class="muted">연구원이 분석한 데이터를 바로 넣습니다. 저장하면 완료된 연구 분석(RA-분석일 번호)이 되어 분석리스트에 올라가고, 개발건·단계를 고르면 개발 › 스케줄 관리의 단계별 분석 결과와 소통 이력에도 남습니다. 그래프·성적서는 저장 뒤 분석을 열어 「사진 보기·첨부」로 붙입니다.</p>
+    ${can ? '<form class="card stack rnd-data-form" id="rndDataForm"><p class="muted">불러오는 중…</p></form>' : '<div class="empty">분석데이터는 연구원(개발·개발책임자)만 입력합니다. 결과는 「분석리스트」에서 볼 수 있습니다.</div>'}
+    <section class="card"><h3>최근 입력한 분석데이터</h3><div id="rndRecent"><p class="muted">불러오는 중…</p></div></section>`;
+  const recent = async () => { const list = (await api('GET', '/api/requests?' + new URLSearchParams({ type: 'rnd_analysis', status: 'done' }))).slice(0, 10);
+    $('#rndRecent', main).innerHTML = list.length ? `<div class="table-wrap"><table class="grid keep-table"><thead><tr><th>번호</th><th>분석일</th><th>시료명</th><th>구분</th><th>결과</th><th>개발건 · 단계</th></tr></thead><tbody>${list.map(a => `<tr data-rnd="${a.id}" style="cursor:pointer"><td class="nowrap"><b>${esc(a.req_no || '')}</b></td><td class="nowrap">${esc(a.data?.analysis_date || '')}</td><td>${esc(a.title)}</td><td>${esc(a.category)}</td><td class="small">${esc(a.result_note || '')}</td><td class="small">${a.data?.dev_request_id ? `${esc(a.data.dev_title || '')}${a.data.dev_step ? ` · ${esc(a.data.dev_step)}` : ''}` : '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">아직 없습니다.</p>';
+    $$('[data-rnd]', main).forEach(tr => tr.onclick = () => rndOpen(Number(tr.dataset.rnd), recent).catch(fail)); };
+  if (can) {
+    const devs = (await api('GET', '/api/dev-roadmap')).rows, form = $('#rndDataForm', main);
+    form.innerHTML = rndDataFields({ devs }) + '<div class="actions"><button type="reset" class="btn">다시 작성</button><button class="btn primary">분석데이터 저장</button></div>';
+    const stepSel = form.elements.dev_step;
+    form.elements.dev_request_id.onchange = e => { const d = devs.find(x => x.id === Number(e.target.value)); stepSel.innerHTML = '<option value="">단계 미지정</option>' + (d?.steps || []).map(s => `<option>${esc(s.name)}</option>`).join(''); if (d && !form.elements.title.value) form.elements.title.value = d.title; };
+    form.onsubmit = async e => { e.preventDefault(); const btn = $('button.primary', form); btn.disabled = true;
+      try { const r = await api('POST', '/api/rnd-analysis-data', { ...formObj(form), items: $$('[data-ad-item]:checked', form).map(i => i.value) }); toast(`분석데이터를 저장했습니다 · ${r.req_no}`); form.reset(); form.elements.analysis_date.value = todayStr(); stepSel.innerHTML = '<option value="">단계 미지정</option>'; await recent(); }
+      catch (error) { fail(error); } finally { btn.disabled = false; } };
+  }
+  await recent();
 }
 async function rndOpen(id, after) {
   const all = await api('GET', '/api/requests?type=rnd_analysis'); const r = all.find(x => x.id === id);
