@@ -1101,3 +1101,31 @@ test('15.313 risk assessment: FMEA AP table, KOSHA 3x3 action rule, review/appro
   assert.deepEqual([er.planned, er.fails, er.down, er.mtbf, er.mttr, er.availability, er.reliability], [240, 2, 6, 117, 3, 97.5, Math.round(Math.exp(-10 / 117) * 10000) / 100]);
   assert.equal((await prod('GET', '/api/equipment-reliability?hours=30')).status, 400);
 });
+
+test('15.314 org chart (CEO, department head and duties) and designated officers (deputy, external, training cycle, alerts, dismissal keeps record)', async () => {
+  const users = (await admin('GET', '/api/admin/users')).body, pu = users.find(x => x.name === '생산'), au = users.find(x => x.name === '관리자');
+  const top = (await admin('POST', '/api/admin/org/departments', { name: '경영지원부' })).body, sub = (await admin('POST', '/api/admin/org/departments', { name: '안전환경팀', parent_id: top.id })).body;
+  assert.equal((await prod('PUT', `/api/admin/org-chart/departments/${sub.id}`, { head_user_id: pu.id })).status, 403);
+  assert.equal((await admin('PUT', `/api/admin/org-chart/departments/${sub.id}`, { head_user_id: pu.id, duties: '사업장 안전·환경 관리\n소방' })).status, 200);
+  assert.equal((await admin('PUT', '/api/admin/org-chart', { ceo_user_id: au.id, ceo_title: '대표이사', company: '테스트상사' })).status, 200);
+  let ch = (await prod('GET', '/api/org/chart')).body; const d = ch.departments.find(x => x.id === sub.id);
+  assert.deepEqual([ch.company, ch.ceo.name, ch.ceo_title, d.parent_id, d.head.name, d.duties, ch.can_manage], ['테스트상사', '관리자', '대표이사', top.id, '생산', '사업장 안전·환경 관리\n소방', false]);
+  // 지정: 관리자만, 정·부 같으면 안 됨, 외부 대행은 이름만, 교육 주기로 다음 기한 자동
+  assert.equal((await prod('POST', '/api/admin/org-duties', { title: '소방안전관리자', user_id: pu.id })).status, 403);
+  assert.equal((await admin('POST', '/api/admin/org-duties', { title: '소방안전관리자', user_id: pu.id, deputy_user_id: pu.id })).status, 400);
+  assert.equal((await admin('POST', '/api/admin/org-duties', { title: '소방안전관리자' })).status, 400, 'person required');
+  let f = (await admin('POST', '/api/admin/org-duties', { duty_key: 'fire_mgr', title: '소방안전관리자', category: 'fire', user_id: pu.id, deputy_user_id: au.id, scope: '전사', appointed_date: '2024-10-01', legal_basis: '화재의 예방 및 안전관리에 관한 법률 제24조', training_cycle: 24, last_training: '2024-10-01', tasks: '소방계획서 작성\n소방훈련', request_id: rid() })).body;
+  assert.deepEqual([f.person_name, f.deputy_name, f.next_training, f.train, f.user.name], ['생산', '관리자', '2026-10-01', today > '2026-10-01' ? 'over' : today >= '2026-09-01' ? 'soon' : 'ok', '생산']);
+  const ext = (await admin('POST', '/api/admin/org-duties', { title: '전기안전관리자', category: 'elec', person_name: '(주)전기안전대행 홍길동', training_cycle: 36, appointed_date: '2026-01-05', request_id: rid() })).body;
+  assert.deepEqual([ext.user_id, ext.person_name, ext.next_training], [null, '(주)전기안전대행 홍길동', '2029-01-05']);
+  if (f.train !== 'ok') { assert.ok((await prod('GET', '/api/alerts')).body.quality_alerts.some(a => /내 지정 업무 법정교육/.test(a.label))); assert.ok((await admin('GET', '/api/alerts')).body.quality_alerts.some(a => /지정 담당자 법정교육/.test(a.label))); }
+  // 교육 이수 → 다음 기한 다시 계산
+  f = (await admin('PUT', `/api/admin/org-duties/${f.id}`, { revision: f.revision, last_training: today, next_training: '' })).body; assert.equal(f.train, 'ok'); assert.match(f.history.at(-1).what, /교육 이수/);
+  assert.equal((await admin('PUT', `/api/admin/org-duties/${f.id}`, { revision: f.revision - 1, note: 'x' })).status, 409);
+  ch = (await prod('GET', '/api/org/chart')).body; assert.equal(ch.duties.length, 2);
+  // 해임: 지우지 않고 종료(선임 이력 보존), 일반 사용자 목록에서는 사라짐
+  assert.equal((await admin('DELETE', `/api/admin/org-duties/${f.id}?revision=${f.revision}`)).status, 400);
+  f = (await admin('PUT', `/api/admin/org-duties/${f.id}`, { revision: f.revision, active: false })).body; assert.deepEqual([f.active, f.end_date], [false, today]); assert.match(f.history.at(-1).what, /해임·종료/);
+  assert.equal((await prod('GET', '/api/org/duties')).body.rows.length, 1); assert.equal((await admin('GET', '/api/org/duties')).body.rows.length, 2);
+  assert.equal((await admin('DELETE', `/api/admin/org-duties/${f.id}?revision=${f.revision}`)).status, 200);
+});

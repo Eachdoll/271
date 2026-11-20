@@ -524,7 +524,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'qualifications', 'supplier_evals', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests', 'quality_audits', 'audit_findings', 'validations', 'quality_goals', 'quality_kpi_values', 'quality_risks'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'qualifications', 'supplier_evals', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests', 'quality_audits', 'audit_findings', 'validations', 'quality_goals', 'quality_kpi_values', 'quality_risks', 'risk_assessments', 'org_duty_assignments']; // 15.313 위험성평가 · 15.314 지정 담당자
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -7027,6 +7027,10 @@ route('GET', '/api/alerts', async ({ user }) => {
     await qa('위험성평가 개선 조치 기한 지남', '#/prod/risk/actions', "SELECT COUNT(*) c, MIN(json_extract(j.value,'$.due')) d FROM risk_assessments a, json_each(a.rows) j WHERE a.status<>'obsolete' AND COALESCE(json_extract(j.value,'$.action'),'')<>'' AND COALESCE(json_extract(j.value,'$.done'),'')='' AND json_extract(j.value,'$.due')<?", t);
     await qa('위험성평가 재평가 예정일 30일 안·지남', '#/prod/risk', "SELECT COUNT(*) c, MIN(next_review) d FROM risk_assessments WHERE status='approved' AND next_review IS NOT NULL AND next_review<=?", in30);
   }
+  // 15.314 지정 담당자 법정교육 기한: 관리자는 전체, 그 밖에는 본인이 정·부로 지정된 업무
+  if (user.is_admin) await qa('지정 담당자 법정교육 30일 안·지남', '#/admin/org/duties', "SELECT COUNT(*) c, MIN(next_training) d FROM org_duty_assignments WHERE active=1 AND next_training IS NOT NULL AND next_training<=?", in30);
+  else await qa('내 지정 업무 법정교육 30일 안·지남', '#/admin/org/duties', "SELECT COUNT(*) c, MIN(next_training) d FROM org_duty_assignments WHERE active=1 AND next_training IS NOT NULL AND next_training<=? AND (user_id=? OR deputy_user_id=?)", in30, user.id, user.id);
+
   const result = { today: t, quality_alerts: qAlerts, overdue_pos: overduePos, overdue_po_count: overduePoCount, overdue_requests: overdueRequests, overdue_request_count: overdueRequestCount, stale_approvals: stale, low_yield: await lowYieldUnits() };
   if (user.is_admin) { const last = await getSetting('last_backup_at'); result.backup = { last_at: last, days: last ? Math.floor((Date.parse(t) - Date.parse(String(last).slice(0, 10))) / 864e5) : null, by: await getSetting('last_backup_by') }; }
   return result;
@@ -8032,6 +8036,95 @@ route('POST', '/api/admin/org-import', async ({ user }) => {
   return orgLists(false);
 });
 
+// ── 15.314 조직도 · 지정 담당자 ──
+// 조직도: 회사(대표) → 부서 트리(부서장·업무 분장·구성원). 지정 담당자: 정보보호·개인정보·소방·산업안전보건·환경·전기·품질 등
+// 법정·사내 담당을 정·부로 지정하고 별도 담당 업무·법적 근거·선임일·법정교육 주기를 관리한다. 보기는 로그인한 누구나, 고치기는 관리자.
+const DUTY_CAT = { security: '정보보호', privacy: '개인정보', fire: '소방', safety: '산업안전보건', env: '환경·화학', elec: '전기·에너지', quality: '품질', emergency: '비상·응급', etc: '기타' };
+const DUTY_COLS = ['duty_key', 'title', 'category', 'user_id', 'person_name', 'deputy_user_id', 'deputy_name', 'scope', 'appointed_date', 'report_date', 'end_date', 'legal_basis', 'qualification', 'contact', 'training_cycle', 'last_training', 'next_training', 'tasks', 'note', 'active'];
+const addMonths = (d, n) => { if (!d || !n) return null; const [y, m, dd] = d.split('-').map(Number); const t = new Date(Date.UTC(y, m - 1 + n, dd)); if (t.getUTCDate() !== dd) t.setUTCDate(0); return t.toISOString().slice(0, 10); };
+async function orgUsers() { return db.prepare("SELECT id, name, department, position FROM users WHERE approval_status='approved' ORDER BY name").all(); }
+async function dutyBody(o0, prior = {}) {
+  const o = o0 && typeof o0 === 'object' ? o0 : {}, pick = k => o[k] === undefined ? prior[k] : o[k];
+  const person = async (idKey, nameKey, label, req) => {
+    const id = optId(pick(idKey)); let name = str(pick(nameKey), 50);
+    if (id) { const u = await db.prepare('SELECT name FROM users WHERE id=?').get(id); if (!u) throw bad(`${label}을(를) 다시 고르세요.`); name = u.name; }
+    if (req && !name) throw bad(`${label}을(를) 고르거나 이름을 적으세요(외부 대행이면 이름만).`);
+    return [id, name];
+  };
+  const [user_id, person_name] = await person('user_id', 'person_name', '담당자(정)', true), [deputy_user_id, deputy_name] = await person('deputy_user_id', 'deputy_name', '대리자(부)', false);
+  if (user_id && user_id === deputy_user_id) throw bad('정 담당자와 대리자가 같습니다.');
+  const cycle = intIn(pick('training_cycle'), '교육 주기(개월)', 0, 120, 0), last = qDate(pick('last_training'), '최근 교육일');
+  // 다음 교육 기한: 적으면 그대로, 비우면 (최근 교육일 또는 선임일) + 주기. 교육 관련 칸을 하나도 안 보냈으면 그대로 둔다.
+  const touchedTraining = ['next_training', 'last_training', 'training_cycle', 'appointed_date'].some(k => o[k] !== undefined);
+  const next = o.next_training ? qDate(o.next_training, '다음 교육 기한') : !touchedTraining ? prior.next_training ?? null : cycle ? addMonths(last || qDate(pick('appointed_date'), '선임일'), cycle) : null;
+  const f = { duty_key: str(pick('duty_key'), 30) || 'custom', title: reqStr(pick('title'), '담당 업무명', 60), category: DUTY_CAT[pick('category')] ? pick('category') : 'etc', user_id, person_name, deputy_user_id, deputy_name,
+    scope: str(pick('scope'), 50), appointed_date: qDate(pick('appointed_date'), '선임(지정)일'), report_date: qDate(pick('report_date'), '선임 신고일'), end_date: qDate(pick('end_date'), '종료일'),
+    legal_basis: str(pick('legal_basis'), 200), qualification: str(pick('qualification'), 200), contact: str(pick('contact'), 60), training_cycle: cycle, last_training: last, next_training: next,
+    tasks: str(pick('tasks'), 3000), note: str(pick('note'), 1000), active: pick('active') === undefined ? 1 : (pick('active') === false || pick('active') === 0 || pick('active') === '0' ? 0 : 1) };
+  if (f.end_date && f.appointed_date && f.end_date < f.appointed_date) throw bad('종료일이 선임일보다 빠릅니다.');
+  return f;
+}
+function dutyRow(r, users = {}) {
+  const t = today(), in30 = addDaysISO(t, 30), u = r.user_id ? users[r.user_id] : null, dp = r.deputy_user_id ? users[r.deputy_user_id] : null;
+  const train = !r.active ? '' : r.next_training ? (r.next_training < t ? 'over' : r.next_training <= in30 ? 'soon' : 'ok') : '';
+  const warn = r.active && ((r.user_id && !u) ? '담당자가 퇴사·삭제되었거나 승인되지 않은 사용자입니다' : r.end_date && r.end_date < t ? '종료일이 지났습니다(해임 처리하거나 연장)' : '');
+  return { ...r, active: !!r.active, history: JSON.parse(r.history || '[]'), category_label: DUTY_CAT[r.category] || r.category, user: u, deputy: dp, train, warn };
+}
+const usersById = async () => Object.fromEntries((await orgUsers()).map(u => [u.id, u]));
+async function orgChartSetting() { try { return JSON.parse(await getSetting('org_chart') || '{}'); } catch { return {}; } }
+route('GET', '/api/org/chart', async ({ user }) => {
+  const users = await orgUsers(), byId = Object.fromEntries(users.map(u => [u.id, u])), cfg = await orgChartSetting(), co = await companyInfo();
+  const departments = (await db.prepare('SELECT id, name, parent_id, sort, head_user_id, duties, positions_json FROM org_departments WHERE active=1 ORDER BY sort, id').all()).map(({ positions_json, ...d }) => ({ ...d, position_names: positions_json === null ? null : JSON.parse(positions_json), head: d.head_user_id ? byId[d.head_user_id] || null : null }));
+  const positions = await db.prepare('SELECT name, sort FROM org_positions WHERE active=1 ORDER BY sort, id').all();
+  const duties = (await db.prepare('SELECT * FROM org_duty_assignments WHERE active=1 ORDER BY sort, category, id').all()).map(r => dutyRow(r, byId));
+  return { company: cfg.company || co.biz_name || '', ceo: cfg.ceo_user_id ? byId[cfg.ceo_user_id] || null : null, ceo_title: cfg.ceo_title || '대표이사', ceo_name: cfg.ceo_user_id ? byId[cfg.ceo_user_id]?.name || '' : (cfg.ceo_name || co.ceo || ''),
+    departments, positions, users, duties, can_manage: !!user.is_admin, me: user.id };
+});
+route('PUT', '/api/admin/org-chart', async ({ user, body }) => {
+  requireAdmin(user); const cfg = await orgChartSetting();
+  const ceo = optId(body.ceo_user_id); if (ceo && !await db.prepare("SELECT 1 FROM users WHERE id=? AND approval_status='approved'").get(ceo)) throw bad('대표를 다시 고르세요.');
+  const next = { company: body.company === undefined ? cfg.company || '' : str(body.company, 100), ceo_user_id: body.ceo_user_id === undefined ? cfg.ceo_user_id || null : ceo, ceo_name: body.ceo_name === undefined ? cfg.ceo_name || '' : str(body.ceo_name, 50), ceo_title: body.ceo_title === undefined ? cfg.ceo_title || '대표이사' : str(body.ceo_title, 30) || '대표이사' };
+  await setSetting('org_chart', JSON.stringify(next)); return next;
+});
+// 부서장·업무 분장(조직도 상자). 부서 이름·상위·사용 여부는 기존 「부서·직급」 탭(PUT /api/admin/org/departments/:id).
+route('PUT', '/api/admin/org-chart/departments/:id', async ({ user, params, body }) => {
+  requireAdmin(user); const d = await mustGet('org_departments', params.id);
+  const head = body.head_user_id === undefined ? d.head_user_id : optId(body.head_user_id);
+  if (head && !await db.prepare("SELECT 1 FROM users WHERE id=? AND approval_status='approved'").get(head)) throw bad('부서장을 다시 고르세요.');
+  const duties = body.duties === undefined ? d.duties : str(body.duties, 2000);
+  await db.prepare('UPDATE org_departments SET head_user_id=?, duties=? WHERE id=?').run(head, duties, d.id);
+  return mustGet('org_departments', d.id);
+});
+route('GET', '/api/org/duties', async ({ user }) => {
+  const byId = await usersById(), all = user.is_admin;
+  const rows = (await db.prepare(`SELECT * FROM org_duty_assignments ${all ? '' : 'WHERE active=1'} ORDER BY active DESC, sort, category, id`).all()).map(r => dutyRow(r, byId));
+  return { rows, users: Object.values(byId), departments: (await db.prepare('SELECT id, name, parent_id FROM org_departments WHERE active=1 ORDER BY sort, id').all()), categories: DUTY_CAT, can_manage: !!user.is_admin, today: today() };
+});
+route('POST', '/api/admin/org-duties', async ({ user, body }) => {
+  requireAdmin(user); const key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM org_duty_assignments WHERE request_id=?').get(key); if (old) return dutyRow(old, await usersById()); }
+  const f = await dutyBody(body), sort = ((await db.prepare('SELECT MAX(sort) s FROM org_duty_assignments').get()).s ?? 0) + 1;
+  const r = await db.prepare(`INSERT INTO org_duty_assignments(${DUTY_COLS.join(',')},sort,history,request_id,created_by) VALUES(${DUTY_COLS.map(() => '?').join(',')},?,?,?,?)`)
+    .run(...DUTY_COLS.map(k => f[k]), sort, JSON.stringify([{ at: now(), by: user.name, what: `지정 · ${f.person_name}` }]), key, user.name);
+  return dutyRow(await mustGet('org_duty_assignments', r.lastInsertRowid), await usersById());
+});
+route('PUT', '/api/admin/org-duties/:id', async ({ user, params, body }) => {
+  requireAdmin(user); const prior = await mustGet('org_duty_assignments', params.id);
+  if (Number(body.revision) !== prior.revision) throw conflict();
+  const f = await dutyBody(body, prior); if (body.active === false && !f.end_date) f.end_date = today();
+  const changed = DUTY_COLS.filter(k => (prior[k] ?? null) !== (f[k] ?? null)); if (!changed.length) return dutyRow(prior, await usersById());
+  const what = prior.active && !f.active ? `해임·종료 · ${prior.person_name}` : !prior.active && f.active ? '다시 지정' : prior.person_name !== f.person_name ? `담당자 변경 ${prior.person_name} → ${f.person_name}` : changed.includes('last_training') ? `교육 이수 ${f.last_training || ''}` : '수정';
+  const r = await db.prepare(`UPDATE org_duty_assignments SET ${DUTY_COLS.map(k => k + '=?').join(',')},history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`)
+    .run(...DUTY_COLS.map(k => f[k]), pushHist(prior, { by: user.name, what, fields: changed }), user.name, prior.id, prior.revision);
+  if (!r.changes) throw conflict();
+  return dutyRow(await mustGet('org_duty_assignments', prior.id), await usersById());
+});
+route('DELETE', '/api/admin/org-duties/:id', async ({ user, params, query }) => {
+  requireAdmin(user); const prior = await mustGet('org_duty_assignments', params.id);
+  if (Number(query.revision) !== prior.revision) throw conflict();
+  if (prior.active && prior.appointed_date && prior.appointed_date < today()) throw bad('이미 선임된 담당자 기록은 지우지 않고 「해임·종료」합니다(선임 이력 보존). 잘못 넣은 것이면 먼저 해임·종료한 뒤 지우세요.');
+  await db.prepare('DELETE FROM org_duty_assignments WHERE id=? AND revision=?').run(prior.id, prior.revision); return { ok: true };
+});
 // ── 영업 → 생산: 생산의뢰(수주) ──
 // 영업이 업체·주문번호·출고 희망·사양과 품목(사이즈별 줄)을 올리면, 생산 담당이 「생산계획 반영」으로 생산일정을 만든다.
 // 일정은 schedules.production_line_id로 의뢰 줄에 연결되고, 진행(생산 수량·완료일)은 그 일정의 실적으로 계산한다.

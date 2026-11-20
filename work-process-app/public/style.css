@@ -4073,3 +4073,58 @@ table.rpt-list.ra-print { font-size: 11px; }
 table.rpt-list.ra-print th, table.rpt-list.ra-print td { padding: 3px 4px; word-break: keep-all; overflow-wrap: anywhere; }
 table.rpt-list.ra-print thead th { white-space: normal; text-align: center; }
 @media print { table.rpt-list.ra-print { font-size: 9px; } }
+
+/* 15.314 조직도 · 지정 담당자 */
+.oc-tools { flex-wrap: wrap; }
+.oc-tools .seg { display: inline-flex; gap: 0; }
+.oc-tools .seg .btn { border-radius: 0; } .oc-tools .seg .btn:first-child { border-radius: 6px 0 0 6px; } .oc-tools .seg .btn:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
+.oc-scroll { overflow: auto; padding: 4px 0 12px; }
+.oc-chart { --oc-line: var(--line-strong, #9aa6b8); }
+.oc-node { background: var(--panel, var(--bg)); border: 1px solid var(--line, #d5dbe5); border-radius: 8px; padding: 8px 10px; min-width: 150px; max-width: 230px; text-align: left; box-shadow: 0 1px 2px rgba(0,0,0,.06); font-size: 13px; }
+.oc-node.can { cursor: pointer; } .oc-node.can:hover, .oc-node.can:focus-visible { border-color: var(--accent); outline: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
+.oc-title { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding-bottom: 4px; margin-bottom: 4px; border-bottom: 2px solid var(--accent); }
+.oc-count { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.oc-root { text-align: center; background: var(--accent); color: #fff; border-color: var(--accent); min-width: 200px; }
+.oc-root .oc-co { font-weight: 700; font-size: 15px; } .oc-root .oc-ceo { margin-top: 2px; }
+.oc-people { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.oc-people .oc-more { display: contents; }
+.oc-person { line-height: 1.5; } .oc-person.head b { color: var(--accent); }
+.oc-role { font-size: 11px; padding: 0 4px; border-radius: 4px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); margin-right: 4px; }
+.oc-badges { display: inline-flex; flex-wrap: wrap; gap: 2px; margin-left: 4px; vertical-align: middle; }
+.oc-badge { --c: #64748b; display: inline-flex; align-items: center; gap: 2px; font-size: 11px; line-height: 16px; padding: 0 5px; border-radius: 8px; background: color-mix(in srgb, var(--c) 15%, transparent); color: var(--c); border: 1px solid color-mix(in srgb, var(--c) 40%, transparent); white-space: nowrap; font-weight: 600; }
+.oc-badge small { font-size: 10px; opacity: .8; }
+[data-cat="security"] { --c: #2563eb; } [data-cat="privacy"] { --c: #7c3aed; } [data-cat="fire"] { --c: #dc2626; } [data-cat="safety"] { --c: #ea580c; } [data-cat="env"] { --c: #16a34a; } [data-cat="elec"] { --c: #b45309; } [data-cat="quality"] { --c: #0d9488; } [data-cat="emergency"] { --c: #db2777; } [data-cat="etc"] { --c: #64748b; }
+.oc-dtasks { margin-top: 6px; padding-top: 4px; border-top: 1px dashed var(--line, #d5dbe5); font-size: 12px; color: var(--muted); }
+.oc-dtasks .duty-tasks { margin: 0; padding-left: 16px; }
+.oc-chart.no-members .oc-more, .oc-chart.no-badges .oc-badges, .oc-chart.no-tasks .oc-dtasks { display: none; }
+.oc-hit { outline: 2px solid #f59e0b; outline-offset: 1px; border-radius: 6px; background: color-mix(in srgb, #f59e0b 14%, transparent); }
+/* 트리(위→아래): 부모 아래 세로선, 형제 사이 가로선(부서 상자 안 구성원 목록에는 안 걸리게 oc-li·oc-sub로 한정) */
+.oc-chart.tree { width: max-content; min-width: 100%; }
+.oc-tree, .oc-sub { display: flex; justify-content: center; margin: 0; padding: 18px 0 0; list-style: none; position: relative; }
+.oc-tree { padding-top: 0; }
+.oc-li { position: relative; display: flex; flex-direction: column; align-items: center; padding: 18px 6px 0; list-style: none; }
+.oc-tree > .oc-li { padding-top: 0; }
+.oc-li::before, .oc-li::after { content: ''; position: absolute; top: 0; right: 50%; width: 50%; height: 18px; border-top: 1px solid var(--oc-line); }
+.oc-li::after { right: auto; left: 50%; border-left: 1px solid var(--oc-line); }
+.oc-li:only-child::before, .oc-li:only-child::after, .oc-tree > .oc-li::before, .oc-tree > .oc-li::after { display: none; }
+.oc-sub > .oc-li:only-child { padding-top: 0; }
+.oc-li:first-child::before, .oc-li:last-child::after { border: 0 none; }
+.oc-li:last-child::before { border-right: 1px solid var(--oc-line); border-radius: 0 6px 0 0; }
+.oc-li:first-child::after { border-radius: 6px 0 0 0; }
+.oc-sub::before { content: ''; position: absolute; top: 0; left: 50%; height: 18px; border-left: 1px solid var(--oc-line); }
+/* 목록(세로): 들여쓰기 + 왼쪽 선 */
+.oc-vlist .oc-root { display: inline-block; margin-bottom: 6px; }
+.oc-vl { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 1px solid var(--oc-line); }
+.oc-vlist > .oc-vl { margin-left: 16px; }
+.oc-vl > li { position: relative; list-style: none; padding: 6px 0 0 12px; }
+.oc-vl > li::before { content: ''; position: absolute; left: -14px; top: 22px; width: 24px; border-top: 1px solid var(--oc-line); }
+.oc-vl .oc-node { max-width: 560px; }
+.oc-loose { margin-top: 14px; display: flex; justify-content: center; } .oc-chart.list .oc-loose { justify-content: flex-start; }
+.duty-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.duty-card { border: 1px solid var(--line, #d5dbe5); border-left: 4px solid var(--c); border-radius: 8px; padding: 8px 10px; }
+.duty-card h3 { margin: 0 0 4px; font-size: 13px; color: var(--c); }
+.duty-line { padding: 4px 0; border-top: 1px dashed var(--line, #e2e8f0); } .duty-line:first-of-type { border-top: 0; }
+.duty-tasks { margin: 4px 0 0; padding-left: 18px; }
+.rpt-sheet .oc-print { overflow: visible; } .rpt-sheet .oc-print .oc-node { box-shadow: none; } .rpt-sheet .oc-print .oc-root { color: #fff; }
+.duty-decl { text-align: center; }
+@media print { .oc-node { break-inside: avoid; } }

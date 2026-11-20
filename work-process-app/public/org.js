@@ -39,7 +39,7 @@ document.addEventListener('change', event => {
 async function pageOrg(main) {
   if (!ME.is_admin) { main.innerHTML = '<div class="empty">관리자만 볼 수 있습니다.</div>'; return; }
   const data = await api('GET', '/api/admin/org'); if (!main.isConnected) return;
-  const reload = () => pageOrg(main).catch(fail);
+  const reload = () => pageOrg(main).then(() => managedTabs(main, '#/admin/org')).catch(fail); // 15.314 다시 그려도 탭 유지
   const tree = orgTree(data.departments), rank = u => { const p = orgPositionItems(data, u.department).find(x => x.name === u.position); return p ? p.sort : -1; }; // 높은 직급(아래쪽)이 먼저, 직급 없음은 맨 뒤
   const count = (key, name) => data.users.filter(u => u[key] === name).length;
   const usedNames = data.users.some(u => u.department || u.position);
@@ -61,7 +61,7 @@ async function pageOrg(main) {
       <section class="card"><h2>공통 직급 <span class="small muted">위가 낮은 직급, 아래가 높은 직급</span></h2><ul class="org-list">${data.positions.map(posRow).join('') || '<li class="muted small">등록된 직급이 없습니다.</li>'}</ul>
         <form class="org-add" data-no-author data-add="positions"><div class="form-grid"><label>새 직급 이름 *<input name="name" required maxlength="30" placeholder="예: 과장"></label></div><div class="actions"><button class="btn primary">직급 추가</button></div></form></section>
     </div>
-    <section class="card"><h2>조직도 · 구성원 <span class="small muted">${data.users.length}명</span></h2><p class="small muted">부서·직급을 고르면 바로 저장됩니다. 권한·가입 승인은 「관리자 설정」에서 합니다.</p>
+    <section class="card"><h2>구성원 배치 <span class="small muted">${data.users.length}명</span></h2><p class="small muted">부서·직급을 고르면 바로 저장됩니다. 권한·가입 승인은 「관리자 설정」에서 합니다.</p>
       ${groups.map(g => `<div class="org-group"><h3>${esc(g.title)} <span class="small muted">${g.list.length}명</span></h3><ul class="org-members">${members(g.list) || '<li class="muted small">구성원 없음</li>'}</ul></div>`).join('')}</section>`;
   const find = key => { const [kind, id] = key.split(':'); return { kind, id: Number(id), row: data[kind].find(x => x.id === Number(id)) }; };
   const run = async (task, message) => { try { await task(); if (message) toast(message); await reload(); } catch (error) { fail(error); } };
@@ -256,4 +256,192 @@ async function pageApprovalRules(main) {
     if (e.target.closest('[data-new]')) { list.push({ when_position: '', approve: [], agree: [], cc: [] }); draw(); return; }
     if (e.target.closest('[data-save]')) { try { const saved = await api('PUT', '/api/approval-rules', { purchase_request: list }); list = saved.purchase_request; draw(); toast('결재선 설정을 저장했습니다.'); } catch (err) { fail(err); } }
   });
+}
+
+// ── 15.314 조직도 · 지정 담당자 ──
+// 조직도: 회사(대표) → 부서 트리(부서장 · 업무 분장 · 구성원, 이름 옆 지정 담당 배지). 트리(가로) · 목록(세로) 보기, 찾기, 인쇄.
+// 지정 담당자: 정보보호·개인정보·소방·산업안전보건·환경·전기·품질 등 법정·사내 담당을 정·부로 지정하고 별도 담당 업무·법적 근거·법정교육 기한을 관리.
+const DUTY_CAT_LABEL = { security: '정보보호', privacy: '개인정보', fire: '소방', safety: '산업안전보건', env: '환경·화학', elec: '전기·에너지', quality: '품질', emergency: '비상·응급', etc: '기타' };
+// 지정 종류 기본값(법적 근거·교육 주기는 흔히 쓰는 기준이며 사업장 규모·법령 개정에 따라 다를 수 있어 고쳐 쓸 수 있다).
+const DUTY_PRESETS = [
+  { key: 'ciso', title: '정보보호 최고책임자(CISO)', short: 'CISO', cat: 'security', basis: '정보통신망법 제45조의3', tasks: '정보보호 계획 수립·시행·개선\n정보보호 실태·관행 정기 점검\n정보보호 위험 식별·평가와 대책\n정보보호 교육·모의훈련 계획·시행\n침해사고 대응 총괄' },
+  { key: 'sec_officer', title: '정보보호 담당자', short: '정보보호', cat: 'security', basis: '사내 지정(정보보안 규정)', tasks: '사용자 계정·접근권한 관리\nPC·서버 보안 패치·백신 점검\n접속기록·로그 정기 점검\n보안 사고 접수·보고·조치\n저장매체·외부 반출 보안 관리' },
+  { key: 'cpo', title: '개인정보 보호책임자(CPO)', short: 'CPO', cat: 'privacy', basis: '개인정보 보호법 제31조', tasks: '개인정보 처리방침 수립·공개\n개인정보 처리 실태 조사·개선\n개인정보 관련 고충 처리·피해 구제\n유출·오남용 방지 내부통제\n개인정보 보호 교육' },
+  { key: 'privacy_mgr', title: '개인정보 보호 담당자', short: '개인정보', cat: 'privacy', basis: '사내 지정(내부 관리계획)', tasks: '개인정보 파일·처리 현황 관리\n개인정보 취급자 접근권한 관리\n보유기간 지난 개인정보 파기\n처리 위탁 업체 관리·점검' },
+  { key: 'fire_mgr', title: '소방안전관리자', short: '소방', cat: 'fire', basis: '화재의 예방 및 안전관리에 관한 법률 제24조', cycle: 24, tasks: '소방계획서 작성·시행\n자위소방대 구성·운영\n피난시설·방화구획·방화시설 관리\n소방시설 유지·관리(작동·종합 점검)\n소방훈련·교육 실시\n화기 취급 감독\n업무 수행 기록 작성·보관' },
+  { key: 'fire_asst', title: '소방안전관리보조자', short: '소방(보조)', cat: 'fire', basis: '화재의 예방 및 안전관리에 관한 법률 제24조', cycle: 24, tasks: '소방안전관리자 업무 보조\n소방시설 일상 점검\n피난통로 확보 점검' },
+  { key: 'safety_chief', title: '안전보건관리책임자', short: '안전보건책임', cat: 'safety', basis: '산업안전보건법 제15조', cycle: 24, tasks: '산업재해 예방계획 수립\n안전보건관리규정 작성·변경\n근로자 안전보건교육\n작업환경측정 등 작업환경 점검·개선\n건강진단 등 건강관리\n산업재해 원인 조사·재발 방지\n위험성평가 실시 총괄' },
+  { key: 'safety_mgr', title: '안전관리자', short: '안전', cat: 'safety', basis: '산업안전보건법 제17조', cycle: 24, tasks: '위험성평가 지도·조언\n안전교육 계획·실시\n사업장 순회 점검·지도\n산업재해 원인 조사·대책\n안전인증 대상 기계 적격품 선정 조언' },
+  { key: 'health_mgr', title: '보건관리자', short: '보건', cat: 'safety', basis: '산업안전보건법 제18조', cycle: 24, tasks: '보건교육 계획·실시\n작업환경 점검·개선 조언\n건강진단 결과 사후관리\n응급처치·물질안전보건자료(MSDS) 관리 조언' },
+  { key: 'supervisor', title: '관리감독자', short: '관리감독', cat: 'safety', basis: '산업안전보건법 제16조', cycle: 12, tasks: '담당 기계·설비 안전·보건 점검\n보호구 착용·사용 지도\n산업재해 보고·응급조치\n작업장 정리정돈·통로 확보\n위험성평가 유해·위험요인 파악 참여' },
+  { key: 'sh_officer', title: '안전보건관리담당자', short: '안전보건담당', cat: 'safety', basis: '산업안전보건법 제19조', cycle: 24, tasks: '안전보건교육 실시 지원\n위험성평가 실시 지원\n작업환경측정·건강진단 지원\n산업재해 원인 조사 지원' },
+  { key: 'elec_mgr', title: '전기안전관리자', short: '전기', cat: 'elec', basis: '전기안전관리법 제22조', cycle: 36, tasks: '전기설비 공사·유지·운용 안전관리\n정기 점검·측정 기록\n전기 사고 예방·대응' },
+  { key: 'hazmat_mgr', title: '위험물안전관리자', short: '위험물', cat: 'env', basis: '위험물안전관리법 제15조', cycle: 24, tasks: '위험물 취급 작업 안전 감독\n위험물 시설 점검·기록\n화재 등 재해 발생 시 응급조치' },
+  { key: 'chem_mgr', title: '유해화학물질 관리자', short: '화학물질', cat: 'env', basis: '화학물질관리법 제32조', cycle: 24, tasks: '유해화학물질 취급 기준 준수 관리\n취급시설 자체 점검·기록\n사고 대비·대응 계획\n취급자 교육' },
+  { key: 'env_tech', title: '환경기술인', short: '환경', cat: 'env', basis: '대기환경보전법·물환경보전법', cycle: 36, tasks: '배출·방지시설 운영·관리\n운영일지 기록·보존\n자가측정·관련 신고' },
+  { key: 'qmr', title: '품질경영 책임자', short: '품질책임', cat: 'quality', basis: '사내 지정(ISO 9001)', tasks: '품질경영시스템 수립·유지\n품질목표·KPI 관리\n내부심사·경영검토 주관\n고객 요구사항 인식 촉진' },
+  { key: 'first_aid', title: '응급처치·비상연락 담당', short: '응급', cat: 'emergency', basis: '사내 지정', tasks: '구급함·AED 점검\n비상연락망 관리\n응급상황 초기 대응·신고' },
+  { key: 'custom', title: '', short: '', cat: 'etc', basis: '', tasks: '' },
+];
+const dutyShort = d => (DUTY_PRESETS.find(p => p.key === d.duty_key)?.short) || d.title.replace(/\(.*\)/, '').slice(0, 8);
+const dutyBadge = (d, deputy = false) => `<span class="oc-badge" data-cat="${esc(d.category)}" title="${esc(d.title)}${deputy ? ' (대리자·부)' : ''}${d.scope ? ' · ' + esc(d.scope) : ''}">${esc(dutyShort(d))}${deputy ? '<small>부</small>' : ''}</span>`;
+const dutyTrainChip = d => !d.next_training ? '<span class="muted">—</span>' : `${esc(d.next_training)} ${d.train === 'over' ? '<span class="chip red">지남</span>' : d.train === 'soon' ? '<span class="chip yellow">30일 안</span>' : ''}`;
+const dutyTasksHtml = t => { const l = String(t || '').split('\n').map(x => x.trim()).filter(Boolean); return l.length ? `<ul class="duty-tasks">${l.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<span class="muted">—</span>'; };
+const ocLayoutKey = 'wpa:oc-layout';
+async function pageOrgChart(main) {
+  const data = await api('GET', '/api/org/chart'); if (!main.isConnected) return;
+  let layout = (() => { try { return localStorage.getItem(ocLayoutKey); } catch { return null; } })() || (innerWidth < 760 ? 'list' : 'tree');
+  const depts = data.departments, users = data.users, can = data.can_manage;
+  const rankOf = u => { const p = orgPositionItems({ departments: depts, positions: data.positions }, u.department).find(x => x.name === u.position); return p ? p.sort : -1; };
+  const byDept = name => users.filter(u => u.department === name).sort((a, b) => rankOf(b) - rankOf(a) || a.name.localeCompare(b.name, 'ko'));
+  const badges = u => data.duties.filter(d => d.user_id === u.id).map(d => dutyBadge(d)).join('') + data.duties.filter(d => d.deputy_user_id === u.id).map(d => dutyBadge(d, true)).join('');
+  const isRoot = d => !d.parent_id || !depts.some(p => p.id === d.parent_id), kids = id => depts.filter(d => d.parent_id === id);
+  const subCount = d => byDept(d.name).length + kids(d.id).reduce((n, k) => n + subCount(k), 0);
+  main.innerHTML = `<h1>조직 구성 <span class="dept">관리</span></h1>
+    <p class="muted">부서 트리(「부서·직급」 탭)와 구성원의 부서·직급으로 그립니다. 이름 옆 색 배지는 지정 담당 업무(정보보호·소방 등, 「부」는 대리자)입니다.${can ? ' 맨 위 상자를 누르면 회사명·대표를, 부서 상자를 누르면 부서장·부서 업무를 정합니다.' : ''}</p>
+    <form class="toolbar oc-tools" id="ocTools"><label class="chk"><input type="checkbox" name="members" checked> 구성원</label><label class="chk"><input type="checkbox" name="badges" checked> 지정 담당 배지</label><label class="chk"><input type="checkbox" name="tasks"> 부서 업무</label>
+      <label class="list-search">찾기<input type="search" name="q" placeholder="이름·부서·담당 업무"></label><span class="grow"></span>
+      <span class="seg" role="group" aria-label="보기"><button type="button" class="btn" data-oc-layout="tree">트리</button><button type="button" class="btn" data-oc-layout="list">목록</button></span><button type="button" class="btn" data-oc-print>인쇄</button>${can ? '<a class="btn" href="#/admin/org/duties">지정 담당자</a>' : ''}</form>
+    <div class="oc-scroll"><div id="ocChart" class="oc-chart"></div></div>
+    <section class="card"><h2>지정 담당자 <span class="small muted">${data.duties.length}건</span></h2><div id="ocDuties"></div></section>`;
+  const tools = $('#ocTools', main);
+  const person = (u, head = false) => `<li class="oc-person${head ? ' head' : ''}" data-oc-name="${esc(u.name)}">${head ? '<span class="oc-role">부서장</span>' : ''}<b>${esc(u.name)}</b> <span class="muted">${esc(u.position || '')}</span><span class="oc-badges">${badges(u)}</span></li>`;
+  const deptBox = d => {
+    const list = byDept(d.name), head = d.head || null, rest = list.filter(u => !head || u.id !== head.id);
+    return `<div class="oc-node${can ? ' can' : ''}" data-oc-dept="${d.id}"${can ? ' tabindex="0" role="button"' : ''} data-oc-name="${esc(d.name)}"><div class="oc-title"><b>${esc(d.name)}</b><span class="oc-count" title="하위 부서 포함 ${subCount(d)}명">${list.length}명</span></div>
+      <ul class="oc-people">${head ? person(head, true) : '<li class="oc-person head muted small"><span class="oc-role">부서장</span> 미지정</li>'}<span class="oc-more">${rest.map(u => person(u)).join('')}</span></ul>
+      ${d.duties ? `<div class="oc-dtasks">${dutyTasksHtml(d.duties)}</div>` : ''}</div>`;
+  };
+  const treeNode = d => `<li class="oc-li">${deptBox(d)}${kids(d.id).length ? `<ul class="oc-sub">${kids(d.id).map(treeNode).join('')}</ul>` : ''}</li>`;
+  const rootBox = `<div class="oc-node oc-root${can ? ' can' : ''}" data-oc-root${can ? ' tabindex="0" role="button"' : ''}><div class="oc-co">${esc(data.company || '회사명 미지정')}</div><div class="oc-ceo">${esc(data.ceo_title)} <b>${esc(data.ceo_name || '미지정')}</b>${data.ceo ? `<span class="oc-badges">${badges(data.ceo)}</span>` : ''}</div></div>`;
+  const loose = users.filter(u => !depts.some(d => d.name === u.department));
+  const draw = () => {
+    const v = formObj(tools), chart = $('#ocChart', main), q = (v.q || '').trim().toLowerCase();
+    chart.className = `oc-chart ${layout}${v.members?.length ? '' : ' no-members'}${v.badges?.length ? '' : ' no-badges'}${v.tasks?.length ? '' : ' no-tasks'}`;
+    chart.innerHTML = layout === 'tree'
+      ? `<ul class="oc-tree"><li class="oc-li">${rootBox}${depts.filter(isRoot).length ? `<ul class="oc-sub">${depts.filter(isRoot).map(treeNode).join('')}</ul>` : ''}</li></ul>`
+      : `<div class="oc-vlist">${rootBox}<ul class="oc-vl">${depts.filter(isRoot).map(function li(d) { return `<li>${deptBox(d)}${kids(d.id).length ? `<ul class="oc-vl">${kids(d.id).map(li).join('')}</ul>` : ''}</li>`; }).join('')}</ul></div>`;
+    if (loose.length) chart.insertAdjacentHTML('beforeend', `<div class="oc-loose"><div class="oc-node"><div class="oc-title"><b>부서 미지정</b><span class="oc-count">${loose.length}명</span></div><ul class="oc-people"><span class="oc-more">${loose.map(u => person(u)).join('')}</span></ul></div></div>`);
+    if (!depts.length) chart.insertAdjacentHTML('beforeend', `<p class="muted small">부서가 없습니다. ${can ? '「부서·직급」 탭에서 부서를 만들고 상위 부서를 정하면 트리로 그려집니다.' : ''}</p>`);
+    $$('[data-oc-layout]', main).forEach(b => b.classList.toggle('primary', b.dataset.ocLayout === layout));
+    if (q) {
+      const hits = $$('[data-oc-name]', chart).filter(el => el.dataset.ocName.toLowerCase().includes(q) || (el.classList.contains('oc-person') && el.textContent.toLowerCase().includes(q)));
+      hits.forEach(el => el.classList.add('oc-hit')); hits[0]?.scrollIntoView({ block: 'nearest', inline: 'center' });
+    }
+    const byCat = Object.keys(DUTY_CAT_LABEL).map(c => [c, data.duties.filter(d => d.category === c)]).filter(([, l]) => l.length);
+    $('#ocDuties', main).innerHTML = byCat.length ? `<div class="duty-cards">${byCat.map(([c, l]) => `<div class="duty-card" data-cat="${c}"><h3>${esc(DUTY_CAT_LABEL[c])}</h3>${l.map(d => `<div class="duty-line"><b>${esc(d.title)}</b><div>${esc(d.person_name)}${d.user ? ` <span class="muted small">${esc([d.user.department, d.user.position].filter(Boolean).join(' · '))}</span>` : ''}${d.deputy_name ? ` <span class="small muted">· 부 ${esc(d.deputy_name)}</span>` : ''}${d.contact ? ` <span class="small">☎ ${esc(d.contact)}</span>` : ''}</div>${d.warn ? `<div class="small err-text">${esc(d.warn)}</div>` : ''}</div>`).join('')}</div>`).join('')}</div>`
+      : `<p class="muted small">지정된 담당자가 없습니다.${can ? ' 「지정 담당자」 탭에서 정보보호·소방·안전보건 등 담당자를 지정하세요.' : ''}</p>`;
+  };
+  draw();
+  tools.addEventListener('input', draw); tools.addEventListener('change', draw); tools.onsubmit = e => e.preventDefault();
+  main.addEventListener('click', async e => {
+    const lb = e.target.closest('[data-oc-layout]'); if (lb) { layout = lb.dataset.ocLayout; try { localStorage.setItem(ocLayoutKey, layout); } catch {} draw(); return; }
+    if (e.target.closest('[data-oc-print]')) { const m = rptWindow('조직도', `<div class="oc-chart ${layout} oc-print${$('#ocChart', main).className.replace(/oc-chart|tree|list/g, '')}">${$('#ocChart', main).innerHTML}</div>${rptBlock('지정 담당자', $('#ocDuties', main).innerHTML)}`, { biz_name: data.company }); m.el.querySelector('.rpt-sheet')?.classList.add('rpt-land'); m.el.classList.add('rpt-wide'); return; }
+    if (!can) return;
+    if (e.target.closest('[data-oc-root]')) {
+      const v = await promptBox('회사 · 대표', `<label>회사명<input name="company" maxlength="100" value="${esc(data.company)}"></label><div class="form-grid"><label>대표 직함<input name="ceo_title" maxlength="30" value="${esc(data.ceo_title)}"></label><label>대표(회원)<select name="ceo_user_id"><option value="">회원 아님 · 이름만</option>${users.map(u => `<option value="${u.id}"${data.ceo?.id === u.id ? ' selected' : ''}>${esc(u.name)} ${esc(u.position || '')}</option>`).join('')}</select></label><label>대표 이름(회원 아님)<input name="ceo_name" maxlength="50" value="${esc(data.ceo ? '' : data.ceo_name)}"></label></div>`,
+        { submit: vals => api('PUT', '/api/admin/org-chart', vals) });
+      if (v) { toast('저장했습니다.'); render(); } return;
+    }
+    const n = e.target.closest('[data-oc-dept]'); if (!n) return;
+    const d = depts.find(x => x.id === Number(n.dataset.ocDept)), mine = byDept(d.name), others = users.filter(u => u.department !== d.name);
+    const v = await promptBox(`${d.name} · 조직도`, `<label>부서장<select name="head_user_id"><option value="">미지정</option><optgroup label="이 부서">${mine.map(u => `<option value="${u.id}"${d.head_user_id === u.id ? ' selected' : ''}>${esc(u.name)} ${esc(u.position || '')}</option>`).join('')}</optgroup><optgroup label="다른 부서">${others.map(u => `<option value="${u.id}"${d.head_user_id === u.id ? ' selected' : ''}>${esc(u.name)} · ${esc(u.department || '부서 미지정')}</option>`).join('')}</optgroup></select></label>
+      <label>부서 업무(분장) <span class="hint">한 줄에 하나</span><textarea name="duties" rows="5" maxlength="2000" placeholder="예) 구매·자재 관리\n협력업체 평가">${esc(d.duties || '')}</textarea></label><p class="small muted">부서 이름·상위 부서·순서는 「부서·직급」 탭, 구성원의 부서·직급은 「부서·직급」 탭 아래 「구성원 배치」에서 바꿉니다.</p>`,
+      { submit: vals => api('PUT', `/api/admin/org-chart/departments/${d.id}`, vals) });
+    if (v) { toast('저장했습니다.'); render(); }
+  });
+  main.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches?.('.oc-node.can')) e.target.click(); });
+}
+async function pageOrgDuties(main) {
+  main.innerHTML = `<h1>조직 구성 <span class="dept">관리</span></h1>
+    <p class="muted">정보보호 담당자·개인정보 보호책임자·소방안전관리자·안전보건관리책임자·관리감독자처럼 법령이나 사내 규정으로 따로 맡기는 업무의 <b>담당자(정)·대리자(부)</b>를 지정하고, 별도 담당 업무·법적 근거·선임일·법정교육 기한을 관리합니다. 바뀌면 지우지 않고 「해임·종료」해 선임 이력을 남깁니다. 법적 근거·교육 주기 기본값은 사업장 규모·법령 개정에 따라 다를 수 있으니 확인해 고쳐 쓰세요.</p>
+    <div class="ip-tiles" id="dutyTiles"></div>
+    <form class="toolbar list-filters" data-read-only id="dutyFilters"><label class="lf-sel">구분<select name="cat"><option value="">전체</option>${Object.entries(DUTY_CAT_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">상태<select name="st"><option value="active">지정 중</option><option value="train">교육 30일 안·지남</option><option value="warn">확인 필요</option><option value="ended">해임·종료</option><option value="">전체</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="담당 업무·이름·근거"></label><span class="grow"></span><span id="dutyTools" class="ip-tools"></span></form>
+    <div id="dutyList"></div>`;
+  const form = $('#dutyFilters', main); let data = { rows: [], users: [], departments: [] };
+  const load = async () => { data = await api('GET', '/api/org/duties'); if (main.isConnected) draw(); };
+  main.qReload = () => load().catch(fail);
+  const draw = () => {
+    const v = formObj(form), q = (v.q || '').trim().toLowerCase(), act = data.rows.filter(d => d.active);
+    qTiles('dutyTiles', [['지정 중', act.length], ['법정교육 30일 안', act.filter(d => d.train === 'soon').length, act.some(d => d.train === 'soon') ? 'yellow' : ''], ['법정교육 지남', act.filter(d => d.train === 'over').length, act.some(d => d.train === 'over') ? 'red' : ''], ['확인 필요', act.filter(d => d.warn).length, act.some(d => d.warn) ? 'red' : ''], ...(data.can_manage ? [['해임·종료', data.rows.filter(d => !d.active).length]] : [])]);
+    $('#dutyTools', main).innerHTML = (data.can_manage ? '<button type="button" class="btn primary" data-duty-new>＋ 담당자 지정</button>' : '') + '<button type="button" class="btn" data-duty-print>지정 현황 인쇄</button><a class="btn" href="#/admin/org/chart">조직도</a>';
+    const rows = data.rows.filter(d => (!v.cat || d.category === v.cat) && (v.st === 'active' ? d.active : v.st === 'train' ? d.active && ['soon', 'over'].includes(d.train) : v.st === 'warn' ? d.active && !!d.warn : v.st === 'ended' ? !d.active : true) && (!q || [d.title, d.person_name, d.deputy_name, d.legal_basis, d.scope, d.tasks].join(' ').toLowerCase().includes(q)));
+    $('#dutyList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>구분</th><th>담당 업무</th><th>담당자(정)</th><th>대리자(부)</th><th>범위</th><th>선임일</th><th>법정교육 기한</th><th>상태</th><th></th></tr></thead><tbody>${rows.map(d => `<tr class="${!d.active ? 'row-off' : d.train === 'over' || d.warn ? 'ip-over' : ''}"><td class="nowrap">${dutyBadge(d)}<div class="small muted">${esc(d.category_label)}</div></td><td data-card-primary><b>${esc(d.title)}</b>${d.legal_basis ? `<div class="small muted">${esc(d.legal_basis)}</div>` : ''}</td><td>${esc(d.person_name)}${d.user ? `<div class="small muted">${esc([d.user.department, d.user.position].filter(Boolean).join(' · '))}</div>` : '<div class="small muted">외부·비회원</div>'}</td><td>${esc(d.deputy_name || '')}</td><td>${esc(d.scope || '전사')}</td><td class="nowrap">${esc(d.appointed_date || '')}${d.report_date ? `<div class="small muted">신고 ${esc(d.report_date)}</div>` : ''}</td><td class="nowrap">${dutyTrainChip(d)}</td><td class="nowrap">${d.active ? '<span class="chip green">지정 중</span>' : `<span class="chip">종료 ${esc(d.end_date || '')}</span>`}${d.warn ? `<div class="small err-text">${esc(d.warn)}</div>` : ''}</td><td><button type="button" class="btn small" data-duty-open="${d.id}">열기</button></td></tr>`).join('')}</tbody></table></div>`
+      : `<div class="empty">${data.rows.length ? '조건에 맞는 담당자가 없습니다.' : `지정된 담당자가 없습니다.${data.can_manage ? ' 「＋ 담당자 지정」에서 정보보호·소방·안전보건 등 종류를 고르면 법적 근거와 기본 업무가 채워집니다.' : ''}`}</div>`;
+  };
+  main.addEventListener('click', e => {
+    if (e.target.closest('[data-duty-new]')) return dutyOpen(null, data).catch(fail);
+    const o = e.target.closest('[data-duty-open]'); if (o) return dutyOpen(data.rows.find(d => d.id === Number(o.dataset.dutyOpen)), data).catch(fail);
+    if (e.target.closest('[data-duty-print]')) dutyListPrint(data.rows.filter(d => d.active)).catch(fail);
+  });
+  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  await load();
+}
+async function dutyOpen(d, list) {
+  const can = list.can_manage, dis = can ? '' : ' disabled', v0 = d || { duty_key: '', category: 'etc', training_cycle: 0, active: true, scope: '전사' };
+  const userOpts = (sel, name) => `<option value="">${name ? '—' : '고르세요'}</option>${list.users.map(u => `<option value="${u.id}"${sel === u.id ? ' selected' : ''}>${esc(u.name)}${u.department || u.position ? ` · ${esc([u.department, u.position].filter(Boolean).join(' '))}` : ''}</option>`).join('')}<option value="ext"${!sel && name ? ' selected' : ''}>외부·비회원(이름 직접 입력)</option>`;
+  const m = modal(`<h3>${d ? `${esc(d.title)} ${d.active ? '<span class="chip green">지정 중</span>' : '<span class="chip">해임·종료</span>'}` : '담당자 지정'}</h3>
+    <form class="stack" data-duty-form>
+      <div class="form-grid">
+        ${can ? `<label>지정 종류<select name="duty_key">${DUTY_PRESETS.map(p => `<option value="${p.key}"${(v0.duty_key || '') === p.key ? ' selected' : ''}>${p.key === 'custom' ? '직접 입력' : esc(p.title)}</option>`).join('')}${!d ? '' : ''}</select></label>` : ''}
+        <label class="${can ? '' : 'span2'}">담당 업무명 *<input name="title" required maxlength="60" value="${esc(v0.title || '')}"${dis}></label>
+        <label>구분<select name="category"${dis}>${Object.entries(DUTY_CAT_LABEL).map(([k, l]) => `<option value="${k}"${v0.category === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label>담당자(정) *<select name="user_sel"${dis}>${userOpts(v0.user_id, v0.person_name)}</select></label>
+        <label data-ext="user">외부 담당자 이름<input name="person_name" maxlength="50" value="${esc(v0.user_id ? '' : v0.person_name || '')}" placeholder="예) (주)○○안전대행 홍길동"${dis}></label>
+        <label>대리자(부)<select name="deputy_sel"${dis}>${userOpts(v0.deputy_user_id, v0.deputy_name).replace('고르세요', '없음')}</select></label>
+        <label data-ext="deputy">외부 대리자 이름<input name="deputy_name" maxlength="50" value="${esc(v0.deputy_user_id ? '' : v0.deputy_name || '')}"${dis}></label>
+        <label>범위<select name="scope"${dis}><option value="전사">전사</option>${list.departments.map(x => `<option${v0.scope === x.name ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}${v0.scope && v0.scope !== '전사' && !list.departments.some(x => x.name === v0.scope) ? `<option selected>${esc(v0.scope)}</option>` : ''}</select></label>
+        <label>연락처<input name="contact" maxlength="60" value="${esc(v0.contact || '')}" placeholder="내선·휴대폰"${dis}></label>
+        <label>선임(지정)일<input type="date" name="appointed_date" value="${esc(v0.appointed_date || '')}"${dis}></label>
+        <label>선임 신고일<input type="date" name="report_date" value="${esc(v0.report_date || '')}"${dis}><span class="hint">관할 기관에 신고하는 업무만</span></label>
+        <label class="span2">법적 근거<input name="legal_basis" maxlength="200" value="${esc(v0.legal_basis || '')}"${dis}></label>
+        <label>자격·면허<input name="qualification" maxlength="200" value="${esc(v0.qualification || '')}" placeholder="예) 소방안전관리자 2급"${dis}></label>
+        <label>법정교육 주기(개월)<input type="number" name="training_cycle" min="0" max="120" value="${esc(v0.training_cycle ?? 0)}"${dis}><span class="hint">0 = 관리 안 함</span></label>
+        <label>최근 교육 이수일<input type="date" name="last_training" value="${esc(v0.last_training || '')}" max="${todayStr()}"${dis}></label>
+        <label>다음 교육 기한<input type="date" name="next_training" value="${esc(v0.next_training || '')}"${dis}><span class="hint">비우면 (최근 교육일 또는 선임일) + 주기</span></label>
+        <label class="span3">별도 담당 업무 <span class="hint">한 줄에 하나</span><textarea name="tasks" rows="6" maxlength="3000"${dis}>${esc(v0.tasks || '')}</textarea></label>
+        <label class="span3">비고<input name="note" maxlength="1000" value="${esc(v0.note || '')}"${dis}></label>
+      </div>
+      ${d?.warn ? `<p class="small err-text">${esc(d.warn)}</p>` : ''}
+      <div class="actions">${d ? '<button type="button" class="btn" data-duty-hist>이력</button><button type="button" class="btn" data-duty-letter>지정서 인쇄</button>' : ''}${d && can && d.active ? '<button type="button" class="btn danger" data-duty-end>해임·종료</button>' : ''}${d && can && !d.active ? '<button type="button" class="btn" data-duty-reopen>다시 지정</button><button type="button" class="btn danger" data-duty-del>삭제</button>' : ''}${d && can && d.active && (!d.appointed_date || d.appointed_date >= todayStr()) ? '<button type="button" class="btn danger" data-duty-del>삭제</button>' : ''}<span class="grow"></span>${can ? `<button type="button" class="btn small" data-duty-tasks>기본 업무 넣기</button><button class="btn primary">${d ? '저장' : '지정'}</button>` : ''}</div>
+    </form>`, { wide: true });
+  const form = $('[data-duty-form]', m.el), el = form.elements;
+  const ext = () => { $('[data-ext="user"]', form).hidden = el.user_sel.value !== 'ext'; $('[data-ext="deputy"]', form).hidden = el.deputy_sel.value !== 'ext'; }; ext();
+  form.addEventListener('change', ext);
+  const addM = (dt, n) => { if (!dt || !n) return ''; const [y, mo, dd] = dt.split('-').map(Number); const t = new Date(Date.UTC(y, mo - 1 + n, dd)); if (t.getUTCDate() !== dd) t.setUTCDate(0); return t.toISOString().slice(0, 10); };
+  const recalc = () => { const n = Number(el.training_cycle.value) || 0; el.next_training.value = n ? addM(el.last_training.value || el.appointed_date.value, n) : ''; };
+  ['training_cycle', 'last_training', 'appointed_date'].forEach(k => el[k].addEventListener('change', recalc));
+  el.duty_key?.addEventListener('change', () => {
+    const p = DUTY_PRESETS.find(x => x.key === el.duty_key.value); if (!p || p.key === 'custom') return;
+    el.title.value = p.title; el.category.value = p.cat; el.legal_basis.value = p.basis; el.training_cycle.value = p.cycle || 0; if (!el.tasks.value.trim()) el.tasks.value = p.tasks; recalc();
+  });
+  $('[data-duty-tasks]', form)?.addEventListener('click', () => { const p = DUTY_PRESETS.find(x => x.key === el.duty_key?.value); if (!p?.tasks) return toast('지정 종류를 고르면 그 업무의 기본 업무를 넣습니다.', 'err'); const have = el.tasks.value.split('\n').map(x => x.trim()); el.tasks.value = [...have.filter(Boolean), ...p.tasks.split('\n').filter(x => !have.includes(x))].join('\n'); });
+  const body = () => { const v = formObj(form); const pick = (sel, name) => sel === 'ext' ? [null, name] : [sel ? Number(sel) : null, '']; const [user_id, person_name] = pick(v.user_sel, v.person_name), [deputy_user_id, deputy_name] = pick(v.deputy_sel, v.deputy_name); delete v.user_sel; delete v.deputy_sel; return { ...v, user_id, person_name, deputy_user_id, deputy_name, scope: v.scope === '전사' ? '' : v.scope }; };
+  const done = (msg) => { toast(msg); m.close(); qReload(); };
+  form.onsubmit = async e => { e.preventDefault(); try { d ? await api('PUT', `/api/admin/org-duties/${d.id}`, { ...body(), revision: d.revision }) : await api('POST', '/api/admin/org-duties', { ...body(), request_id: crypto.randomUUID() }); done(d ? '저장했습니다.' : `${el.title.value} 담당자를 지정했습니다.`); } catch (err) { fail(err); } };
+  $('[data-duty-end]', m.el)?.addEventListener('click', async () => { const v = await promptBox('해임·종료', `<p class="small muted">기록은 남고 조직도·현황에서 빠집니다. 후임을 지정하려면 종료 뒤 「＋ 담당자 지정」을 하세요.</p><label>종료일 *<input type="date" name="end_date" required value="${todayStr()}"></label>`); if (!v) return; try { await api('PUT', `/api/admin/org-duties/${d.id}`, { active: false, end_date: v.end_date, revision: d.revision }); done('해임·종료했습니다.'); } catch (err) { fail(err); } });
+  $('[data-duty-reopen]', m.el)?.addEventListener('click', async () => { try { await api('PUT', `/api/admin/org-duties/${d.id}`, { active: true, end_date: '', revision: d.revision }); done('다시 지정했습니다.'); } catch (err) { fail(err); } });
+  $$('[data-duty-del]', m.el).forEach(b => b.addEventListener('click', async () => { if (!await confirmBox('이 기록을 지울까요? 선임 이력이 필요하면 지우지 말고 「해임·종료」로 두세요.')) return; try { await api('DELETE', `/api/admin/org-duties/${d.id}?revision=${d.revision}`); done('지웠습니다.'); } catch (err) { fail(err); } }));
+  $('[data-duty-hist]', m.el)?.addEventListener('click', () => qHistory(d.title, d.history, {}));
+  $('[data-duty-letter]', m.el)?.addEventListener('click', () => dutyLetter(d).catch(fail));
+}
+async function dutyLetter(d) {
+  const co = await rptCompany(), org = await api('GET', '/api/org/chart').catch(() => ({}));
+  const who = d.user ? `${[d.user.department, d.user.position].filter(Boolean).join(' · ')}` : '외부·비회원';
+  rptWindow('담당자 지정서', rptRow([[['담당 업무', d.title], ['구분', DUTY_CAT_LABEL[d.category] || d.category]], [['성명', d.person_name], ['소속 · 직급', who]], [['대리자(부)', d.deputy_name], ['범위', d.scope || '전사']], [['선임(지정)일', d.appointed_date], ['선임 신고일', d.report_date]], [['법적 근거', d.legal_basis], ['자격·면허', d.qualification]], [['법정교육 주기', d.training_cycle ? `${d.training_cycle}개월` : ''], ['다음 교육 기한', d.next_training]]])
+    + rptBlock('별도 담당 업무', dutyTasksHtml(d.tasks)) + (d.note ? rptBlock('비고', rptText(d.note)) : '')
+    + `<p class="rpt-text duty-decl">위 사람을 <b>${esc(d.title)}</b>(으)로 지정하고, 위 업무를 맡깁니다.</p><p class="rpt-text duty-decl">${esc(d.appointed_date || todayStr())}</p><p class="rpt-text duty-decl">${esc(org.company || co.biz_name || '')} ${esc(org.ceo_title || '대표이사')} ${esc(org.ceo_name || co.ceo || '')} (인)</p>`
+    + '<div class="rpt-sign"><span>담당자 확인</span><span>대리자 확인</span><span>지정권자</span></div>', co);
+}
+async function dutyListPrint(rows) {
+  const co = await rptCompany();
+  rptWindow('지정 담당자 현황', `<table class="rpt-list"><thead><tr><th>No</th><th>구분</th><th>담당 업무</th><th>담당자(정)</th><th>대리자(부)</th><th>범위</th><th>선임일</th><th>법적 근거</th><th>다음 교육</th><th>연락처</th></tr></thead><tbody>${rows.map((d, i) => `<tr><td class="c">${i + 1}</td><td class="c">${esc(DUTY_CAT_LABEL[d.category] || '')}</td><td>${esc(d.title)}</td><td>${esc(d.person_name)}</td><td>${esc(d.deputy_name || '')}</td><td>${esc(d.scope || '전사')}</td><td class="c">${esc(d.appointed_date || '')}</td><td>${esc(d.legal_basis || '')}</td><td class="c">${esc(d.next_training || '')}</td><td>${esc(d.contact || '')}</td></tr>`).join('')}</tbody></table>`, co)
+    .el.classList.add('rpt-wide');
+}
+// 내 정보: 본인이 정·부로 지정된 업무
+async function meDutiesCard(box) {
+  try {
+    const rows = (await api('GET', '/api/org/duties')).rows.filter(d => d.active && (d.user_id === ME.id || d.deputy_user_id === ME.id)); if (!box.isConnected) return;
+    box.innerHTML = `<h3>지정 담당 업무</h3>${rows.length ? rows.map(d => `<div class="duty-line">${dutyBadge(d, d.user_id !== ME.id)} <b>${esc(d.title)}</b>${d.user_id !== ME.id ? ' <span class="small muted">(대리자)</span>' : ''}${d.next_training ? ` <span class="small">· 다음 법정교육 ${dutyTrainChip(d)}</span>` : ''}${dutyTasksHtml(d.tasks)}</div>`).join('') : '<p class="small muted">지정된 담당 업무가 없습니다.</p>'}<div class="actions" style="justify-content:flex-start"><a class="btn" href="#/admin/org/chart">조직도 보기</a><a class="btn" href="#/admin/org/duties">지정 담당자 현황</a></div>`;
+  } catch { box.remove(); }
 }

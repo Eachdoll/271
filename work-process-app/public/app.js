@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.313';
+const APP_VERSION = '15.314';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -441,6 +441,8 @@ const ROUTE_ROLE = [
   [['#/sales/quotes', '#/sales/orders', '#/sales/bills', '#/sales/calendar', '#/sales/reps', '#/sales/returns', '#/sales/delivery-status', '#/sales/closing', '#/sales/tax', '#/sales/tax-check', '#/sales/book', '#/sales/ledger', '#/sales/aging'], ['sales']],
   [['#/purchase/stock', '#/purchase/bills', '#/purchase/calendar', '#/purchase/returns', '#/purchase/receipt-status', '#/purchase/closing', '#/purchase/tax', '#/purchase/tax-check', '#/purchase/book', '#/purchase/ledger', '#/purchase/aging'], ['purchase']],
   [['#/purchase/payments', '#/purchase/disbursements', '#/purchase/notes'], ['sales', 'purchase']],
+  [['#/admin/org/chart', '#/admin/org/duties'], null], // 15.314 조직도·지정 담당자는 누구나 보기(고치기는 관리자)
+  [['#/admin/org'], ['관리자']], // 부서·직급 탭은 관리자만(일반 사용자 탭 줄에서 숨김)
 ];
 function routeRoles(route) {
   const path = String(route || '#/').split('?')[0];
@@ -698,7 +700,9 @@ const PAGES = {
   '#/admin/users': main => managedPage(main, '#/admin/users', m => pageMembers(m, 'info')), // 15.175 회원 관리 · 회원 정보
   '#/admin/users/roles': main => managedPage(main, '#/admin/users/roles', m => pageMembers(m, 'roles')), // 사용 권한
   '#/admin/users/menus': main => managedPage(main, '#/admin/users/menus', m => pageMembers(m, 'menus')), // 메뉴 보기
-  '#/admin/org': pageOrg,
+  '#/admin/org': main => managedPage(main, '#/admin/org', pageOrg),
+  '#/admin/org/chart': main => managedPage(main, '#/admin/org/chart', pageOrgChart), // 15.314 조직도
+  '#/admin/org/duties': main => managedPage(main, '#/admin/org/duties', pageOrgDuties), // 15.314 지정 담당자
   '#/admin/approval': main => pageApprovalRules(main), // 15.185 결재선 기본값
   '#/admin/bom': pageBoms,
   '#/logistics/warehouses': main => pageWarehouses(main), // 15.230 관리 › 창고 관리
@@ -743,6 +747,7 @@ const MANAGE = {
   '#/purchase/bills': { title: '매입전표 관리', tabs: [['#/purchase/bills/new', '전표 입력'], ['#/purchase/bills', '전표 목록']] },
   '#/sales/book': { title: '매출 거래처별 장부', tabs: [['#/sales/book', '전표별 장부'], ['#/sales/ledger', '품목 줄별 원장']] },
   '#/purchase/book': { title: '매입 거래처별 장부', tabs: [['#/purchase/book', '전표별 장부'], ['#/purchase/ledger', '품목 줄별 원장']] },
+  '#/admin/org': { title: '조직 구성', tabs: [['#/admin/org/chart', '조직도'], ['#/admin/org', '부서·직급'], ['#/admin/org/duties', '지정 담당자']] }, // 15.314
   '#/admin/users': { title: '회원 관리', tabs: [['#/admin/users', '회원 정보'], ['#/admin/users/roles', '사용 권한'], ['#/admin/users/menus', '메뉴 보기']] },
   // 15.213 입력·목록 메뉴 통일
   '#/logistics/ship': { title: '출하 관리', tabs: [['#/logistics/ship/new', '출하 입력'], ['#/logistics/ship', '출하 목록']] },
@@ -755,11 +760,12 @@ const MANAGE = {
   '#/dev/list': { title: '개발 관리', tabs: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
   '#/dev/analysis': { title: '연구 분석 관리', tabs: [['#/dev/analysis/request', '분석데이터 입력'], ['#/dev/analysis', '분석리스트']] }, // 15.285 · 15.288
 };
-const ROUTE_ALIAS = { '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/calendar': '#/sales/bills', '#/logistics/qr': '#/logistics/lots', '#/logistics/pallets': '#/logistics/lots', '#/logistics/scan': '#/logistics/lots', '#/sales/reps': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users', '#/logistics/receipt/other': '#/logistics/receipt/new', '#/logistics/ship/new': '#/logistics/ship', '#/purchase/laundry/new': '#/purchase/laundry', '#/prod/semi/new': '#/prod/semi', '#/prod/semi/cut/new': '#/prod/semi/cut', '#/prod/semi/wash/new': '#/prod/semi/wash', '#/quality/request': '#/quality/list', '#/quality/voc/request': '#/quality/voc/list', '#/dev/request': '#/dev/list', '#/dev/analysis/request': '#/dev/analysis' };
+const ROUTE_ALIAS = { '#/admin/org/chart': '#/admin/org', '#/admin/org/duties': '#/admin/org', '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/calendar': '#/sales/bills', '#/logistics/qr': '#/logistics/lots', '#/logistics/pallets': '#/logistics/lots', '#/logistics/scan': '#/logistics/lots', '#/sales/reps': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users', '#/logistics/receipt/other': '#/logistics/receipt/new', '#/logistics/ship/new': '#/logistics/ship', '#/purchase/laundry/new': '#/purchase/laundry', '#/prod/semi/new': '#/prod/semi', '#/prod/semi/cut/new': '#/prod/semi/cut', '#/prod/semi/wash/new': '#/prod/semi/wash', '#/quality/request': '#/quality/list', '#/quality/voc/request': '#/quality/voc/list', '#/dev/request': '#/dev/list', '#/dev/analysis/request': '#/dev/analysis' };
 const navRoute = r => ROUTE_ALIAS[String(r || '#/').split('?')[0]] || String(r || '#/').split('?')[0];
 const TAB_ON = { '#/logistics/receipt/other': '#/logistics/receipt/new' }; // 15.234 기타입고도 「입고 입력」 탭에 불
 function managedTabs(main, route) {
   route = TAB_ON[route] || route;
+  if (!canSeeRoute(route)) return; // 15.314 권한 없는 화면 안내 제목(「사용 권한이 없습니다」)을 탭 제목으로 덮지 않음
   const m = MANAGE[navRoute(route)], h1 = $('h1', main); if (!m || !h1 || $('.manage-tabs', main)) return;
   const t = [...h1.childNodes].find(n => n.nodeType === 3 && n.nodeValue.trim());
   if (t) t.nodeValue = /수정|고치기/.test(t.nodeValue) ? `${m.title} · ${t.nodeValue.trim()} ` : m.title + ' '; else h1.prepend(m.title + ' '); // 15.178 고치는 중 표시 유지
@@ -3206,10 +3212,12 @@ async function pageMe(main) {
   main.innerHTML = `<h1>내 정보</h1>
   <div class="card"><p><b>${esc(ME.name)}</b> ${ME.is_admin ? '<span class="tag">관리자</span>' : ''}</p><p class="muted small">담당: ${ME.roles.map((r) => ROLE_LABEL[r]).join(', ') || '없음 (승인 권한이 필요하면 관리자에게 요청)'}</p></div>
   <div class="card"><h3>부서 · 직급</h3><p><b>${esc(ME.department || '부서 미지정')}</b> · ${esc(ME.position || '직급 미지정')}</p><p class="small muted">구매의뢰서의 의뢰부서·요청자 직급으로 자동 표시됩니다. 바꾸려면 관리자에게 요청하세요(관리 › 조직 구성).</p></div>
+  <div class="card" id="meDuties"><h3>지정 담당 업무</h3><p class="small muted">불러오는 중…</p></div>
   <form class="card stack" id="pwForm"><h3>비밀번호 변경</h3>
     <label>현재 비밀번호<input type="password" name="current" required autocomplete="current-password"></label>
     <label>새 비밀번호<input type="password" name="password" required minlength="4" autocomplete="new-password"></label>
     <div class="actions"><button class="btn primary">변경</button></div></form>`;
+  meDutiesCard($('#meDuties')); // 15.314
   $('#pwForm').onsubmit = async (e) => { e.preventDefault(); try { await api('PUT', '/api/me/password', formObj(e.target)); e.target.reset(); toast('비밀번호를 변경했습니다.'); } catch (err) { fail(err); } };
 }
 
