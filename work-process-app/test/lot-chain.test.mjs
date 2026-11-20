@@ -614,3 +614,23 @@ test('15.286 research analyses linked to a development item and roadmap step; re
   await admin('POST', `/api/requests/${a2.id}/dev-link`, { dev_request_id: '' });
   assert.equal((await admin('GET', '/api/dev-roadmap?id=' + dev.id)).body.rows[0].analyses.length, 1);
 });
+
+test('15.287 analysis data entered directly on a development step: done RA- record linked to the step, history kept, research role only', async () => {
+  const dev = (await admin('POST', '/api/requests', { type: 'development', title: '저분진 장갑', customer: 'B사', due_date: '2027-03-31', target_price: '1', data: { extra: 'x' } })).body;
+  await admin('POST', `/api/requests/${dev.id}/approve`);
+  await admin('PUT', `/api/dev-roadmap/${dev.id}`, { term: 'mid', steps: [{ name: '시제품', start_date: '2026-11-01', end_date: '2026-12-31', status: 'doing' }] });
+  const body = { dev_step: '시제품', title: '시제품 A', category: '시제품분석', items: ['파티클', '인장,인열'], result_note: '파티클 80/ft² 합격', analysis_date: '2026-11-18' };
+  assert.equal((await prod('POST', `/api/dev-roadmap/${dev.id}/analysis-data`, body)).status, 403);
+  assert.equal((await admin('POST', `/api/dev-roadmap/${dev.id}/analysis-data`, { ...body, result_note: '' })).status, 400);
+  const r = await admin('POST', `/api/dev-roadmap/${dev.id}/analysis-data`, body);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.match(r.body.req_no, /^RA-261118-\d{2}$/); assert.equal(r.body.status, 'done'); assert.equal(r.body.result_note, '파티클 80/ft² 합격');
+  assert.equal(r.body.data.dev_step, '시제품'); assert.deepEqual(r.body.data.items, ['파티클', '인장,인열']); assert.equal(r.body.data.token, undefined);
+  const r2 = (await admin('POST', `/api/dev-roadmap/${dev.id}/analysis-data`, { ...body, title: '시제품 B', result_note: '흡수 4.1' })).body;
+  assert.notEqual(r2.req_no, r.body.req_no, 'own number each');
+  const row = (await admin('GET', '/api/dev-roadmap?id=' + dev.id)).body.rows[0];
+  assert.deepEqual(row.analyses.map(a => [a.title, a.dev_step, a.status, a.analysis_date]), [['시제품 A', '시제품', 'done', '2026-11-18'], ['시제품 B', '시제품', 'done', '2026-11-18']]);
+  const talk = (await admin('GET', `/api/comments/request/${dev.id}`)).body.rows.map(c => c.content);
+  assert.ok(talk.some(c => /^\[분석\] 분석데이터 · RA-261118-\d{2} 시제품 A \(시제품분석\) · 단계 「시제품」 · 분석일 2026-11-18 · 결과: 파티클 80/.test(c)), JSON.stringify(talk));
+  assert.equal((await admin('PUT', `/api/attachments/request/${r.body.id}`, { photos: [] })).status === 404, false, 'attachments allowed for research analysis');
+});

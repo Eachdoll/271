@@ -235,7 +235,7 @@ async function attachmentEntity(type, id, user, write = false) {
     if (!write && ['purchase_order', 'other_receipt'].includes(type) && await db.prepare('SELECT 1 FROM requests WHERE source_type=? AND source_id=?').get(type, Number(id))) return;
     throw new HttpError(404, '첨부할 기록을 찾을 수 없습니다.');
   }
-  if (type === 'request' && !['development','sample','sample_goods','voc'].includes(row.type)) throw bad('개발·샘플 의뢰서와 VOC에 사진을 첨부할 수 있습니다.');
+  if (type === 'request' && !['development','sample','sample_goods','voc','rnd_analysis'].includes(row.type)) throw bad('개발·샘플·연구 분석 의뢰서와 VOC에 사진을 첨부할 수 있습니다.'); // 15.287 연구 분석 데이터에도 첨부
   if (write) {
     if (type === 'request') {
       if (!(hasRole(user, REQUEST_TYPES[row.type]) || (row.requester_id === user.id && ['pending','rejected'].includes(row.status)))) throw new HttpError(403, '의뢰자 또는 담당자만 사진을 변경할 수 있습니다.');
@@ -3533,7 +3533,7 @@ route('GET', '/api/dev-roadmap', async ({ query }) => {
     FROM requests r LEFT JOIN dev_plans p ON p.request_id=r.id WHERE ${where.join(' AND ')} ORDER BY COALESCE(NULLIF(p.target_date,''), r.due_date, '9999') , r.id LIMIT 500`).all(...args);
   const steps = new Map(); for (const st of await db.prepare(`SELECT * FROM dev_plan_steps ${query.id ? 'WHERE request_id=? ' : ''}ORDER BY request_id, sort, id`).all(...(query.id ? [Number(query.id)] : []))) { if (!steps.has(st.request_id)) steps.set(st.request_id, []); steps.get(st.request_id).push(st); }
   const ana = new Map(); // 15.286 연결된 연구 분석(단계·결과)
-  for (const a of await db.prepare(`SELECT id, req_no, title, category, status, result_note, requester_name, created_at, updated_at, CAST(json_extract(data,'$.dev_request_id') AS INTEGER) AS dev_id, COALESCE(json_extract(data,'$.dev_step'),'') AS dev_step FROM requests WHERE type='rnd_analysis' AND status<>'rejected' AND json_extract(data,'$.dev_request_id') IS NOT NULL ${query.id ? "AND json_extract(data,'$.dev_request_id')=?" : ''} ORDER BY id`).all(...(query.id ? [Number(query.id)] : []))) { if (!ana.has(a.dev_id)) ana.set(a.dev_id, []); ana.get(a.dev_id).push(a); }
+  for (const a of await db.prepare(`SELECT id, req_no, title, category, status, result_note, requester_name, created_at, updated_at, CAST(json_extract(data,'$.dev_request_id') AS INTEGER) AS dev_id, COALESCE(json_extract(data,'$.dev_step'),'') AS dev_step, COALESCE(json_extract(data,'$.analysis_date'),'') AS analysis_date FROM requests WHERE type='rnd_analysis' AND status<>'rejected' AND json_extract(data,'$.dev_request_id') IS NOT NULL ${query.id ? "AND json_extract(data,'$.dev_request_id')=?" : ''} ORDER BY id`).all(...(query.id ? [Number(query.id)] : []))) { if (!ana.has(a.dev_id)) ana.set(a.dev_id, []); ana.get(a.dev_id).push(a); }
   return { rows: rows.map(r => ({ ...r, term: r.term || '', progress: r.progress || 0, steps: steps.get(r.id) || [], analyses: ana.get(r.id) || [] })) };
 });
 // 15.277 담당자(개발·영업): 개발 담당·개발 승인권자·영업·관리자가 지정. 바뀌면 소통 내역에 [담당자] 한 줄을 같이 남김.
@@ -3664,6 +3664,30 @@ route('POST', '/api/requests/:id/status', async ({ user, params, body }) => {
   }
   await db.batch(cmds);
   return decodeRequest((await getRequest(r.id)));
+});
+// 15.287 개발건 단계에 분석데이터 바로 입력(연구 담당): 승인 없이 완료된 연구 분석(RA- 번호)으로 저장하고 단계에 연결, 이력 남김
+route('POST', '/api/dev-roadmap/:id/analysis-data', async ({ user, params, body }) => {
+  if (!hasRole(user, 'dev') && !hasRole(user, 'dev_approver')) throw new HttpError(403, '분석데이터는 연구(개발) 담당자가 입력합니다.');
+  const result = reqStr(body.result_note, '분석 결과', 1000);
+  const date = body.analysis_date ? dateStr(body.analysis_date, '분석일') : today();
+  const items = (Array.isArray(body.items) ? body.items : []).map(x => str(x, 50)).filter(Boolean).slice(0, 30);
+  const data = { items, sample_qty: str(body.sample_qty, 50), extra: str(body.note, 2000), analysis_date: date, entered_directly: 1, dev_request_id: params.id, dev_step: body.dev_step };
+  const dev = await rndDevLink(data);
+  const f = requestFields('rnd_analysis', { title: body.title, customer: (await getRequest(dev.id)).customer || '', due_date: '', category: body.category, data });
+  const token = 'ad:' + crypto.randomUUID(), ymd = date.slice(2).replace(/-/g, ''), prefix = `${REQUEST_PREFIX.rnd_analysis}-${ymd}-`;
+  await db.batch([
+    { sql: 'INSERT INTO requests(type,title,customer,due_date,category,target_price,data,requester_id,requester_name,status,result_note,approver_name,approved_at,req_no) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      args: ['rnd_analysis', f.title, f.customer, '', f.category, '', JSON.stringify({ ...f.data, token }), user.id, user.name, 'done', result, user.name, now(), token] },
+    { sql: "UPDATE requests SET req_no=? || printf('%02d', (SELECT COALESCE(MAX(CAST(substr(req_no, length(?) + 1) AS INTEGER)),0)+1 FROM requests WHERE req_no LIKE ?)) WHERE req_no=?", args: [prefix, prefix, prefix + '%', token] },
+  ]);
+  const row = await db.prepare("SELECT * FROM requests WHERE type='rnd_analysis' AND json_extract(data,'$.token')=?").get(token);
+  row.data = JSON.stringify({ ...JSON.parse(row.data), token: undefined });
+  const label = `${row.req_no} ${f.title} (${f.category})${data.dev_step ? ` · 단계 「${data.dev_step}」` : ''}`;
+  await db.batch([
+    { sql: "UPDATE requests SET data=json_remove(data,'$.token') WHERE id=?", args: [row.id] },
+    { sql: 'INSERT INTO progress_comments(entity_type,entity_id,content,author_id,author_name) VALUES(?,?,?,?,?)', args: ['request', row.id, `[분석결과] 분석데이터 입력 · 분석일 ${date} · ${result}`.slice(0, 2000), user.id, user.name] },
+    rndDevNote(user, dev.id, `분석데이터 · ${label} · 분석일 ${date} · 결과: ${result}`)]);
+  return decodeRequest(row);
 });
 // 15.286 이미 있는 연구 분석을 개발건·단계에 연결(바꾸기·끊기). 연구 담당·승인권자·의뢰자.
 route('POST', '/api/requests/:id/dev-link', async ({ user, params, body }) => {

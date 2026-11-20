@@ -246,20 +246,22 @@ const DEV_TALK = [['진행', '진행내용', '#1c7ed6'], ['영업', '영업 코�
 const DEV_ANA = ['분석', '분석 결과', '#0c8599']; // 15.286 연구 분석 이력
 const devTalkKind = text => { const m = /^\[(진행|영업|요청|담당자|분석)\]\s?/.exec(text || ''); return m ? [m[1], text.slice(m[0].length)] : ['', text || '']; };
 let DEV_DIRECTORY = null;
-// 15.286 개발건(단계)에서 바로 연구 분석의뢰
-async function rndAnalysisNew(dev, step = '') {
+// 15.287 개발건 단계에 분석데이터 바로 입력(연구 담당): 승인 없이 완료된 연구 분석(RA-)으로 저장 · 단계 연결 · 이력
+async function rndAnalysisData(dev, step = '') {
   const cfg = REQ.rnd_analysis, cats = cfg.fields.find(f => f.k === 'category').opts, items = cfg.fields.find(f => f.k === 'items').opts;
-  const v = await promptBox(`연구 분석의뢰 · ${dev.title}`, `<p class="small muted">이 개발건${step ? `의 「${esc(step)}」 단계` : ''}에 연결된 분석의뢰를 올립니다. 연구책임자가 승인하면 연구 분석리스트에 올라가고, 결과가 들어오면 이 창의 단계별 분석 결과와 소통에 남습니다.</p>
-    <div class="form-grid"><label>샘플명 *<input name="title" required maxlength="200" value="${esc(dev.title)}"></label>
-      <label>분석 구분 *<select name="category" required>${cats.map(c => `<option>${esc(c)}</option>`).join('')}</select></label>
+  let root = null;
+  const v = await promptBox(`분석데이터 입력 · ${dev.title}`, `<p class="small muted">이 개발건${step ? `의 「${esc(step)}」 단계` : ''}에서 분석한 데이터를 넣습니다. 완료된 연구 분석(RA- 번호)으로 저장되고 단계별 분석 결과·소통 이력에 남습니다. 그래프·성적서는 저장 뒤 분석을 열어 「사진 보기·첨부」로 붙이세요.</p>
+    <div class="form-grid"><label>분석일 *<input type="date" name="analysis_date" required value="${todayStr()}"></label>
       <label>단계<select name="dev_step"><option value="">단계 미지정</option>${dev.steps.map(s => `<option${s.name === step ? ' selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label>
-      <label>샘플수량<input name="sample_qty" maxlength="50"></label><label>완료 희망일<input type="date" name="due_date"></label>
-      <label class="span3">의뢰목적<input name="purpose" maxlength="200"></label></div>
-    <fieldset class="vendor-sec"><legend>의뢰 항목</legend><div class="dc-ana-checks">${items.map(i => `<label class="inline"><input type="checkbox" name="items" value="${esc(i)}"> ${esc(i)}</label>`).join('')}</div></fieldset>
-    <label>추가 요청사항<textarea name="extra" rows="2" maxlength="2000"></textarea></label>`, { wide: true,
-    submit: async (val, el) => { const picked = [...(el || document).querySelectorAll('.modal [name=items]:checked')].map(i => i.value);
-      return api('POST', '/api/requests', { type: 'rnd_analysis', title: val.title, customer: dev.customer || '', due_date: val.due_date, category: val.category, data: { purpose: val.purpose, sample_qty: val.sample_qty, items: picked, extra: val.extra, dev_request_id: dev.id, dev_step: val.dev_step } }); } });
-  if (v) toast('연구 분석의뢰를 올렸습니다(접수대기). 연구책임자가 승인하면 진행됩니다.');
+      <label>분석 구분 *<select name="category" required>${cats.map(c => `<option${c === '시제품분석' ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
+      <label class="span2">샘플·시료명 *<input name="title" required maxlength="200" value="${esc(dev.title)}${step ? ' ' + esc(step) : ''}"></label>
+      <label>샘플수량<input name="sample_qty" maxlength="50"></label></div>
+    <fieldset class="vendor-sec"><legend>분석 항목</legend><div class="dc-ana-checks">${items.map(i => `<label class="inline"><input type="checkbox" data-ad-item value="${esc(i)}"> ${esc(i)}</label>`).join('')}</div></fieldset>
+    <label>분석 결과 * <span class="hint">(측정값·판정·비교 등)</span><textarea name="result_note" required rows="4" maxlength="1000" placeholder="예) 파티클 95/ft² (기준 150 이하) 합격 · 흡수성능 4.2g/g"></textarea></label>
+    <label>비고<input name="note" maxlength="300"></label>`, { wide: true,
+    onOpen: el => { root = el; },
+    submit: async val => api('POST', `/api/dev-roadmap/${dev.id}/analysis-data`, { ...val, items: $$('[data-ad-item]:checked', root).map(i => i.value) }) });
+  if (v) toast(`분석데이터를 저장했습니다 · ${v.req_no}`);
   return !!v;
 }
 async function rndOpen(id, after) {
@@ -308,12 +310,13 @@ async function devCaseWindow(id, done) {
       <div class="small dr-now">${r.current_stage ? `<span>현재 <b>${esc(r.current_stage)}</b></span>` : '<span class="muted">현재 진행현황 미입력</span>'}${r.next_step ? `<span>다음 <b>${esc(r.next_step)}</b>${r.next_date ? ` ${esc(r.next_date)}` : ''}</span>` : ''}${r.steps.length ? `<span>공정 ${r.steps.filter(x => x.status === 'done').length}/${r.steps.length}</span>` : ''}</div>`; };
   summary();
   // 15.286 단계별 분석 결과: 로드맵 공정 순서대로, 각 단계에 연결된 연구 분석(상태·결과). 단계마다 「＋ 분석의뢰」
+  const canAna = hasRole('dev') || hasRole('dev_approver');
   const anaBox = () => {
     const list = r.analyses || [], names = [...r.steps.map(s => s.name), ...list.map(a => a.dev_step).filter(Boolean)].filter((n, i, all) => all.indexOf(n) === i);
     const groups = [...names.map(n => [n, r.steps.find(s => s.name === n)]), ['', null]];
-    const item = a => `<button type="button" class="dc-ana-item st-${a.status}" data-dc-ana-open="${a.id}">${a.req_no ? `<span class="dc-ana-no">${esc(a.req_no)}</span> ` : ''}<b>${esc(a.title)}</b> <span class="chip">${esc(a.category)}</span> ${statusChip(a.status)}<div class="dc-ana-res">${a.result_note ? `결과 <b>${esc(a.result_note)}</b>` : '<span class="muted">결과 대기</span>'} <span class="small muted">· ${esc(String(a.updated_at || a.created_at).slice(0, 10))}</span></div></button>`;
-    $('[data-dc-ana]', el).innerHTML = groups.map(([n, st]) => { const as = list.filter(a => (a.dev_step || '') === n); if (!n && !as.length) return ''; return `<div class="dc-ana-step"><div class="dc-ana-h"><b>${n ? esc(n) : '단계 미지정'}</b>${st ? ` <span class="small muted">${esc((st.start_date || '').slice(5))}~${esc((st.end_date || '').slice(5))}</span> <span class="chip" style="color:${DEV_STEP_STATE[st.status]?.[1]};border-color:${DEV_STEP_STATE[st.status]?.[1]}">${DEV_STEP_STATE[st.status]?.[0] || ''}</span>` : ''}<span class="small muted">분석 ${as.length}건${as.length ? ` · 완료 ${as.filter(a => a.status === 'done').length}` : ''}</span><button type="button" class="btn small" data-dc-ana-new="${esc(n)}">＋ 분석의뢰</button></div>${as.map(item).join('') || '<p class="small muted dc-ana-none">아직 연결된 분석이 없습니다.</p>'}</div>`; }).join('') || '<p class="small muted">공정표에 단계를 넣으면 단계별로 분석을 연결할 수 있습니다. 「＋ 분석의뢰」로 바로 의뢰할 수도 있습니다.</p>';
-    if (!r.steps.length && !list.length) $('[data-dc-ana]', el).insertAdjacentHTML('beforeend', '<div class="actions" style="justify-content:flex-start"><button type="button" class="btn small" data-dc-ana-new="">＋ 분석의뢰</button></div>');
+    const item = a => `<button type="button" class="dc-ana-item st-${a.status}" data-dc-ana-open="${a.id}">${a.req_no ? `<span class="dc-ana-no">${esc(a.req_no)}</span> ` : ''}<b>${esc(a.title)}</b> <span class="chip">${esc(a.category)}</span> ${statusChip(a.status)}<div class="dc-ana-res">${a.result_note ? `결과 <b>${esc(a.result_note)}</b>` : '<span class="muted">결과 대기</span>'} <span class="small muted">· ${esc(a.analysis_date || String(a.updated_at || a.created_at).slice(0, 10))}</span></div></button>`;
+    $('[data-dc-ana]', el).innerHTML = groups.map(([n, st]) => { const as = list.filter(a => (a.dev_step || '') === n); if (!n && !as.length) return ''; return `<div class="dc-ana-step"><div class="dc-ana-h"><b>${n ? esc(n) : '단계 미지정'}</b>${st ? ` <span class="small muted">${esc((st.start_date || '').slice(5))}~${esc((st.end_date || '').slice(5))}</span> <span class="chip" style="color:${DEV_STEP_STATE[st.status]?.[1]};border-color:${DEV_STEP_STATE[st.status]?.[1]}">${DEV_STEP_STATE[st.status]?.[0] || ''}</span>` : ''}<span class="small muted">분석 ${as.length}건${as.length ? ` · 완료 ${as.filter(a => a.status === 'done').length}` : ''}</span>${canAna ? `<button type="button" class="btn small" data-dc-ana-new="${esc(n)}">＋ 분석데이터</button>` : ''}</div>${as.map(item).join('') || '<p class="small muted dc-ana-none">아직 연결된 분석이 없습니다.</p>'}</div>`; }).join('') || '<p class="small muted">공정표에 단계를 넣으면 단계별로 분석데이터를 넣고 볼 수 있습니다.</p>';
+    if (!r.steps.length && !list.length && canAna) $('[data-dc-ana]', el).insertAdjacentHTML('beforeend', '<div class="actions" style="justify-content:flex-start"><button type="button" class="btn small" data-dc-ana-new="">＋ 분석데이터</button></div>');
   };
   anaBox();
   const endpoint = `/api/comments/request/${id}`; let rows = [], next = null, filter = 'all';
@@ -333,7 +336,7 @@ async function devCaseWindow(id, done) {
     const del = e.target.closest('[data-dc-del]'); if (del) { if (!(await confirmBox('이 글을 지울까요? 쓴 지 10분 안에만 지울 수 있고 자리에 「(삭제됨)」이 남습니다.'))) return; try { await api('DELETE', `${endpoint}/${del.dataset.dcDel}`); changed = true; await loadTalk(); } catch (err) { fail(err); } return; }
     if (e.target.closest('[data-dc-owner-save]')) { try { const res = await api('PUT', `/api/dev-roadmap/${id}/owners`, { dev_owner_id: $('[name=dev_owner_id]', el).value, sales_owner_id: $('[name=sales_owner_id]', el).value }); toast(res.changed ? '담당자를 저장했습니다.' : '바뀐 담당자가 없습니다.'); if (res.changed) { changed = true; r = await load1(); await loadTalk(); } } catch (err) { fail(err); } return; }
     if (e.target.closest('[data-dc-plan]')) { await devPlanEditor(r, async () => { changed = true; r = await load1(); summary(); anaBox(); }); return; }
-    const an = e.target.closest('[data-dc-ana-new]'); if (an) { if (await rndAnalysisNew(r, an.dataset.dcAnaNew)) { changed = true; r = await load1(); anaBox(); await loadTalk(); } return; }
+    const an = e.target.closest('[data-dc-ana-new]'); if (an) { if (await rndAnalysisData(r, an.dataset.dcAnaNew)) { changed = true; r = await load1(); anaBox(); await loadTalk(); } return; }
     const ao = e.target.closest('[data-dc-ana-open]'); if (ao) { await rndOpen(Number(ao.dataset.dcAnaOpen), async () => { changed = true; r = await load1(); anaBox(); await loadTalk(); }); return; }
     if (e.target.closest('[data-dc-req]')) { try { const full = (await api('GET', '/api/requests?' + new URLSearchParams({ type: 'development', q: r.req_no || r.title }))).find(x => x.id === r.id); if (full) requestDetail('development', full, async () => { changed = true; }); else toast('의뢰서를 찾지 못했습니다.'); } catch (err) { fail(err); } }
   });

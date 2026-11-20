@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.286';
+const APP_VERSION = '15.287';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -730,13 +730,18 @@ function managedTabs(main, route) {
 const PROCESS_FLOWS = [
   { key: 'order', name: '주문 · 출하 · 매출', steps: [['#/sales/quotes', '견적'], ['#/sales/orders', '수주'], ['#/sales/mr', '생산의뢰'], ['#/prod/orders', '생산의뢰 접수'], ['#/prod/finished/plan', '생산계획'], ['#/prod/finished', '생산실적'], ['#/logistics/ship-orders', '출하지시'], ['#/logistics/ship', '출하'], ['#/sales/bills', '매출전표'], ['#/sales/tax', '세금계산서'], ['#/purchase/payments', '입금확인']] },
   { key: 'buy', name: '구매 · 입고 · 매입', steps: [['#/sales/orders', '수주'], ['#/sales/pr', '구매의뢰'], ['#/purchase/po', '발주'], ['#/logistics/receive', '입고확인'], ['#/quality/inspections', '수입검사'], ['#/purchase/bills', '매입전표'], ['#/purchase/tax', '매입 세금계산서'], ['#/purchase/disbursements', '지급확인']] },
+  // 15.287 품질: 분석의뢰 · 수입검사 · 출하검사 · VOC (분석 관리 목록의 검사구분 칩을 누르면 그 흐름으로)
+  { key: 'qreq', name: '품질 분석의뢰', steps: [['#/quality/request', '분석의뢰·접수'], ['#/quality/list', '분석 진행·결과'], ['#/quality/inspections', '검사 이력']] },
+  { key: 'qin', name: '수입검사', on: ['#/quality/list', '#/quality/inspections'], steps: [['#/purchase/po', '발주'], ['#/logistics/receive', '입고확인'], ['#/quality/list', '수입검사'], ['#/quality/inspections', '판정·이력'], ['#/purchase/bills', '매입전표']] },
+  { key: 'qout', name: '출하검사', on: ['#/quality/list', '#/quality/inspections'], steps: [['#/prod/finished', '생산실적'], ['#/quality/list', '출하검사'], ['#/quality/inspections', '판정·이력'], ['#/logistics/ship-orders', '출하지시'], ['#/logistics/ship', '출하']] },
+  { key: 'voc', name: 'VOC 처리', steps: [['#/quality/voc/request', 'VOC 접수'], ['#/quality/voc/list', 'VOC 처리'], ['#/prod/lot-trace', 'LOT 연결 조회']] },
   { key: 'semi', name: '반제품 · 포장 생산', steps: [['#/prod/semi', '반제품 계획'], ['#/prod/semi/cut', '커팅/융착'], ['#/prod/semi/wash', '세탁'], ['#/prod/finished', '포장(완제품 실적)'], ['#/logistics/ship', '출하']] },
 ];
 const FLOW_KEY = 'wpa:flow', FLOW_FOLD = 'wpa:flow-fold';
 const flowStore = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } return null; };
 function processGuide(main, route) {
   $('.proc-guide', main)?.remove();
-  const r = navRoute(TAB_ON[route] || route), flows = PROCESS_FLOWS.filter(f => f.steps.some(([h]) => h === r)); if (!flows.length) return;
+  const r0 = TAB_ON[route] || route, r = PROCESS_FLOWS.some(f => f.steps.some(([h]) => h === r0)) ? r0 : navRoute(r0), flows = PROCESS_FLOWS.filter(f => f.steps.some(([h]) => h === r) && (!f.on || f.on.includes(r))); if (!flows.length) return; // 15.287 on: 이 흐름을 보여 줄 화면(품질 화면에서만) 의뢰 화면(별칭)도 제 단계로
   const anchor = $('.manage-tabs', main) || $('h1', main); if (!anchor || anchor.closest('.modal')) return;
   const box = document.createElement('nav'); box.className = 'proc-guide'; box.setAttribute('aria-label', '업무 흐름 안내');
   const draw = () => {
@@ -2311,7 +2316,7 @@ function requestDetail(type, r, reload) {
       ${type === 'rnd_analysis' ? `<div class="rq-kv full"><span>연결 개발건</span><b>${r.data?.dev_request_id ? `${esc(r.data.dev_title || '')}${r.data.dev_step ? ` · 단계 「${esc(r.data.dev_step)}」` : ''}` : '<span class="muted">연결 안 됨</span>'}</b></div>` : ''}
       ${type === 'voc' && r.data?.lot ? `<div class="rq-kv full"><span>LOT 연결</span><b><button type="button" class="link-btn" data-lt-open="${esc(r.data.lot)}">${esc(r.data.lot)} · LOT 연결 조회 →</button></b></div>` : ''}
     </div>
-    <details class="rq-more"><summary>더보기 · 상세 내용 <span class="small muted">(${filled}개 항목${r.source_type ? ' · 입고 출처' : ''}${['development','sample','sample_goods'].includes(type) ? ' · 사진' : ''}${r.approver_name ? ' · 접수 기록' : ''})</span></summary>
+    <details class="rq-more"><summary>더보기 · 상세 내용 <span class="small muted">(${filled}개 항목${r.source_type ? ' · 입고 출처' : ''}${['development','sample','sample_goods','rnd_analysis'].includes(type) ? ' · 사진' : ''}${r.approver_name ? ' · 접수 기록' : ''})</span></summary>
     <table class="kv">
       ${r.source_type ? `<tr><th>입고 출처</th><td><a href="${r.source_type === 'purchase_order' ? '#/logistics/receive' : '#/logistics/other'}">${r.source_type === 'purchase_order' ? '발주입고' : '기타입고'} #${esc(r.source_id)}</a>${r.data.purchase_req_no ? ' · 구매의뢰번호 ' + esc(r.data.purchase_req_no) : ''}</td></tr>
       <tr><th>입고일 / 분류</th><td>${esc(r.data.received_date || '')} / ${esc(r.data.item_category || '미분류')}</td></tr>
@@ -2320,14 +2325,14 @@ function requestDetail(type, r, reload) {
       ${r.approver_name ? `<tr><th>${r.status === 'rejected' ? '반려자' : '접수자'}</th><td>${esc(r.approver_name)}${r.approved_at ? ' · ' + esc(r.approved_at.slice(0, 16)) : ''}</td></tr>` : ''}
       ${rows}
     </table>
-    ${type !== 'voc' && (r.source_type || ['development','sample','sample_goods'].includes(type)) ? '<h4>첨부 사진 · 기록</h4><div data-request-photos></div>' : ''}
+    ${type !== 'voc' && (r.source_type || ['development','sample','sample_goods','rnd_analysis'].includes(type)) ? '<h4>첨부 사진 · 기록</h4><div data-request-photos></div>' : ''}
     </details>
     ${type === 'voc' ? '<h4>첨부 사진 · 기록</h4><div data-request-photos></div>' : ''}
     </div>
     <div class="actions wrap">
       <button class="btn" data-a="print">인쇄</button>${commentButton("request", r.id, r.title)}
       ${type==='analysis' && ['수입검사','출하검사'].includes(r.category) ? '<button class="btn primary" data-a="inspection">검사규격·측정값</button>' : ''}
-      ${['development','sample','sample_goods','voc'].includes(type) ? '<button class="btn" data-a="photos">사진 보기·첨부</button>' : ''}
+      ${['development','sample','sample_goods','voc','rnd_analysis'].includes(type) ? '<button class="btn" data-a="photos">사진 보기·첨부</button>' : ''}
       ${(mine && ['pending', 'rejected'].includes(r.status)) || mgr ? '<button class="btn" data-a="edit">수정</button>' : ''}
       ${(mine && ['pending', 'rejected'].includes(r.status)) || mgr ? '<button class="btn danger" data-a="del">삭제</button>' : ''}
       ${approver && r.status === 'pending' ? '<button class="btn red" data-a="reject">반려</button><button class="btn primary" data-a="approve">승인</button>' : ''}
@@ -2335,7 +2340,7 @@ function requestDetail(type, r, reload) {
       ${type === 'rnd_analysis' && (mgr || mine || hasRole('dev_approver')) ? '<button class="btn" data-a="devlink">개발건 연결</button>' : ''}
       ${mgr && ['waiting', 'progress', 'done'].includes(r.status) ? `<button class="btn${type === 'rnd_analysis' ? ' primary' : ''}" data-a="status">${type === 'rnd_analysis' ? '분석결과 입력' : '상태/결과 변경'}</button>` : ''}
     </div>`, { wide: true });
-  if (['development','sample','sample_goods','voc'].includes(type)) renderAttachmentPreview($('[data-request-photos]', m.el), 'request', r.id);
+  if (['development','sample','sample_goods','voc','rnd_analysis'].includes(type)) renderAttachmentPreview($('[data-request-photos]', m.el), 'request', r.id);
   else if (r.source_type) renderAttachmentPreview($('[data-request-photos]', m.el), r.source_type, r.source_id);
   const act = async (a) => {
     try {
@@ -2498,7 +2503,7 @@ async function pageWorkList(type) {
   };
   $$('#stSeg button').forEach((b) => (b.onclick = () => { status = b.dataset.s; $$('#stSeg button').forEach((x) => x.classList.toggle('on', x === b)); filterForm.requestSubmit(); }));
   $$('#qcSeg button').forEach((b) => (b.onclick = () => { qc = b.dataset.qc; $$('#qcSeg button').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', String(x === b)); }); filterForm.requestSubmit(); }));
-  $$('#catSeg button').forEach((b) => (b.onclick = () => { category = b.dataset.c; $$('#catSeg button').forEach((x) => x.classList.toggle('on', x === b)); filterForm.requestSubmit(); }));
+  $$('#catSeg button').forEach((b) => (b.onclick = () => { category = b.dataset.c; $$('#catSeg button').forEach((x) => x.classList.toggle('on', x === b)); if (type === 'analysis') { try { localStorage.setItem('wpa:flow', { 수입검사: 'qin', 출하검사: 'qout' }[category] || 'qreq'); } catch { /* 편의 */ } try { processGuide(main, '#/quality/list'); } catch { /* 편의 */ } } filterForm.requestSubmit(); })); // 15.287 검사구분 → 업무 흐름
   bindListControls(filterForm, load, () => {
     status = ''; category = '';
     $$('#stSeg button', main).forEach(button => button.classList.toggle('on', !button.dataset.s));
