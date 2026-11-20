@@ -506,7 +506,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'qualifications', 'supplier_evals', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'qualifications', 'supplier_evals', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests', 'quality_audits', 'audit_findings', 'validations', 'quality_goals', 'quality_kpi_values', 'quality_risks'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -4772,6 +4772,261 @@ route('PUT', '/api/reliability/:id', async ({ user, params, body }) => {
     .run(...REL_COLS.map(k => f[k]), to, judge, pushHist(prior, { by: user.name, what: to !== prior.status ? '단계' : '수정', ...(to !== prior.status ? { status: [prior.status, to] } : {}), fields: changed, ...(judge !== prior.judge && judge ? { reason: `판정 ${judge}` } : {}), ...(reason ? { reason } : {}) }), user.name, prior.id, prior.revision);
   if (!r.changes) throw conflict();
   return relRow(await mustGet('reliability_tests', prior.id));
+});
+// ── 15.308 품질 4단계: 심사(Audit) 관리 · 밸리데이션 · 품질목표·KPI · 리스크 관리 ──
+// 부적합·CAPA를 다른 화면에서 만들 때(심사 지적 등) 같은 번호 규칙·검사로 넣는다.
+async function ncCreate(user, src, fields, key = null) {
+  const f = ncBody(fields), prefix = 'NC-' + today().slice(2).replace(/-/g, '') + '-';
+  const r = await db.prepare(`INSERT INTO nonconformities(nc_no,source_type,source_id,source_no,${NC_COLS.join(',')},history,request_id,created_by) VALUES(${nextDocNo('nonconformities', 'nc_no')},?,?,?,${NC_COLS.map(() => '?').join(',')},?,?,?)`)
+    .run(prefix, prefix, prefix, src.type, src.id ?? null, src.no || '', ...NC_COLS.map(k => f[k]), JSON.stringify([{ at: now(), by: user.name, what: '등록', source: src.no || '' }]), key, user.name);
+  return mustGet('nonconformities', r.lastInsertRowid);
+}
+// A4 심사: 계획 → 실시(실시일·체크리스트) → 시정 중(열린 지적이 있으면) → 종결(지적의 CAPA가 모두 종결·권고는 확인). 중·경 지적은 CAPA 자동 생성.
+const AUD_KIND = { customer: '고객사 수검', internal: '내부심사', supplier: '협력사 심사', cert: '인증심사' };
+const AUD_STATUS = { planned: '계획', done: '실시', correcting: '시정 중', closed: '종결', void: '취소' };
+const FND_GRADE = { major: '중대(Major)', minor: '경미(Minor)', obs: '권고(관찰)' };
+const AUD_COLS = ['title', 'kind', 'target', 'cert_id', 'plan_date', 'done_date', 'auditors', 'scope', 'checklist', 'summary'];
+function audBody(o0, prior = {}) {
+  const o = o0 && typeof o0 === 'object' ? o0 : {}, pick = k => o[k] === undefined ? prior[k] : o[k];
+  const kind = pick('kind'); if (!AUD_KIND[kind]) throw bad('심사 유형을 고르세요.');
+  let cl = pick('checklist'); if (typeof cl === 'string') { try { cl = JSON.parse(cl || '[]'); } catch { cl = []; } }
+  cl = (Array.isArray(cl) ? cl : []).slice(0, 100).map(x => ({ q: str(x?.q, 300), result: ['', '적합', '부적합', '관찰', '해당 없음'].includes(x?.result) ? x.result : '', note: str(x?.note, 300) })).filter(x => x.q);
+  const f = { title: reqStr(pick('title'), '심사명', 200), kind, target: str(pick('target'), 100), cert_id: kind === 'cert' ? optId(pick('cert_id')) : null, plan_date: dateStr(pick('plan_date'), '심사 예정일'), done_date: qDate(pick('done_date'), '실시일'),
+    auditors: str(pick('auditors'), 200), scope: str(pick('scope'), 1000), checklist: JSON.stringify(cl), summary: str(pick('summary'), 2000) };
+  if (f.done_date && f.done_date > today()) throw bad('실시일이 오늘보다 늦습니다.');
+  return f;
+}
+async function audRows(where = '', args = []) {
+  const audits = await db.prepare(`SELECT * FROM quality_audits ${where} ORDER BY CASE WHEN status IN ('closed','void') THEN 1 ELSE 0 END, plan_date DESC, id DESC LIMIT 1000`).all(...args);
+  const fs0 = await db.prepare('SELECT f.*, n.nc_no, n.status AS nc_status, n.due_date AS nc_due FROM audit_findings f LEFT JOIN nonconformities n ON n.id=f.nc_id ORDER BY f.id').all();
+  const certs = await db.prepare('SELECT id, kind, cert_no FROM certifications').all();
+  return audits.map(a => { const fnd = fs0.filter(f => f.audit_id === a.id).map(f => ({ ...f, grade_label: FND_GRADE[f.grade], closed: f.grade === 'obs' ? !!f.obs_done : f.nc_status === 'closed' || f.nc_status === 'void', nc_status_label: NC_STATUS[f.nc_status] || '' }));
+    const c = certs.find(x => x.id === a.cert_id);
+    return { ...a, checklist: JSON.parse(a.checklist || '[]'), files: JSON.parse(a.files || '[]'), history: JSON.parse(a.history || '[]'), kind_label: AUD_KIND[a.kind], status_label: AUD_STATUS[a.status], findings: fnd, open_findings: fnd.filter(f => !f.closed).length, cert_label: c ? `${c.kind} ${c.cert_no}`.trim() : '' }; });
+}
+const audOne = async id => (await audRows('WHERE id=?', [Number(id)]))[0] || (() => { throw new HttpError(404, '심사를 찾을 수 없습니다.'); })();
+route('GET', '/api/audits', async ({ user }) => ({ rows: await audRows(), certs: (await db.prepare("SELECT id, kind, cert_no, next_audit FROM certifications WHERE status IN ('valid','suspended','prep') ORDER BY kind").all()), can_manage: isQuality(user), today: today() }));
+route('POST', '/api/audits', async ({ user, body }) => {
+  requireRole(user, 'quality', '품질'); const key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT id FROM quality_audits WHERE request_id=?').get(key); if (old) return audOne(old.id); }
+  const f = audBody(body), prefix = 'AUD-' + today().slice(2).replace(/-/g, '') + '-';
+  const r = await db.prepare(`INSERT INTO quality_audits(audit_no,${AUD_COLS.join(',')},history,request_id,created_by) VALUES(${nextDocNo('quality_audits', 'audit_no')},${AUD_COLS.map(() => '?').join(',')},?,?,?)`)
+    .run(prefix, prefix, prefix, ...AUD_COLS.map(k => f[k]), JSON.stringify([{ at: now(), by: user.name, what: '계획 등록' }]), key, user.name);
+  return audOne(r.lastInsertRowid);
+});
+route('PUT', '/api/audits/:id', async ({ user, params, body }) => {
+  requireRole(user, 'quality', '품질'); const prior = await mustGet('quality_audits', params.id), cur = await audOne(prior.id);
+  if (Number(body.revision) !== prior.revision) throw conflict();
+  if (['closed', 'void'].includes(prior.status) && !(body.status && body.status !== prior.status && hasRole(user, 'quality_approver'))) throw bad(`${AUD_STATUS[prior.status]}된 심사입니다. 다시 열려면 품질책임자가 상태를 바꾸세요.`);
+  const f = audBody(body, prior), reason = str(body.reason, 300);
+  let to = body.status && AUD_STATUS[body.status] ? body.status : prior.status;
+  if (to !== prior.status) {
+    if (to === 'void') { if (!reason) throw bad('취소 사유를 적으세요.'); if (cur.findings.length) throw bad('지적사항이 있는 심사는 취소할 수 없습니다.'); }
+    else if (to === 'done') { if (!f.done_date) f.done_date = today(); to = cur.open_findings ? 'correcting' : 'done'; }
+    else if (to === 'closed') { if (!f.done_date) throw bad('실시한 심사만 종결합니다.'); if (cur.open_findings) throw bad(`열린 지적사항 ${cur.open_findings}건의 CAPA를 종결(권고는 「확인」)해야 심사를 종결합니다.`); }
+    else if (to === 'planned' && !hasRole(user, 'quality_approver')) throw new HttpError(403, '다시 열기는 품질책임자가 합니다.');
+  }
+  const cur0 = JSON.parse(prior.files || '[]'), keepNames = body.keep_files === undefined ? cur0.map(x => x.file) : body.keep_files;
+  if (!Array.isArray(keepNames) || keepNames.some(n => !cur0.some(x => x.file === n))) throw bad('남길 파일을 다시 확인하세요.');
+  const keep = cur0.filter(x => keepNames.includes(x.file)); if (keep.length + (body.files || []).length > 10) throw bad('파일은 10개까지입니다.');
+  const added = await saveDocFiles(body.files, 5), files = [...keep, ...added];
+  try {
+    const changed = AUD_COLS.filter(k => (prior[k] ?? null) !== (f[k] ?? null)); if (added.length || keep.length !== cur0.length) changed.push('files');
+    if (!changed.length && to === prior.status) return cur;
+    const closing = to === 'closed' && prior.status !== 'closed';
+    const r = await db.prepare(`UPDATE quality_audits SET ${AUD_COLS.map(k => k + '=?').join(',')},files=?,status=?,closed_by=CASE WHEN ?=1 THEN ? ELSE closed_by END,closed_at=CASE WHEN ?=1 THEN ? ELSE closed_at END,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`)
+      .run(...AUD_COLS.map(k => f[k]), JSON.stringify(files), to, closing ? 1 : 0, user.name, closing ? 1 : 0, now(), pushHist(prior, { by: user.name, what: to !== prior.status ? '단계' : '수정', ...(to !== prior.status ? { status: [prior.status, to] } : {}), fields: changed, ...(reason ? { reason } : {}) }), user.name, prior.id, prior.revision);
+    if (!r.changes) throw conflict();
+  } catch (error) { await removePhotos(added.map(x => x.file)); throw error; }
+  await removePhotos(cur0.filter(x => !keepNames.includes(x.file)).map(x => x.file));
+  return audOne(prior.id);
+});
+route('POST', '/api/audits/:id/findings', async ({ user, params, body }) => {
+  requireRole(user, 'quality', '품질'); const a = await mustGet('quality_audits', params.id), key = str(body.request_id, 80) || null;
+  if (key && await db.prepare('SELECT 1 FROM audit_findings WHERE request_id=?').get(key)) return audOne(a.id);
+  if (['closed', 'void'].includes(a.status)) throw bad('종결·취소된 심사에는 지적을 더할 수 없습니다.');
+  if (!FND_GRADE[body.grade]) throw bad('지적 등급(중대·경미·권고)을 고르세요.');
+  const content = reqStr(body.content, '지적 내용', 1000), due = qDate(body.due_date, '시정 기한') || (body.grade === 'obs' ? null : addDaysISO(today(), body.grade === 'major' ? 30 : 60));
+  let nc = null;
+  if (body.grade !== 'obs') nc = await ncCreate(user, { type: 'audit', id: a.id, no: a.audit_no }, { kind: '심사 지적', grade: body.grade, title: `[${AUD_KIND[a.kind]}] ${content}`.slice(0, 200), detail: [str(body.clause, 100) && `조항 ${str(body.clause, 100)}`, a.target && `대상 ${a.target}`].filter(Boolean).join(' · '), owner_name: str(body.owner_name, 50), due_date: due, found_date: a.done_date || today() });
+  await db.batch([
+    { sql: 'INSERT INTO audit_findings(audit_id,grade,clause,content,dept,due_date,nc_id,request_id,created_by) VALUES(?,?,?,?,?,?,?,?,?)', args: [a.id, body.grade, str(body.clause, 100), content, str(body.dept, 50), due, nc?.id ?? null, key, user.name] },
+    { sql: "UPDATE quality_audits SET status=CASE WHEN status='done' THEN 'correcting' ELSE status END,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=?", args: [pushHist(a, { by: user.name, what: `지적 ${FND_GRADE[body.grade]}${nc ? ' → ' + nc.nc_no : ''}` }), user.name, a.id] },
+  ]);
+  return audOne(a.id);
+});
+route('PUT', '/api/audits/:id/findings/:fid', async ({ user, params, body }) => {
+  requireRole(user, 'quality', '품질'); const f = await db.prepare('SELECT * FROM audit_findings WHERE id=? AND audit_id=?').get(Number(params.fid), Number(params.id)); if (!f) throw new HttpError(404, '지적사항을 찾을 수 없습니다.');
+  if (f.grade !== 'obs') throw bad('중대·경미 지적은 연결된 CAPA를 종결하면 닫힙니다.');
+  await db.prepare('UPDATE audit_findings SET obs_done=? WHERE id=?').run(body.obs_done ? 1 : 0, f.id);
+  return audOne(f.audit_id);
+});
+
+// A6 밸리데이션: 대상(설비·공정·시험법·기타)과 단계(IQ→OQ→PQ 등)별 수행·결과, 프로토콜·보고서 파일. 판정(적합·부적합)은 품질책임자, 적합이면 재밸리데이션 기한 = 판정일 + 주기.
+const VAL_KIND = { equipment: '설비 적격성(IQ·OQ·PQ)', process: '공정 밸리데이션', method: '시험법 밸리데이션', cleaning: '세척 밸리데이션', system: '컴퓨터 시스템' };
+const VAL_STATUS = { planned: '계획', running: '수행', pass: '적합', fail: '부적합', void: '취소' };
+const VAL_COLS = ['title', 'kind', 'target_type', 'target_id', 'target_label', 'stages', 'criteria', 'cycle_months', 'change_id', 'owner_name'];
+async function valBody(o0, prior = {}) {
+  const o = o0 && typeof o0 === 'object' ? o0 : {}, pick = k => o[k] === undefined ? prior[k] : o[k];
+  const kind = pick('kind'); if (!VAL_KIND[kind]) throw bad('밸리데이션 종류를 고르세요.');
+  const tt = ['equipment', 'method', 'process', 'other'].includes(pick('target_type')) ? pick('target_type') : 'process'; let tid = optId(pick('target_id')), label = str(pick('target_label'), 200);
+  if (tt === 'equipment' && tid) { const e = await mustGet('equipment', tid); label = `${e.equip_no} ${e.name}`; }
+  else if (tt === 'method' && tid) { const t = await mustGet('test_methods', tid); label = `${t.method_no} ${t.name}`; }
+  else tid = null;
+  if (!label) throw bad('대상(설비·시험법을 고르거나 공정·시스템 이름)을 넣으세요.');
+  let st = pick('stages'); if (typeof st === 'string') { try { st = JSON.parse(st || '[]'); } catch { st = []; } }
+  st = (Array.isArray(st) ? st : []).slice(0, 12).map(x => ({ key: reqStr(x?.key, '단계 이름', 50), plan_date: qDate(x?.plan_date, '단계 예정일'), done_date: qDate(x?.done_date, '단계 수행일'), result: ['', '적합', '부적합'].includes(x?.result) ? x.result : '', note: str(x?.note, 500) }));
+  if (!st.length) throw bad('단계(IQ·OQ·PQ 등)를 하나 이상 넣으세요.');
+  if (st.some(x => x.result && !x.done_date)) throw bad('결과를 넣은 단계는 수행일도 넣으세요.');
+  return { title: reqStr(pick('title'), '밸리데이션 이름', 200), kind, target_type: tt, target_id: tid, target_label: label, stages: JSON.stringify(st), criteria: str(pick('criteria'), 2000), cycle_months: intIn(pick('cycle_months'), '재밸리데이션 주기(개월)', 0, 120, 0), change_id: optId(pick('change_id')), owner_name: str(pick('owner_name'), 50) };
+}
+async function valRows(where = '', args = []) {
+  return (await db.prepare(`SELECT * FROM validations ${where} ORDER BY CASE WHEN status IN ('void') THEN 2 WHEN status IN ('pass','fail') THEN 1 ELSE 0 END, id DESC LIMIT 1000`).all(...args)).map(v => ({ ...v, stages: JSON.parse(v.stages || '[]'), files: JSON.parse(v.files || '[]'), history: JSON.parse(v.history || '[]'), kind_label: VAL_KIND[v.kind], status_label: VAL_STATUS[v.status] }));
+}
+const valOne = async id => (await valRows('WHERE id=?', [Number(id)]))[0] || (() => { throw new HttpError(404, '밸리데이션을 찾을 수 없습니다.'); })();
+route('GET', '/api/validations', async ({ user }) => ({ rows: await valRows(), equipment: await db.prepare("SELECT id, equip_no, name FROM equipment WHERE status<>'disposed' ORDER BY equip_no").all(), methods: await db.prepare("SELECT id, method_no, name FROM test_methods WHERE status='active' ORDER BY method_no").all(), can_manage: isQuality(user), can_judge: hasRole(user, 'quality_approver'), today: today() }));
+route('POST', '/api/validations', async ({ user, body }) => {
+  requireRole(user, 'quality', '품질'); const key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT id FROM validations WHERE request_id=?').get(key); if (old) return valOne(old.id); }
+  const f = await valBody(body); if (f.change_id) await mustGet('quality_changes', f.change_id);
+  const prefix = 'VAL-' + today().slice(2).replace(/-/g, '') + '-', files = await saveDocFiles(body.files, 5);
+  try {
+    const r = await db.prepare(`INSERT INTO validations(val_no,${VAL_COLS.join(',')},files,history,request_id,created_by) VALUES(${nextDocNo('validations', 'val_no')},${VAL_COLS.map(() => '?').join(',')},?,?,?,?)`)
+      .run(prefix, prefix, prefix, ...VAL_COLS.map(k => f[k]), JSON.stringify(files.map(x => ({ ...x, doc: str(body.file_doc, 20) || '프로토콜' }))), JSON.stringify([{ at: now(), by: user.name, what: '계획 등록' }]), key, user.name);
+    return valOne(r.lastInsertRowid);
+  } catch (error) { await removePhotos(files.map(x => x.file)); throw error; }
+});
+route('PUT', '/api/validations/:id', async ({ user, params, body }) => {
+  requireRole(user, 'quality', '품질'); const prior = await mustGet('validations', params.id);
+  if (Number(body.revision) !== prior.revision) throw conflict();
+  if (['pass', 'fail', 'void'].includes(prior.status)) throw bad(`${VAL_STATUS[prior.status]} 판정·취소된 밸리데이션입니다. 다시 하려면 「재밸리데이션」으로 새로 만드세요.`);
+  const f = await valBody(body, prior), reason = str(body.reason, 300);
+  let to = body.status === 'void' ? 'void' : prior.status; if (to === 'void' && !reason) throw bad('취소 사유를 적으세요.');
+  if (to !== 'void' && JSON.parse(f.stages).some(x => x.done_date)) to = 'running';
+  const cur0 = JSON.parse(prior.files || '[]'), keepNames = body.keep_files === undefined ? cur0.map(x => x.file) : body.keep_files;
+  if (!Array.isArray(keepNames) || keepNames.some(n => !cur0.some(x => x.file === n))) throw bad('남길 파일을 다시 확인하세요.');
+  const keep = cur0.filter(x => keepNames.includes(x.file)); if (keep.length + (body.files || []).length > 10) throw bad('파일은 10개까지입니다.');
+  const added = (await saveDocFiles(body.files, 5)).map(x => ({ ...x, doc: ['프로토콜', '보고서', '데이터', '기타'].includes(body.file_doc) ? body.file_doc : '보고서' })), files = [...keep, ...added];
+  try {
+    const changed = VAL_COLS.filter(k => (prior[k] ?? null) !== (f[k] ?? null)); if (added.length || keep.length !== cur0.length) changed.push('files');
+    if (!changed.length && to === prior.status) return valOne(prior.id);
+    const r = await db.prepare(`UPDATE validations SET ${VAL_COLS.map(k => k + '=?').join(',')},files=?,status=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`)
+      .run(...VAL_COLS.map(k => f[k]), JSON.stringify(files), to, pushHist(prior, { by: user.name, what: to !== prior.status ? '단계' : '수정', ...(to !== prior.status ? { status: [prior.status, to] } : {}), fields: changed, ...(reason ? { reason } : {}) }), user.name, prior.id, prior.revision);
+    if (!r.changes) throw conflict();
+  } catch (error) { await removePhotos(added.map(x => x.file)); throw error; }
+  await removePhotos(cur0.filter(x => !keepNames.includes(x.file)).map(x => x.file));
+  return valOne(prior.id);
+});
+route('POST', '/api/validations/:id/judge', async ({ user, params, body }) => {
+  if (!hasRole(user, 'quality_approver')) throw new HttpError(403, '밸리데이션 판정은 품질책임자·관리자가 합니다.');
+  const prior = await mustGet('validations', params.id); if (Number(body.revision) !== prior.revision) throw conflict();
+  if (!['planned', 'running'].includes(prior.status)) throw bad('이미 판정·취소된 밸리데이션입니다.');
+  const st = JSON.parse(prior.stages || '[]'); if (st.some(x => !x.result)) throw bad('모든 단계의 결과(적합·부적합)를 넣어야 판정합니다.');
+  const result = body.result === 'fail' ? 'fail' : 'pass'; if (result === 'pass' && st.some(x => x.result === '부적합')) throw bad('부적합 단계가 있어 「적합」으로 판정할 수 없습니다.');
+  const until = result === 'pass' && prior.cycle_months ? calNextDue(today(), prior.cycle_months) : null;
+  const r = await db.prepare("UPDATE validations SET status=?,judge_note=?,judged_by=?,judged_at=?,valid_until=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?")
+    .run(result, str(body.note, 1000), user.name, now(), until, pushHist(prior, { by: user.name, what: '판정', status: [prior.status, result], ...(body.note ? { reason: str(body.note, 300) } : {}) }), user.name, prior.id, prior.revision);
+  if (!r.changes) throw conflict();
+  return valOne(prior.id);
+});
+
+// M1 품질목표·KPI: 연도별 목표(지표·단위·방향·목표값)·전략·예산·개선계획, 월별 목표·실적. 자동 지표 4개는 실적을 매번 집계한다.
+const KPI_METRIC = { iqc_fail_rate: { label: '수입검사 불합격률', unit: '%', direction: 'down' }, oqc_fail_rate: { label: '출하검사 불합격률', unit: '%', direction: 'down' }, voc_count: { label: 'VOC 건수', unit: '건', direction: 'down' }, capa_ontime: { label: 'CAPA 기한 준수율', unit: '%', direction: 'up' } };
+const GOAL_STATUS = { plan: '계획', progress: '진행', achieved: '달성', missed: '미달' };
+const GOAL_COLS = ['year', 'title', 'metric', 'unit', 'direction', 'target', 'strategy', 'plan', 'budget', 'owner_name', 'status', 'note'];
+function goalBody(o0, prior = {}) {
+  const o = o0 && typeof o0 === 'object' ? o0 : {}, pick = k => o[k] === undefined ? prior[k] : o[k];
+  const metric = pick('metric') || ''; if (metric && !KPI_METRIC[metric]) throw bad('자동 지표를 다시 고르세요.');
+  const n = (v, l) => v === '' || v == null ? null : num(v, l);
+  const f = { year: intIn(pick('year'), '연도', 2000, 2100, Number(today().slice(0, 4))), title: reqStr(pick('title'), '목표명', 200), metric, unit: metric ? KPI_METRIC[metric].unit : str(pick('unit'), 20), direction: metric ? KPI_METRIC[metric].direction : pick('direction') === 'up' ? 'up' : 'down',
+    target: n(pick('target'), '목표값'), strategy: str(pick('strategy'), 1000), plan: str(pick('plan'), 2000), budget: n(pick('budget'), '예산'), owner_name: str(pick('owner_name'), 50), status: GOAL_STATUS[pick('status')] ? pick('status') : 'plan', note: str(pick('note'), 1000) };
+  if (f.budget != null && f.budget < 0) throw bad('예산은 0 이상으로 넣으세요.');
+  return f;
+}
+// 자동 지표 월별 값: {m: {n, d}} → 비율은 n/d×100, 건수는 n
+async function kpiAuto(metric, year) {
+  const y = String(year), out = {};
+  const put = rows => rows.forEach(r => { out[Number(r.m)] = { n: r.n || 0, d: r.d || 0 }; });
+  if (metric === 'iqc_fail_rate' || metric === 'oqc_fail_rate') put(await db.prepare(`SELECT substr(r.created_at,6,2) AS m, SUM(CASE WHEN m.result='fail' THEN 1 ELSE 0 END) AS n, SUM(CASE WHEN m.result IN ('pass','fail') THEN 1 ELSE 0 END) AS d FROM requests r JOIN inspection_measurements m ON m.request_id=r.id WHERE r.type='analysis' AND r.category=? AND substr(r.created_at,1,4)=? GROUP BY m`).all(metric === 'iqc_fail_rate' ? '수입검사' : '출하검사', y));
+  else if (metric === 'voc_count') put(await db.prepare("SELECT substr(created_at,6,2) AS m, COUNT(*) AS n, 0 AS d FROM requests WHERE type='voc' AND substr(created_at,1,4)=? GROUP BY m").all(y));
+  else if (metric === 'capa_ontime') put(await db.prepare("SELECT substr(closed_at,6,2) AS m, SUM(CASE WHEN due_date IS NULL OR substr(closed_at,1,10)<=due_date THEN 1 ELSE 0 END) AS n, COUNT(*) AS d FROM nonconformities WHERE status='closed' AND substr(closed_at,1,4)=? GROUP BY m").all(y));
+  return out;
+}
+const kpiVal = (metric, x) => !x ? null : metric === 'voc_count' ? x.n : x.d ? Math.round(x.n / x.d * 1000) / 10 : null;
+async function goalRows(year) {
+  const goals = await db.prepare('SELECT * FROM quality_goals WHERE year=? ORDER BY id').all(year), vals = await db.prepare('SELECT v.* FROM quality_kpi_values v JOIN quality_goals g ON g.id=v.goal_id WHERE g.year=?').all(year), cache = {};
+  const out = [];
+  for (const g of goals) {
+    const auto = g.metric ? (cache[g.metric] ||= await kpiAuto(g.metric, year)) : null;
+    const months = Array.from({ length: 12 }, (_, i) => { const m = i + 1, v = vals.find(x => x.goal_id === g.id && x.month === m); return { m, target: v?.target ?? null, actual: auto ? kpiVal(g.metric, auto[m]) : v?.actual ?? null, base: auto?.[m] || null }; });
+    let ytd = null;
+    if (auto) { const t = Object.values(auto).reduce((s, x) => ({ n: s.n + x.n, d: s.d + x.d }), { n: 0, d: 0 }); ytd = kpiVal(g.metric, Object.keys(auto).length ? t : null); }
+    else { const a = months.map(x => x.actual).filter(v => v != null); ytd = a.length ? (['건', '개', '회', '원', '件'].includes(g.unit) ? a.reduce((s, v) => s + v, 0) : Math.round(a.reduce((s, v) => s + v, 0) / a.length * 100) / 100) : null; }
+    const met = ytd == null || g.target == null ? null : g.direction === 'up' ? ytd >= g.target : ytd <= g.target;
+    out.push({ ...g, history: JSON.parse(g.history || '[]'), status_label: GOAL_STATUS[g.status], metric_label: KPI_METRIC[g.metric]?.label || '', months, ytd, met });
+  }
+  return out;
+}
+route('GET', '/api/kpi', async ({ user, query }) => { const year = intIn(query.year, '연도', 2000, 2100, Number(today().slice(0, 4))); return { year, rows: await goalRows(year), metrics: KPI_METRIC, can_manage: isQuality(user), today: today() }; });
+route('POST', '/api/kpi/goals', async ({ user, body }) => {
+  requireRole(user, 'quality', '품질'); const key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM quality_goals WHERE request_id=?').get(key); if (old) return old; }
+  const f = goalBody(body);
+  const r = await db.prepare(`INSERT INTO quality_goals(${GOAL_COLS.join(',')},history,request_id,created_by) VALUES(${GOAL_COLS.map(() => '?').join(',')},?,?,?)`).run(...GOAL_COLS.map(k => f[k]), JSON.stringify([{ at: now(), by: user.name, what: '등록' }]), key, user.name);
+  return mustGet('quality_goals', r.lastInsertRowid);
+});
+route('PUT', '/api/kpi/goals/:id', async ({ user, params, body }) => {
+  requireRole(user, 'quality', '품질'); const prior = await mustGet('quality_goals', params.id);
+  if (Number(body.revision) !== prior.revision) throw conflict();
+  const f = goalBody(body, prior), changed = GOAL_COLS.filter(k => (prior[k] ?? null) !== (f[k] ?? null));
+  let values = null;
+  if (body.values !== undefined) { if (!Array.isArray(body.values)) throw bad('월별 값을 확인하세요.'); values = body.values.map(v => { const m = intIn(v?.month, '월', 1, 12, 0); const n = (x, l) => x === '' || x == null ? null : num(x, l); return { m, target: n(v.target, `${m}월 목표`), actual: f.metric ? null : n(v.actual, `${m}월 실적`) }; }); }
+  if (!changed.length && !values) return prior;
+  const results = await db.batch([
+    { sql: `UPDATE quality_goals SET ${GOAL_COLS.map(k => k + '=?').join(',')},history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`, args: [...GOAL_COLS.map(k => f[k]), pushHist(prior, { by: user.name, what: values ? '월별 값·수정' : '수정', fields: changed }), user.name, prior.id, prior.revision] },
+    ...(values || []).map(v => ({ sql: `INSERT INTO quality_kpi_values(goal_id,month,target,actual,updated_by) SELECT ?,?,?,?,? WHERE EXISTS(SELECT 1 FROM quality_goals WHERE id=? AND revision=?) ON CONFLICT(goal_id,month) DO UPDATE SET target=excluded.target,actual=excluded.actual,updated_by=excluded.updated_by,updated_at=datetime('now','+9 hours')`, args: [prior.id, v.m, v.target, v.actual, user.name, prior.id, prior.revision + 1] })),
+  ]);
+  if (!results[0].meta.changes) throw conflict();
+  return mustGet('quality_goals', prior.id);
+});
+route('DELETE', '/api/kpi/goals/:id', async ({ user, params, query }) => {
+  requireRole(user, 'quality', '품질'); const prior = await mustGet('quality_goals', params.id);
+  if (Number(query.revision) !== prior.revision) throw conflict();
+  await db.batch([{ sql: 'DELETE FROM quality_kpi_values WHERE goal_id=? AND EXISTS(SELECT 1 FROM quality_goals WHERE id=? AND revision=?)', args: [prior.id, prior.id, prior.revision] }, { sql: 'DELETE FROM quality_goals WHERE id=? AND revision=?', args: [prior.id, prior.revision] }]);
+  return { ok: true };
+});
+
+// M2 리스크 관리: 위험·기회, 발생가능성×영향도(1~5) = 점수(15↑ 상 · 8↑ 중 · 하), 대응계획·담당·기한, 재평가. 식별 → 대응 중(계획·담당 필요) → 종결(재평가 필요).
+const RISK_STATUS = { identified: '식별', acting: '대응 중', closed: '종결' };
+const RISK_COLS = ['kind', 'area', 'content', 'cause', 'likelihood', 'impact', 'plan', 'owner_name', 'due_date', 're_likelihood', 're_impact', 'review_date', 'next_review', 'note'];
+const riskGrade = s => s >= 15 ? '상' : s >= 8 ? '중' : '하';
+function riskBody(o0, prior = {}) {
+  const o = o0 && typeof o0 === 'object' ? o0 : {}, pick = k => o[k] === undefined ? prior[k] : o[k];
+  const sc = (v, l, req = true) => v === '' || v == null ? (req ? (() => { throw bad(`${l}(1~5)을 고르세요.`); })() : null) : intIn(v, l, 1, 5, null);
+  return { kind: pick('kind') === 'opportunity' ? 'opportunity' : 'risk', area: str(pick('area'), 50), content: reqStr(pick('content'), '리스크 내용', 500), cause: str(pick('cause'), 1000), likelihood: sc(pick('likelihood'), '발생가능성'), impact: sc(pick('impact'), '영향도'),
+    plan: str(pick('plan'), 1000), owner_name: str(pick('owner_name'), 50), due_date: qDate(pick('due_date'), '대응 기한'), re_likelihood: sc(pick('re_likelihood'), '재평가 발생가능성', false), re_impact: sc(pick('re_impact'), '재평가 영향도', false), review_date: qDate(pick('review_date'), '재평가일'), next_review: qDate(pick('next_review'), '다음 재평가일'), note: str(pick('note'), 1000) };
+}
+const riskRow = r => { const s = r.likelihood * r.impact, rs = r.re_likelihood && r.re_impact ? r.re_likelihood * r.re_impact : null; return { ...r, history: JSON.parse(r.history || '[]'), score: s, grade: riskGrade(s), re_score: rs, re_grade: rs ? riskGrade(rs) : '', status_label: RISK_STATUS[r.status], kind_label: r.kind === 'opportunity' ? '기회' : '위험' }; };
+route('GET', '/api/risks', async ({ user }) => ({ rows: (await db.prepare("SELECT * FROM quality_risks ORDER BY CASE WHEN status='closed' THEN 1 ELSE 0 END, likelihood*impact DESC, id DESC LIMIT 2000").all()).map(riskRow), can_manage: isQuality(user), today: today() }));
+route('POST', '/api/risks', async ({ user, body }) => {
+  requireRole(user, 'quality', '품질'); const key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM quality_risks WHERE request_id=?').get(key); if (old) return riskRow(old); }
+  const f = riskBody(body);
+  const r = await db.prepare(`INSERT INTO quality_risks(risk_no,${RISK_COLS.join(',')},history,request_id,created_by) VALUES(${nextDocNo('quality_risks', 'risk_no')},${RISK_COLS.map(() => '?').join(',')},?,?,?)`).run('RSK-', 'RSK-', 'RSK-', ...RISK_COLS.map(k => f[k]), JSON.stringify([{ at: now(), by: user.name, what: '식별' }]), key, user.name);
+  return riskRow(await mustGet('quality_risks', r.lastInsertRowid));
+});
+route('PUT', '/api/risks/:id', async ({ user, params, body }) => {
+  requireRole(user, 'quality', '품질'); const prior = await mustGet('quality_risks', params.id);
+  if (Number(body.revision) !== prior.revision) throw conflict();
+  const f = riskBody(body, prior), to = body.status && RISK_STATUS[body.status] ? body.status : prior.status;
+  if (prior.status === 'closed' && to === 'closed') throw bad('종결된 리스크입니다. 다시 열려면 상태를 「대응 중」으로 바꾸세요.');
+  if (to === 'acting' && prior.status !== 'acting' && (!f.plan || !f.owner_name)) throw bad('대응계획과 담당을 넣어야 「대응 중」으로 갑니다.');
+  if (to === 'closed' && prior.status !== 'closed' && (!f.re_likelihood || !f.re_impact || !f.review_date)) throw bad('재평가(대응 후 발생가능성·영향도·재평가일)를 넣어야 종결합니다.');
+  const changed = RISK_COLS.filter(k => (prior[k] ?? null) !== (f[k] ?? null)); if (!changed.length && to === prior.status) return riskRow(prior);
+  const r = await db.prepare(`UPDATE quality_risks SET ${RISK_COLS.map(k => k + '=?').join(',')},status=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`)
+    .run(...RISK_COLS.map(k => f[k]), to, pushHist(prior, { by: user.name, what: to !== prior.status ? '단계' : '수정', ...(to !== prior.status ? { status: [prior.status, to] } : {}), fields: changed }), user.name, prior.id, prior.revision);
+  if (!r.changes) throw conflict();
+  return riskRow(await mustGet('quality_risks', prior.id));
 });
 route('GET', '/api/rnd-specs', async ({ user }) => { const { raw, ...lib } = await rndSpecLibrary(); return { ...lib, can_manage: isResearcher(user) }; });
 route('PUT', '/api/rnd-specs', async ({ user, body }) => {

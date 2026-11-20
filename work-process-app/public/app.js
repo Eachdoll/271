@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.307';
+const APP_VERSION = '15.308';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -382,7 +382,8 @@ const NAV = [
   ] },
   // 15.305 품질 메뉴를 품질보증(QA)·품질관리(QC) 묶음으로(개발지침서 3장). 품질경영(QM)은 4단계에서 메뉴가 생기면 추가.
   { group: '품질', items: [
-    { sub: '품질보증(QA)', items: [['#/quality/docs', '문서관리'], ['#/quality/changes', '변경관리'], ['#/quality/training', '교육·자격관리'], ['#/quality/certs', '인증서 관리'], ['#/quality/suppliers', '협력업체 품질'], ['#/quality/capa', '부적합·CAPA'], ['#/quality/voc/list', 'VOC 관리'], ['#/quality/calibration', '검교정 관리']] }, // 15.306 2단계 A1·A2·A3·A5
+    { sub: '품질경영(QM)', items: [['#/quality/kpi', '품질목표·KPI'], ['#/quality/risks', '리스크 관리']] }, // 15.308 4단계 M1·M2
+    { sub: '품질보증(QA)', items: [['#/quality/docs', '문서관리'], ['#/quality/changes', '변경관리'], ['#/quality/training', '교육·자격관리'], ['#/quality/audits', '심사 관리'], ['#/quality/certs', '인증서 관리'], ['#/quality/suppliers', '협력업체 품질'], ['#/quality/validation', '밸리데이션'], ['#/quality/capa', '부적합·CAPA'], ['#/quality/voc/list', 'VOC 관리'], ['#/quality/calibration', '검교정 관리']] }, // 15.306 2단계 A1·A2·A3·A5
     { sub: '품질관리(QC)', items: [['#/quality/inspections', '수입·출하 검사 이력'], ['#/quality/list', '분석 관리'], ['#/quality/coa', 'COA 발행'], ['#/quality/pqc', '공정품질(PQC)'], ['#/quality/methods', '시험법·신뢰성']] }, // 15.307 C1·C3
   ] },
   { group: '연구소', items: [['#/dev/list', '개발 관리'], ['#/dev/schedule', '스케줄 관리'], ['#/dev/analysis', '연구 분석 관리'], ['#/dev/specs', '검사규격 항목설정'], ['#/dev/ip', '지식재산권 관리']] }, // 15.302 지식재산권 // 15.276 · 15.285 · 15.295 메뉴 이름 개발 → 연구소, 연구소 검사규격
@@ -671,6 +672,10 @@ const PAGES = {
   '#/prod/pm': main => pagePm(main), // 15.307 공무
   '#/quality/pqc': main => pagePqc(main), // 15.307 C1
   '#/quality/methods': main => pageMethods(main), // 15.307 C3
+  '#/quality/audits': main => pageAudits(main), // 15.308 A4
+  '#/quality/validation': main => pageValidations(main), // 15.308 A6
+  '#/quality/kpi': main => pageKpi(main), // 15.308 M1
+  '#/quality/risks': main => pageRisks(main), // 15.308 M2
   '#/prod/semi/cut': main => pageSemi(main, 'cut'),
   '#/prod/semi/cut/new': main => pageSemi(main, 'cut'),
   '#/prod/semi/wash': main => pageSemi(main, 'wash'),
@@ -3082,7 +3087,7 @@ async function pageAdmin(main) {
       }
       const signatures = (backup.tables.laundry_reports || []).map(row => row.signature).concat(backup.tables.settings.filter(row => row.key === 'laundry_report_settings').map(row => { try { return JSON.parse(row.value).signature; } catch { return ''; } })).filter(Boolean);
       // 15.306 품질 문서(작업본·승인판)·공급사 COA 파일도 함께
-      const qfiles = (backup.tables.quality_docs || []).flatMap(row => [JSON.parse(row.file_json || '{}').file, ...JSON.parse(row.versions || '[]').map(v => v.file?.file)]).concat((backup.tables.supplier_coas || []).flatMap(row => JSON.parse(row.files || '[]').map(x => x.file)), (backup.tables.test_methods || []).flatMap(row => [JSON.parse(row.file_json || '{}').file, ...JSON.parse(row.history || '[]').map(h => h.old_file?.file)])).filter(Boolean);
+      const qfiles = (backup.tables.quality_docs || []).flatMap(row => [JSON.parse(row.file_json || '{}').file, ...JSON.parse(row.versions || '[]').map(v => v.file?.file)]).concat((backup.tables.supplier_coas || []).flatMap(row => JSON.parse(row.files || '[]').map(x => x.file)), (backup.tables.test_methods || []).flatMap(row => [JSON.parse(row.file_json || '{}').file, ...JSON.parse(row.history || '[]').map(h => h.old_file?.file)]), (backup.tables.quality_audits || []).concat(backup.tables.validations || []).flatMap(row => JSON.parse(row.files || '[]').map(x => x.file))).filter(Boolean);
       const photos = [...new Set(backup.tables.laundry.concat(backup.tables.attachments || [], backup.tables.purchase_requests || []).flatMap(row => JSON.parse(row.photos || '[]')).concat(signatures, qfiles))];
       for (const [i, file] of photos.entries()) {
         status.textContent = `사진을 저장하고 있습니다… (${i + 1}/${photos.length})`;

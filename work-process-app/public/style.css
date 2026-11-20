@@ -3970,3 +3970,26 @@ table.chg-imp tr.chg-yes td:first-child { font-weight: 700; color: var(--text); 
 table.rel-pts td.rel-out { background: color-mix(in srgb, #e03131 12%, var(--panel)); } table.rel-pts td.rel-out input { color: #c92a2a; font-weight: 700; background: transparent; }
 .rel-judge { margin-top: 6px; }
 .tm-cond { max-width: 360px; white-space: pre-line; }
+
+/* 15.308 심사·밸리데이션·품질목표·KPI·리스크 */
+.aud-cl td:first-child input, .aud-cl td:nth-child(3) input, .val-st td:first-child input, .val-st td:nth-child(5) input { width: 100%; }
+.val-dot { display: inline-block; font-size: 11px; padding: 1px 6px; margin-right: 3px; border-radius: 9px; border: 1px solid var(--line); color: var(--muted); }
+.val-dot.on { border-color: var(--accent); color: var(--accent); } .val-dot.ok { background: var(--green-bg); color: var(--green); border-color: transparent; } .val-dot.ng { background: var(--red-bg); color: var(--red); border-color: transparent; }
+.kpi-tbl input { width: 64px; } .kpi-tbl td, .kpi-tbl th { text-align: center; }
+td.kpi-ok { background: color-mix(in srgb, #2f9e44 10%, var(--panel)); } td.kpi-ng { background: color-mix(in srgb, #e03131 10%, var(--panel)); }
+th.kpi-m, td.kpi-m { min-width: 40px; text-align: center; font-size: 12.5px; }
+.kpi-svg { width: 100%; height: auto; display: block; margin-top: 8px; }
+.kpi-svg .kpi-grid { stroke: var(--line); } .kpi-svg .kpi-ax { font-size: 11px; fill: var(--muted); }
+.kpi-svg .kpi-ac { fill: none; stroke: var(--accent); stroke-width: 2; } .kpi-svg .kpi-tg { fill: none; stroke: #f08c00; stroke-width: 1.4; stroke-dasharray: 5 4; }
+.kpi-svg .kpi-pt { fill: var(--accent); } .kpi-svg .kpi-pt.ok { fill: #2f9e44; } .kpi-svg .kpi-pt.ng { fill: #e03131; }
+.kpi-key { display: inline-block; width: 18px; height: 0; border-top: 2px solid var(--accent); vertical-align: middle; margin: 0 4px 0 10px; } .kpi-key.tg { border-top: 2px dashed #f08c00; }
+.risk-wrap { display: grid; grid-template-columns: 230px 1fr; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .risk-wrap { grid-template-columns: 1fr; } }
+table.risk-matrix { border-collapse: separate; border-spacing: 3px; }
+table.risk-matrix th { font-size: 12px; color: var(--muted); font-weight: 500; width: 18px; }
+table.risk-matrix td { width: 36px; height: 36px; text-align: center; font-weight: 700; border-radius: 6px; cursor: pointer; }
+table.risk-matrix td.rm-상 { background: color-mix(in srgb, #e03131 30%, var(--panel)); } table.risk-matrix td.rm-중 { background: color-mix(in srgb, #f59f00 28%, var(--panel)); } table.risk-matrix td.rm-하 { background: color-mix(in srgb, #2f9e44 20%, var(--panel)); }
+table.risk-matrix td.on { outline: 2px solid var(--text); }
+.risk-ax { margin-top: 4px; } .risk-score { align-self: end; padding-bottom: 8px; }
+.kpi-tbl th, .kpi-tbl td:last-child, .rel-pts th, .val-st th, .aud-cl th, .pm-edit th, .pqc-grid th, .tr-att th, .chg-imp th { white-space: nowrap; }
+.modal table.grid.kpi-tbl > thead > tr > th, .modal table.grid.kpi-tbl > tbody > tr > th { white-space: nowrap !important; overflow-wrap: normal !important; min-width: 64px; }
