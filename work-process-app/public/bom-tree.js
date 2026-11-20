@@ -195,6 +195,7 @@ async function pageBomSheet(main) {
       catch (error) { fail(error); if (error.status === 409) { await load(); } } finally { btn.disabled = false; }
     };
   };
+  let keepView = null;
   const draw = () => {
     if (!main.isConnected) return;
     const list = products(), n = N(), mats = list.reduce((t, b) => t + b.materials.length, 0), empty = list.filter(b => !b.materials.length).length;
@@ -202,8 +203,12 @@ async function pageBomSheet(main) {
     $('#bsSummary', main).textContent = `제품 ${list.length}개 · 자재 줄 ${mats}개${empty ? ` · 구성자재 없는 제품 ${empty}개` : ''}${n ? ` · 생산 ${fmtNum(n)} 기준 필요량 표시` : ''}`;
     // 15.293 분류별: 제품분류(1차 › 2차)로 묶어 각 묶음마다 같은 트리 표
     const byCat = () => { const g = new Map(); for (const b of list) { const k = catsOf(b) || '(분류 없음)'; if (!g.has(k)) g.set(k, []); g.get(k).push(b); } return [...g].sort((a, b) => (a[0] === '(분류 없음)') - (b[0] === '(분류 없음)') || a[0].localeCompare(b[0], 'ko')); };
+    // 15.294 다시 그려도 표 안 스크롤 위치 유지(수정·취소·저장 때 맨 위로 튀지 않게): 긴 표 높이 제한(tw-fill)을 먼저 옮기고 scrollTop 되돌림
+    const keep = $$('#bsList > .table-wrap, #bsList > .bs-cat > .table-wrap', main).map(w => ({ c: w.className, t: w.scrollTop, l: w.scrollLeft }));
     $('#bsList', main).innerHTML = view === 'material' ? materialTable(list) : !list.length ? '<div class="empty">조건에 맞는 제품이 없습니다.</div>'
       : view === 'category' ? byCat().map(([k, bs]) => `<section class="bs-cat"><h3 class="bs-cat-h">${esc(k)} <span class="small muted">제품 ${bs.length}개 · 자재 줄 ${bs.reduce((t, b) => t + b.materials.length, 0)}개</span></h3>${productTable(bs)}</section>`).join('') : productTable(list);
+    if (view === keepView) $$('#bsList > .table-wrap, #bsList > .bs-cat > .table-wrap', main).forEach((w, i) => { const k = keep[i]; if (!k) return; w.className = k.c; w.scrollTop = k.t; w.scrollLeft = k.l; });
+    keepView = view;
     $$('[data-bs-edit]', main).forEach(x => x.onclick = () => { editing = Number(x.dataset.bsEdit); draw(); $('[data-bs-editor]', main)?.scrollIntoView({ block: 'nearest' }); });
     $$('[data-bs-goto]', main).forEach(x => x.onclick = () => { editing = Number(x.dataset.bsGoto); view = 'product'; collapsed.delete('p' + editing); draw(); $('[data-bs-editor]', main)?.scrollIntoView({ block: 'center' }); });
     $$('[data-bs-toggle]', main).forEach(x => x.onclick = () => { const k = x.dataset.bsToggle, open = x.getAttribute('aria-expanded') !== 'true'; if (open) collapsed.delete(k); else collapsed.add(k); x.setAttribute('aria-expanded', String(open)); x.textContent = open ? '▾' : '▸'; $$(`[data-bs-of="${CSS.escape(k)}"]`, main).forEach(tr => { tr.hidden = !open; }); });
