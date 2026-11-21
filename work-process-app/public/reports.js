@@ -1718,9 +1718,11 @@ async function ttEdit(trainingId, onDone = () => {}) {
     <p class="small muted">문항을 만들고 「응시 열기」를 켜면 대상자가 시스템에서 바로 풉니다. 자동 채점해 <b>합격 점수 이상이면 이수</b>, 응시 횟수를 다 써도 못 넘으면 <b>재교육</b>으로 대상자 결과에 들어갑니다.${lock ? ` <b>이미 ${taken}번 응시해 문항은 바꿀 수 없습니다</b>(합격 점수·횟수·열기만).` : ''}</p>
     <form class="stack" data-tt-form>
       <div class="form-grid tt-set"><label>합격 점수(100점 만점)<input type="number" name="pass_score" min="1" max="100" value="${t0.pass_score}"></label><label>응시 횟수(재응시 포함)<input type="number" name="max_attempts" min="1" max="10" value="${t0.max_attempts}"></label><label>제한 시간(분, 0 = 없음)<input type="number" name="time_limit_min" min="0" max="180" value="${t0.time_limit_min}"></label>
-        <label class="chk"><input type="checkbox" name="open" value="1"${t0.open ? ' checked' : ''}> 응시 열기(대상자가 풀 수 있음)</label></div>
+        <label class="chk"><input type="checkbox" name="open" value="1"${t0.open ? ' checked' : ''}> 응시 열기(대상자가 풀 수 있음)</label>
+        <label>자격 시험 <span class="hint">(합격하면 이 자격 부여·갱신)</span><input name="qual_kind" maxlength="100" list="ttQualKinds" value="${esc(t0.qual_kind || '')}" placeholder="예) 수입검사원 · 비우면 일반 테스트"><datalist id="ttQualKinds">${['수입검사원', '출하검사원', '내부심사원', '세탁 작업자', '커팅/융착 작업자', '지게차 운전'].map(k => `<option value="${k}">`).join('')}</datalist></label>
+        <label>자격 유효기간(개월) <span class="hint">(0 = 만료 없음)</span><input type="number" name="qual_months" min="0" max="120" value="${t0.qual_months ?? 24}"></label></div>
       <div data-tt-qs></div>
-      ${lock ? '' : '<div class="actions" style="justify-content:flex-start"><button type="button" class="btn" data-tt-addq="choice">＋ 객관식</button><button type="button" class="btn" data-tt-addq="ox">＋ O/X</button><button type="button" class="btn" data-tt-addq="short">＋ 단답형</button></div>'}
+      ${lock ? '' : '<div class="actions" style="justify-content:flex-start"><button type="button" class="btn" data-tt-addq="choice">＋ 객관식</button><button type="button" class="btn" data-tt-addq="ox">＋ O/X</button><button type="button" class="btn" data-tt-addq="short">＋ 단답형</button><span class="grow"></span><button type="button" class="btn" data-tt-bank>📚 문제은행에서 가져오기</button><button type="button" class="btn" data-tt-tobank>문제은행에 저장</button></div>'}
       ${d.attempts?.length ? `<fieldset class="vendor-sec"><legend>응시 결과 (${new Set(d.attempts.map(a => a.user_name)).size}명)</legend><div class="table-wrap"><table class="grid" data-no-filter><thead><tr><th>이름</th><th>회차</th><th class="r">점수</th><th>결과</th><th>제출</th></tr></thead><tbody>${d.attempts.map(a => `<tr><td>${esc(a.user_name)}</td><td>${a.attempt_no}회</td><td class="r"><b>${a.score}</b></td><td><span class="chip ${a.passed ? 'green' : 'red'}">${a.passed ? '합격' : '불합격'}</span></td><td class="small">${esc(String(a.submitted_at).slice(0, 16))}</td></tr>`).join('')}</tbody></table></div></fieldset>` : ''}
       <div class="actions"><span class="grow small muted" data-tt-sum></span><button type="button" class="btn" data-tt-preview>미리 보기</button><button class="btn primary">저장</button></div>
     </form>`, { wide: true });
@@ -1747,11 +1749,13 @@ async function ttEdit(trainingId, onDone = () => {}) {
     if (b.dataset.ttUp || b.dataset.ttDown) { read(); const i = Number(b.dataset.ttUp ?? b.dataset.ttDown), j = b.dataset.ttUp ? i - 1 : i + 1; [qs[i], qs[j]] = [qs[j], qs[i]]; draw(); return; }
     if (b.dataset.ttAddopt) { read(); qs[Number(b.dataset.ttAddopt)].options.push(''); draw(); return; }
     if (b.dataset.ttDelopt) { read(); const [i, j] = b.dataset.ttDelopt.split(':').map(Number), q = qs[i]; q.options.splice(j, 1); if (q.answer === j) q.answer = -1; else if (q.answer > j) q.answer--; draw(); return; }
+    if (b.matches('[data-tt-bank]')) { read(); qbPick().then(add => { if (add?.length) { qs = [...qs.filter(q => (q.q || '').trim()), ...add]; draw(); toast(`${add.length}문항을 넣었습니다.`); } }).catch(fail); return; } // 15.341
+    if (b.matches('[data-tt-tobank]')) { read(); promptBox('문제은행에 저장', `<p class="small muted">지금 문항 ${qs.length}개를 문제은행에 넣습니다(같은 분류의 같은 문제는 건너뜀).</p><label>분류 *<input name="category" required maxlength="50" value="${esc(d.training.title.slice(0, 50))}"></label>`, { submit: v => api('POST', '/api/question-bank', { category: v.category, questions: qs }) }).then(r => { if (r) toast(`문제은행에 ${r.created}개 넣었습니다${r.skipped ? ` (같은 문제 ${r.skipped}개 건너뜀)` : ''}.`); }).catch(fail); return; }
     if (b.matches('[data-tt-preview]')) { read(); ttTakeView({ training: d.training, test: { ...t0, ...formObj(form), questions: qs.map(({ answer: _a, ...x }) => x) }, preview: true }); }
   });
   form.onsubmit = async e => {
     e.preventDefault(); read(); const v = formObj(form);
-    try { await api('PUT', `/api/trainings/${trainingId}/test`, { pass_score: v.pass_score, max_attempts: v.max_attempts, time_limit_min: v.time_limit_min, open: !!form.elements.open.checked, ...(lock ? {} : { questions: qs }), revision: d.test?.revision });
+    try { await api('PUT', `/api/trainings/${trainingId}/test`, { pass_score: v.pass_score, max_attempts: v.max_attempts, time_limit_min: v.time_limit_min, open: !!form.elements.open.checked, qual_kind: v.qual_kind, qual_months: v.qual_months, ...(lock ? {} : { questions: qs }), revision: d.test?.revision });
       toast(form.elements.open.checked ? '테스트를 저장하고 응시를 열었습니다. 대상자 「할 일」에 「테스트 응시」가 뜹니다.' : '테스트를 저장했습니다(응시는 닫힘).'); m.close(); onDone(); }
     catch (err) { fail(err); }
   };
@@ -1761,6 +1765,7 @@ function ttTakeView(d, onDone = () => {}) {
   const q = d.test.questions, limit = Number(d.test.time_limit_min) || 0, rid = crypto.randomUUID(); let busy = false, timer = null;
   const used = (d.mine || []).length;
   const m = modal(`<h3>📝 ${esc(d.training.title)} · 테스트${d.preview ? ' <span class="chip">미리 보기</span>' : ''}</h3>
+    ${d.test.qual_kind ? `<p class="tt-qual">🎖 자격 시험 · 합격하면 <b>${esc(d.test.qual_kind)}</b> 자격${Number(d.test.qual_months) ? `(${d.test.qual_months}개월)` : ''}</p>` : ''}
     <p class="small muted">${q.length}문항 · 합격 ${d.test.pass_score}점 이상${d.preview ? '' : ` · ${used + 1}번째 응시(최대 ${d.test.max_attempts}번)`}${limit ? ` · 제한 ${limit}분` : ''}</p>
     ${limit && !d.preview ? '<div class="tt-timer" data-tt-timer aria-live="polite"></div>' : ''}
     <form class="stack tt-take" data-tt-take-form>${q.map((x, i) => `<fieldset class="tt-tq" data-tq="${i}"><legend><b>${i + 1}.</b> ${esc(x.q)} <span class="small muted">(${x.points}점)</span></legend>
@@ -1790,6 +1795,7 @@ function ttResult(d, r) {
   const m = modal(`<div class="tt-result ${r.passed ? 'tt-pass' : 'tt-fail'}"><div class="tt-score"><b>${r.score}</b><span>점</span></div>
     <h2>${r.passed ? '합격' : '불합격'}</h2><p>합격 점수 ${r.pass_score}점 · ${r.attempt_no}번째 응시</p>
     <div class="tt-marks">${r.detail.map((ok, i) => `<span class="${ok ? 'ok' : 'no'}" title="${i + 1}번 ${ok ? '맞음' : '틀림'}">${i + 1}<b>${ok ? '○' : '✕'}</b></span>`).join('')}</div>
+    ${r.qual ? `<p class="tt-qual">🎖 자격 <b>${esc(r.qual.kind)}</b> ${r.qual.renewed ? '갱신' : '부여'}${r.qual.expire_date ? ` · ${esc(r.qual.expire_date)}까지` : ''}</p>` : ''}
     <p class="small muted">${r.passed ? '교육 결과가 「이수」로 기록되었습니다.' : left > 0 ? `다시 응시할 수 있습니다(${left}번 남음). 교육 자료를 다시 보고 응시하세요.` : '응시 횟수를 다 썼습니다. 결과가 「재교육」으로 기록되었습니다. 품질 담당에게 재교육을 요청하세요.'}</p>
     <button type="button" class="btn primary" data-ok>확인</button></div>`);
   $('[data-ok]', m.el).onclick = () => m.close();
@@ -1818,6 +1824,51 @@ async function trRecord(name) {
       + '<div class="rpt-sign"><span>본인</span><span>품질 담당</span><span>승인</span></div>', co); } catch (err) { fail(err); } };
   $('[data-rec-xlsx]', m.el).onclick = () => { const t = $('.tr-rec-grid', m.el); if (t) tableToXlsx(t, `교육기록_${p.name}`); };
 }
+// ── 15.341 문제은행 ── 분류별 문항 목록 · 추가/수정/삭제 · 테스트 만들 때 골라 넣기
+async function qbEdit(row = null, cats = [], onDone = () => {}) {
+  const q0 = row || { type: 'choice', q: '', options: ['', '', '', ''], answer: 0, points: 1, category: cats[0] || '' };
+  const m = modal(`<h3>${row ? '문항 수정' : '문항 추가'} · 문제은행</h3><form class="stack" data-qb-form><div class="form-grid">
+    <label>분류<input name="category" maxlength="50" list="qbCats" value="${esc(q0.category || '')}" placeholder="예) 세탁 · 검사 · 안전"><datalist id="qbCats">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist></label>
+    <label>유형<select name="type">${Object.entries(TT_TYPE_LABEL).map(([k, l]) => `<option value="${k}"${q0.type === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+    <label>배점<input type="number" name="points" min="1" max="20" value="${q0.points}"></label>
+    <label class="span3">문제 *<textarea name="q" rows="2" maxlength="500" required>${esc(q0.q)}</textarea></label></div>
+    <div data-qb-ans></div><div class="actions"><span class="grow"></span><button class="btn primary">저장</button></div></form>`, { wide: true });
+  const f = $('[data-qb-form]', m.el), ans = $('[data-qb-ans]', m.el); let opts = q0.type === 'choice' ? [...q0.options] : ['', '', '', ''];
+  const drawAns = () => { const t = f.type.value;
+    ans.innerHTML = t === 'choice' ? `<fieldset class="vendor-sec"><legend>보기 · 정답</legend>${opts.map((o, j) => `<div class="tt-opt"><label class="tt-ans"><input type="radio" name="ans" value="${j}"${q0.type === 'choice' && q0.answer === j ? ' checked' : ''}> 정답</label><input data-o="${j}" maxlength="200" value="${esc(o)}" placeholder="보기 ${j + 1}"></div>`).join('')}</fieldset>`
+      : t === 'ox' ? `<div class="tt-ox-set">정답 <label class="tt-ans"><input type="radio" name="ans" value="O"${q0.answer === 'O' ? ' checked' : ''}> O</label><label class="tt-ans"><input type="radio" name="ans" value="X"${q0.answer === 'X' ? ' checked' : ''}> X</label></div>`
+      : `<label>정답 * <span class="hint">(여러 개면 「,」로)</span><input name="ans_text" maxlength="200" value="${esc(q0.type === 'short' ? q0.answer : '')}"></label>`; };
+  f.type.addEventListener('change', drawAns); drawAns();
+  f.onsubmit = async e => { e.preventDefault(); const t = f.type.value, o = { category: f.category.value, type: t, q: f.q.value, points: f.points.value };
+    if (t === 'choice') { o.options = [...ans.querySelectorAll('[data-o]')].map(x => x.value); o.answer = Number(f.querySelector('[name=ans]:checked')?.value ?? -1); } else if (t === 'ox') o.answer = f.querySelector('[name=ans]:checked')?.value || ''; else o.answer = f.ans_text.value;
+    try { if (row) await api('PUT', `/api/question-bank/${row.id}`, o); else { const r = await api('POST', '/api/question-bank', o); if (r.skipped) toast('같은 분류에 같은 문제가 이미 있어 넣지 않았습니다.', 'err'); } m.close(); toast('문제은행에 저장했습니다.'); onDone(); } catch (err) { fail(err); } };
+}
+// 테스트 만들기 창에서 은행 문항 고르기(분류별·무작위 N개)
+async function qbPick() {
+  const d = await api('GET', '/api/question-bank'); if (!d.rows.length) { toast('문제은행이 비어 있습니다. 교육·자격관리 › 문제은행 탭에서 문항을 넣으세요.', 'err'); return null; }
+  return new Promise(resolve => {
+    let done = false;
+    const m = modal(`<h3>📚 문제은행에서 가져오기</h3><div class="toolbar"><label class="lf-sel">분류<select data-qb-cat><option value="">전체</option>${d.categories.map(c => `<option value="${esc(c)}">${esc(c || '(분류 없음)')}</option>`).join('')}</select></label><label class="lf-sel">무작위<input type="number" data-qb-n min="1" max="50" placeholder="개수" style="width:6em"></label><button type="button" class="btn small" data-qb-rand>무작위로 고르기</button></div>
+      <div class="qb-pick" data-qb-list></div><div class="actions"><span class="grow small muted" data-qb-cnt></span><button type="button" class="btn" data-qb-cancel>취소</button><button type="button" class="btn primary" data-qb-ok>넣기</button></div>`, { wide: true, onClose: () => { if (!done) resolve(null); } });
+    const list = $('[data-qb-list]', m.el), cat = $('[data-qb-cat]', m.el);
+    const draw = () => { const rs = d.rows.filter(r => !cat.value || r.category === cat.value); list.innerHTML = rs.map(r => `<label class="chk qb-row"><input type="checkbox" value="${r.id}"> <span class="chip small">${esc(TT_TYPE_LABEL[r.type])}</span> ${esc(r.q)} <span class="muted small">${esc(r.category || '')} · ${r.points}점</span></label>`).join(''); cnt(); };
+    const cnt = () => { $('[data-qb-cnt]', m.el).textContent = `${list.querySelectorAll('input:checked').length}개 고름`; };
+    cat.addEventListener('change', draw); list.addEventListener('change', cnt); draw();
+    $('[data-qb-rand]', m.el).onclick = () => { const n = Number($('[data-qb-n]', m.el).value) || 5, boxes = [...list.querySelectorAll('input')]; boxes.forEach(b => { b.checked = false; }); boxes.sort(() => Math.random() - 0.5).slice(0, n).forEach(b => { b.checked = true; }); cnt(); };
+    $('[data-qb-cancel]', m.el).onclick = () => m.close();
+    $('[data-qb-ok]', m.el).onclick = () => { const ids = [...list.querySelectorAll('input:checked')].map(b => Number(b.value)); done = true; m.close(); resolve(d.rows.filter(r => ids.includes(r.id)).map(({ id: _i, category: _c, created_by: _b, updated_at: _u, ...q }) => q)); };
+  });
+}
+function drawQbTab(host, data, can, reload) {
+  const cats = data.categories, byCat = cats.map(c => [c, data.rows.filter(r => r.category === c)]);
+  host.innerHTML = `<div class="toolbar"><span class="small muted">분류 ${cats.length}개 · 문항 ${data.rows.length}개. 문항은 테스트에 넣을 때 복사되므로 여기서 고쳐도 이미 만든 테스트는 바뀌지 않습니다.</span><span class="grow"></span>${can ? '<button type="button" class="btn primary" data-qb-new>＋ 문항</button>' : ''}</div>
+    ${data.rows.length ? byCat.map(([c, rs]) => `<details class="qb-cat" open><summary><b>📁 ${esc(c || '(분류 없음)')}</b> <span class="muted small">${rs.length}문항</span></summary><div class="table-wrap"><table class="grid" data-no-filter><thead><tr><th>유형</th><th>문제</th><th>정답</th><th class="r">배점</th><th></th></tr></thead><tbody>${rs.map(r => `<tr><td class="nowrap">${esc(TT_TYPE_LABEL[r.type])}</td><td>${esc(r.q)}${r.type === 'choice' ? `<div class="small muted">${r.options.map((o, j) => `${['①', '②', '③', '④', '⑤', '⑥'][j]} ${esc(o)}`).join(' ')}</div>` : ''}</td><td class="nowrap">${r.type === 'choice' ? ['①', '②', '③', '④', '⑤', '⑥'][r.answer] : esc(r.answer)}</td><td class="r">${r.points}</td><td class="nowrap">${can ? `<button type="button" class="btn small" data-qb-edit="${r.id}">수정</button> <button type="button" class="btn small danger" data-qb-del="${r.id}">삭제</button>` : ''}</td></tr>`).join('')}</tbody></table></div></details>`).join('') : '<div class="empty">문제은행이 비어 있습니다. 「＋ 문항」으로 넣거나, 테스트 만들기 창의 「문제은행에 저장」으로 모으세요.</div>'}`;
+  host.onclick = async e => {
+    if (e.target.closest('[data-qb-new]')) return qbEdit(null, cats, reload).catch(fail);
+    const ed = e.target.closest('[data-qb-edit]'); if (ed) return qbEdit(data.rows.find(r => r.id === Number(ed.dataset.qbEdit)), cats, reload).catch(fail);
+    const dl = e.target.closest('[data-qb-del]'); if (dl && await confirmBox('이 문항을 문제은행에서 지울까요? (이미 만든 테스트는 그대로)')) { try { await api('DELETE', `/api/question-bank/${dl.dataset.qbDel}`); toast('지웠습니다.'); reload(); } catch (err) { fail(err); } }
+  };
+}
 async function qualEdit(r = null, can = true) {
   const people = await qPeople(), v0 = r || { status: 'valid' };
   const v = await promptBox(r ? '자격 수정' : '자격 등록', `<div class="form-grid">
@@ -1834,7 +1885,7 @@ async function pageTraining(main) {
   const tab0 = sessionStorage.getItem('qTrTab') || 'plan';
   main.innerHTML = `<h1>교육·자격관리 <span class="dept">품질</span></h1>
   <p class="muted">연간 교육 계획(OJT·정기·직무·외부·문서 개정 교육)과 실적(참석·시간·평가), 개인별 교육 이력, 검사원·심사원 등 자격의 만료일을 관리합니다. 교육 대상자는 본인이 「참석 확인」을 누릅니다.</p>
-  <div class="seg q-tabs" id="trTabs"><button type="button" data-tab="plan">교육 계획·실적</button><button type="button" data-tab="cal">연간 교육 캘린더</button><button type="button" data-tab="people">개인별 이력</button><button type="button" data-tab="qual">자격 관리</button></div>
+  <div class="seg q-tabs" id="trTabs"><button type="button" data-tab="plan">교육 계획·실적</button><button type="button" data-tab="cal">연간 교육 캘린더</button><button type="button" data-tab="bank" hidden>문제은행</button><button type="button" data-tab="people">개인별 이력</button><button type="button" data-tab="qual">자격 관리</button></div>
   <div class="ip-tiles" id="trTiles"></div>
   <form class="toolbar list-filters" data-read-only id="trFilters"><label class="lf-sel">연도<select name="year"></select></label><label class="lf-sel" data-only="plan">상태<select name="st"><option value="">전체</option>${Object.entries(TR_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}<option value="mine">내 참석 확인 대기</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="교육명·강사·대상자·자격명"></label><span class="grow"></span><span id="trTools" class="ip-tools"></span></form>
   <div id="trList"></div>`;
@@ -1848,6 +1899,8 @@ async function pageTraining(main) {
     $$('#trTabs button', main).forEach(b => b.classList.toggle('on', b.dataset.tab === tab)); $$('[data-only]', form).forEach(x => { x.hidden = x.dataset.only !== tab; });
     const v = formObj(form), q = (v.q || '').trim().toLowerCase(), yr = r => !v.year || String(r).startsWith(v.year);
     const rows = tr.rows.filter(r => yr(r.plan_date));
+    { const bb = main.querySelector('#trTabs [data-tab="bank"]'); if (bb) bb.hidden = !tr.can_manage; } // 15.341 문제은행은 품질만
+    if (tab === 'bank') { qTiles('trTiles', []); $('#trTools', main).innerHTML = ''; const host = $('#trList', main); host.innerHTML = '<p class="muted">불러오는 중…</p>'; const reload = () => api('GET', '/api/question-bank').then(d => { if (tab === 'bank' && host.isConnected) drawQbTab(host, d, tr.can_manage, reload); }).catch(fail); reload(); return; }
     if (tab === 'cal') { // 15.338 연간 교육 캘린더: 유형 × 월, 실시·평가완료 = ✔(실시 월), 아래 이수율
       const Y = Number(v.year || todayStr().slice(0, 4)), rs = tr.rows.filter(r => r.plan_date.startsWith(String(Y)) && (!q || [r.title, r.instructor, r.kind].join(' ').toLowerCase().includes(q)));
       const pct = r => { const n = r.attendees.length, p = r.attendees.filter(a => a.result === '이수').length; return n ? `이수 ${p}/${n}` : ''; };

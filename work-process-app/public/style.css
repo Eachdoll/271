@@ -4575,3 +4575,9 @@ form.list-filters [hidden], form.toolbar [hidden] { display: none !important; } 
 .tr-trend td small { display: block; font-size: 11px; color: var(--muted); }
 .tr-trend td.tr-bad { color: var(--red); font-weight: 700; background: var(--red-bg); }
 .tr-trend td.tr-bad small { color: var(--red); }
+
+/* 15.341 문제은행 · 자격 시험 */
+.qb-pick { display: grid; gap: 4px; max-height: 50vh; overflow: auto; margin: 8px 0; }
+.qb-row { display: flex !important; flex-direction: row !important; align-items: baseline; gap: 6px; padding: 6px 8px; border-bottom: 1px dashed var(--line); font-weight: 400 !important; }
+.qb-cat { margin: 8px 0; } .qb-cat > summary { cursor: pointer; padding: 6px 0; }
+.tt-qual { padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 10%, transparent); font-weight: 600; }

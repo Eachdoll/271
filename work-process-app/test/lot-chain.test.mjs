@@ -1525,3 +1525,18 @@ test('15.340 inspection monthly fail-rate API: by vendor/item, judged only in de
   assert.equal(r.status, 200); assert.ok(Array.isArray(r.body.rows)); assert.equal(r.body.by, 'vendor');
   const i = await admin('GET', '/api/inspection-trend?year=' + today.slice(0, 4) + '&kind=출하검사&by=item'); assert.deepEqual([i.body.kind, i.body.by], ['출하검사', 'item']);
 });
+
+test('15.341 question bank (dedupe per category, quality only) · qualification exam grants/renews qualification with expiry', async () => {
+  const qs = [{ type: 'ox', q: '불량은 격리?', answer: 'O', points: 1 }, { type: 'choice', q: '건조 온도?', options: ['40', '60'], answer: 1, points: 1 }];
+  assert.deepEqual((await admin('POST', '/api/question-bank', { category: '세탁', questions: qs })).body, { created: 2, skipped: 0 });
+  assert.equal((await admin('POST', '/api/question-bank', { category: '세탁', questions: [qs[0]] })).body.skipped, 1);
+  assert.equal((await prod('GET', '/api/question-bank')).status, 403);
+  const bank = (await admin('GET', '/api/question-bank')).body; assert.deepEqual(bank.categories, ['세탁']); assert.equal(bank.rows.find(r => r.type === 'choice').answer, 1);
+  const t = (await admin('POST', '/api/trainings', { title: '세탁 검사원 자격 시험', kind: '직무 교육', plan_date: today, attendees: ['생산'], request_id: rid() })).body;
+  assert.equal((await admin('PUT', `/api/trainings/${t.id}/test`, { questions: bank.rows.map(({ id, category, created_by, updated_at, ...q }) => q), pass_score: 50, max_attempts: 2, open: true, qual_kind: '세탁 검사원', qual_months: 24 })).status, 200);
+  assert.equal((await prod('GET', `/api/trainings/${t.id}/test`)).body.test.qual_kind, '세탁 검사원');
+  const r = (await prod('POST', `/api/trainings/${t.id}/test/submit`, { answers: ['O', 1], request_id: rid() })).body;
+  assert.equal(r.qual.kind, '세탁 검사원'); assert.equal(r.qual.renewed, false);
+  const q = (await admin('GET', '/api/qualifications')).body.rows.find(x => x.user_name === '생산' && x.kind === '세탁 검사원');
+  assert.equal(q.status, 'valid'); assert.equal(q.acquired_date, today); assert.equal(q.expire_date.slice(0, 4), String(Number(today.slice(0, 4)) + 2));
+});

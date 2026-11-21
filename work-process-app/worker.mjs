@@ -614,7 +614,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'login_logs', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'training_tests', 'training_test_attempts', 'qualifications', 'supplier_evals', 'supplier_eval_plans', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests', 'quality_audits', 'audit_findings', 'validations', 'quality_goals', 'quality_kpi_values', 'quality_risks', 'risk_assessments', 'org_duty_assignments', 'dev_costs', 'cost_rates', 'cost_materials', 'cost_material_prices', 'cost_items', 'cost_item_revs', 'org_charts']; // 15.313 위험성평가 · 15.314 지정 담당자
+const backupTables = ['settings', 'users', 'login_logs', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'training_tests', 'training_test_attempts', 'question_bank', 'qualifications', 'supplier_evals', 'supplier_eval_plans', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests', 'quality_audits', 'audit_findings', 'validations', 'quality_goals', 'quality_kpi_values', 'quality_risks', 'risk_assessments', 'org_duty_assignments', 'dev_costs', 'cost_rates', 'cost_materials', 'cost_material_prices', 'cost_items', 'cost_item_revs', 'org_charts']; // 15.313 위험성평가 · 15.314 지정 담당자
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -4590,13 +4590,46 @@ function ttGrade(questions, answers) {
 const ttPublic = q => q.map(({ answer: _a, ...x }) => x); // 응시자에게는 정답을 빼고
 async function ttGet(trainingId) { return db.prepare('SELECT * FROM training_tests WHERE training_id=?').get(trainingId); }
 const ttAtt = (t, user) => db.prepare('SELECT * FROM training_attendees WHERE training_id=? AND (user_id=? OR user_name=?)').get(t.id, user.id, user.name);
+// ── 15.341 문제은행 ── 문항을 분류(예: 세탁·검사·안전)별로 모아 두고 교육 테스트에 골라 넣는다(넣을 때 복사되므로 은행을 고쳐도 이미 만든 테스트는 그대로).
+const qbRow = r => { const o = { type: r.type, q: r.q, points: r.points }; if (r.type === 'choice') { o.options = JSON.parse(r.options || '[]'); o.answer = Number(r.answer); } else o.answer = r.answer; return { id: r.id, category: r.category, ...o, created_by: r.created_by, updated_at: r.updated_at || r.created_at }; };
+const qbStore = q => [q.type, q.q, q.type === 'choice' ? JSON.stringify(q.options) : '[]', String(q.answer), q.points];
+route('GET', '/api/question-bank', async ({ user }) => {
+  requireRole(user, 'quality', '품질');
+  const rows = (await db.prepare('SELECT * FROM question_bank ORDER BY category, id').all()).map(qbRow);
+  return { rows, categories: [...new Set(rows.map(r => r.category))] };
+});
+route('POST', '/api/question-bank', async ({ user, body }) => {
+  requireRole(user, 'quality', '품질');
+  const category = str(body.category, 50), qs = ttQuestions(Array.isArray(body.questions) ? body.questions : [body]);
+  const dup = new Set((await db.prepare('SELECT q FROM question_bank WHERE category=?').all(category)).map(r => ttNorm(r.q)));
+  const add = qs.filter(q => !dup.has(ttNorm(q.q)));
+  if (add.length) await db.batch(add.map(q => ({ sql: 'INSERT INTO question_bank(category,type,q,options,answer,points,created_by) VALUES(?,?,?,?,?,?,?)', args: [category, ...qbStore(q), user.name] })));
+  return { created: add.length, skipped: qs.length - add.length };
+});
+route('PUT', '/api/question-bank/:id', async ({ user, params, body }) => {
+  requireRole(user, 'quality', '품질'); const r = await mustGet('question_bank', params.id);
+  const [q] = ttQuestions([body]), category = str(body.category ?? r.category, 50);
+  await db.prepare("UPDATE question_bank SET category=?,type=?,q=?,options=?,answer=?,points=?,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=?").run(category, ...qbStore(q), user.name, r.id);
+  return qbRow(await mustGet('question_bank', r.id));
+});
+route('DELETE', '/api/question-bank/:id', async ({ user, params }) => { requireRole(user, 'quality', '품질'); await mustGet('question_bank', params.id); await db.prepare('DELETE FROM question_bank WHERE id=?').run(Number(params.id)); return { ok: true }; });
+// 15.341 자격 시험: 합격하면 그 자격을 새로 주거나(있으면 취득일·만료일 갱신). 만료 = 합격일 + 유효기간(개월, 0이면 없음).
+async function ttGrantQual(test, t, user) {
+  if (!test.qual_kind) return null;
+  const d = today(), exp = test.qual_months ? (() => { const [y, m, dd] = d.split('-').map(Number); const x = new Date(Date.UTC(y, m - 1 + test.qual_months, dd)); return x.toISOString().slice(0, 10); })() : null;
+  const prior = await db.prepare("SELECT * FROM qualifications WHERE user_name=? AND kind=? AND status<>'withdrawn' ORDER BY id DESC").get(user.name, test.qual_kind);
+  const note = `교육 테스트 합격 · ${t.title}`;
+  if (prior) await db.prepare("UPDATE qualifications SET acquired_date=?,expire_date=?,status='valid',issuer=CASE WHEN issuer='' THEN '사내(교육 테스트)' ELSE issuer END,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=?").run(d, exp, pushHist(prior, { by: user.name, what: `자격 갱신(${note})` }), user.name, prior.id);
+  else await db.prepare('INSERT INTO qualifications(user_id,user_name,kind,cert_no,issuer,acquired_date,expire_date,status,note,history,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(user.id, user.name, test.qual_kind, `TR-${t.id}`, '사내(교육 테스트)', d, exp, 'valid', note, JSON.stringify([{ at: now(), by: user.name, what: `자격 부여(${note})` }]), user.name);
+  return { kind: test.qual_kind, expire_date: exp, renewed: !!prior };
+}
 route('GET', '/api/trainings/:id/test', async ({ user, params }) => {
   const t = await mustGet('trainings', params.id), test = await ttGet(t.id), manage = isQuality(user);
   const me = await ttAtt(t, user);
   if (!test) return { training: { id: t.id, title: t.title, status: t.status }, test: null, can_manage: manage, is_attendee: !!me };
   const questions = JSON.parse(test.questions || '[]');
   const mine = await db.prepare('SELECT attempt_no,score,passed,submitted_at,detail FROM training_test_attempts WHERE test_id=? AND user_name=? ORDER BY attempt_no').all(test.id, user.name);
-  const base = { id: test.id, pass_score: test.pass_score, max_attempts: test.max_attempts, time_limit_min: test.time_limit_min, open: !!test.open, revision: test.revision, count: questions.length, total_points: questions.reduce((s, q) => s + q.points, 0) };
+  const base = { id: test.id, pass_score: test.pass_score, max_attempts: test.max_attempts, time_limit_min: test.time_limit_min, open: !!test.open, qual_kind: test.qual_kind || '', qual_months: test.qual_months || 0, revision: test.revision, count: questions.length, total_points: questions.reduce((s, q) => s + q.points, 0) };
   const out = { training: { id: t.id, title: t.title, status: t.status }, can_manage: manage, is_attendee: !!me, mine: mine.map(m => ({ ...m, detail: JSON.parse(m.detail || '[]') })), passed: mine.some(m => m.passed),
     can_take: !!me && !!test.open && t.status !== 'void' && !mine.some(m => m.passed) && mine.length < test.max_attempts };
   if (manage) {
@@ -4613,6 +4646,7 @@ route('PUT', '/api/trainings/:id/test', async ({ user, params, body }) => {
   const max_attempts = Math.round(Number(body.max_attempts ?? prior?.max_attempts ?? 2)); if (!(max_attempts >= 1 && max_attempts <= 10)) throw bad('응시 횟수는 1~10번입니다.');
   const time_limit_min = Math.round(Number(body.time_limit_min ?? prior?.time_limit_min ?? 0)); if (!(time_limit_min >= 0 && time_limit_min <= 180)) throw bad('제한 시간은 0(없음)~180분입니다.');
   const open = body.open === true || body.open === 1 || body.open === '1' ? 1 : 0;
+  const qual_kind = str(body.qual_kind ?? prior?.qual_kind ?? '', 100), qual_months = Math.round(Number(body.qual_months ?? prior?.qual_months ?? 0)); if (!(qual_months >= 0 && qual_months <= 120)) throw bad('자격 유효기간은 0~120개월입니다.'); // 15.341
   const taken = prior ? (await db.prepare('SELECT COUNT(*) AS n FROM training_test_attempts WHERE test_id=?').get(prior.id)).n : 0;
   let questions = prior ? JSON.parse(prior.questions || '[]') : [];
   if (body.questions !== undefined) {
@@ -4621,8 +4655,8 @@ route('PUT', '/api/trainings/:id/test', async ({ user, params, body }) => {
     questions = next;
   }
   if (!questions.length) throw bad('문항을 1개 이상 넣으세요.');
-  if (prior) { const r = await db.prepare("UPDATE training_tests SET questions=?,pass_score=?,max_attempts=?,time_limit_min=?,open=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?").run(JSON.stringify(questions), pass_score, max_attempts, time_limit_min, open, user.name, prior.id, prior.revision); if (!r.changes) throw conflict(); }
-  else await db.prepare('INSERT INTO training_tests(training_id,questions,pass_score,max_attempts,time_limit_min,open,created_by) VALUES(?,?,?,?,?,?,?)').run(t.id, JSON.stringify(questions), pass_score, max_attempts, time_limit_min, open, user.name);
+  if (prior) { const r = await db.prepare("UPDATE training_tests SET questions=?,pass_score=?,max_attempts=?,time_limit_min=?,open=?,qual_kind=?,qual_months=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?").run(JSON.stringify(questions), pass_score, max_attempts, time_limit_min, open, qual_kind, qual_months, user.name, prior.id, prior.revision); if (!r.changes) throw conflict(); }
+  else await db.prepare('INSERT INTO training_tests(training_id,questions,pass_score,max_attempts,time_limit_min,open,qual_kind,qual_months,created_by) VALUES(?,?,?,?,?,?,?,?,?)').run(t.id, JSON.stringify(questions), pass_score, max_attempts, time_limit_min, open, qual_kind, qual_months, user.name);
   return { ok: true };
 });
 route('POST', '/api/trainings/:id/test/submit', async ({ user, params, body }) => {
@@ -4646,7 +4680,8 @@ route('POST', '/api/trainings/:id/test/submit', async ({ user, params, body }) =
       { sql: 'UPDATE trainings SET revision=revision+1 WHERE id=?', args: [t.id] }, // 열려 있던 담당자 수정 창이 점수를 덮어쓰지 않게
     ]);
   } catch (e) { if (/UNIQUE/i.test(String(e?.message))) throw new HttpError(409, '같은 응시가 이미 제출되었습니다. 새로 불러오세요.'); throw e; }
-  return { score, passed: !!passed, attempt_no: no, max_attempts: test.max_attempts, detail, pass_score: test.pass_score, result };
+  const qual = passed ? await ttGrantQual(test, t, user) : null; // 15.341 자격 시험
+  return { score, passed: !!passed, attempt_no: no, max_attempts: test.max_attempts, detail, pass_score: test.pass_score, result, qual };
 });
 // 개인별 교육기록: 품질은 누구나, 그 밖에는 본인만. user 없이 부르면 사람 목록(품질) 또는 본인.
 route('GET', '/api/training-records', async ({ user, query }) => {
