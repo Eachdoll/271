@@ -843,7 +843,7 @@ function processGuide(main, route) {
     const fb = e.target.closest('[data-pg-flow]'); if (fb) { flowStore(FLOW_KEY, fb.dataset.pgFlow); draw(); return; }
     if (e.target.closest('[data-pg-fold]')) { flowStore(FLOW_FOLD, flowStore(FLOW_FOLD) === '1' ? '0' : '1'); draw(); }
   });
-  draw(); anchor.after(box);
+  draw(); (anchor.closest('.report-heading') || anchor).after(box); // 15.346 제목이 머리 줄(flex) 안에 있으면 그 줄 아래로(휴대폰 가로 넘침 방지)
 }
 // 15.213 메뉴 찾기: 화면 이름 일부를 치면 「부서 › 묶음 › 화면」 목록이 뜨고, Enter·누르면 그 화면으로.
 function bindNavFind() {

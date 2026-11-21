@@ -4653,3 +4653,6 @@ tr.env-hatch > td { color: var(--muted); }
 /* 15.345 점검 조건 켜기/끄기 */
 .env-cond { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 10px; }
 .env-cond label.chk { display: inline-flex !important; flex-direction: row !important; align-items: center; gap: 6px; margin: 0; font-weight: 600; }
+/* 15.346 흐름 막대가 부모(그리드·flex)를 넓히지 않게: 단계는 막대 안에서 가로 스크롤 */
+.proc-guide { min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden; }
+.proc-guide .pg-steps { min-width: 0; max-width: 100%; }
