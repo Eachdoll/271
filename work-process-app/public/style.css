@@ -4706,3 +4706,11 @@ tr.env-hatch > td { color: var(--muted); }
 .assist-form input { flex: 1; min-width: 0; }
 @media (max-width: 700px) { .assist-btn { bottom: 76px; right: 14px; width: 48px; height: 48px; } .assist-panel { right: 8px; left: 8px; width: auto; bottom: 70px; height: min(70vh, 520px); } }
 @media print { .assist-btn, .assist-panel { display: none !important; } }
+/* 15.351 태블릿(701~820px): 「조건」 단추를 입력칸 아래 줄에 맞춤 · 챗봇 단추가 아래 빠른 이동 막대(820px 이하)와 겹치지 않게 */
+@media (min-width: 701px) and (max-width: 820px) { form.list-filters > .filter-toggle, form.list-filters.lf-pc-fold > .filter-toggle { align-self: flex-end; } }
+@media (max-width: 820px) { .assist-btn { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); } .assist-panel { bottom: calc(70px + env(safe-area-inset-bottom, 0px)); } }
+@media (min-width: 481px) and (max-width: 820px) { .who > a { max-width: 260px; } } /* 15.351 태블릿: 이름·역할 표시가 「관리…」로 잘리던 것 */
+.assist-msg.me { background: #2457d6; color: #fff; } /* 15.351 다크에서도 흰 글자 대비 4.5:1 이상(밝은 강조색 위 흰 글자 3.6:1이던 것) */
+/* 15.351 챗봇은 팝업 아래(팝업 z 50): 팝업이 열려 있으면 💬 단추를 숨겨 팝업 아래쪽 저장·제출 단추를 가리지 않게 */
+.assist-btn { z-index: 40; } .assist-panel { z-index: 41; }
+body:has(.modal-wrap) .assist-btn { display: none; }
