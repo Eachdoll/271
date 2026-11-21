@@ -790,7 +790,7 @@ function ipSuggest(kind, appDate, regDate, today) {
 }
 async function pageIpRights(main) {
   main.innerHTML = `<h1>지식재산권 관리 <span class="dept">연구소</span></h1>
-  <p class="muted">회사가 가진 특허·실용신안·디자인·상표 등을 한곳에 모아 <b>언제까지 유효한지, 다음에 무엇을 언제 해야 하는지</b>(연차료 납부·존속기간 갱신) 관리합니다. 기한이 지나면 빨강, 90일 안이면 노랑으로 보입니다. 기간 자동 계산은 국내 기준 참고값이니 정확한 날짜는 특허청·대리인 안내로 확인해 고치세요.</p>
+  <p class="muted">회사가 가진 특허·실용신안·디자인·상표 등을 한곳에 모아 <b>언제까지 유효한지, 다음에 무엇을 언제 해야 하는지</b>(연차료 납부·존속기간 갱신) 관리합니다. 기한이 지나면 빨강, 90일 안이면 노랑으로 보입니다. 기간 자동 계산은 국내 기준 참고값이니 정확한 날짜는 특허청·대리인 안내로 확인해 고치세요. 왼쪽 「구분」 폴더로 특허·상표 등을 골라 봅니다.</p>
   <div class="ip-tiles" id="ipTiles"></div>
   <form class="toolbar list-filters" data-read-only id="ipFilters">
     <label class="lf-sel">구분<select name="kind"><option value="">전체</option>${Object.keys(IP_KIND_INFO).map(k => `<option>${k}</option>`).join('')}</select></label>
@@ -913,7 +913,7 @@ function certSuggest(kind, issue, today) {
 }
 async function pageCerts(main) {
   main.innerHTML = `<h1>인증서 관리 <span class="dept">품질</span></h1>
-  <p class="muted">회사가 받은 인증(ISO 9001·14001·45001, GRS 등)의 <b>유효기간</b>과 <b>다음 심사</b>(사후심사·갱신심사) 일정을 관리합니다. 다음 심사일이나 만료일이 지나면 빨강, 90일 안이면 노랑. 기간 자동 계산은 일반적인 주기(참고값)이니 인증기관 일정에 맞춰 고치세요.</p>
+  <p class="muted">회사가 받은 인증(ISO 9001·14001·45001, GRS 등)의 <b>유효기간</b>과 <b>다음 심사</b>(사후심사·갱신심사) 일정을 관리합니다. 다음 심사일이나 만료일이 지나면 빨강, 90일 안이면 노랑. 기간 자동 계산은 일반적인 주기(참고값)이니 인증기관 일정에 맞춰 고치세요. 왼쪽 「인증 종류」 폴더로 종류별로 골라 봅니다.</p>
   <div class="ip-tiles" id="ctTiles"></div>
   <form class="toolbar list-filters" data-read-only id="ctFilters">
     <label class="lf-sel">인증 종류<select name="kind"><option value="">전체</option>${Object.keys(CERT_INFO).map(k => `<option>${esc(k)}</option>`).join('')}</select></label>
@@ -1293,7 +1293,7 @@ async function ncOpen(id) {
 }
 async function pageNcs(main) {
   main.innerHTML = `<h1>부적합·CAPA <span class="dept">품질</span></h1>
-  <p class="muted">수입·출하검사 불합격, 분석 불합격, 공정 이상, 고객 불만(VOC), 심사 지적을 한곳에 모아 <b>등록 → 원인분석 → 조치 → 유효성검증 → 종결</b>로 관리합니다. 검사·분석·VOC 창의 「CAPA 등록」으로도 바로 등록됩니다. 종결은 유효성검증이 「유효」일 때 품질책임자가 합니다.</p>
+  <p class="muted">수입·출하검사 불합격, 분석 불합격, 공정 이상, 고객 불만(VOC), 심사 지적을 한곳에 모아 <b>등록 → 원인분석 → 조치 → 유효성검증 → 종결</b>로 관리합니다. 검사·분석·VOC 창의 「CAPA 등록」으로도 바로 등록됩니다. 종결은 유효성검증이 「유효」일 때 품질책임자가 합니다. 설비 점검 이상·고장, 환경점검(온습도 이탈·청소 불량)에서도 바로 등록되며, 왼쪽 연도 폴더로 해를 골라 봅니다(기본 전체 연도).</p>
   <div class="ip-tiles" id="ncTiles"></div>
   <form class="toolbar list-filters" data-read-only id="ncFilters"><label class="lf-sel">연도<select name="year"><option value="" selected>전체</option></select></label><label class="lf-sel">단계<select name="st"><option value="live">진행 중(종결·취소 빼고)</option><option value="">전체</option>${Object.entries(NC_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">출처<select name="src"><option value="">전체</option>${Object.entries(NC_SOURCE_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="list-search">찾기<input type="search" name="q" placeholder="번호·내용·품목·LOT·출처 번호·담당"></label><span class="grow"></span><span id="ncTools" class="ip-tools"></span></form>
   <div id="ncList"></div>`;
@@ -1884,7 +1884,7 @@ async function qualEdit(r = null, can = true) {
 async function pageTraining(main) {
   const tab0 = sessionStorage.getItem('qTrTab') || 'plan';
   main.innerHTML = `<h1>교육·자격관리 <span class="dept">품질</span></h1>
-  <p class="muted">연간 교육 계획(OJT·정기·직무·외부·문서 개정 교육)과 실적(참석·시간·평가), 개인별 교육 이력, 검사원·심사원 등 자격의 만료일을 관리합니다. 교육 대상자는 본인이 「참석 확인」을 누릅니다.</p>
+  <p class="muted">연간 교육 계획(OJT·정기·직무·외부·문서 개정 교육)과 실적(참석·시간·평가), 개인별 교육 이력, 검사원·심사원 등 자격의 만료일을 관리합니다. 테스트가 없는 교육만 대상자 본인이 「참석 확인」을 누릅니다. 교육에 테스트를 붙이면 대상자가 시스템에서 풀고, <b>합격하면 이수·참석이 자동 기록</b>됩니다. 자격 시험으로 만들면 합격 때 자격이 부여·갱신(만료일 자동)되고, 「문제은행」 탭(품질)에서 문항을 모아 테스트에 골라 넣습니다. 「연간 교육 캘린더」 탭과 왼쪽 연도 폴더로 해마다 누적해 봅니다.</p>
   <div class="seg q-tabs" id="trTabs"><button type="button" data-tab="plan">교육 계획·실적</button><button type="button" data-tab="cal">연간 교육 캘린더</button><button type="button" data-tab="bank" hidden>문제은행</button><button type="button" data-tab="people">개인별 이력</button><button type="button" data-tab="qual">자격 관리</button></div>
   <div class="ip-tiles" id="trTiles"></div>
   <form class="toolbar list-filters" data-read-only id="trFilters"><label class="lf-sel">연도<select name="year"></select></label><label class="lf-sel" data-only="plan">상태<select name="st"><option value="">전체</option>${Object.entries(TR_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}<option value="mine">내 참석 확인 대기</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="교육명·강사·대상자·자격명"></label><span class="grow"></span><span id="trTools" class="ip-tools"></span></form>
@@ -2222,7 +2222,7 @@ async function eqOpen(id) {
 }
 async function pageEquipment(main) {
   main.innerHTML = `<h1>설비 대장·이력 <span class="dept">생산 · 공무</span></h1>
-  <p class="muted">생산설비(호기·위치·제조사)와 예방보전(PM) 항목·주기, 고장·수리 이력을 관리합니다. PM 일정은 「예방보전(PM) 일정」에서 한눈에 봅니다. 등록·기록은 생산·품질 담당이 합니다.</p>
+  <p class="muted">생산설비(호기·위치·제조사)와 예방보전(PM) 항목·주기, 고장·수리 이력을 관리합니다. PM 일정은 「예방보전(PM) 일정」에서 한눈에 봅니다. 등록·기록은 생산·품질 담당이 합니다. 왼쪽 「설비 종류」 폴더로 종류별로 골라 봅니다. 점검 결과 「이상」이나 고장을 기록하면 부적합·CAPA로 바로 넘길 수 있습니다.</p>
   <div class="ip-tiles" id="eqTiles"></div>
   <form class="toolbar list-filters" data-read-only id="eqFilters"><label class="lf-sel">종류<select name="kind"><option value="">전체</option></select></label><label class="lf-sel">상태<select name="st"><option value="live">폐기 빼고</option><option value="">전체</option>${Object.entries(EQ_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}<option value="due">PM 7일 안·지남</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="설비번호·설비명·호기·위치·제조사"></label><span class="grow"></span><span id="eqTools" class="ip-tools"></span></form>
   <div id="eqList"></div>`;
@@ -2284,7 +2284,7 @@ async function pmToCapa(e, logId, what) {
 }
 async function pagePm(main) {
   main.innerHTML = `<h1>예방보전(PM) 일정 <span class="dept">생산 · 공무</span></h1>
-  <p class="muted">모든 설비의 예방보전 항목을 다음 예정일 순으로 봅니다. 「수행」으로 점검표를 체크하면 직전 수행일과 다음 예정일(수행일 + 주기)이 바뀌고 설비 이력에 남습니다. 점검 중 「이상」이 하나라도 있으면 결과가 「이상」으로 기록됩니다.</p>
+  <p class="muted">모든 설비의 예방보전 항목을 다음 예정일 순으로 봅니다. 「수행」으로 점검표를 체크하면 직전 수행일과 다음 예정일(수행일 + 주기)이 바뀌고 설비 이력에 남습니다. 점검 중 「이상」이 하나라도 있으면 결과가 「이상」으로 기록됩니다. 「연간 PM 캘린더」 탭에서 설비별 계획·수행·지연을 12개월로 누적해 봅니다. 공무 오퍼레이터는 휴대폰에서 점검표 체크·고장 신고를 하고, 점검 이상·고장은 할 일에 올라와 수리 기록이나 부적합·CAPA로 처리합니다.</p>
   <div class="seg q-tabs" id="pmTabs"><button type="button" data-tab="list">기한 목록</button><button type="button" data-tab="cal">연간 PM 캘린더</button></div>
   <div class="ip-tiles" id="pmTiles"></div>
   <form class="toolbar list-filters" data-read-only id="pmFilters"><label class="lf-sel" data-only="cal">연도<select name="year">${[1, 0, -1, -2].map(i => { const y = Number(todayStr().slice(0, 4)) + i; return `<option${i === 0 ? ' selected' : ''}>${y}</option>`; }).join('')}</select></label><label class="lf-sel">기한<select name="due"><option value="30">30일 안·지남</option><option value="7">7일 안·지남</option><option value="over">지남</option><option value="">전체</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="설비·호기·위치·PM 항목"></label></form>
@@ -2588,7 +2588,7 @@ async function audOpen(id = null, pre = {}) {
 }
 async function pageAudits(main) {
   main.innerHTML = `<h1>심사(Audit) 관리 <span class="dept">품질</span></h1>
-  <p class="muted">고객사 수검·내부심사·협력사 심사·인증심사를 <b>계획 → 실시 → 시정 중 → 종결</b>로 관리합니다. 체크리스트로 실시하고, 중대·경미 지적은 부적합·CAPA로 자동 등록되며 CAPA가 모두 종결되어야 심사를 종결합니다. 대응보고서는 파일로 붙입니다.</p>
+  <p class="muted">고객사 수검·내부심사·협력사 심사·인증심사를 <b>계획 → 실시 → 시정 중 → 종결</b>로 관리합니다. 체크리스트로 실시하고, 중대·경미 지적은 부적합·CAPA로 자동 등록되며 CAPA가 모두 종결되어야 심사를 종결합니다. 대응보고서는 파일로 붙입니다. 「연간 심사 캘린더」 탭에서 연간 심사 프로그램(계획·실시·지연)을 누적해 보고, 협력사 심사를 실시하면 협력업체 품질의 그 업체 현장심사 계획이 자동으로 실시 처리됩니다.</p>
   <div class="seg q-tabs" id="audTabs"><button type="button" data-tab="list">심사 목록</button><button type="button" data-tab="cal">연간 심사 프로그램</button></div>
   <div class="ip-tiles" id="audTiles"></div>
   <form class="toolbar list-filters" data-read-only id="audFilters"><label class="lf-sel">연도<select name="year"><option>${todayStr().slice(0, 4)}</option></select></label><label class="lf-sel">유형<select name="kind"><option value="">전체</option>${Object.entries(AUD_KIND_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">단계<select name="st"><option value="live">진행 중</option><option value="">전체</option>${Object.entries(AUD_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="list-search">찾기<input type="search" name="q" placeholder="번호·심사명·대상·심사원"></label><span class="grow"></span><span id="audTools" class="ip-tools"></span></form>

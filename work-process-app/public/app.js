@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.346';
+const APP_VERSION = '15.347';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -529,12 +529,39 @@ function helpDodge(main, details) {
   const left = Math.min(...hits.map(b => b.left));
   details.style.right = `${parseFloat(getComputedStyle(details).right) + (r.right - left) + 8}px`;
 }
+// 15.347 화면 설명이 없던 화면의 도움말(화면 코드에 설명 문단이 없을 때만 넣음)
+const ROUTE_HELP = {
+  '#/sales/quotes': '거래처에 보낼 견적서를 만들고 출력합니다. 확정된 견적은 수주로 이어 받아 품목·단가를 다시 입력하지 않게 합니다. 업무 흐름: 견적 → 수주 → 생산의뢰·출하 → 매출전표.',
+  '#/sales/orders': '고객 주문(수주)을 등록하고 납기·진행(생산의뢰·출하·매출전표)을 봅니다. 수주에서 생산의뢰·구매의뢰를 만들고, 출하지시와 분할 매출전표로 이어집니다.',
+  '#/sales/mr': '영업이 생산팀에 보내는 생산의뢰 목록입니다. 수주를 고르거나 직접 품목·수량·납기를 넣어 의뢰하면 생산 › 생산의뢰 접수로 넘어가 생산계획이 잡힙니다.',
+  '#/sales/pr': '영업이 구매팀에 보내는 구매의뢰 목록입니다. 의뢰가 접수되면 구매가 발주로 이어 받고, 입고되면 진행 상태가 바뀝니다.',
+  '#/sales/bills': '매출전표 목록입니다. 수주·출하를 골라 전표를 잡고(나눠 잡기 가능), 거래명세서를 출력하며, 전표를 골라 세금계산서에 담습니다. 마감한 달·거래처의 전표는 고칠 수 없습니다.',
+  '#/sales/returns': '고객에게서 돌아온 물건(반입·반품)을 기록합니다. 반입하면 재고에 다시 잡히고 매출에서 차감되며, 품질 문제면 VOC·CAPA로, 불량품은 불량·폐기나 공급사 반출로 이어집니다.',
+  '#/sales/delivery-status': '거래처·품목별로 언제 얼마나 납품(출하)했는지 봅니다. 매출전표가 아직 없는 출하도 함께 보여 마감 전에 빠진 전표를 찾을 수 있습니다.',
+  '#/purchase/bills': '매입전표 목록입니다. 입고를 골라 전표를 잡고, 전표를 골라 매입 세금계산서에 담은 뒤 지급확인으로 이어집니다. 마감한 달·거래처의 전표는 고칠 수 없습니다.',
+  '#/purchase/returns': '공급사로 돌려보낸 물건(반출·반품)을 기록합니다. 반출하면 재고에서 빠지고 매입에서 차감됩니다. 수입검사 불합격·불량품 처리와 함께 씁니다.',
+  '#/purchase/receipt-status': '거래처·품목별로 언제 얼마나 입고됐는지 봅니다. 매입전표가 아직 없는 입고도 함께 보여 마감 전에 빠진 전표를 찾을 수 있습니다.',
+  '#/purchase/notes': '받을어음·지급어음을 등록하고 만기일자로 관리합니다. 만기가 다가오면 표시되고, 만기 회수·결제를 기록하면 입금·지급과 거래처 잔액에 반영됩니다.',
+  '#/prod/orders': '영업이 보낸 생산의뢰를 접수합니다. 접수하면 완제품 계획생산(또는 반제품 계획)으로 이어지고, 실적이 쌓이면 진행이 갱신됩니다. 반려하려면 사유를 적으세요.',
+  '#/prod/semi': '반제품(봉투 등) 생산 계획과 진행을 봅니다. 커팅/융착·세탁 작업 실적이 계획에 자동으로 쌓이고, 반제품 LOT는 완제품 포장에 투입됩니다.',
+  '#/logistics/receipts': '입고 건마다 입고증(입고번호 묶음)을 보고 출력합니다. 입고증의 LOT는 LOT·QR 관리에서 라벨로 발행하고, 수입검사 대상이면 품질 › 분석 관리로 넘어갑니다.',
+  '#/admin': '데이터 백업(내려받기·복원), 회사 사진 저장소, 가입 초대코드를 관리합니다. 사용자 승인·권한은 「회원 관리」, 결재선은 「결재선 설정」, 접속 국가 제한은 「접속 보안」에서 합니다.',
+  '#/me': '내 부서·직급과 지정 담당 업무를 보고, 최근 로그인 기록(IP·장소)을 확인하며 비밀번호를 바꿉니다. 모르는 접속이 보이면 비밀번호를 바꾸고 관리자에게 알리세요. 언어·다크 모드는 오른쪽 위 「화면 설정」에서 바꿉니다.',
+};
+function routeHelp(main, route) {
+  const t = ROUTE_HELP[route]; if (!t || main.querySelector('details.help, .report-heading p.muted')) return; // 머리 줄 안 설명이 있으면 그대로
+  if ([...main.querySelectorAll(':scope > p.muted, :scope > section > p.muted')].some(p => p.textContent.trim().length >= (p.parentElement === main ? 20 : 80))) return; // foldHelp와 같은 기준
+  const h1 = main.querySelector('h1'); if (!h1) return;
+  const at = h1.closest('.report-heading') || (h1.parentElement === main ? h1 : h1.closest('#main > *')); if (!at) return;
+  const p = document.createElement('p'); p.className = 'muted'; p.textContent = t; if (at.classList.contains('report-heading')) p.dataset.inline = '1'; at.after(p); // 머리 줄 오른쪽에 단추가 있는 화면은 도움말을 줄 아래에
+}
 function foldHelp(main) {
   for (const p of main.querySelectorAll(':scope > p.muted, :scope > section > p.muted, #receiptContent > p.muted')) {
     if (p.textContent.trim().length < (p.parentElement === main ? 20 : 80) || p.closest('details')) continue; // 15.279 화면 바로 아래 짧은 설명도 도움말로(화면마다 같은 모양)
     const details = document.createElement('details'); details.className = 'help';
     details.innerHTML = '<summary title="이 화면 설명">도움말</summary>'; p.replaceWith(details); details.append(p); // 15.180 오른쪽 위 단추
-    if (details.parentElement === main) requestAnimationFrame(() => { const h1 = $('h1', main); if (h1 && details.isConnected) { details.style.top = `${h1.offsetTop}px`; helpDodge(main, details); } }); // 제목 줄 높이에(위치 표시와 겹치지 않게)
+    if (p.dataset.inline) details.classList.add('help-inline'); // 15.347
+    if (details.parentElement === main && !p.dataset.inline) requestAnimationFrame(() => { const h1 = $('h1', main); if (h1 && details.isConnected) { details.style.top = `${h1.offsetTop}px`; helpDodge(main, details); } }); // 제목 줄 높이에(위치 표시와 겹치지 않게)
   }
 }
 function applyView(main, route) {
@@ -993,7 +1020,7 @@ async function render() {
   refreshNavBadges();
   const seq = render.seq = (render.seq || 0) + 1; // 15.317 빠르게 메뉴를 옮기면 앞 화면의 늦게 끝난 그리기가 새 화면에 탭·경로(HOME 등)를 덮어쓰던 것: 앞 그리기는 페이지 뒤 단계를 건너뜀
   const page = canSeeRoute(route) ? PAGES[location.hash || '#/'] || pageHome : pageNoMenu;
-  try { await page($('#main')); if (seq !== render.seq) return; if (page === pageHome || page === pageTasks) applyMenuAccess($('#main')); if (page !== pageNoMenu) { favoriteTools($('#main'), route); focusToggle($('#main')); } if (POPOUT || document.body.classList.contains('focus-mode')) focusBar(); if (POPOUT) document.title = `${screenTitle($('#main')) || '화면'} · 분리한 창`; applyView($('#main'), route); foldHelp($('#main')); erpEntryBar($('#main'), route); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  try { await page($('#main')); if (seq !== render.seq) return; if (page === pageHome || page === pageTasks) applyMenuAccess($('#main')); if (page !== pageNoMenu) { favoriteTools($('#main'), route); focusToggle($('#main')); } if (POPOUT || document.body.classList.contains('focus-mode')) focusBar(); if (POPOUT) document.title = `${screenTitle($('#main')) || '화면'} · 분리한 창`; applyView($('#main'), route); routeHelp($('#main'), route); foldHelp($('#main')); erpEntryBar($('#main'), route); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   if (seq !== render.seq) return;
   try { autoRememberLists($('#main')); } catch { /* 15.281 조회 조건 기억은 편의 기능 */ }
   try { managedTabs($('#main'), route.split('?')[0]); } catch { /* 15.213 */ }

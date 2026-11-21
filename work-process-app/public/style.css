@@ -4656,3 +4656,5 @@ tr.env-hatch > td { color: var(--muted); }
 /* 15.346 흐름 막대가 부모(그리드·flex)를 넓히지 않게: 단계는 막대 안에서 가로 스크롤 */
 .proc-guide { min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden; }
 .proc-guide .pg-steps { min-width: 0; max-width: 100%; }
+/* 15.347 머리 줄 오른쪽에 단추가 있는 화면: 도움말을 줄 아래에(겹침 방지) */
+#main > details.help.help-inline { position: static !important; display: block; margin: 0 0 8px; }

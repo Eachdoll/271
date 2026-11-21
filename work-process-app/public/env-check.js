@@ -23,7 +23,7 @@ async function pageEnv(main, { operator = false, area: fixedArea = '' } = {}) {
   let tab = operator ? 'day' : (['day', 'month', 'setup'].includes(envSs('envTab')) ? envSs('envTab') : 'day');
   let date = todayStr(), d = null, mon = null, setup = null, rail = null;
   main.innerHTML = `<h1>환경점검 <span class="dept">${operator ? esc(ENV_AREA_L[area]) : '생산'}</span></h1>
-  ${operator ? '' : '<p class="muted">창고·라인의 구역별로 매일 <b>온습도(오전·오후)</b>를, 라인은 <b>청소 체크시트</b>도 점검합니다. 점검자가 기록하면 확인자가 확인하고 승인자가 승인합니다(확인되면 기록이 잠김). 기준을 벗어나거나 불량이면 조치 내용을 적고, 필요하면 부적합·CAPA로 넘깁니다. 구역·기준·청소 항목은 「구역 설정」에서 고칩니다.</p>'}
+  ${operator ? '' : '<p class="muted">창고·라인의 구역별로 매일 <b>온습도(오전·오후)</b>를, 라인은 <b>청소 체크시트</b>도 점검합니다. 점검자가 기록하면 확인자가 확인하고 승인자가 승인합니다(확인되면 기록이 잠김). 기준을 벗어나거나 불량이면 조치 내용을 적고, 필요하면 부적합·CAPA로 넘깁니다. 구역·기준·청소 항목은 「구역 설정」에서 고칩니다. <b>토·일·공휴일은 점검하지 않는 날(빗금)</b>이며, 일하는 날이면 「특근 지정」 뒤 점검합니다. 라인이 쉬는 날은 구역별·라인 전체 「비가동」으로 지정합니다. 구역마다 온도·습도 점검을 켜고 끌 수 있고(창고는 습도 기본 끔), 회사 휴일은 「구역 설정 › 휴일 관리」에서 넣습니다. 월간 기록은 인쇄·엑셀로 점검일지를 냅니다.</p>'}
   <div class="seg q-tabs env-areas" id="envArea"${fixedArea ? ' hidden' : ''}>${Object.entries(ENV_AREA_L).map(([k, l]) => `<button type="button" data-area="${k}">${ENV_AREA_IC[k]} ${l}</button>`).join('')}</div>
   <div class="seg q-tabs" id="envTabs"${operator ? ' hidden' : ''}><button type="button" data-tab="day">일일 점검</button><button type="button" data-tab="month">월간 기록 · 인쇄</button><button type="button" data-tab="setup">구역 설정</button></div>
   <div class="ip-tiles" id="envTiles"></div>
