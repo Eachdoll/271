@@ -4456,3 +4456,32 @@ body:not(.focus-mode) .focus-fab, body:not(.focus-mode) .focus-bar { display: no
 .op-qty-input input { min-width: 0; width: auto !important; flex: 1 1 0; }
 .op-qty-input b { flex: none; white-space: nowrap; }
 .op-form, .op-form > * { min-width: 0; max-width: 100%; }
+/* 15.331 출하: LOT별 수량 · 재고 현황 */
+.op-lotq { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 14px; }
+.op-lotq:has(input:not(:placeholder-shown)) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.op-lotq-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.op-lotq-name b { font-size: 17px; overflow-wrap: anywhere; }
+.op-lotq-name small { color: var(--muted); }
+.op-lotq-in { display: flex; align-items: center; gap: 6px; flex: none; }
+.op-lotq-in input { width: 96px !important; min-width: 0; min-height: 52px; font-size: 20px; font-weight: 800; text-align: right; }
+.op-lotq-in .btn { min-height: 44px; }
+.op-lot-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.op-lot-tools .btn { min-height: 46px; }
+.op-total { font-size: 18px; padding: 10px 12px; border-radius: 12px; background: var(--bg); }
+.op-total b { font-size: 22px; }
+.op-total-ok { background: var(--green-bg); color: var(--green); }
+.op-warn-bad { color: var(--red); background: var(--red-bg); }
+.op-stock-filters { display: flex; gap: 8px; align-items: center; }
+.op-stock-filters .op-search { flex: 1; }
+.op-wh-filter select { min-height: 52px; font-size: 16px; border-radius: 14px; max-width: 42vw; }
+.op-stock { border: 1.5px solid var(--line); border-radius: 16px; background: var(--panel); }
+.op-stock > summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 72px; padding: 12px 16px; cursor: pointer; list-style: none; }
+.op-stock > summary::-webkit-details-marker { display: none; }
+.op-stock[open] > summary { border-bottom: 1px solid var(--line); }
+.op-stock-lots { padding: 4px 16px 10px; }
+.op-stock-lot { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px dashed var(--line); }
+.op-stock-lot:last-child { border-bottom: 0; }
+.op-stock-lot span:first-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.op-stock-lot small { color: var(--muted); }
+.op-stock-q { font-size: 18px; font-weight: 800; white-space: nowrap; }
+@media (max-width: 600px) { .op-pop { grid-template-columns: 1fr 1fr; } }

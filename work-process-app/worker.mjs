@@ -212,8 +212,8 @@ function operatorRequestAllowed(method, path, user) {
     if (method === 'POST' && (path === '/api/semi-batches' || /^\/api\/schedules\/[1-9]\d*\/actuals$/.test(path) || /^\/api\/(?:operator\/semi-records|actuals)\/[1-9]\d*\/complete$/.test(path))) return true;
   }
   if (opLog(user)) {
-    if (method === 'GET' && ['/api/operator/open-po', '/api/operator/ship-pending', '/api/operator/log-history', '/api/warehouses', '/api/lots/available'].includes(path)) return true;
-    if (method === 'POST' && ['/api/receipts', '/api/ship-instructions/ship'].includes(path)) return true;
+    if (method === 'GET' && ['/api/operator/open-po', '/api/operator/ship-pending', '/api/operator/log-history', '/api/warehouses', '/api/lots/available', '/api/inventory/places'].includes(path)) return true; // 15.331 재고 현황(창고·위치·LOT별 수량, 금액 없음)
+    if (method === 'POST' && (['/api/receipts', '/api/ship-instructions/ship'].includes(path) || /^\/api\/ship-instructions\/[1-9]\d*\/ship-lots$/.test(path))) return true; // 15.331 한 지시를 여러 LOT로
   }
   return false;
 }
@@ -9050,7 +9050,7 @@ async function mrAutoShip(user, date) {
 // 지시·전표 줄을 LOT별로 나누고(첫 LOT은 원래 줄, 나머지는 같은 전표의 새 줄 + 새 지시), 남는 수량은 새 줄로 출하 대기에 남는다.
 // 공급가액·세액은 수량 비율로 나누고 끝 줄에 나머지를 몰아 전표 합계는 그대로. 한 batch로 처리(중간 실패 시 모두 되돌림).
 route('POST', '/api/ship-instructions/:id/ship-lots', async ({ user, params, body }) => {
-  if (!hasRole(user, 'logistics')) throw new HttpError(403, '출하 처리는 물류 담당자가 합니다.');
+  if (!hasRole(user, 'logistics') && !opLog(user)) throw new HttpError(403, '출하 처리는 물류 담당자가 합니다.');
   const ins = await mustGet('ship_instructions', params.id);
   if (ins.status !== 'pending') throw new HttpError(409, '이미 처리됐거나 취소된 출하지시입니다. 새로 불러오세요.');
   if (ins.held) throw new HttpError(409, `${ins.item}: 보류 중인 지시입니다. 보류를 풀고 출하 처리하세요.`);

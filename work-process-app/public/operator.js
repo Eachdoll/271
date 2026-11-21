@@ -10,7 +10,8 @@ const OP_GROUPS = {
   ] },
   log: { role: 'operator_logistics', icon: '🚚', label: '물류', desc: '입고 · 출하 입력', links: [
     ['#/operator/receive', '입고 입력', '📥', '받은 발주를 고르고 수량·LOT 입력'],
-    ['#/operator/ship', '출하 입력', '📤', '출하지시를 고르고 LOT·수량 확인'],
+    ['#/operator/ship', '출하 입력', '📤', '출하지시를 고르고 LOT·수량 확인(여러 LOT 섞기 가능)'],
+    ['#/operator/stock', '재고 현황', '📊', '품목·LOT·창고 위치별 재고 보기'],
   ] },
 };
 const OPERATOR_LINKS = Object.values(OP_GROUPS).flatMap(g => g.links); // 예전 이름(다른 화면에서 참조)
@@ -52,6 +53,7 @@ async function operatorPage(route, main) {
   if (route === '#/operator/finished') return operatorFinished(main);
   if (route === '#/operator/receive') return operatorReceive(main);
   if (route === '#/operator/ship') return operatorShip(main);
+  if (route === '#/operator/stock') return operatorStock(main);
   return operatorHome(main);
 }
 const opRemain = po => Math.max(0, Math.round((Number(po.qty) - (['ok', 'mismatch'].includes(po.recv_status) ? Number(po.recv_qty) || 0 : 0)) * 1e6) / 1e6);
@@ -135,7 +137,7 @@ function opDone(title, html) {
   $('[data-ok]', m.el).onclick = () => m.close(); $('[data-ok]', m.el).focus();
   setTimeout(() => m.close(), 4000);
 }
-// ── 물류: 출하 입력 ── 출하지시 카드를 누르면 팝업에서 LOT(지시 수량만큼 남은 첫 LOT을 미리 고름)·수량 확인 후 출하
+// ── 물류: 출하 입력 ── 출하지시 카드를 누르면 팝업에서 LOT별 수량(여러 LOT 섞기)을 확인 후 출하
 async function operatorShip(main) {
   main.innerHTML = `<h1>📤 출하 입력</h1><p class="muted">내보낼 출하지시를 눌러 LOT와 수량을 확인하세요.</p>
     <label class="op-search"><span class="sr-only">찾기</span><input type="search" id="opQ" placeholder="🔎 고객 · 품목 · 수주번호" autocomplete="off"></label>
@@ -153,44 +155,89 @@ async function operatorShip(main) {
   $('#opList', main).addEventListener('click', e => { const b = e.target.closest('[data-si]'); if (b) opShipPop(rows.find(r => String(r.id) === b.dataset.si), load); });
   await load();
 }
+// 15.331 한 품목을 LOT 여러 개 섞어 출고: LOT마다 수량을 넣는다. 처음엔 먼저 들어온 LOT부터 지시 수량만큼 자동으로 채움(한 LOT이 모자라면 다음 LOT에서).
+// LOT 하나면 /ship(수량 줄이면 나머지 대기), 둘 이상이면 /ship-lots(LOT마다 출하 1건, 남은 수량은 출하 대기).
 async function opShipPop(ins, reload) {
   if (!ins) return;
   let busy = false;
+  const Q = Number(ins.qty), U = esc(ins.unit || ''), r6 = n => Math.round(Number(n) * 1e6) / 1e6;
   const m = modal(`<h2 class="op-pop-title">📤 ${esc(ins.item)}${ins.spec ? ' <span class="op-spec">' + esc(ins.spec) + '</span>' : ''}</h2>
-    <p class="muted">${esc(ins.customer)}${ins.order_no ? ' · ' + esc(ins.order_no) : ''} · 지시 ${fmtNum(ins.qty)} ${esc(ins.unit || '')}</p>
+    <p class="muted">${esc(ins.customer)}${ins.order_no ? ' · ' + esc(ins.order_no) : ''} · 지시 <b>${fmtNum(Q)} ${U}</b></p>
     <form class="stack op-form" id="opShipForm">
-      <fieldset class="op-lots"><legend>LOT 고르기</legend><div data-lots><p class="muted">재고 LOT 불러오는 중…</p></div></fieldset>
-      <label class="op-qty-field">출하 수량 *<span class="op-qty-input"><input name="qty" type="number" inputmode="decimal" step="any" min="0" max="${ins.qty}" required value="${ins.qty}"><b>${esc(ins.unit || '')}</b></span></label>
+      <fieldset class="op-lots"><legend>LOT별 출하 수량 <small class="muted">(여러 LOT을 섞어 낼 수 있습니다)</small></legend><div data-lots><p class="muted">재고 LOT 불러오는 중…</p></div></fieldset>
+      <div class="op-lot-tools"><button type="button" class="btn" data-auto>먼저 들어온 LOT부터 자동 채우기</button><button type="button" class="btn" data-clear>모두 0</button></div>
+      <div class="op-total" data-total aria-live="polite"></div>
       <p class="op-warn" data-warn hidden></p>
       <label>출고일<input name="ship_date" type="date" value="${todayStr()}" max="${todayStr()}" required></label>
       <button class="btn primary op-save">출하 저장</button>
-    </form>`);
+    </form>`, { wide: false });
   const f = $('#opShipForm', m.el), warn = $('[data-warn]', m.el);
   let lots = [];
   try { lots = (await api('GET', '/api/lots/available?item=' + encodeURIComponent(ins.item))).rows || []; } catch { lots = []; }
   if (!m.el.isConnected) return;
-  const usable = lots.filter(l => !l.qc_fail || l.concession), pick = usable.find(l => Number(l.balance) >= Number(ins.qty)) || usable[0];
-  $('[data-lots]', m.el).innerHTML = (lots.length ? lots.map(l => { const bad = l.qc_fail && !l.concession; return `<label class="op-lot ${bad ? 'op-lot-bad' : ''}"><input type="radio" name="lot" value="${esc(l.lot)}" ${bad ? 'disabled' : ''} ${pick && pick.lot === l.lot ? 'checked' : ''}><span><b>${esc(l.lot)}</b>${l.vendor_lot ? ` <small>(${esc(l.vendor_lot)})</small>` : ''}<small>잔량 ${fmtNum(Math.round(Number(l.balance) * 1e6) / 1e6)} ${esc(l.unit || ins.unit || '')}${bad ? ' · 검사 불합격' : l.concession ? ' · 특채' : ''}</small></span></label>`; }).join('') : '<p class="muted small">이 품목의 재고 LOT이 없습니다.</p>')
-    + `<label class="op-lot"><input type="radio" name="lot" value="" ${pick ? '' : 'checked'}><span><b>LOT 없이 출하</b><small>LOT을 모를 때(추적이 끊깁니다)</small></span></label>`;
+  const usable = l => !l.qc_fail || l.concession;
+  $('[data-lots]', m.el).innerHTML = lots.map((l, i) => { const ok = usable(l); return `<div class="op-lotq ${ok ? '' : 'op-lot-bad'}"><span class="op-lotq-name"><b>${esc(l.lot)}</b>${l.vendor_lot ? ` <small>(${esc(l.vendor_lot)})</small>` : ''}<small>잔량 ${fmtNum(r6(l.balance))} ${esc(l.unit || ins.unit || '')}${l.first_date ? ' · 입고 ' + esc(String(l.first_date).slice(5)) : ''}${ok ? (l.concession ? ' · 특채' : '') : ' · 검사 불합격'}</small></span>
+      <span class="op-lotq-in"><input type="number" inputmode="decimal" step="any" min="0" data-lq="${i}" aria-label="${esc(l.lot)} 출하 수량" placeholder="0" ${ok ? '' : 'disabled'}><button type="button" class="btn small" data-lall="${i}" ${ok ? '' : 'disabled'} aria-label="${esc(l.lot)} 잔량 전부">전부</button></span></div>`; }).join('')
+    + `<div class="op-lotq"><span class="op-lotq-name"><b>LOT 없이</b><small>LOT을 모를 때(추적이 끊깁니다)</small></span><span class="op-lotq-in"><input type="number" inputmode="decimal" step="any" min="0" data-lq="none" aria-label="LOT 없이 출하 수량" placeholder="0"></span></div>`;
+  const inputs = () => [...m.el.querySelectorAll('[data-lq]')];
+  const autoFill = () => { let need = Q; for (const el of inputs()) { if (el.dataset.lq === 'none') { el.value = ''; continue; } const l = lots[Number(el.dataset.lq)]; if (!usable(l) || need <= 0) { el.value = ''; continue; } const take = r6(Math.min(Number(l.balance), need)); el.value = take > 0 ? take : ''; need = r6(need - take); } };
+  const parts = () => inputs().map(el => ({ el, lot: el.dataset.lq === 'none' ? '' : lots[Number(el.dataset.lq)].lot, l: el.dataset.lq === 'none' ? null : lots[Number(el.dataset.lq)], qty: r6(Number(el.value) || 0) })).filter(p => p.qty > 0);
   const check = () => {
-    const q = Number(f.qty.value), lot = f.querySelector('input[name=lot]:checked')?.value || '', l = lots.find(x => x.lot === lot), msgs = [];
-    if (q > 0 && q < Number(ins.qty)) msgs.push(`나머지 ${fmtNum(Math.round((ins.qty - q) * 1e6) / 1e6)} ${ins.unit || ''}는 출하 대기로 남습니다.`);
-    if (l && q > Number(l.balance) + 1e-6) msgs.push(`LOT ${lot} 잔량(${fmtNum(l.balance)})보다 많습니다. 수량을 줄이거나 다른 LOT을 고르세요.`);
-    warn.hidden = !msgs.length; warn.textContent = msgs.join(' ');
+    const ps = parts(), total = r6(ps.reduce((t, p) => t + p.qty, 0)), msgs = []; let bad = false;
+    for (const p of ps) if (p.l && p.qty > Number(p.l.balance) + 1e-6) { msgs.push(`LOT ${p.lot} 잔량(${fmtNum(r6(p.l.balance))})보다 많습니다.`); bad = true; }
+    if (total > Q + 1e-6) { msgs.push(`합계가 지시 수량(${fmtNum(Q)})보다 많습니다.`); bad = true; }
+    else if (total > 0 && total < Q) msgs.push(`나머지 ${fmtNum(r6(Q - total))} ${ins.unit || ''}는 출하 대기로 남습니다.`);
+    $('[data-total]', m.el).innerHTML = `합계 <b>${fmtNum(total)}</b> / 지시 ${fmtNum(Q)} ${U}${ps.length > 1 ? ` · <span class="chip">LOT ${ps.length}개 섞어 출고</span>` : ''}`;
+    $('[data-total]', m.el).classList.toggle('op-total-ok', Math.abs(total - Q) < 1e-6);
+    warn.hidden = !msgs.length; warn.textContent = msgs.join(' '); warn.classList.toggle('op-warn-bad', bad);
+    return { ps, total, bad };
   };
-  f.addEventListener('input', check); f.addEventListener('change', check); check();
+  autoFill(); check();
+  f.addEventListener('input', check);
+  m.el.addEventListener('click', e => {
+    const all = e.target.closest('[data-lall]'); if (all) { const i = Number(all.dataset.lall), l = lots[i]; const others = r6(parts().filter(p => p.el.dataset.lq !== String(i)).reduce((t, p) => t + p.qty, 0)); m.el.querySelector(`[data-lq="${i}"]`).value = r6(Math.max(0, Math.min(Number(l.balance), Q - others))) || ''; check(); }
+    if (e.target.closest('[data-auto]')) { autoFill(); check(); }
+    if (e.target.closest('[data-clear]')) { inputs().forEach(el => { el.value = ''; }); check(); }
+  });
   f.onsubmit = async e => {
     e.preventDefault(); if (busy || !f.reportValidity()) return;
-    const q = Number(f.qty.value), lot = f.querySelector('input[name=lot]:checked')?.value || '';
-    if (!(q > 0) || q > Number(ins.qty)) { toast(`출하 수량은 0보다 크고 지시 수량(${fmtNum(ins.qty)}) 이하로 넣으세요.`, 'err'); f.qty.focus(); return; }
-    if (!lot && lots.length && !await confirmBox('LOT 없이 출하할까요? 이 출하는 LOT 추적이 되지 않습니다.')) return;
+    const { ps, total, bad } = check();
+    if (!ps.length) { toast('출하할 수량을 LOT에 넣으세요.', 'err'); return; }
+    if (bad) { toast(warn.textContent, 'err'); return; }
+    if (ps.some(p => !p.lot) && lots.some(usable) && !await confirmBox('LOT 없이 출하하는 수량이 있습니다. 그 수량은 LOT 추적이 되지 않습니다. 저장할까요?')) return;
     busy = true; const btn = $('.op-save', f); btn.disabled = true; btn.textContent = '저장 중…';
     try {
-      await api('POST', '/api/ship-instructions/ship', { ids: [ins.id], ship_date: f.ship_date.value, lots: { [ins.id]: lot }, qtys: q < Number(ins.qty) ? { [ins.id]: q } : {} });
-      m.close(); opDone('출하 저장 완료', `${esc(ins.customer)} · ${esc(ins.item)} ${fmtNum(q)} ${esc(ins.unit || '')}${lot ? `<br>LOT ${esc(lot)}` : ''}`);
+      const date = f.ship_date.value;
+      if (ps.length === 1) await api('POST', '/api/ship-instructions/ship', { ids: [ins.id], ship_date: date, lots: { [ins.id]: ps[0].lot }, qtys: total < Q ? { [ins.id]: total } : {} });
+      else await api('POST', `/api/ship-instructions/${ins.id}/ship-lots`, { lines: ps.map(p => ({ lot: p.lot, qty: p.qty, ship_date: date })) });
+      m.close(); opDone('출하 저장 완료', `${esc(ins.customer)} · ${esc(ins.item)} ${fmtNum(total)} ${U}<br>${ps.map(p => `${p.lot ? 'LOT ' + esc(p.lot) : 'LOT 없음'} ${fmtNum(p.qty)}`).join('<br>')}`);
       await reload();
     } catch (err) { fail(err); btn.disabled = false; btn.textContent = '출하 저장'; busy = false; }
   };
+}
+// ── 15.331 물류: 재고 현황 ── 품목별 합계 → 누르면 LOT·창고 위치별 수량(먼저 들어온 순). 금액 없음.
+async function operatorStock(main) {
+  main.innerHTML = `<h1>📊 재고 현황</h1><p class="muted">품목을 누르면 LOT·창고 위치별 수량이 보입니다. 위에 있는 LOT이 먼저 들어온 것입니다.</p>
+    <div class="op-stock-filters"><label class="op-search"><span class="sr-only">찾기</span><input type="search" id="opQ" placeholder="🔎 품목 · 코드 · LOT · 위치" autocomplete="off"></label>
+    <label class="op-wh-filter"><span class="sr-only">창고</span><select id="opWh" aria-label="창고"><option value="">모든 창고</option></select></label></div>
+    <p class="small muted" data-count></p><div id="opStock" class="op-cards" aria-live="polite"><p class="muted">불러오는 중…</p></div>`;
+  let data = { rows: [], warehouses: [] };
+  const draw = () => {
+    const q = opKey($('#opQ', main).value), wh = $('#opWh', main).value;
+    const rows = data.rows.filter(r => (!wh || (wh === '(위치 미지정)' ? !r.warehouse : r.warehouse === wh)) && opMatch(q, r.item, r.code, r.lot, r.warehouse, r.location));
+    const items = new Map();
+    for (const r of rows) { const k = r.item + '\u0000' + (r.unit || ''); if (!items.has(k)) items.set(k, { item: r.item, code: r.code, unit: r.unit, qty: 0, lots: [] }); const it = items.get(k); it.qty += Number(r.qty); it.lots.push(r); }
+    const list = [...items.values()].sort((a, b) => a.item.localeCompare(b.item, 'ko'));
+    $('[data-count]', main).textContent = `${list.length}품목 · ${rows.length}줄${data.more ? ' (일부만)' : ''}`;
+    $('#opStock', main).innerHTML = list.length ? list.map(it => { it.lots.sort((x, y) => String(x.first_date || '').localeCompare(String(y.first_date || '')) || String(x.lot).localeCompare(String(y.lot))); const lotN = new Set(it.lots.map(x => x.lot)).size;
+      return `<details class="op-stock"${list.length <= 3 ? ' open' : ''}><summary><span class="op-card-main"><b>${esc(it.item)}</b><span class="op-sub">${it.code ? esc(it.code) + ' · ' : ''}LOT ${lotN}개</span></span><span class="op-qty">${fmtNum(Math.round(it.qty * 1e6) / 1e6)} <small>${esc(it.unit || '')}</small></span></summary>
+        <div class="op-stock-lots">${it.lots.map(x => `<div class="op-stock-lot"><span><b>${esc(x.lot || '(LOT 없음)')}</b><small>${x.warehouse ? esc(x.warehouse) + (x.location ? ' · ' + esc(x.location) : '') : '위치 미지정'}${x.first_date ? ' · 입고 ' + esc(String(x.first_date).slice(0, 10)) : ''}</small></span><span class="op-stock-q ${Number(x.qty) < 0 ? 'op-late' : ''}">${fmtNum(x.qty)}</span></div>`).join('')}</div></details>`; }).join('')
+      : `<div class="empty">${data.rows.length ? '찾는 재고가 없습니다.' : '재고가 없습니다.'}</div>`;
+  };
+  data = await api('GET', '/api/inventory/places');
+  $('#opWh', main).innerHTML = '<option value="">모든 창고</option>' + data.warehouses.map(w => `<option>${esc(w.name)}</option>`).join('') + '<option>(위치 미지정)</option>';
+  $('#opQ', main).addEventListener('input', draw); $('#opWh', main).addEventListener('change', draw);
+  draw();
 }
 function operatorSimplifySemi(row) {
   const more = document.createElement('details'); more.className = 'operator-more';
