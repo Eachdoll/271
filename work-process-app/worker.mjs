@@ -524,7 +524,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'qualifications', 'supplier_evals', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests', 'quality_audits', 'audit_findings', 'validations', 'quality_goals', 'quality_kpi_values', 'quality_risks', 'risk_assessments', 'org_duty_assignments', 'dev_costs', 'cost_rates', 'cost_materials', 'cost_material_prices', 'cost_items', 'cost_item_revs']; // 15.313 위험성평가 · 15.314 지정 담당자
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'qualifications', 'supplier_evals', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests', 'quality_audits', 'audit_findings', 'validations', 'quality_goals', 'quality_kpi_values', 'quality_risks', 'risk_assessments', 'org_duty_assignments', 'dev_costs', 'cost_rates', 'cost_materials', 'cost_material_prices', 'cost_items', 'cost_item_revs', 'org_charts']; // 15.313 위험성평가 · 15.314 지정 담당자
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -8501,7 +8501,55 @@ route('GET', '/api/org/chart', async ({ user }) => {
   const positions = await db.prepare('SELECT name, sort FROM org_positions WHERE active=1 ORDER BY sort, id').all();
   const duties = (await db.prepare('SELECT * FROM org_duty_assignments WHERE active=1 ORDER BY sort, category, id').all()).map(r => dutyRow(r, byId));
   return { company: cfg.company || co.biz_name || '', ceo: cfg.ceo_user_id ? byId[cfg.ceo_user_id] || null : null, ceo_title: cfg.ceo_title || '대표이사', ceo_name: cfg.ceo_user_id ? byId[cfg.ceo_user_id]?.name || '' : (cfg.ceo_name || co.ceo || ''),
-    departments, positions, users, duties, can_manage: !!user.is_admin, me: user.id };
+    departments, positions, users, duties, can_manage: !!user.is_admin, me: user.id,
+    charts: (await db.prepare('SELECT id, name, note, sort, updated_at, created_at FROM org_charts WHERE active=1 ORDER BY sort, id').all()) };
+});
+// 15.323 저장해 쓰는 조직도(SBL 조직도 등). data = { title, ceo_title, ceo_user_id, ceo_name, nodes: [{ key, name, parent, head:{user_id,name}, members:[{user_id,name,role}], duties }] }
+function orgChartClean(v0, userIds) {
+  const v = v0 && typeof v0 === 'object' && !Array.isArray(v0) ? v0 : {}, nodes0 = Array.isArray(v.nodes) ? v.nodes : [];
+  if (nodes0.length > 300) throw bad('조직도 상자는 300개까지입니다.');
+  const person = (p, l) => { const o = p && typeof p === 'object' ? p : {}, uid = optId(o.user_id); if (uid && !userIds.has(uid)) throw bad(`${l}: 회원을 다시 고르세요.`); const name = str(o.name, 50); return uid || name ? { user_id: uid || null, name, role: str(o.role, 40) } : null; };
+  const keys = new Set(), nodes = nodes0.map((n, i) => {
+    const o = n && typeof n === 'object' ? n : {}, key = /^[a-z0-9]{4,16}$/.test(o.key || '') ? o.key : randomHex(4); if (keys.has(key)) throw bad('조직도 상자가 겹칩니다.'); keys.add(key);
+    const name = reqStr(o.name, `${i + 1}번 상자 이름`, 60), members = (Array.isArray(o.members) ? o.members : []).slice(0, 200).map(m => person(m, `${name} 구성원`)).filter(Boolean);
+    return { key, name, parent: o.parent ? String(o.parent) : null, head: person(o.head, `${name} 장`), members, duties: str(o.duties, 2000) };
+  });
+  for (const n of nodes) { if (n.parent && !keys.has(n.parent)) n.parent = null; let p = n.parent, hop = 0; while (p) { if (p === n.key || ++hop > 300) throw bad(`「${n.name}」의 상위 상자가 돌고 돕니다.`); p = nodes.find(x => x.key === p)?.parent || null; } }
+  const ceo = optId(v.ceo_user_id); if (ceo && !userIds.has(ceo)) throw bad('대표를 다시 고르세요.');
+  return { title: str(v.title, 100), ceo_title: str(v.ceo_title, 30), ceo_user_id: ceo || null, ceo_name: str(v.ceo_name, 50), nodes };
+}
+async function orgChartFromOfficial() {
+  const depts = await db.prepare('SELECT id, name, parent_id, head_user_id, duties FROM org_departments WHERE active=1 ORDER BY sort, id').all(), users = await orgUsers(), cfg = await orgChartSetting(), co = await companyInfo();
+  const key = id => `d${id}`;
+  return { title: cfg.company || co.biz_name || '', ceo_title: cfg.ceo_title || '대표이사', ceo_user_id: cfg.ceo_user_id || null, ceo_name: cfg.ceo_user_id ? '' : cfg.ceo_name || co.ceo || '',
+    nodes: depts.map(d => ({ key: key(d.id), name: d.name, parent: d.parent_id && depts.some(p => p.id === d.parent_id) ? key(d.parent_id) : null, head: d.head_user_id ? { user_id: d.head_user_id, name: '' } : null, members: users.filter(u => u.department === d.name && u.id !== d.head_user_id).map(u => ({ user_id: u.id, name: '', role: '' })), duties: d.duties || '' })) };
+}
+const orgChartUserIds = async () => new Set((await orgUsers()).map(u => u.id));
+const orgChartOut = r => ({ ...r, data: JSON.parse(r.data || '{}'), history: JSON.parse(r.history || '[]'), active: !!r.active });
+route('GET', '/api/org/charts/:id', async ({ params }) => { const r = await mustGet('org_charts', params.id); if (!r.active) throw new HttpError(404, '보관한 조직도입니다.'); return orgChartOut(r); });
+route('POST', '/api/admin/org-charts', async ({ user, body }) => {
+  requireAdmin(user); const key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM org_charts WHERE request_id=?').get(key); if (old) return orgChartOut(old); }
+  const name = reqStr(body.name, '조직도 이름', 60);
+  if (name === '공식 조직도' || await db.prepare('SELECT 1 FROM org_charts WHERE name=? AND active=1').get(name)) throw bad(`이미 있는 조직도 이름입니다: ${name}`);
+  let data = { title: '', nodes: [] };
+  if (body.copy === 'official') data = await orgChartFromOfficial();
+  else if (optId(body.copy)) { const src = await mustGet('org_charts', optId(body.copy)); data = JSON.parse(src.data || '{}'); }
+  data = orgChartClean(data, await orgChartUserIds());
+  const sort = ((await db.prepare('SELECT MAX(sort) m FROM org_charts').get()).m || 0) + 1;
+  const r = await db.prepare('INSERT INTO org_charts(name,note,data,sort,history,request_id,created_by) VALUES(?,?,?,?,?,?,?)').run(name, str(body.note, 300), JSON.stringify(data), sort, JSON.stringify([{ at: now(), by: user.name, what: `만듦${body.copy === 'official' ? ' · 공식 조직도 복사' : optId(body.copy) ? ' · 다른 조직도 복사' : ''}` }]), key, user.name);
+  return orgChartOut(await mustGet('org_charts', r.lastInsertRowid));
+});
+route('PUT', '/api/admin/org-charts/:id', async ({ user, params, body }) => {
+  requireAdmin(user); const prior = await mustGet('org_charts', params.id); if (Number(body.revision) !== prior.revision) throw conflict();
+  const name = body.name === undefined ? prior.name : reqStr(body.name, '조직도 이름', 60);
+  if (name !== prior.name && (name === '공식 조직도' || await db.prepare('SELECT 1 FROM org_charts WHERE name=? AND active=1 AND id<>?').get(name, prior.id))) throw bad(`이미 있는 조직도 이름입니다: ${name}`);
+  const data = body.data === undefined ? prior.data : JSON.stringify(orgChartClean(body.data, await orgChartUserIds())), note = body.note === undefined ? prior.note : str(body.note, 300);
+  const active = body.active === undefined ? prior.active : (body.active ? 1 : 0), sort = body.sort === undefined ? prior.sort : Number(body.sort) || 0;
+  const what = active !== prior.active ? (active ? '다시 사용' : '보관(목록에서 숨김)') : name !== prior.name ? `이름 ${prior.name} → ${name}` : str(body.what, 100) || '수정';
+  const res = await db.prepare("UPDATE org_charts SET name=?,note=?,data=?,active=?,sort=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?").run(name, note, data, active, sort, pushHist(prior, { by: user.name, what }), user.name, prior.id, prior.revision);
+  if (!(res.meta?.changes ?? res.changes)) throw conflict();
+  return orgChartOut(await mustGet('org_charts', prior.id));
 });
 route('PUT', '/api/admin/org-chart', async ({ user, body }) => {
   requireAdmin(user); const cfg = await orgChartSetting();

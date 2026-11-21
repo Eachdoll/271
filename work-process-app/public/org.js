@@ -288,69 +288,136 @@ const dutyBadge = (d, deputy = false) => `<span class="oc-badge" data-cat="${esc
 const dutyTrainChip = d => !d.next_training ? '<span class="muted">—</span>' : `${esc(d.next_training)} ${d.train === 'over' ? '<span class="chip red">지남</span>' : d.train === 'soon' ? '<span class="chip yellow">30일 안</span>' : ''}`;
 const dutyTasksHtml = t => { const l = String(t || '').split('\n').map(x => x.trim()).filter(Boolean); return l.length ? `<ul class="duty-tasks">${l.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<span class="muted">—</span>'; };
 const ocLayoutKey = 'wpa:oc-layout';
+const ocChartKey = 'wpa:oc-chart';
+// 15.323 조직도 여러 개: 「공식 조직도」(부서·구성원에서 바로 그림) + 저장해 쓰는 조직도(SBL 조직도 등, 상자·구성원·역할을 따로 저장).
 async function pageOrgChart(main) {
   const data = await api('GET', '/api/org/chart'); if (!main.isConnected) return;
   let layout = (() => { try { return localStorage.getItem(ocLayoutKey); } catch { return null; } })() || (innerWidth < 760 ? 'list' : 'tree');
-  const depts = data.departments, users = data.users, can = data.can_manage;
-  const rankOf = u => { const p = orgPositionItems({ departments: depts, positions: data.positions }, u.department).find(x => x.name === u.position); return p ? p.sort : -1; };
-  const byDept = name => users.filter(u => u.department === name).sort((a, b) => rankOf(b) - rankOf(a) || a.name.localeCompare(b.name, 'ko'));
-  const badges = u => data.duties.filter(d => d.user_id === u.id).map(d => dutyBadge(d)).join('') + data.duties.filter(d => d.deputy_user_id === u.id).map(d => dutyBadge(d, true)).join('');
-  const isRoot = d => !d.parent_id || !depts.some(p => p.id === d.parent_id), kids = id => depts.filter(d => d.parent_id === id);
-  const subCount = d => byDept(d.name).length + kids(d.id).reduce((n, k) => n + subCount(k), 0);
-  main.innerHTML = `<h1>조직 구성 <span class="dept">관리</span></h1>
-    <p class="muted">부서 트리(「부서·직급」 탭)와 구성원의 부서·직급으로 그립니다. 이름 옆 색 배지는 지정 담당 업무(정보보호·소방 등, 「부」는 대리자)입니다.${can ? ' 맨 위 상자를 누르면 회사명·대표를, 부서 상자를 누르면 부서장·부서 업무를 정합니다.' : ''}</p>
-    <form class="toolbar oc-tools" id="ocTools" data-read-only><label class="chk"><input type="checkbox" name="members" checked> 구성원</label><label class="chk"><input type="checkbox" name="badges" checked> 지정 담당 배지</label><label class="chk"><input type="checkbox" name="tasks"> 부서 업무</label>
-      <label class="list-search">찾기<input type="search" name="q" placeholder="이름·부서·담당 업무"></label><span class="grow"></span>
-      <span class="seg" role="group" aria-label="보기"><button type="button" class="btn" data-oc-layout="tree">트리</button><button type="button" class="btn" data-oc-layout="list">목록</button></span><button type="button" class="btn" data-oc-print>인쇄</button>${can ? '<a class="btn" href="#/admin/org/duties">지정 담당자</a>' : ''}</form>
-    <div class="oc-scroll"><div id="ocChart" class="oc-chart"></div></div>
-    <section class="card"><h2>지정 담당자 <span class="small muted">${data.duties.length}건</span></h2><div id="ocDuties"></div></section>`;
-  const tools = $('#ocTools', main);
-  const person = (u, head = false) => `<li class="oc-person${head ? ' head' : ''}" data-oc-name="${esc(u.name)}">${head ? '<span class="oc-role">부서장</span>' : ''}<b>${esc(u.name)}</b> <span class="muted">${esc(u.position || '')}</span><span class="oc-badges">${badges(u)}</span></li>`;
-  const deptBox = d => {
-    const list = byDept(d.name), head = d.head || null, rest = list.filter(u => !head || u.id !== head.id);
-    return `<div class="oc-node${can ? ' can' : ''}" data-oc-dept="${d.id}"${can ? ' tabindex="0" role="button"' : ''} data-oc-name="${esc(d.name)}"><div class="oc-title"><b>${esc(d.name)}</b><span class="oc-count" title="하위 부서 포함 ${subCount(d)}명">${list.length}명</span></div>
-      <ul class="oc-people">${head ? person(head, true) : '<li class="oc-person head muted small"><span class="oc-role">부서장</span> 미지정</li>'}<span class="oc-more">${rest.map(u => person(u)).join('')}</span></ul>
-      ${d.duties ? `<div class="oc-dtasks">${dutyTasksHtml(d.duties)}</div>` : ''}</div>`;
+  let sel = (() => { try { return localStorage.getItem(ocChartKey) || 'official'; } catch { return 'official'; } })();
+  if (sel !== 'official' && !data.charts.some(c => String(c.id) === sel)) sel = 'official';
+  let custom = sel === 'official' ? null : await api('GET', `/api/org/charts/${sel}`).catch(() => null); if (!custom) sel = 'official'; if (!main.isConnected) return;
+  const depts0 = data.departments, users = data.users, can = data.can_manage, uById = id => users.find(u => u.id === Number(id));
+  const rankOf = u => { const p = orgPositionItems({ departments: depts0, positions: data.positions }, u.department).find(x => x.name === u.position); return p ? p.sort : -1; };
+  const badges = u => !u?.id ? '' : data.duties.filter(d => d.user_id === u.id).map(d => dutyBadge(d)).join('') + data.duties.filter(d => d.deputy_user_id === u.id).map(d => dutyBadge(d, true)).join('');
+  // 그릴 모양으로 맞춤: nodes [{ id, name, parent_id, head, people, duties }]
+  const pOf = p => { if (!p) return null; const u = p.user_id ? uById(p.user_id) : null; return u ? { ...u, role: p.role || '' } : { id: null, name: p.name || '(이름 없음)', position: '', role: p.role || '' }; };
+  const model = () => {
+    if (!custom) return { title: data.company || '회사명 미지정', ceoTitle: data.ceo_title, ceoName: data.ceo_name || '미지정', ceo: data.ceo,
+      nodes: depts0.map(d => ({ id: String(d.id), name: d.name, parent_id: d.parent_id && depts0.some(p => p.id === d.parent_id) ? String(d.parent_id) : null, head: d.head || null, duties: d.duties || '',
+        people: users.filter(u => u.department === d.name && u.id !== d.head?.id).sort((a, b) => rankOf(b) - rankOf(a) || a.name.localeCompare(b.name, 'ko')) })),
+      loose: users.filter(u => !depts0.some(d => d.name === u.department)) };
+    const c = custom.data, ceoU = c.ceo_user_id ? uById(c.ceo_user_id) : null;
+    return { title: c.title || custom.name, ceoTitle: c.ceo_title || '', ceoName: ceoU?.name || c.ceo_name || '', ceo: ceoU,
+      nodes: (c.nodes || []).map(n => ({ id: n.key, name: n.name, parent_id: n.parent, head: pOf(n.head), duties: n.duties || '', people: (n.members || []).map(pOf) })), loose: [] };
   };
-  const treeNode = d => `<li class="oc-li">${deptBox(d)}${kids(d.id).length ? `<ul class="oc-sub">${kids(d.id).map(treeNode).join('')}</ul>` : ''}</li>`;
-  const rootBox = `<div class="oc-node oc-root${can ? ' can' : ''}" data-oc-root${can ? ' tabindex="0" role="button"' : ''}><div class="oc-co">${esc(data.company || '회사명 미지정')}</div><div class="oc-ceo">${esc(data.ceo_title)} <b>${esc(data.ceo_name || '미지정')}</b>${data.ceo ? `<span class="oc-badges">${badges(data.ceo)}</span>` : ''}</div></div>`;
-  const loose = users.filter(u => !depts.some(d => d.name === u.department));
+  main.innerHTML = `<h1>조직 구성 <span class="dept">관리</span></h1>
+    <p class="muted">「공식 조직도」는 부서 트리(「부서·직급」 탭)와 구성원의 부서·직급으로 바로 그립니다. SBL·프로젝트·TF처럼 다른 모양의 조직도는 따로 저장해 씁니다(공식 조직도를 복사해 시작할 수 있음). 이름 옆 색 배지는 지정 담당 업무(정보보호·소방 등, 「부」는 대리자)입니다.</p>
+    <nav class="oc-charts" aria-label="조직도 고르기" id="ocCharts"></nav>
+    <div class="small oc-note" id="ocNote" role="status"></div>
+    <form class="toolbar oc-tools" id="ocTools" data-read-only><label class="chk"><input type="checkbox" name="members" checked> 구성원</label><label class="chk"><input type="checkbox" name="badges" checked> 지정 담당 배지</label><label class="chk"><input type="checkbox" name="tasks"> 부서 업무</label>
+      <label class="list-search">찾기<input type="search" name="q" placeholder="이름·부서·역할·담당 업무"></label><span class="grow"></span>
+      <span class="seg" role="group" aria-label="보기"><button type="button" class="btn" data-oc-layout="tree" aria-pressed="false">트리</button><button type="button" class="btn" data-oc-layout="list" aria-pressed="false">목록</button></span><button type="button" class="btn" data-oc-print>인쇄</button><span id="ocAdmin" class="oc-admin"></span></form>
+    <div class="oc-scroll"><div id="ocChart" class="oc-chart" aria-live="polite"></div></div>
+    <section class="card"><h2>지정 담당자 <span class="small muted">${data.duties.length}건</span></h2><div id="ocDuties"></div></section>`;
+  const tools = $('#ocTools', main), reload = () => render();
+  const chartName = () => custom ? custom.name : '공식 조직도';
+  const drawHead = () => {
+    $('#ocCharts', main).innerHTML = `<button type="button" class="oc-chip${!custom ? ' on' : ''}" data-oc-sel="official" aria-pressed="${!custom}">공식 조직도</button>${data.charts.map(c => `<button type="button" class="oc-chip${custom?.id === c.id ? ' on' : ''}" data-oc-sel="${c.id}" aria-pressed="${custom?.id === c.id}" title="${esc(c.note || '')}">${esc(c.name)}</button>`).join('')}${can ? '<button type="button" class="oc-chip add" data-oc-new>＋ 새 조직도</button>' : ''}`;
+    $('#ocNote', main).textContent = custom ? `${custom.note ? custom.note + ' · ' : ''}저장한 조직도 · 마지막 수정 ${String(custom.updated_at || custom.created_at || '').slice(0, 16)}${custom.updated_by ? ' ' + custom.updated_by : ''}` : '부서·구성원 정보로 늘 최신 상태입니다.';
+    $('#ocAdmin', main).innerHTML = !can ? '' : custom ? '<button type="button" class="btn" data-oc-addnode>＋ 상자</button><button type="button" class="btn" data-oc-meta>이름·설명</button><button type="button" class="btn" data-oc-copy>복사</button><button type="button" class="btn" data-oc-hist>이력</button><button type="button" class="btn danger" data-oc-archive>보관</button>' : '<a class="btn" href="#/admin/org/duties">지정 담당자</a>';
+  };
   const draw = () => {
-    const v = formObj(tools), chart = $('#ocChart', main), q = (v.q || '').trim().toLowerCase();
+    const M = model(), v = formObj(tools), chart = $('#ocChart', main), q = (v.q || '').trim().toLowerCase();
+    const isRoot = d => !d.parent_id || !M.nodes.some(p => p.id === d.parent_id), kids = id => M.nodes.filter(d => d.parent_id === id);
+    const subCount = d => d.people.length + (d.head ? 1 : 0) + kids(d.id).reduce((n, k) => n + subCount(k), 0);
+    const person = (u, head = false) => `<li class="oc-person${head ? ' head' : ''}" data-oc-name="${esc(u.name)}">${head ? `<span class="oc-role">${custom ? '장' : '부서장'}</span>` : ''}<b>${esc(u.name)}</b> <span class="muted">${esc(u.position || '')}</span>${u.role ? ` <span class="oc-rrole">${esc(u.role)}</span>` : ''}<span class="oc-badges">${badges(u)}</span></li>`;
+    const box = d => `<div class="oc-node${can ? ' can' : ''}" data-oc-dept="${esc(d.id)}"${can ? ` tabindex="0" role="button" aria-label="${esc(d.name)} 상자 고치기"` : ''} data-oc-name="${esc(d.name)}"><div class="oc-title"><b>${esc(d.name)}</b><span class="oc-count" title="하위 포함 ${subCount(d)}명">${d.people.length + (d.head ? 1 : 0)}명</span></div>
+      <ul class="oc-people">${d.head ? person(d.head, true) : `<li class="oc-person head muted small"><span class="oc-role">${custom ? '장' : '부서장'}</span> 미지정</li>`}<span class="oc-more">${d.people.map(u => person(u)).join('')}</span></ul>
+      ${d.duties ? `<div class="oc-dtasks">${dutyTasksHtml(d.duties)}</div>` : ''}</div>`;
+    const treeNode = d => `<li class="oc-li">${box(d)}${kids(d.id).length ? `<ul class="oc-sub">${kids(d.id).map(treeNode).join('')}</ul>` : ''}</li>`;
+    const rootBox = `<div class="oc-node oc-root${can ? ' can' : ''}" data-oc-root${can ? ' tabindex="0" role="button" aria-label="맨 위 상자(회사·대표) 고치기"' : ''}><div class="oc-co">${esc(M.title)}</div>${M.ceoTitle || M.ceoName ? `<div class="oc-ceo">${esc(M.ceoTitle)} <b>${esc(M.ceoName || '미지정')}</b>${M.ceo ? `<span class="oc-badges">${badges(M.ceo)}</span>` : ''}</div>` : ''}</div>`;
     chart.className = `oc-chart ${layout}${v.members?.length ? '' : ' no-members'}${v.badges?.length ? '' : ' no-badges'}${v.tasks?.length ? '' : ' no-tasks'}`;
+    chart.setAttribute('aria-label', chartName());
     chart.innerHTML = layout === 'tree'
-      ? `<ul class="oc-tree"><li class="oc-li">${rootBox}${depts.filter(isRoot).length ? `<ul class="oc-sub">${depts.filter(isRoot).map(treeNode).join('')}</ul>` : ''}</li></ul>`
-      : `<div class="oc-vlist">${rootBox}<ul class="oc-vl">${depts.filter(isRoot).map(function li(d) { return `<li>${deptBox(d)}${kids(d.id).length ? `<ul class="oc-vl">${kids(d.id).map(li).join('')}</ul>` : ''}</li>`; }).join('')}</ul></div>`;
-    if (loose.length) chart.insertAdjacentHTML('beforeend', `<div class="oc-loose"><div class="oc-node"><div class="oc-title"><b>부서 미지정</b><span class="oc-count">${loose.length}명</span></div><ul class="oc-people"><span class="oc-more">${loose.map(u => person(u)).join('')}</span></ul></div></div>`);
-    if (!depts.length) chart.insertAdjacentHTML('beforeend', `<p class="muted small">부서가 없습니다. ${can ? '「부서·직급」 탭에서 부서를 만들고 상위 부서를 정하면 트리로 그려집니다.' : ''}</p>`);
-    $$('[data-oc-layout]', main).forEach(b => b.classList.toggle('primary', b.dataset.ocLayout === layout));
-    if (q) {
-      const hits = $$('[data-oc-name]', chart).filter(el => el.dataset.ocName.toLowerCase().includes(q) || (el.classList.contains('oc-person') && el.textContent.toLowerCase().includes(q)));
-      hits.forEach(el => el.classList.add('oc-hit')); hits[0]?.scrollIntoView({ block: 'nearest', inline: 'center' });
-    }
+      ? `<ul class="oc-tree"><li class="oc-li">${rootBox}${M.nodes.filter(isRoot).length ? `<ul class="oc-sub">${M.nodes.filter(isRoot).map(treeNode).join('')}</ul>` : ''}</li></ul>`
+      : `<div class="oc-vlist">${rootBox}<ul class="oc-vl">${M.nodes.filter(isRoot).map(function li(d) { return `<li>${box(d)}${kids(d.id).length ? `<ul class="oc-vl">${kids(d.id).map(li).join('')}</ul>` : ''}</li>`; }).join('')}</ul></div>`;
+    if (M.loose.length) chart.insertAdjacentHTML('beforeend', `<div class="oc-loose"><div class="oc-node"><div class="oc-title"><b>부서 미지정</b><span class="oc-count">${M.loose.length}명</span></div><ul class="oc-people"><span class="oc-more">${M.loose.map(u => person(u)).join('')}</span></ul></div></div>`);
+    if (!M.nodes.length) chart.insertAdjacentHTML('beforeend', `<p class="muted small">${custom ? (can ? '상자가 없습니다. 「＋ 상자」로 조직을 만드세요.' : '상자가 없습니다.') : `부서가 없습니다. ${can ? '「부서·직급」 탭에서 부서를 만들고 상위 부서를 정하면 트리로 그려집니다.' : ''}`}</p>`);
+    $$('[data-oc-layout]', main).forEach(b => { b.classList.toggle('primary', b.dataset.ocLayout === layout); b.setAttribute('aria-pressed', String(b.dataset.ocLayout === layout)); });
+    if (q) { const hits = $$('[data-oc-name]', chart).filter(el => el.dataset.ocName.toLowerCase().includes(q) || (el.classList.contains('oc-person') && el.textContent.toLowerCase().includes(q))); hits.forEach(el => el.classList.add('oc-hit')); hits[0]?.scrollIntoView({ block: 'nearest', inline: 'center' }); }
     const byCat = Object.keys(DUTY_CAT_LABEL).map(c => [c, data.duties.filter(d => d.category === c)]).filter(([, l]) => l.length);
     $('#ocDuties', main).innerHTML = byCat.length ? `<div class="duty-cards">${byCat.map(([c, l]) => `<div class="duty-card" data-cat="${c}"><h3>${esc(DUTY_CAT_LABEL[c])}</h3>${l.map(d => `<div class="duty-line"><b>${esc(d.title)}</b><div>${esc(d.person_name)}${d.user ? ` <span class="muted small">${esc([d.user.department, d.user.position].filter(Boolean).join(' · '))}</span>` : ''}${d.deputy_name ? ` <span class="small muted">· 부 ${esc(d.deputy_name)}</span>` : ''}${d.contact ? ` <span class="small">☎ ${esc(d.contact)}</span>` : ''}</div>${d.warn ? `<div class="small err-text">${esc(d.warn)}</div>` : ''}</div>`).join('')}</div>`).join('')}</div>`
       : `<p class="muted small">지정된 담당자가 없습니다.${can ? ' 「지정 담당자」 탭에서 정보보호·소방·안전보건 등 담당자를 지정하세요.' : ''}</p>`;
   };
-  draw();
+  drawHead(); draw();
   tools.addEventListener('input', draw); tools.addEventListener('change', draw); tools.onsubmit = e => e.preventDefault();
+  // 저장한 조직도 고치기(통째로 저장, 동시에 고치면 다시 불러오기)
+  const save = async (nextData, what, extra = {}) => { try { custom = await api('PUT', `/api/admin/org-charts/${custom.id}`, { data: nextData, what, revision: custom.revision, ...extra }); drawHead(); draw(); toast('저장했습니다.'); return true; } catch (err) { fail(err); return false; } };
+  const userOpts = (sel0, blank = '회원 아님 · 이름만') => `<option value="">${blank}</option>${users.map(u => `<option value="${u.id}"${Number(sel0) === u.id ? ' selected' : ''}>${esc(u.name)} · ${esc([u.department, u.position].filter(Boolean).join(' ') || '부서 미지정')}</option>`).join('')}`;
+  const nodeEdit = async (key, parentForNew = null) => {
+    const c = structuredClone(custom.data), nodes = c.nodes = c.nodes || [], isNew = !key, n = isNew ? { key: Math.random().toString(36).slice(2, 10), name: '', parent: parentForNew, head: null, members: [], duties: '' } : nodes.find(x => x.key === key); if (!n) return;
+    const desc = k => nodes.filter(x => x.parent === k).flatMap(x => [x.key, ...desc(x.key)]), banned = new Set([n.key, ...desc(n.key)]);
+    const mrow = (p, i) => `<tr data-mi="${i}"><td><select data-m="user_id" aria-label="${i + 1}번 구성원 회원">${userOpts(p.user_id)}</select></td><td><input data-m="name" value="${esc(p.user_id ? '' : p.name || '')}" maxlength="50" placeholder="회원 아니면 이름" aria-label="${i + 1}번 구성원 이름"${p.user_id ? ' disabled' : ''}></td><td><input data-m="role" value="${esc(p.role || '')}" maxlength="40" placeholder="예) PM · 영업" aria-label="${i + 1}번 구성원 역할"></td><td><button type="button" class="btn small" data-m-rm="${i}" aria-label="${i + 1}번 구성원 빼기">×</button></td></tr>`;
+    let mem = (n.members || []).map(x => ({ ...x }));
+    const m = modal(`<h3>${isNew ? '새 상자' : `${esc(n.name)} · 상자`} <span class="small muted">${esc(custom.name)}</span></h3><form class="stack" data-oc-node>
+      <div class="form-grid"><label class="span2">상자 이름 *<input name="name" required maxlength="60" value="${esc(n.name)}" placeholder="예) SBL 사업부 · 영업팀"></label>
+        <label>상위 상자<select name="parent"><option value="">맨 위(대표 아래)</option>${nodes.filter(x => !banned.has(x.key)).map(x => `<option value="${esc(x.key)}"${x.key === n.parent ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
+        <label>장(회원)<select name="head_user">${userOpts(n.head?.user_id, '없음 · 이름만')}</select></label><label>장 이름(회원 아님)<input name="head_name" maxlength="50" value="${esc(n.head?.user_id ? '' : n.head?.name || '')}"></label><label>장 역할<input name="head_role" maxlength="40" value="${esc(n.head?.role || '')}" placeholder="예) 본부장 · PM"></label></div>
+      <fieldset class="vendor-sec"><legend>구성원 <span class="hint">회원을 고르면 직급·지정 담당 배지가 함께 보이고, 회원이 아닌 협력사·외부 인원은 이름만 넣습니다</span></legend>
+        <div class="table-wrap"><table class="grid oc-mem" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>회원</th><th>이름(회원 아님)</th><th>역할</th><th><span class="sr-only">빼기</span></th></tr></thead><tbody></tbody></table></div>
+        <div class="actions"><button type="button" class="btn small" data-m-add>＋ 구성원</button><button type="button" class="btn small" data-m-dept>공식 부서 인원 넣기</button></div></fieldset>
+      <label>업무(분장) <span class="hint">한 줄에 하나</span><textarea name="duties" rows="4" maxlength="2000">${esc(n.duties || '')}</textarea></label>
+      <div class="actions">${isNew ? '' : '<button type="button" class="btn" data-n-child>＋ 하위 상자</button><button type="button" class="btn" data-n-up aria-label="같은 줄에서 앞으로">◀ 앞으로</button><button type="button" class="btn" data-n-down aria-label="같은 줄에서 뒤로">뒤로 ▶</button><button type="button" class="btn danger" data-n-del>상자 빼기</button>'}<span class="grow"></span><button class="btn primary">저장</button></div></form>`, { wide: true });
+    const form = $('[data-oc-node]', m.el), tb = $('.oc-mem tbody', form), drawM = () => { tb.innerHTML = mem.map(mrow).join('') || '<tr><td colspan="4" class="empty">구성원이 없습니다.</td></tr>'; };
+    drawM();
+    const touchedM = () => { m.el.parentElement.dataset.dirty = '1'; };
+    tb.addEventListener('input', e => { const t = e.target.closest('[data-m]'), i = Number(e.target.closest('[data-mi]')?.dataset.mi); if (!t || !mem[i]) return; const k = t.dataset.m; mem[i][k] = k === 'user_id' ? Number(t.value) || null : t.value; if (k === 'user_id') { if (mem[i].user_id) mem[i].name = ''; drawM(); } touchedM(); });
+    form.addEventListener('click', async e => {
+      if (e.target.closest('[data-m-add]')) { mem.push({ user_id: null, name: '', role: '' }); drawM(); touchedM(); tb.querySelector('tr:last-child select')?.focus(); return; }
+      const rm = e.target.closest('[data-m-rm]'); if (rm) { mem.splice(Number(rm.dataset.mRm), 1); drawM(); touchedM(); return; }
+      if (e.target.closest('[data-m-dept]')) { const dn = await promptBox('공식 부서 인원 넣기', `<label>부서<select name="dept">${depts0.map(d => `<option>${esc(d.name)}</option>`).join('')}</select></label>`); if (!dn) return; const add = users.filter(u => u.department === dn.dept && !mem.some(x => x.user_id === u.id)); mem.push(...add.map(u => ({ user_id: u.id, name: '', role: '' }))); drawM(); touchedM(); toast(`${add.length}명을 넣었습니다.`); return; }
+      if (!isNew && e.target.closest('[data-n-child]')) { m.close(); nodeEdit(null, n.key); return; }
+      const mv = e.target.closest('[data-n-up], [data-n-down]'); if (mv) { const sib = nodes.filter(x => x.parent === n.parent), i = sib.indexOf(n), j = i + (mv.matches('[data-n-up]') ? -1 : 1); if (j < 0 || j >= sib.length) return toast('더 옮길 수 없습니다.'); const a = nodes.indexOf(sib[i]), b2 = nodes.indexOf(sib[j]); [nodes[a], nodes[b2]] = [nodes[b2], nodes[a]]; if (await save(c, `${n.name} 순서`)) m.close(); return; }
+      if (e.target.closest('[data-n-del]')) { const ch = nodes.filter(x => x.parent === n.key).length; if (!await confirmBox(`「${n.name}」 상자를 뺄까요?${ch ? ` 하위 상자 ${ch}개는 한 단계 위로 올라갑니다.` : ''}`)) return; nodes.forEach(x => { if (x.parent === n.key) x.parent = n.parent; }); c.nodes = nodes.filter(x => x !== n); if (await save(c, `${n.name} 상자 뺌`)) m.close(); }
+    });
+    form.onsubmit = async e => { e.preventDefault(); const v = formObj(form); const hu = Number(v.head_user) || null;
+      Object.assign(n, { name: v.name.trim(), parent: v.parent || null, head: hu || v.head_name.trim() ? { user_id: hu, name: hu ? '' : v.head_name.trim(), role: v.head_role.trim() } : null, members: mem.filter(x => x.user_id || String(x.name || '').trim()), duties: v.duties });
+      if (isNew) nodes.push(n); if (await save(c, isNew ? `${n.name} 상자 추가` : `${n.name} 수정`)) m.close(); };
+  };
+  const newChart = async (copyFrom) => {
+    const v = await promptBox('새 조직도', `<label>이름 *<input name="name" required maxlength="60" placeholder="예) SBL 조직도 · 2027 TF"></label><label>설명<input name="note" maxlength="300" placeholder="예) SBL 사업 협업 조직(협력사 포함)"></label>
+      <fieldset class="vendor-sec"><legend>시작</legend><label class="ci-chk"><input type="radio" name="copy" value="official"${copyFrom === 'official' || !copyFrom ? ' checked' : ''}> 공식 조직도 복사(지금 부서·구성원)</label>${custom ? `<label class="ci-chk"><input type="radio" name="copy" value="${custom.id}"${copyFrom === custom.id ? ' checked' : ''}> 「${esc(custom.name)}」 복사</label>` : ''}<label class="ci-chk"><input type="radio" name="copy" value=""> 빈 조직도</label></fieldset>`);
+    if (!v) return; try { const r = await api('POST', '/api/admin/org-charts', { ...v, request_id: crypto.randomUUID() }); try { localStorage.setItem(ocChartKey, String(r.id)); } catch {} toast(`「${r.name}」을(를) 만들었습니다.`); reload(); } catch (err) { fail(err); }
+  };
   main.addEventListener('click', async e => {
+    const sc = e.target.closest('[data-oc-sel]'); if (sc) { try { localStorage.setItem(ocChartKey, sc.dataset.ocSel); } catch {} reload(); return; }
     const lb = e.target.closest('[data-oc-layout]'); if (lb) { layout = lb.dataset.ocLayout; try { localStorage.setItem(ocLayoutKey, layout); } catch {} draw(); return; }
-    if (e.target.closest('[data-oc-print]')) { const m = rptWindow('조직도', `<div class="oc-chart ${layout} oc-print${$('#ocChart', main).className.replace(/oc-chart|tree|list/g, '')}">${$('#ocChart', main).innerHTML}</div>${rptBlock('지정 담당자', $('#ocDuties', main).innerHTML)}`, { biz_name: data.company }); m.el.querySelector('.rpt-sheet')?.classList.add('rpt-land'); m.el.classList.add('rpt-wide'); return; }
+    if (e.target.closest('[data-oc-print]')) { const m = rptWindow(chartName(), `<div class="oc-chart ${layout} oc-print${$('#ocChart', main).className.replace(/oc-chart|tree|list/g, '')}">${$('#ocChart', main).innerHTML}</div>${custom ? '' : rptBlock('지정 담당자', $('#ocDuties', main).innerHTML)}`, { biz_name: data.company }); m.el.querySelector('.rpt-sheet')?.classList.add('rpt-land'); m.el.classList.add('rpt-wide'); return; }
     if (!can) return;
+    if (e.target.closest('[data-oc-new]')) return newChart('official');
+    if (custom) {
+      if (e.target.closest('[data-oc-addnode]')) return nodeEdit(null, null);
+      if (e.target.closest('[data-oc-copy]')) return newChart(custom.id);
+      if (e.target.closest('[data-oc-hist]')) return qHistory(custom.name, custom.history, {});
+      if (e.target.closest('[data-oc-meta]')) { const v = await promptBox('이름 · 설명', `<label>이름 *<input name="name" required maxlength="60" value="${esc(custom.name)}"></label><label>설명<input name="note" maxlength="300" value="${esc(custom.note || '')}"></label>`); if (v && await save(custom.data, '이름·설명', v)) reload(); return; }
+      if (e.target.closest('[data-oc-archive]')) { if (!await confirmBox(`「${custom.name}」을(를) 보관할까요? 목록에서 숨기고 기록은 남깁니다.`)) return; if (await save(custom.data, '보관', { active: false })) { try { localStorage.setItem(ocChartKey, 'official'); } catch {} reload(); } return; }
+      if (e.target.closest('[data-oc-root]')) { const c = structuredClone(custom.data); const v = await promptBox('맨 위 상자', `<label>조직 이름(회사·사업명)<input name="title" maxlength="100" value="${esc(c.title || '')}" placeholder="${esc(custom.name)}"></label><div class="form-grid"><label>대표 직함<input name="ceo_title" maxlength="30" value="${esc(c.ceo_title || '')}" placeholder="예) 대표이사 · 사업 총괄"></label><label>대표(회원)<select name="ceo_user_id">${userOpts(c.ceo_user_id)}</select></label><label>대표 이름(회원 아님)<input name="ceo_name" maxlength="50" value="${esc(c.ceo_user_id ? '' : c.ceo_name || '')}"></label></div>`); if (v) await save({ ...c, ...v, ceo_user_id: Number(v.ceo_user_id) || null }, '맨 위 상자'); return; }
+      const n = e.target.closest('[data-oc-dept]'); if (n) return nodeEdit(n.dataset.ocDept);
+      return;
+    }
     if (e.target.closest('[data-oc-root]')) {
       const v = await promptBox('회사 · 대표', `<label>회사명<input name="company" maxlength="100" value="${esc(data.company)}"></label><div class="form-grid"><label>대표 직함<input name="ceo_title" maxlength="30" value="${esc(data.ceo_title)}"></label><label>대표(회원)<select name="ceo_user_id"><option value="">회원 아님 · 이름만</option>${users.map(u => `<option value="${u.id}"${data.ceo?.id === u.id ? ' selected' : ''}>${esc(u.name)} ${esc(u.position || '')}</option>`).join('')}</select></label><label>대표 이름(회원 아님)<input name="ceo_name" maxlength="50" value="${esc(data.ceo ? '' : data.ceo_name)}"></label></div>`,
         { submit: vals => api('PUT', '/api/admin/org-chart', vals) });
       if (v) { toast('저장했습니다.'); render(); } return;
     }
     const n = e.target.closest('[data-oc-dept]'); if (!n) return;
-    const d = depts.find(x => x.id === Number(n.dataset.ocDept)), mine = byDept(d.name), others = users.filter(u => u.department !== d.name);
+    const d = depts0.find(x => x.id === Number(n.dataset.ocDept)), mine = users.filter(u => u.department === d.name), others = users.filter(u => u.department !== d.name);
     const v = await promptBox(`${d.name} · 조직도`, `<label>부서장<select name="head_user_id"><option value="">미지정</option><optgroup label="이 부서">${mine.map(u => `<option value="${u.id}"${d.head_user_id === u.id ? ' selected' : ''}>${esc(u.name)} ${esc(u.position || '')}</option>`).join('')}</optgroup><optgroup label="다른 부서">${others.map(u => `<option value="${u.id}"${d.head_user_id === u.id ? ' selected' : ''}>${esc(u.name)} · ${esc(u.department || '부서 미지정')}</option>`).join('')}</optgroup></select></label>
       <label>부서 업무(분장) <span class="hint">한 줄에 하나</span><textarea name="duties" rows="5" maxlength="2000" placeholder="예) 구매·자재 관리\n협력업체 평가">${esc(d.duties || '')}</textarea></label><p class="small muted">부서 이름·상위 부서·순서는 「부서·직급」 탭, 구성원의 부서·직급은 「부서·직급」 탭 아래 「구성원 배치」에서 바꿉니다.</p>`,
       { submit: vals => api('PUT', `/api/admin/org-chart/departments/${d.id}`, vals) });
     if (v) { toast('저장했습니다.'); render(); }
   });
-  main.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches?.('.oc-node.can')) e.target.click(); });
+  main.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('.oc-node.can')) { e.preventDefault(); e.target.click(); } });
 }
 async function pageOrgDuties(main) {
   main.innerHTML = `<h1>조직 구성 <span class="dept">관리</span></h1>

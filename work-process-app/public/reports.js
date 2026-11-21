@@ -3180,7 +3180,7 @@ async function costItemOpen(id = null, pre = {}, opts = {}) {
   };
   const cell0 = (k, l, r, w) => {
     if (l.type === 'exp' && String(l.pct ?? '').trim() !== '' && (k === 'qty' || k === 'price')) return k === 'qty' ? `<td class="r small">${esc(l.pct)}%</td>` : `<td class="r small muted" data-ci-auto="${r}"></td>`;
-    const v = l[k] ?? '', at = `data-r="${r}" data-k="${k}" style="min-width:${w}px"`, ty = l.type || 'mat';
+    const v = l[k] ?? '', at = `data-r="${r}" data-k="${k}" style="min-width:${w}px" aria-label="${r + 1}번 줄 ${esc(COLS.find(c => c[0] === k)?.[1] || k)}"`, ty = l.type || 'mat';
     if (k === 'type') return `<td><select ${at}>${Object.entries(COST_LINE_LABEL).map(([a, b]) => `<option value="${a}"${ty === a ? ' selected' : ''}>${b}</option>`).join('')}</select></td>`;
     if (k === 'material_id') return ty === 'mat' ? `<td><select ${at}>${matOpt(v)}</select></td>` : '<td class="muted small c">—</td>';
     if (k === 'price' && ty === 'mat' && l.material_id && !l.manual_price) return `<td class="r small"><div class="ci-pcell"><span data-ci-auto="${r}"></span><button type="button" class="ci-own" data-ci-own="${r}" title="백데이터 단가 대신 이 줄만 단가를 직접 넣습니다">직접</button></div></td>`;

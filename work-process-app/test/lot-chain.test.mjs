@@ -1316,3 +1316,27 @@ test('15.322 goods landed cost: 40ft FOB Shanghai→Busan 1,600,000 ÷ 100 boxes
   assert.equal(it2.rev, 1); assert.equal(it2.totals.direct, 77000 + 16000 + (77000 + 16000) * 0.08 + 3000);
   assert.equal((await admin('POST', '/api/cost/items', { item_code: 'T322-BAD', name: 'x', lines: [{ type: 'exp', name: 'a', pct: 'alert(1)', base: ['goods'] }] })).status, 400);
 });
+test('15.323 multiple saved org charts: create from official copy / blank / another chart, validate nodes·members·cycles, admin-only, archive', async () => {
+  const u = (await admin('GET', '/api/admin/users')).body.find(x => x.name === '생산');
+  const d1 = (await admin('POST', '/api/admin/org/departments', { name: '경영지원' })).body;
+  await admin('PUT', `/api/admin/users/${u.id}`, { department: '경영지원', position: '' });
+  const off = (await admin('POST', '/api/admin/org-charts', { name: 'SBL 조직도', note: 'SBL 협업', copy: 'official', request_id: rid() })).body;
+  assert.equal(off.name, 'SBL 조직도'); assert.ok(off.data.nodes.some(n => n.name === '경영지원' && n.members.some(m => m.user_id === u.id)), 'copied official departments and members');
+  assert.equal((await admin('POST', '/api/admin/org-charts', { name: 'SBL 조직도' })).status, 400, 'unique name');
+  assert.equal((await admin('POST', '/api/admin/org-charts', { name: '공식 조직도' })).status, 400);
+  assert.equal((await prod('POST', '/api/admin/org-charts', { name: 'x' })).status, 403);
+  const data = { title: 'SBL 사업', ceo_title: '사업 총괄', ceo_name: '외부 대표', nodes: [{ key: 'aaaa', name: 'SBL 영업', head: { user_id: u.id, role: 'PM' }, members: [{ name: '협력사 김과장', role: '물류' }, { user_id: 999999 }].slice(0, 1), duties: '수주\n물류' }, { key: 'bbbb', name: 'SBL 생산', parent: 'aaaa', members: [] }] };
+  const s2 = (await admin('PUT', `/api/admin/org-charts/${off.id}`, { revision: off.revision, data, what: '상자 수정' })).body;
+  assert.equal(s2.data.nodes.length, 2); assert.equal(s2.data.nodes[0].head.role, 'PM'); assert.equal(s2.data.nodes[0].members[0].name, '협력사 김과장'); assert.equal(s2.data.nodes[1].parent, 'aaaa');
+  assert.equal((await admin('PUT', `/api/admin/org-charts/${off.id}`, { revision: off.revision, data })).status, 409, 'stale revision');
+  assert.equal((await admin('PUT', `/api/admin/org-charts/${off.id}`, { revision: s2.revision, data: { nodes: [{ key: 'aaaa', name: 'A', parent: 'bbbb' }, { key: 'bbbb', name: 'B', parent: 'aaaa' }] } })).status, 400, 'cycle');
+  assert.equal((await admin('PUT', `/api/admin/org-charts/${off.id}`, { revision: s2.revision, data: { nodes: [{ key: 'aaaa', name: 'A', members: [{ user_id: 999999 }] }] } })).status, 400, 'unknown user');
+  const cp = (await admin('POST', '/api/admin/org-charts', { name: 'SBL 2027', copy: off.id, request_id: rid() })).body; assert.equal(cp.data.nodes.length, 2);
+  const blank = (await admin('POST', '/api/admin/org-charts', { name: 'TF', copy: '', request_id: rid() })).body; assert.equal(blank.data.nodes.length, 0);
+  const view = (await prod('GET', '/api/org/chart')).body; assert.deepEqual(view.charts.map(c => c.name), ['SBL 조직도', 'SBL 2027', 'TF']);
+  assert.equal((await prod('GET', `/api/org/charts/${off.id}`)).body.data.nodes[0].name, 'SBL 영업', 'everyone can view');
+  await admin('PUT', `/api/admin/org-charts/${blank.id}`, { revision: blank.revision, active: false });
+  assert.ok(!(await prod('GET', '/api/org/chart')).body.charts.some(c => c.id === blank.id)); assert.equal((await prod('GET', `/api/org/charts/${blank.id}`)).status, 404);
+  assert.match((await admin('GET', `/api/org/charts/${off.id}`)).body.history.at(-1).what, /상자 수정/);
+  await admin('PUT', `/api/admin/users/${u.id}`, { department: '', position: '' }); await admin('PUT', `/api/admin/org/departments/${d1.id}`, { active: false });
+});
