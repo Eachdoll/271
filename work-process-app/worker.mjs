@@ -3583,6 +3583,14 @@ route('PUT','/api/requests/:id/inspection',async ({user,params,body})=>{
 route('GET','/api/requests/:id/inspection/history/:historyId',async ({params})=>{
   await inspectionRequest(params.id); const row=await db.prepare('SELECT * FROM inspection_measurement_history WHERE id=? AND request_id=?').get(params.historyId,params.id);if(!row) throw new HttpError(404,'검사 이력을 찾을 수 없습니다.');return decodeInspection(row);
 });
+// 15.340 수입·출하검사 월별 불합격률: 업체(거래처) 또는 품목 × 1~12월(의뢰일 기준), 판정된 것만 분모.
+route('GET', '/api/inspection-trend', async ({ query }) => {
+  const year = intIn(query.year, '연도', 2000, 2100, Number(today().slice(0, 4))), kind = query.kind === '출하검사' ? '출하검사' : '수입검사', by = query.by === 'item' ? 'item' : 'vendor';
+  const col = by === 'item' ? 'TRIM(r.title)' : "TRIM(r.customer)";
+  const rows = await db.prepare(`SELECT ${col} AS name, CAST(substr(r.created_at,6,2) AS INTEGER) AS m, COUNT(*) AS total, SUM(CASE WHEN im.result='fail' THEN 1 ELSE 0 END) AS fail, SUM(CASE WHEN im.result='pass' THEN 1 ELSE 0 END) AS pass
+    FROM requests r LEFT JOIN inspection_measurements im ON im.request_id=r.id WHERE r.type='analysis' AND r.category=? AND COALESCE(json_extract(r.data,'$.exempt'),0)<>1 AND substr(r.created_at,1,4)=? AND ${col}<>'' GROUP BY name, m ORDER BY name, m`).all(kind, String(year));
+  return { year, kind, by, rows };
+});
 route('GET','/api/inspections',async ({query})=>{
   const where=["r.type='analysis'","r.category IN ('수입검사','출하검사')"], args=[];
   if(query.kind){if(!['수입검사','출하검사'].includes(query.kind)) throw bad('검사 구분을 확인하세요.');where.push('r.category=?');args.push(query.kind);}

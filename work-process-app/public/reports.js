@@ -801,7 +801,8 @@ async function pageIpRights(main) {
   </form>
   <div id="ipList"></div>`;
   const form = $('#ipFilters', main); let data = { rows: [], can_manage: false, today: todayStr() };
-  const load = async () => { data = await api('GET', '/api/ip-rights'); if (main.isConnected) draw(); };
+  const ipRail = selectRail(main, form, 'kind', { title: '구분', icon: '💡', counts: () => countBy((typeof data !== 'undefined' && data.rows) || [], r => r.kind) }); // 15.340
+  const load = async () => { data = await api('GET', '/api/ip-rights'); if (main.isConnected) { ipRail.draw(); draw(); } };
   const dueCls = r => { const d = ipDday(r.next_due, data.today); return d === null || !['registered', 'filed', 'exam'].includes(r.status) ? '' : d < 0 ? 'over' : d <= 90 ? 'soon' : ''; };
   const live = r => !['rejected', 'abandoned', 'expired'].includes(r.status);
   const filtered = () => { const v = formObj(form), q = (v.q || '').trim().toLowerCase();
@@ -923,7 +924,8 @@ async function pageCerts(main) {
   </form>
   <div id="ctList"></div>`;
   const form = $('#ctFilters', main); let data = { rows: [], can_manage: false, today: todayStr() };
-  const load = async () => { data = await api('GET', '/api/certs'); if (main.isConnected) draw(); };
+  const ctRail = selectRail(main, form, 'kind', { title: '인증 종류', icon: '🏅', counts: () => countBy(data.rows, r => r.kind) }); // 15.340
+  const load = async () => { data = await api('GET', '/api/certs'); if (main.isConnected) { ctRail.draw(); draw(); } };
   const live = r => ['valid', 'suspended', 'prep'].includes(r.status);
   const firstDue = r => [r.next_audit, r.expire_date].filter(Boolean).sort()[0] || null; // 심사·만료 중 먼저 오는 것
   const dueCls = r => { const d = ipDday(firstDue(r), data.today); return d === null || !live(r) ? '' : d < 0 ? 'over' : d <= 90 ? 'soon' : ''; };
@@ -1949,6 +1951,39 @@ function annualCalHtml(items, Y, { rowTitle = '구분', rows = null, empty = '' 
     </tbody><tfoot><tr class="sp-cum"><th class="sp-v">누적 계획·실시</th>${cum.map(([a, b], i) => `<td class="${now(i)}"><div class="sp-bar" title="${i + 1}월까지 계획 ${a} · 실시 ${b}"><i style="height:${Math.round(a / max * 100)}%"></i><b style="height:${Math.round(b / max * 100)}%"></b></div><span>${b}/${a}</span></td>`).join('')}<td class="nowrap"><b>${done.length}</b> / ${live.length}</td></tr></tfoot></table></div>`;
 }
 const calLate = (date, y0 = todayStr()) => !!date && date.slice(0, 7) < y0.slice(0, 7);
+// 15.340 분류 폴더 창: 조회 줄의 고르기 칸(예: 인증 종류·구분·설비 종류)을 왼쪽 폴더로(문서관리처럼). 고르기 칸의 첫 「전체」가 맨 위.
+function selectRail(main, form, field, { title = '분류', icon = '📁', counts = () => ({}), allLabel = '전체' } = {}) {
+  const sel = form.elements[field]; sel.closest('label').hidden = true;
+  const ex = document.createElement('div'); ex.className = 'stock-ex cat-ex';
+  ex.innerHTML = `<details class="stock-tree-box" open><summary>${icon} ${esc(title)}</summary><nav class="stock-tree cat-tree" aria-label="${esc(title)}"></nav></details><section class="stock-ex-main"></section>`;
+  form.before(ex); const sec = ex.lastElementChild, box = ex.firstElementChild, nav = ex.querySelector('nav');
+  for (let n = ex.nextElementSibling; n;) { const nx = n.nextElementSibling; sec.append(n); n = nx; }
+  if (window.matchMedia?.('(max-width: 860px)').matches) box.open = false;
+  const draw = () => { const c = counts() || {};
+    $('summary', box).textContent = `${icon} ${title} · ${sel.value ? sel.selectedOptions[0]?.textContent : allLabel}`;
+    nav.innerHTML = [...sel.options].map(o => { const on = sel.value === o.value; return `<div class="st-row${on ? ' on' : ''}" style="--d:0"><span class="st-tw"></span><button type="button" class="st-node" data-cat="${esc(o.value)}" aria-current="${on}"><span class="st-ic">${o.value ? (on ? '📂' : '📁') : '🗂'}</span>${esc(o.value ? o.textContent : allLabel)}${c[o.value] != null ? ` <span class="st-n">${fmtNum(c[o.value])}</span>` : ''}</button></div>`; }).join(''); };
+  nav.addEventListener('click', e => { const b = e.target.closest('[data-cat]'); if (!b) return; sel.value = b.dataset.cat; sel.dispatchEvent(new Event('change', { bubbles: true })); draw(); if (window.matchMedia?.('(max-width: 860px)').matches) box.open = false; });
+  sel.addEventListener('change', draw); draw(); return { draw };
+}
+const countBy = (rows, f) => rows.reduce((m, r) => { const k = f(r); m[k] = (m[k] || 0) + 1; m[''] = (m[''] || 0) + 1; return m; }, { '': 0 });
+// 15.340 수입·출하검사 월별 불합격률(업체·품목 × 월)
+async function inspTrend() {
+  const y0 = Number(todayStr().slice(0, 4));
+  const m = modal(`<h3>수입·출하검사 월별 불합격률</h3><form class="toolbar list-filters" data-tr-f><label class="lf-sel">연도<select name="year">${[0, 1, 2, 3].map(i => `<option>${y0 - i}</option>`).join('')}</select></label><label class="lf-sel">구분<select name="kind"><option>수입검사</option><option>출하검사</option></select></label><label class="lf-sel">기준<select name="by"><option value="vendor">업체(거래처)별</option><option value="item">품목별</option></select></label><span class="grow"></span><button type="button" class="btn" data-tr-x>엑셀</button></form><div data-tr-body><p class="muted">불러오는 중…</p></div>`, { wide: true });
+  const f = $('[data-tr-f]', m.el), body = $('[data-tr-body]', m.el);
+  const load = async () => {
+    const v = formObj(f), d = await api('GET', '/api/inspection-trend?' + new URLSearchParams(v)); if (!m.el.isConnected) return;
+    const names = [...new Set(d.rows.map(r => r.name))], cell = (n, mo) => d.rows.find(r => r.name === n && r.m === mo);
+    const pct = (fl, j) => j ? Math.round(fl / j * 1000) / 10 : null;
+    const td = x => { if (!x) return '<td class="muted">·</td>'; const j = x.fail + x.pass, p = pct(x.fail, j); return `<td class="r ${x.fail ? 'tr-bad' : ''}" title="검사 ${x.total} · 판정 ${j} · 불합격 ${x.fail}">${p == null ? `<span class="muted">${x.total}</span>` : `${x.fail}/${j}<small>${p}%</small>`}</td>`; };
+    const sum = rs => { const t = rs.reduce((a, x) => ({ fail: a.fail + x.fail, pass: a.pass + x.pass, total: a.total + x.total }), { fail: 0, pass: 0, total: 0 }); return t; };
+    body.innerHTML = names.length ? `<div class="table-wrap"><table class="grid tr-trend" data-no-filter><thead><tr><th>${d.by === 'item' ? '품목' : '업체'}</th>${Array.from({ length: 12 }, (_, i) => `<th>${i + 1}월</th>`).join('')}<th>합계</th></tr></thead><tbody>${names.map(n => { const all = sum(d.rows.filter(r => r.name === n)); return `<tr><td><b>${esc(n)}</b></td>${Array.from({ length: 12 }, (_, i) => td(cell(n, i + 1))).join('')}${td(all)}</tr>`; }).join('')}</tbody>
+      <tfoot><tr><th>전체</th>${Array.from({ length: 12 }, (_, i) => { const rs = d.rows.filter(r => r.m === i + 1); return rs.length ? td(sum(rs)) : '<td class="muted">·</td>'; }).join('')}${td(sum(d.rows))}</tr></tfoot></table></div><p class="small muted">칸 = 불합격/판정 건수와 불합격률(판정 전 검사는 회색 건수). 빨강 = 불합격 있음.</p>` : `<div class="empty">${d.year}년 ${d.kind} 기록이 없습니다.</div>`;
+  };
+  f.addEventListener('change', () => load().catch(fail));
+  $('[data-tr-x]', m.el).onclick = () => { const t = $('.tr-trend', m.el); if (t) tableToXlsx(t, `월별불합격률_${formObj(f).kind}_${formObj(f).year}`); };
+  await load();
+}
 // 15.335 연도 폴더 창: 연간 기록 화면 왼쪽에 「📁 2027 · 2026 …」(문서관리 폴더처럼). 조회 줄의 연도 칸(select[name=year])을 대신 고른다.
 function yearOptions(sel, years, def = todayStr().slice(0, 4), all = false) {
   const cur = sel.value || def, y0 = Number(todayStr().slice(0, 4));
@@ -2136,17 +2171,18 @@ async function pageEquipment(main) {
   main.innerHTML = `<h1>설비 대장·이력 <span class="dept">생산 · 공무</span></h1>
   <p class="muted">생산설비(호기·위치·제조사)와 예방보전(PM) 항목·주기, 고장·수리 이력을 관리합니다. PM 일정은 「예방보전(PM) 일정」에서 한눈에 봅니다. 등록·기록은 생산·품질 담당이 합니다.</p>
   <div class="ip-tiles" id="eqTiles"></div>
-  <form class="toolbar list-filters" data-read-only id="eqFilters"><label class="lf-sel">상태<select name="st"><option value="live">폐기 빼고</option><option value="">전체</option>${Object.entries(EQ_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}<option value="due">PM 7일 안·지남</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="설비번호·설비명·호기·위치·제조사"></label><span class="grow"></span><span id="eqTools" class="ip-tools"></span></form>
+  <form class="toolbar list-filters" data-read-only id="eqFilters"><label class="lf-sel">종류<select name="kind"><option value="">전체</option></select></label><label class="lf-sel">상태<select name="st"><option value="live">폐기 빼고</option><option value="">전체</option>${Object.entries(EQ_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}<option value="due">PM 7일 안·지남</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="설비번호·설비명·호기·위치·제조사"></label><span class="grow"></span><span id="eqTools" class="ip-tools"></span></form>
   <div id="eqList"></div>`;
   const form = $('#eqFilters', main); let data = { rows: [], today: todayStr() };
-  const load = async () => { data = await api('GET', '/api/equipment'); if (main.isConnected) draw(); };
+  const eqRail = selectRail(main, form, 'kind', { title: '설비 종류', icon: '🏭', counts: () => countBy(data.rows.filter(r => r.status !== 'disposed'), r => r.kind || '(종류 없음)') }); // 15.340
+  const load = async () => { data = await api('GET', '/api/equipment'); if (!main.isConnected) return; const ks = [...new Set(data.rows.map(r => r.kind || '(종류 없음)'))].sort((a, b) => a.localeCompare(b, 'ko')), cur = form.elements.kind.value; form.elements.kind.innerHTML = '<option value="">전체</option>' + ks.map(k => `<option${k === cur ? ' selected' : ''}>${esc(k)}</option>`).join(''); eqRail.draw(); draw(); };
   main.qReload = () => load().catch(fail);
   const due = r => r.status !== 'disposed' && r.next_pm && ipDday(r.next_pm, data.today) <= 7;
   const draw = () => {
     const v = formObj(form), q = (v.q || '').trim().toLowerCase(), all = data.rows;
     qTiles('eqTiles', [['설비(폐기 빼고)', all.filter(r => r.status !== 'disposed').length], ['가동', all.filter(r => r.status === 'running').length, 'green'], ['정비 중', all.filter(r => r.status === 'maintenance').length, all.some(r => r.status === 'maintenance') ? 'yellow' : ''], ['PM 7일 안·지남', all.filter(due).length, all.some(due) ? 'red' : ''], ['올해 고장', all.reduce((s, r) => s + r.fails_year, 0)], ['올해 비가동(h)', all.reduce((s, r) => s + r.downtime_year, 0)]]);
     $('#eqTools', main).innerHTML = data.can_manage ? '<button type="button" class="btn primary" id="eqNewBtn">＋ 설비 등록</button>' : '';
-    const rows = all.filter(r => (v.st === 'live' ? r.status !== 'disposed' : v.st === 'due' ? due(r) : !v.st || r.status === v.st) && (!q || [r.equip_no, r.name, r.unit_name, r.location, r.maker, r.model, r.kind].join(' ').toLowerCase().includes(q)));
+    const rows = all.filter(r => (!v.kind || (r.kind || '(종류 없음)') === v.kind) && (v.st === 'live' ? r.status !== 'disposed' : v.st === 'due' ? due(r) : !v.st || r.status === v.st) && (!q || [r.equip_no, r.name, r.unit_name, r.location, r.maker, r.model, r.kind].join(' ').toLowerCase().includes(q)));
     $('#eqList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>설비번호</th><th>설비명</th><th>호기</th><th>위치</th><th>제조사 · 모델</th><th>PM 항목</th><th>다음 PM</th><th>올해 고장 · 비가동</th><th>상태</th><th></th></tr></thead><tbody>${rows.map(r => `<tr data-eq-row="${r.id}" class="${due(r) ? (ipDday(r.next_pm, data.today) < 0 ? 'ip-over' : 'ip-soon') : ''}${r.status === 'disposed' ? ' row-off' : ''}"><td class="nowrap" data-card-primary><b>${esc(r.equip_no)}</b></td><td><b>${esc(r.name)}</b>${r.kind ? `<div class="small muted">${esc(r.kind)}</div>` : ''}</td><td>${esc(r.unit_name)}</td><td>${esc(r.location)}</td><td>${esc([r.maker, r.model].filter(Boolean).join(' · '))}</td><td>${r.pm_items.length}</td><td class="nowrap">${esc(r.next_pm || '')}${qDd(r.next_pm, data.today, r.status !== 'disposed', 7)}</td><td class="nowrap">${r.fails_year}건 · ${r.downtime_year}h</td><td><span class="chip ${EQ_STATUS_CHIP[r.status]}">${esc(r.status_label)}</span></td><td><button type="button" class="btn small" data-eq-open="${r.id}">열기</button></td></tr>`).join('')}</tbody></table></div>`
       : `<div class="empty">${all.length ? '조건에 맞는 설비가 없습니다.' : '등록된 설비가 없습니다. 「＋ 설비 등록」으로 세탁기·커팅기 등과 PM 항목을 넣으세요.'}</div>`;
   };

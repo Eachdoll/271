@@ -4568,3 +4568,10 @@ form.list-filters [hidden], form.toolbar [hidden] { display: none !important; } 
 .op-check.is-ng { border-color: var(--red); } .op-check.is-ng .op-ng { background: var(--red-bg); color: var(--red); border-color: var(--red); }
 .op-check input[data-note] { width: 100%; min-height: 46px; }
 .op-allok { min-height: 48px; }
+
+/* 15.340 월별 불합격률 · 분류 폴더 */
+.tr-trend th, .tr-trend td { text-align: center; white-space: nowrap; }
+.tr-trend td:first-child, .tr-trend th:first-child { text-align: left; }
+.tr-trend td small { display: block; font-size: 11px; color: var(--muted); }
+.tr-trend td.tr-bad { color: var(--red); font-weight: 700; background: var(--red-bg); }
+.tr-trend td.tr-bad small { color: var(--red); }

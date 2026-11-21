@@ -1519,3 +1519,9 @@ test('15.339 maintenance operator: PM checklist + breakdown only; abnormal/break
   todo = (await prod('GET', '/api/my-tasks')).body.approvals.pm_issue; assert.ok(!todo || !todo.items.some(x => x.equip_no === eq.equip_no), 'linked → off the list');
   const cal = (await admin('GET', '/api/pm-calendar?year=' + today.slice(0, 4))).body; assert.ok(cal.equipment.some(x => x.id === eq.id)); assert.ok(cal.logs.some(l => l.equipment_id === eq.id && l.result === '이상'));
 });
+
+test('15.340 inspection monthly fail-rate API: by vendor/item, judged only in denominator', async () => {
+  const r = await admin('GET', '/api/inspection-trend?year=' + today.slice(0, 4) + '&kind=수입검사&by=vendor');
+  assert.equal(r.status, 200); assert.ok(Array.isArray(r.body.rows)); assert.equal(r.body.by, 'vendor');
+  const i = await admin('GET', '/api/inspection-trend?year=' + today.slice(0, 4) + '&kind=출하검사&by=item'); assert.deepEqual([i.body.kind, i.body.by], ['출하검사', 'item']);
+});
