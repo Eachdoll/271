@@ -1605,3 +1605,17 @@ test('15.344 env rest days: weekends/public holidays (with substitute rules) blo
   assert.equal((await prod('POST', '/api/env/days', { kind: 'holiday', day: '2026-12-25', note: 'x' })).status, 400, 'already public holiday');
   assert.equal((await prod('DELETE', `/api/env/days/${fc.company.id}`)).status, 200);
 });
+
+test('15.345 zone check conditions on/off: warehouse defaults to humidity off, records need only enabled values, at least one on', async () => {
+  const w = (await prod('POST', '/api/env/zones', { area: 'warehouse', name: '완제품 창고(조건)', temp_min: 5, temp_max: 35 })).body;
+  assert.deepEqual([w.temp_on, w.hum_on], [true, false], 'warehouse: humidity off by default');
+  const l = (await prod('POST', '/api/env/zones', { area: 'line', name: '조건 라인' })).body; assert.deepEqual([l.temp_on, l.hum_on], [true, true]);
+  assert.equal((await prod('PUT', `/api/env/zones/${w.id}`, { temp_on: false, hum_on: false, revision: w.revision })).status, 400, 'at least one on');
+  const mon = '2026-11-16';
+  const r = await prod('POST', '/api/env/records', { area: 'warehouse', kind: 'th', date: mon, entries: [{ zone_id: w.id, slot: 'am', temp: 20, hum: 99 }] });
+  assert.equal(r.status, 200, JSON.stringify(r.body)); assert.equal(r.body.deviations, 0, 'humidity ignored when off');
+  const rec = (await prod('GET', `/api/env/day?area=warehouse&date=${mon}`)).body.records.find(x => x.zone_id === w.id); assert.deepEqual([rec.temp, rec.hum], [20, null]);
+  assert.equal((await prod('POST', '/api/env/records', { area: 'warehouse', kind: 'th', date: mon, entries: [{ zone_id: w.id, slot: 'pm', hum: 50 }] })).status, 400, 'temperature still required');
+  const w2 = (await prod('PUT', `/api/env/zones/${w.id}`, { hum_on: true, hum_max: 60, revision: w.revision })).body; assert.equal(w2.hum_on, true);
+  assert.equal((await prod('POST', '/api/env/records', { area: 'warehouse', kind: 'th', date: mon, entries: [{ zone_id: w.id, slot: 'pm', temp: 20 }] })).status, 400, 'humidity required once on');
+});

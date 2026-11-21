@@ -4649,3 +4649,7 @@ tr.env-hatch > td { color: var(--muted); }
 .env-hol { color: var(--red); font-weight: 600; }
 .env-cs th.env-hol-h { color: var(--red); }
 .env-cs th small { font-weight: 400; color: var(--muted); }
+
+/* 15.345 점검 조건 켜기/끄기 */
+.env-cond { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 10px; }
+.env-cond label.chk { display: inline-flex !important; flex-direction: row !important; align-items: center; gap: 6px; margin: 0; font-weight: 600; }

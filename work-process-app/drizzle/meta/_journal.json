@@ -708,6 +708,13 @@
       "when": 1800010420000,
       "tag": "0100_env_days",
       "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "6",
+      "when": 1800010421000,
+      "tag": "0101_env_zone_checks",
+      "breakpoints": true
     }
   ]
 }

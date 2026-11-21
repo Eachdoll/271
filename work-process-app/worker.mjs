@@ -4964,13 +4964,16 @@ const canEnvConfirm = (user, area) => !isOperator(user) && (hasRole(user, 'produ
 const canEnvApprove = (user, area) => !!user.is_admin || publicUser(user).roles.includes('production_approver') || (area === 'warehouse' && publicUser(user).roles.includes('logistics_approver'));
 const canEnvSetup = user => !isOperator(user) && (hasRole(user, 'production') || hasRole(user, 'logistics'));
 const envNum = (v, label, lo, hi) => { if (v === '' || v == null) return null; const n = Number(v); if (!Number.isFinite(n) || n < lo || n > hi) throw bad(`${label}은(는) ${lo}~${hi} 사이 숫자로 넣으세요.`); return Math.round(n * 10) / 10; };
-const envZoneRow = r => ({ ...r, clean_items: JSON.parse(r.clean_items || '[]'), active: !!r.active, area_label: ENV_AREA[r.area] || r.area });
+const envZoneRow = r => ({ ...r, clean_items: JSON.parse(r.clean_items || '[]'), active: !!r.active, temp_on: r.temp_on !== 0, hum_on: r.hum_on !== 0, area_label: ENV_AREA[r.area] || r.area });
 const envSheetRow = r => r && ({ ...r, history: JSON.parse(r.history || '[]'), status_label: ENV_STATUS[r.status] || r.status, kind_label: ENV_KIND[r.kind] || r.kind, area_label: ENV_AREA[r.area] || r.area });
 const envRecRow = r => ({ ...r, results: JSON.parse(r.results || '[]'), ok: !!r.ok, skipped: !!r.skipped, slot_label: ENV_SLOT[r.slot] || r.slot });
 const envInRange = (z, t, h) => (t == null || ((z.temp_min == null || t >= z.temp_min) && (z.temp_max == null || t <= z.temp_max))) && (h == null || ((z.hum_min == null || h >= z.hum_min) && (z.hum_max == null || h <= z.hum_max)));
 function envZoneInput(body, prior = {}) {
   const g = k => body[k] !== undefined ? body[k] : prior[k];
   const z = { name: reqStr(g('name'), '구역 이름', 60), temp_min: envNum(g('temp_min'), '온도 하한', -50, 100), temp_max: envNum(g('temp_max'), '온도 상한', -50, 100), hum_min: envNum(g('hum_min'), '습도 하한', 0, 100), hum_max: envNum(g('hum_max'), '습도 상한', 0, 100), note: str(g('note'), 300) };
+  const onv = (k, def) => { const v = body[k] !== undefined ? body[k] : prior[k]; return v === undefined || v === null ? def : (v === true || v === 1 || v === '1' || v === 'on') ? 1 : 0; }; // 15.345 점검 조건 켜기/끄기
+  z.temp_on = onv('temp_on', 1); z.hum_on = onv('hum_on', (body.area || prior.area) === 'warehouse' ? 0 : 1);
+  if (!z.temp_on && !z.hum_on) throw bad('온도·습도 중 하나는 점검해야 합니다.');
   if (z.temp_min != null && z.temp_max != null && z.temp_min > z.temp_max) throw bad('온도 하한이 상한보다 큽니다.');
   if (z.hum_min != null && z.hum_max != null && z.hum_min > z.hum_max) throw bad('습도 하한이 상한보다 큽니다.');
   const items = body.clean_items !== undefined ? body.clean_items : (prior.clean_items != null ? JSON.parse(prior.clean_items) : null);
@@ -5083,7 +5086,7 @@ route('POST', '/api/env/zones', async ({ user, body }) => {
   if (await db.prepare('SELECT 1 FROM env_zones WHERE area=? AND name=? AND active=1').get(area, z.name)) throw bad(`${ENV_AREA[area]}에 같은 이름의 구역이 있습니다.`);
   const items = area === 'line' ? (z.clean_items ?? ENV_CLEAN_DEFAULT) : (z.clean_items ?? []);
   const sort = ((await db.prepare('SELECT MAX(sort) m FROM env_zones WHERE area=?').get(area))?.m ?? 0) + 1;
-  const r = await db.prepare('INSERT INTO env_zones(area,name,temp_min,temp_max,hum_min,hum_max,clean_items,sort,note,created_by) VALUES(?,?,?,?,?,?,?,?,?,?)').run(area, z.name, z.temp_min, z.temp_max, z.hum_min, z.hum_max, JSON.stringify(items), sort, z.note, user.name);
+  const r = await db.prepare('INSERT INTO env_zones(area,name,temp_min,temp_max,hum_min,hum_max,temp_on,hum_on,clean_items,sort,note,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').run(area, z.name, z.temp_min, z.temp_max, z.hum_min, z.hum_max, z.temp_on, z.hum_on, JSON.stringify(items), sort, z.note, user.name);
   return envZoneRow(await mustGet('env_zones', r.lastInsertRowid));
 });
 route('PUT', '/api/env/zones/:id', async ({ user, params, body }) => {
@@ -5091,7 +5094,7 @@ route('PUT', '/api/env/zones/:id', async ({ user, params, body }) => {
   const p = await mustGet('env_zones', params.id); if (Number(body.revision) !== p.revision) throw conflict();
   const z = envZoneInput(body, p), active = body.active === undefined ? p.active : (body.active ? 1 : 0);
   if (active && await db.prepare('SELECT 1 FROM env_zones WHERE area=? AND name=? AND active=1 AND id<>?').get(p.area, z.name, p.id)) throw bad(`${ENV_AREA[p.area]}에 같은 이름의 구역이 있습니다.`);
-  const r = await db.prepare("UPDATE env_zones SET name=?,temp_min=?,temp_max=?,hum_min=?,hum_max=?,clean_items=?,note=?,active=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?").run(z.name, z.temp_min, z.temp_max, z.hum_min, z.hum_max, JSON.stringify(z.clean_items ?? []), z.note, active, user.name, p.id, p.revision);
+  const r = await db.prepare("UPDATE env_zones SET name=?,temp_min=?,temp_max=?,hum_min=?,hum_max=?,temp_on=?,hum_on=?,clean_items=?,note=?,active=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?").run(z.name, z.temp_min, z.temp_max, z.hum_min, z.hum_max, z.temp_on, z.hum_on, JSON.stringify(z.clean_items ?? []), z.note, active, user.name, p.id, p.revision);
   if (!r.changes) throw conflict(); return envZoneRow(await mustGet('env_zones', p.id));
 });
 route('POST', '/api/env/zones/reorder', async ({ user, body }) => {
@@ -5140,8 +5143,8 @@ route('POST', '/api/env/records', async ({ user, body }) => {
     const skipped = e.skipped ? 1 : 0, action = str(e.action, 300), where = `${z.name} ${ENV_SLOT[slot]}`;
     if (skipped) { if (!action) throw bad(`${where}: 점검하지 않은 사유(휴무·미가동 등)를 적으세요.`); return { z, slot, temp: null, hum: null, results: '[]', ok: 1, skipped, action }; }
     if (kind === 'th') {
-      const temp = envNum(e.temp, `${where} 온도`, -50, 100), hum = envNum(e.hum, `${where} 습도`, 0, 100);
-      if (temp == null || hum == null) throw bad(`${where}: 온도와 습도를 넣으세요.`);
+      const temp = z.temp_on ? envNum(e.temp, `${where} 온도`, -50, 100) : null, hum = z.hum_on ? envNum(e.hum, `${where} 습도`, 0, 100) : null; // 15.345 꺼진 조건은 저장 안 함
+      if ((z.temp_on && temp == null) || (z.hum_on && hum == null)) throw bad(`${where}: ${[z.temp_on && '온도', z.hum_on && '습도'].filter(Boolean).join('와 ')}를 넣으세요.`);
       const ok = envInRange(z, temp, hum); if (!ok && !action) throw bad(`${where}: 기준을 벗어났습니다. 조치 내용을 적으세요.`);
       return { z, slot, temp, hum, results: '[]', ok: ok ? 1 : 0, skipped, action };
     }
