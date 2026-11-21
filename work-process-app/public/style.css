@@ -4311,3 +4311,36 @@ label.ci-chk input[type=checkbox] { width: auto; min-height: 0; margin: 0; }
 #main form.oc-tools > label.chk { display: inline-flex; flex-direction: row !important; align-items: center; gap: 6px; align-self: center; white-space: nowrap; }
 #main form.oc-tools > label.chk > input { width: auto; margin: 0; }
 .oc-note { color: var(--muted); margin: 2px 0 6px; }
+
+/* 15.324 크게 보기(전체 화면) · 새 창으로 분리 */
+.focus-toggle { background: none; border: 0; font-size: 20px; line-height: 1; color: var(--muted); cursor: pointer; min-width: 36px; min-height: 36px; vertical-align: middle; border-radius: 8px; }
+.focus-toggle:hover, .focus-toggle:focus-visible { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); outline: none; }
+body.focus-mode header.top, body.focus-mode .side, body.focus-mode .tabbar, body.focus-mode #main > .page-tabs, body.focus-mode #main .crumbs, body.focus-mode #main h1 .focus-toggle { display: none !important; }
+body.focus-mode .layout { display: block; min-height: 100vh; }
+body.focus-mode #main { max-width: none; width: auto; margin: 0; padding-top: 56px; min-height: 100vh; }
+.focus-bar { position: fixed; top: 8px; right: 12px; z-index: 45; display: flex; gap: 6px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 5px 6px; box-shadow: var(--shadow-float, 0 6px 18px rgba(0, 0, 0, .18)); }
+.focus-bar .fb-title { font-weight: 600; font-size: 13px; padding: 0 6px; max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media print { .focus-bar { display: none !important; } }
+
+/* 15.325 전 화면 검사에서 찾은 깨짐 */
+/* 설명 글 끝에 붙은 작은 단추(예: 출하 관리 「매출전표 입력으로」)가 좁게 눌려 4줄로 꺾이던 것 */
+#main p > .btn { display: inline-block; white-space: nowrap; }
+/* 관리 화면 탭(입력·목록·하위 탭): 휴대폰에서 글자가 두 줄로 꺾이지 않게 한 줄 + 옆으로 밀기 */
+@media (max-width: 700px) {
+  .manage-tabs { max-width: 100%; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .manage-tabs::-webkit-scrollbar { display: none; }
+  .manage-tabs a { white-space: nowrap; flex: 0 0 auto; padding: 8px 14px; }
+}
+/* 표 머리글 필터 단추: 좁은 칸에서도 아이콘이 단추 밖으로 나가지 않게 */
+.xf-btn { flex: 0 0 auto; min-width: max-content; }
+/* 세탁 검수: 옷 색 머리글(흰색·하늘색)이 다크 모드에서 밝은 상자로 튀던 것 → 같은 색 계열의 어두운 바탕 + 밝은 글자 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .lr-grid thead th.lr-c-op_white, :root:not([data-theme="light"]) .lr-grid thead th.lr-c-tp_white, :root:not([data-theme="light"]) .lr-grid thead th.lr-c-gown_lab { background: #3a4150; color: #f1f3f6; }
+  :root:not([data-theme="light"]) .lr-grid thead th.lr-c-op_sky, :root:not([data-theme="light"]) .lr-grid thead th.lr-c-gown_zip { background: #23466b; color: #e6f0fb; }
+}
+:root[data-theme="dark"] .lr-grid thead th.lr-c-op_white, :root[data-theme="dark"] .lr-grid thead th.lr-c-tp_white, :root[data-theme="dark"] .lr-grid thead th.lr-c-gown_lab { background: #3a4150; color: #f1f3f6; }
+:root[data-theme="dark"] .lr-grid thead th.lr-c-op_sky, :root[data-theme="dark"] .lr-grid thead th.lr-c-gown_zip { background: #23466b; color: #e6f0fb; }
+@media print { .lr-grid thead th.lr-c-op_white, .lr-grid thead th.lr-c-tp_white, .lr-grid thead th.lr-c-gown_lab { background: #fff !important; color: #1b1f24 !important; } .lr-grid thead th.lr-c-op_sky, .lr-grid thead th.lr-c-gown_zip { background: #d9e8f7 !important; color: #1b1f24 !important; } }
+/* 세탁 검수 표 머리글·합계 칸 기본 바탕(#eceef2)도 다크에서 어둡게 */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .lr-grid thead th:not([class*="lr-c-"]), :root:not([data-theme="light"]) .lr-grid tfoot th, :root:not([data-theme="light"]) .lr-grid tfoot td, :root:not([data-theme="light"]) .lr-grid tbody th { background: #2a303b; color: #e8ebf0; } }
+:root[data-theme="dark"] .lr-grid thead th:not([class*="lr-c-"]), :root[data-theme="dark"] .lr-grid tfoot th, :root[data-theme="dark"] .lr-grid tfoot td, :root[data-theme="dark"] .lr-grid tbody th { background: #2a303b; color: #e8ebf0; }

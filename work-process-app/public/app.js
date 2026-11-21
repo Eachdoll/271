@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.323';
+const APP_VERSION = '15.325';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -980,7 +980,7 @@ async function render() {
   refreshNavBadges();
   const seq = render.seq = (render.seq || 0) + 1; // 15.317 빠르게 메뉴를 옮기면 앞 화면의 늦게 끝난 그리기가 새 화면에 탭·경로(HOME 등)를 덮어쓰던 것: 앞 그리기는 페이지 뒤 단계를 건너뜀
   const page = canSeeRoute(route) ? PAGES[location.hash || '#/'] || pageHome : pageNoMenu;
-  try { await page($('#main')); if (seq !== render.seq) return; if (page === pageHome || page === pageTasks) applyMenuAccess($('#main')); if (page !== pageNoMenu) favoriteTools($('#main'), route); applyView($('#main'), route); foldHelp($('#main')); erpEntryBar($('#main'), route); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  try { await page($('#main')); if (seq !== render.seq) return; if (page === pageHome || page === pageTasks) applyMenuAccess($('#main')); if (page !== pageNoMenu) favoriteTools($('#main'), route); if (POPOUT) { focusBar(); document.title = `${screenTitle($('#main')) || '화면'} · 분리한 창`; } applyView($('#main'), route); foldHelp($('#main')); erpEntryBar($('#main'), route); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   if (seq !== render.seq) return;
   try { autoRememberLists($('#main')); } catch { /* 15.281 조회 조건 기억은 편의 기능 */ }
   try { managedTabs($('#main'), route.split('?')[0]); } catch { /* 15.213 */ }
@@ -1185,6 +1185,43 @@ function readRecent() { try { const v = JSON.parse(localStorage.getItem(recentKe
 const screenTitle = main => { const h = $('h1', main); if (!h) return ''; const c = h.cloneNode(true); c.querySelectorAll('.dept, .view-switch, .fav-toggle, button, a').forEach(x => x.remove()); return c.textContent.replace(/\s+/g, ' ').trim().slice(0, 40); };
 const FAVORITE_SKIP = ['#/', '#/tasks', '#/favorites', '#/me'];
 // 화면 제목 옆 ☆(자주 쓰는 화면에 추가)과 최근 연 화면 기록. 자주 쓰는 화면은 서버(내 설정)에 저장해 다른 기기에서도 보인다.
+// 15.324 크게 보기(전체 화면) · 새 창으로 분리: 화면 제목 옆 ⤢ → 메뉴·탭·위쪽 줄을 숨기고 이 화면만 꽉 차게(브라우저 전체 화면),
+// 오른쪽 위 「⧉ 새 창으로 분리」(다른 모니터로) · 「↙ 창 안으로」(원래대로). 분리한 창의 「↙ 창 안으로」는 그 창을 닫고 원래 창에서 같은 화면을 연다.
+const POPOUT = typeof location !== 'undefined' && /[?&]pop(=|&|$)/.test(location.search || ''); // URLSearchParams 없는 환경(시작 시험)에서도
+let fsByUs = false;
+function focusBar() {
+  let bar = document.getElementById('focusBar'); if (!bar) { bar = document.createElement('div'); bar.id = 'focusBar'; bar.className = 'focus-bar'; bar.setAttribute('role', 'toolbar'); bar.setAttribute('aria-label', '크게 보기'); document.body.append(bar); }
+  bar.innerHTML = POPOUT ? `<span class="fb-title">${esc(screenTitle($('#main')) || '')}</span><button type="button" class="btn small primary" data-fb-in title="이 창을 닫고 원래 창에서 이 화면 보기">↙ 창 안으로</button>`
+    : `<button type="button" class="btn small" data-fb-pop title="이 화면을 새 창으로 분리(다른 모니터로 옮겨 보기)">⧉ 새 창으로 분리</button><button type="button" class="btn small primary" data-fb-exit title="원래 크기로(Esc)">↙ 창 안으로</button>`;
+  return bar;
+}
+function enterFocus() {
+  document.body.classList.add('focus-mode'); focusBar();
+  const el = document.documentElement; if (el.requestFullscreen && !document.fullscreenElement) el.requestFullscreen().then(() => { fsByUs = true; }).catch(() => { /* 전체 화면을 못 써도 크게 보기는 됨 */ });
+  document.querySelector('#focusBar [data-fb-exit]')?.focus();
+}
+function exitFocus() {
+  document.body.classList.remove('focus-mode'); document.getElementById('focusBar')?.remove();
+  if (document.fullscreenElement && fsByUs) document.exitFullscreen().catch(() => {}); fsByUs = false;
+  document.querySelector('#main h1 .focus-toggle')?.focus();
+}
+function popOut() {
+  const w = window.open(`${location.pathname}?pop=1${location.hash || '#/'}`, 'wpa-pop-' + (location.hash || '#/').replace(/[^a-z0-9]/gi, '_'), `popup=yes,width=${screen.availWidth},height=${screen.availHeight},left=0,top=0`);
+  if (!w) { toast('새 창이 막혔습니다. 주소창 오른쪽에서 이 사이트의 팝업을 허용하세요.', 'err'); return; }
+  exitFocus(); toast('새 창으로 분리했습니다. 그 창의 「↙ 창 안으로」를 누르면 여기로 돌아옵니다.');
+}
+function popIn() {
+  const h = location.hash || '#/';
+  try { if (window.opener && !window.opener.closed) { window.opener.location.hash = h; window.opener.focus(); window.close(); return; } } catch { /* 다른 창에 못 닿으면 이 창에서 */ }
+  location.href = location.pathname + h;
+}
+if (typeof document !== 'undefined') {
+  document.addEventListener('click', e => { if (e.target.closest('[data-fb-exit]')) exitFocus(); else if (e.target.closest('[data-fb-pop]')) popOut(); else if (e.target.closest('[data-fb-in]')) popIn(); else if (e.target.closest('#main h1 .focus-toggle')) enterFocus(); });
+  // Esc로 브라우저 전체 화면을 끝내면 크게 보기도 끝냄(열린 창이 있으면 그 창을 닫으려던 것이니 크게 보기는 둠)
+  document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && fsByUs) { fsByUs = false; if (document.body.classList.contains('focus-mode') && !document.querySelector('.modal-wrap')) exitFocus(); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !POPOUT && document.body.classList.contains('focus-mode') && !document.querySelector('.modal-wrap')) exitFocus(); });
+  if (POPOUT) document.body.classList.add('focus-mode', 'popout');
+}
 function favoriteTools(main, route) {
   const path = String(route || '#/').split('?')[0], title = screenTitle(main);
   if (!title || FAVORITE_SKIP.includes(path) || !PAGES[path]) return;
@@ -1194,6 +1231,7 @@ function favoriteTools(main, route) {
   const button = document.createElement('button'); button.type = 'button'; button.className = 'fav-toggle';
   const paint = () => { const on = favs().some(f => f.href === path); button.textContent = on ? '★' : '☆'; button.setAttribute('aria-pressed', String(on)); button.setAttribute('aria-label', on ? '자주 쓰는 화면에서 빼기' : '자주 쓰는 화면에 추가'); button.title = button.getAttribute('aria-label'); };
   paint(); h1.insertBefore(button, h1.querySelector('.dept, .view-switch') || null); // 제목 글자 바로 뒤(부서 표시·전환 버튼 앞)
+  if (!POPOUT) { const fz = document.createElement('button'); fz.type = 'button'; fz.className = 'focus-toggle'; fz.textContent = '⤢'; fz.title = '크게 보기(전체 화면) — 메뉴·탭을 숨기고 이 화면만 크게, 새 창으로 분리도 됩니다'; fz.setAttribute('aria-label', '크게 보기(전체 화면)'); button.after(fz); } // 15.324
   button.onclick = async () => {
     const on = favs().some(f => f.href === path);
     const next = on ? favs().filter(f => f.href !== path) : [...favs(), { href: path, label: title }].slice(-20);
@@ -1909,7 +1947,7 @@ async function pageHome(main) {
     { key: 'alerts', label: '확인이 필요한 일', html: alertsCard(alerts) },
     { key: 'overview', label: 'Overview(부서별 지금 처리할 것)', html: `<section class="dash-section" aria-labelledby="dashNow"><h2 id="dashNow">Overview <span class="dash-sub">부서별 지금 처리할 것</span></h2><div class="dash-overview">${applyWidgetPref(cards, pref).map(c => c.html).join('')}</div></section>` },
     { key: 'pipeline', label: 'Request Pipeline(의뢰 종류별 진행)', html: `<section class="dash-section" aria-labelledby="dashProgress"><h2 id="dashProgress">Request Pipeline <span class="dash-sub">의뢰 종류별 진행</span></h2>
-  <div class="table-wrap"><table class="grid keep-table progress-table">
+  <div class="table-wrap"><table class="grid keep-table progress-table" data-no-filter>
     <caption class="sr-only">의뢰 종류별 진행 현황 (건수)</caption>
     <thead><tr><th scope="col">구분</th><th scope="col">접수대기</th><th scope="col">대기</th><th scope="col">진행</th><th scope="col">완료</th></tr></thead>
     <tbody>${['analysis', 'rnd_analysis', 'development', 'sample', 'sample_goods', 'voc'].filter(t => r[t]).map((t) => `<tr><th scope="row"><a href="${REQ[t].list}">${REQ[t].label}의뢰</a></th><td>${num(r[t].pending)}</td><td>${num(r[t].waiting)}</td><td>${num(r[t].progress)}</td><td>${num(r[t].done)}</td></tr>`).join('')}</tbody>
