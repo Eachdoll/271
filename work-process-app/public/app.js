@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.345';
+const APP_VERSION = '15.346';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -789,10 +789,18 @@ function managedTabs(main, route) {
 // 지금 화면 단계만 색, 나머지는 회색(누르면 그 화면으로). 두 흐름에 걸친 화면은 위 칩으로 흐름을 바꿔 봄(이 기기에 기억).
 const PROCESS_FLOWS = [
   { key: 'order', name: '주문 · 출하 · 매출', steps: [['#/sales/quotes', '견적'], ['#/sales/orders', '수주'], ['#/sales/mr', '생산의뢰'], ['#/prod/orders', '생산의뢰 접수'], ['#/prod/finished/plan', '생산계획'], ['#/prod/finished', '생산실적'], ['#/logistics/ship-orders', '출하지시'], ['#/logistics/ship', '출하'], ['#/sales/bills', '매출전표'], ['#/sales/tax', '세금계산서'], ['#/purchase/payments', '입금확인']] },
+  // 15.346 흐름이 없던 메뉴(마감·장부·연령표·반품·샘플·세탁 검수·재고·검사규격)도 업무 흐름에 연결
+  { key: 'arclose', name: '매출 마감 · 채권', on: ['#/sales/calendar', '#/sales/reps', '#/sales/delivery-status', '#/sales/tax-check', '#/sales/closing', '#/sales/book', '#/sales/aging', '#/purchase/payments'], steps: [['#/sales/bills', '매출전표'], ['#/sales/delivery-status', '납품현황'], ['#/sales/tax-check', '매출 발행 체크'], ['#/sales/tax', '매출 세금계산서'], ['#/sales/closing', '매출 마감'], ['#/purchase/payments', '입금확인'], ['#/sales/book', '거래처별 장부'], ['#/sales/aging', '채권 연령표']] },
+  { key: 'apclose', name: '매입 마감 · 채무', on: ['#/purchase/calendar', '#/purchase/receipt-status', '#/purchase/tax-check', '#/purchase/closing', '#/purchase/book', '#/purchase/notes', '#/purchase/aging', '#/purchase/disbursements'], steps: [['#/purchase/bills', '매입전표'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/tax-check', '매입 발행 체크'], ['#/purchase/tax', '매입 세금계산서'], ['#/purchase/closing', '매입 마감'], ['#/purchase/disbursements', '지급확인'], ['#/purchase/notes', '어음 관리'], ['#/purchase/book', '거래처별 장부'], ['#/purchase/aging', '채무 연령표']] },
+  { key: 'returns', name: '반품(반입 · 반출)', on: ['#/sales/returns', '#/purchase/returns'], steps: [['#/logistics/ship', '출하'], ['#/sales/returns', '고객 반입(반품)'], ['#/quality/voc/list', 'VOC·원인 분석'], ['#/purchase/laundry', '불량·폐기'], ['#/purchase/returns', '공급사 반출'], ['#/quality/capa', '재발 방지(CAPA)']] },
+  { key: 'sample', name: '샘플 의뢰', on: ['#/sales/sample/product', '#/sales/sample/goods', '#/purchase/sample/list', '#/prod/list'], steps: [['#/sales/sample/product', '제품 샘플의뢰'], ['#/prod/list', '제품 샘플 제작(생산)'], ['#/sales/sample/goods', '상품 샘플의뢰'], ['#/purchase/sample/list', '상품 샘플 구매'], ['#/dev/request', '개발의뢰로 전환']] },
+  { key: 'laundry', name: '세탁 검수 · 불량', on: ['#/purchase/laundry', '#/purchase/laundry-reports'], steps: [['#/prod/semi/wash', '세탁(호기별)'], ['#/purchase/laundry-reports', '세탁 검수·성적서'], ['#/purchase/laundry', '불량·폐기 관리'], ['#/quality/capa', '부적합·CAPA']] },
+  { key: 'stock', name: '입고 · 재고 · LOT', on: ['#/logistics/receipt/new', '#/logistics/receipts', '#/logistics/stock', '#/logistics/lots', '#/purchase/stock'], steps: [['#/logistics/receipt/new', '입고 입력'], ['#/logistics/receipts', '입고증'], ['#/logistics/lots', 'LOT·QR 발행'], ['#/logistics/stock', '재고 현황(창고·위치·LOT)'], ['#/purchase/stock', '안전재고·구매 재고'], ['#/purchase/po', '발주']] },
+  { key: 'master', name: '기준정보 · 초기 설정', on: ['#/admin/bom', '#/admin/bom-sheet', '#/purchase/vendors', '#/purchase/prices', '#/logistics/warehouses', '#/quality/specs', '#/admin/users', '#/admin/approval', '#/admin/security'], steps: [['#/admin/bom', '제품·BOM'], ['#/admin/bom-sheet', 'BOM 소요량표'], ['#/purchase/vendors', '거래처'], ['#/purchase/prices', '거래처별 단가'], ['#/logistics/warehouses', '창고·위치'], ['#/quality/specs', '검사규격'], ['#/admin/users', '사용자·권한'], ['#/admin/approval', '결재선'], ['#/admin/security', '접속 보안']] }, // 15.346 처음 쓸 때 넣는 순서
   { key: 'cost', name: '원가 산출', on: ['#/purchase/cost', '#/purchase/cost/materials', '#/purchase/cost/rates', '#/purchase/cost/trend'], steps: [['#/purchase/cost/rates', '공통 기준(인건비·경비율)'], ['#/purchase/cost/materials', '원가 백데이터(단가 시점)'], ['#/purchase/cost', '품목별 원가·리비전'], ['#/purchase/cost/trend', '원가 추이·마진']] }, // 15.318
   { key: 'buy', name: '구매 · 입고 · 매입', steps: [['#/sales/orders', '수주'], ['#/sales/pr', '구매의뢰'], ['#/purchase/po', '발주'], ['#/logistics/receive', '입고확인'], ['#/quality/inspections', '수입검사'], ['#/purchase/bills', '매입전표'], ['#/purchase/tax', '매입 세금계산서'], ['#/purchase/disbursements', '지급확인']] },
   // 15.287 품질: 분석의뢰 · 수입검사 · 출하검사 · VOC (분석 관리 목록의 검사구분 칩을 누르면 그 흐름으로)
-  { key: 'qreq', name: '품질 분석의뢰', steps: [['#/quality/request', '분석의뢰·접수'], ['#/quality/list', '분석 진행·결과'], ['#/quality/inspections', '검사 이력']] },
+  { key: 'qreq', name: '품질 분석의뢰', steps: [['#/dev/specs', '검사규격 항목설정'], ['#/quality/request', '분석의뢰·접수'], ['#/quality/list', '분석 진행·결과'], ['#/quality/inspections', '검사 이력']] },
   { key: 'qin', name: '수입검사', on: ['#/quality/list', '#/quality/inspections'], steps: [['#/purchase/po', '발주'], ['#/logistics/receive', '입고확인'], ['#/quality/list', '수입검사'], ['#/quality/inspections', '판정·이력'], ['#/purchase/bills', '매입전표']] },
   { key: 'qout', name: '출하검사', on: ['#/quality/list', '#/quality/inspections'], steps: [['#/prod/finished', '생산실적'], ['#/quality/list', '출하검사'], ['#/quality/inspections', '판정·이력'], ['#/logistics/ship-orders', '출하지시'], ['#/logistics/ship', '출하']] },
   { key: 'voc', name: 'VOC 처리', on: ['#/quality/voc/request', '#/quality/voc/list', '#/prod/lot-trace'], steps: [['#/quality/voc/request', 'VOC 접수'], ['#/quality/voc/list', 'VOC 처리'], ['#/prod/lot-trace', 'LOT 연결 조회'], ['#/quality/capa', 'CAPA(재발 방지)']] },
@@ -819,7 +827,7 @@ const FLOW_KEY = 'wpa:flow', FLOW_FOLD = 'wpa:flow-fold';
 const flowStore = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } return null; };
 function processGuide(main, route) {
   $('.proc-guide', main)?.remove();
-  const FLOW_ALIAS = { '#/logistics/receipt/new': '#/logistics/receive', '#/logistics/receipts': '#/logistics/receive' }; // 15.290 입고 입력·입고증 목록도 「입고확인」 단계
+  const FLOW_ALIAS = { '#/logistics/receipt/new': '#/logistics/receive', '#/logistics/receipts': '#/logistics/receive', '#/sales/calendar': '#/sales/closing', '#/sales/reps': '#/sales/book', '#/purchase/calendar': '#/purchase/closing' }; // 15.346 달력·담당자별 현황은 마감·장부 흐름으로 // 15.290 입고 입력·입고증 목록도 「입고확인」 단계
   const r0 = TAB_ON[route] || route, r = PROCESS_FLOWS.some(f => f.steps.some(([h]) => h === r0)) ? r0 : FLOW_ALIAS[navRoute(r0)] || navRoute(r0), flows = PROCESS_FLOWS.filter(f => f.steps.some(([h]) => h === r) && (!f.on || f.on.includes(r))); if (!flows.length) return; // 15.287 on: 이 흐름을 보여 줄 화면(품질 화면에서만) 의뢰 화면(별칭)도 제 단계로
   const anchor = $('.manage-tabs', main) || $('h1', main); if (!anchor || anchor.closest('.modal')) return;
   const box = document.createElement('nav'); box.className = 'proc-guide'; box.setAttribute('aria-label', '업무 흐름 안내');

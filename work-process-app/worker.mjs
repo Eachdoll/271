@@ -2097,7 +2097,7 @@ async function salesTeam() {
 }
 // 고를 수 있는 담당자(reps) = 영업팀. used = 거래처·전표에 이미 쓰인 다른 이름(목록 거르기에서만 보임).
 route('GET', '/api/sales-reps', async ({ user }) => {
-  requireSales(user);
+  if (!hasRole(user, 'sales') && !hasRole(user, 'purchase')) throw new HttpError(403, '영업담당자 목록은 영업·구매 담당자가 봅니다.'); // 15.346 거래처 등록(구매)에서도 담당자 이름 고름
   const { team, basis, departments } = await salesTeam(), set = new Set(team);
   const used = (await db.prepare("SELECT sales_rep AS n FROM vendors WHERE sales_rep<>'' UNION SELECT sales_rep FROM sales_bills WHERE sales_rep<>''").all()).map(r => r.n).filter(n => !set.has(n)).sort((a, b) => a.localeCompare(b, 'ko'));
   return { reps: team, used, basis, departments };
