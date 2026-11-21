@@ -524,7 +524,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'qualifications', 'supplier_evals', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests', 'quality_audits', 'audit_findings', 'validations', 'quality_goals', 'quality_kpi_values', 'quality_risks', 'risk_assessments', 'org_duty_assignments', 'dev_costs', 'cost_rates', 'cost_materials', 'cost_material_prices', 'cost_items', 'cost_item_revs']; // 15.313 위험성평가 · 15.314 지정 담당자
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'qualifications', 'supplier_evals', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests', 'quality_audits', 'audit_findings', 'validations', 'quality_goals', 'quality_kpi_values', 'quality_risks', 'risk_assessments', 'org_duty_assignments', 'dev_costs', 'cost_rates', 'cost_materials', 'cost_material_prices', 'cost_items', 'cost_item_revs', 'org_charts']; // 15.313 위험성평가 · 15.314 지정 담당자
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -5353,6 +5353,9 @@ const COST_LINE = { mat: '원부자재', labor: '인건비', exp: '기타 직접
 const COST_CUR = ['KRW', 'USD', 'EUR', 'JPY', 'CNY'];
 const COST_CAUSE = { manual: '직접 수정', material: '단가 변경', rates: '공통 기준 변경', create: '최초 산출' };
 const requireCost = user => { if (!hasRole(user, 'purchase')) throw new HttpError(403, '원가 산출 관리는 구매 담당자(관리자)만 봅니다.'); };
+// 15.321 연구소 예상 원가(stage=dev)는 연구소(개발·개발책임자)와 구매가, 양산 원가(stage=mass)는 구매만 다룬다.
+const costCanStage = (user, stage) => stage === 'dev' ? (isResearcher(user) || hasRole(user, 'purchase')) : hasRole(user, 'purchase');
+const requireCostStage = (user, stage) => { if (!costCanStage(user, stage)) throw new HttpError(403, stage === 'dev' ? '개발원가(양산 원가 예측)는 연구소·구매 담당자만 봅니다.' : '원가 산출 관리는 구매 담당자(관리자)만 봅니다.'); };
 const cr2 = v => Math.round(v * 100) / 100, cr4 = v => Math.round(v * 10000) / 10000;
 // 칸 수식: 숫자·+ − × ÷·괄호만(예: 245000/1500*0.32, =9000*4). 쉼표·₩·앞의 = 는 무시.
 function costExpr(src, label) {
@@ -5389,6 +5392,9 @@ function costCompute(item0, rates, prices) {
     else amount = qty * unit_price;
     return { ...l, qty_v: cr4(qty), unit_price: cr4(unit_price), capa_v: capa == null ? null : cr4(capa), workers_v: workers, amount: cr4(amount), price_src, price_date };
   });
+  // 15.322 비율 줄(보험료·관세 등): 기준 줄(auto 이름)들의 금액 합 × 비율%. 앞 줄부터 차례로(보험료 → 관세 과세가격에 보험료 포함).
+  lines.forEach((l, i) => { if (l.type !== 'exp' || l.pct == null || l.pct === '') return; const pct = costExpr(l.pct, `${i + 1}번 줄 비율(%)`) ?? 0, base = lines.filter(x => x !== l && (l.base || []).includes(x.auto)).reduce((s2, x) => s2 + x.amount, 0);
+    lines[i] = { ...l, qty_v: cr4(pct / 100), unit_price: cr4(base), amount: cr4(base * pct / 100), price_src: 'pct' }; });
   const sum = t => lines.filter(l => l.type === t).reduce((s, l) => s + l.amount, 0);
   const material = sum('mat'), labor = sum('labor'), other = sum('exp'), direct = material + labor + other;
   const defect = direct * used.defect_rate / 100, mfg = direct * used.mfg_rate / 100, sga = (item.sga_base === 'mfg' ? direct + mfg : direct) * used.sga_rate / 100, total = direct + defect + mfg + sga;
@@ -5398,15 +5404,16 @@ function costCompute(item0, rates, prices) {
   return { lines, totals, rates: used };
 }
 // 15.320 제품 사양(포장 구조·포장당/외포장당/박스당 sh·시트·원단 폭·자재 매입가) — 화면이 이 값으로 원가 줄(auto)을 만든다. 정해진 칸만 받는다.
-const COST_AUTO = ['fabric', 'pack', 'outer', 'box', 'cut', 'packing'];
-const COST_BUILD_ENUM = { pack: ['double', 'triple'], unit: ['pack', 'sheet', 'box'], dim: ['in', 'mm'], fdim: ['in', 'mm'], fbasis: ['', 'yd', 'sqm', 'm'], pk_cu: ['pack', 'sh'] };
-const COST_BUILD_VAL = ['sw', 'sl', 'fw', 'floss', 'spy', 'spp', 'spo', 'spb', 'puse', 'ouse', 'buse', 'fprice', 'pprice', 'oprice', 'bprice', 'cut_capa', 'cut_workers', 'pk_capa', 'pk_workers'];
+const COST_AUTO = ['fabric', 'pack', 'outer', 'box', 'cut', 'packing', 'goods', 'origin', 'freight', 'insurance', 'duty', 'dest', 'imp_etc']; // 15.322 상품 수입 물류비
+const COST_BUILD_ENUM = { i_inc: ['EXW', 'FOB', 'CFR', 'CIF', 'DAP', 'DDP'], pack: ['double', 'triple'], unit: ['pack', 'sheet', 'box'], dim: ['in', 'mm'], fdim: ['in', 'mm'], fbasis: ['', 'yd', 'sqm', 'm'], pk_cu: ['pack', 'sh'] };
+const COST_BUILD_VAL = ['sw', 'sl', 'fw', 'floss', 'spy', 'spp', 'spo', 'spb', 'puse', 'ouse', 'buse', 'fprice', 'pprice', 'oprice', 'bprice', 'cut_capa', 'cut_workers', 'pk_capa', 'pk_workers', 'i_price', 'i_gq', 'i_qty', 'i_freight', 'i_origin', 'i_dest', 'i_ins', 'i_duty', 'i_etc'];
 function costBuildClean(v0) {
   let v = v0; if (typeof v === 'string') { try { v = JSON.parse(v || '{}'); } catch { v = {}; } } if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
-  const o = { on: !!v.on };
+  const o = { on: !!v.on, i_on: !!v.i_on };
+  for (const k of ['i_cont', 'i_route']) if (String(v[k] ?? '').trim()) o[k] = str(String(v[k]), 40);
   for (const [k, list] of Object.entries(COST_BUILD_ENUM)) if (list.includes(v[k])) o[k] = v[k];
   for (const k of COST_BUILD_VAL) if (v[k] !== undefined && v[k] !== null && String(v[k]).trim() !== '') { const x = str(String(v[k]), 40); costExpr(x, `제품 사양(${k}) `); o[k] = x; }
-  for (const k of ['fmat', 'pmat', 'omat', 'bmat']) { const id = optId(v[k]); if (id) o[k] = id; }
+  for (const k of ['fmat', 'pmat', 'omat', 'bmat', 'i_mat']) { const id = optId(v[k]); if (id) o[k] = id; }
   return o;
 }
 function costLinesClean(list, matIds) {
@@ -5422,6 +5429,7 @@ function costLinesClean(list, matIds) {
     const line = { key, type, material_id: mid, manual_price: !!(mid && o.manual_price), name: str(o.name, 100), spec: str(o.spec, 100), unit: str(o.unit, 20), qty: ex('qty', '소요량·작업량'), price: ex('price', '단가'), loss: type === 'mat' ? loss : 0,
       capa: type === 'labor' ? ex('capa', '시간당 처리량') : '', workers: type === 'labor' ? ex('workers', '인원') : '', note: str(o.note, 200) };
     if (COST_AUTO.includes(o.auto)) line.auto = o.auto; /* 15.320 제품 사양에서 만든 줄 */
+    if (type === 'exp' && String(o.pct ?? '').trim() !== '') { line.pct = ex('pct', '비율(%)'); line.base = Array.isArray(o.base) ? [...new Set(o.base.filter(k => COST_AUTO.includes(k)))].slice(0, 10) : []; } /* 15.322 보험료·관세 같은 비율 줄 */
     if (!line.name && !mid) throw bad(n + '항목 이름을 넣으세요.');
     return line;
   });
@@ -5429,15 +5437,16 @@ function costLinesClean(list, matIds) {
 async function costItemBody(o0, prior = {}) {
   const o = o0 && typeof o0 === 'object' ? o0 : {}, pick = k => o[k] === undefined ? prior[k] : o[k];
   const bom = optId(pick('bom_id')); if (bom && !await db.prepare('SELECT 1 FROM boms WHERE id=?').get(bom)) throw bad('제품등록 품목을 다시 고르세요.');
+  const devReq = optId(pick('dev_request_id')); if (devReq && !await db.prepare("SELECT 1 FROM requests WHERE id=? AND type='development'").get(devReq)) throw bad('개발리스트의 개발 건을 다시 고르세요.');
   const nOrNull = (v, l, lo = 0, hi = 1e12) => { if (v === '' || v == null) return null; const n = Number(String(v).replace(/,/g, '')); if (!Number.isFinite(n) || n < lo || n > hi) throw bad(`${l}을(를) ${lo} 이상 숫자로 넣으세요.`); return n; };
   const ov0 = o.overrides === undefined ? JSON.parse(prior.overrides || '{}') : (o.overrides && typeof o.overrides === 'object' ? o.overrides : {}), ov = {};
   for (const [k, l, hi] of [['labor_rate', '시간당 인건비', 1e7], ['mfg_rate', '제조경비율', 100], ['sga_rate', '판관비율', 100], ['defect_rate', '불량률', 100]]) { const v = nOrNull(ov0[k], l, 0, hi); if (v != null) ov[k] = v; }
   const matIds = new Set((await db.prepare('SELECT id FROM cost_materials').all()).map(r => r.id));
   return { name: reqStr(pick('name'), '품목명', 150), spec: str(pick('spec'), 150), kind: COST_KIND[pick('kind')] ? pick('kind') : 'product', category: str(pick('category'), 50), bom_id: bom, unit: str(pick('unit'), 20),
     pieces: nOrNull(pick('pieces'), '낱개 수', 0.0001), pack_spec: str(pick('pack_spec'), 100), customer: str(pick('customer'), 100), sale_price: nOrNull(pick('sale_price'), '판매가'), sga_base: pick('sga_base') === 'mfg' ? 'mfg' : 'direct',
-    overrides: JSON.stringify(ov), lines: JSON.stringify(costLinesClean(o.lines === undefined ? JSON.parse(prior.lines || '[]') : o.lines, matIds)), note: str(pick('note'), 1000), build: JSON.stringify(costBuildClean(o.build === undefined ? prior.build : o.build)) };
+    dev_request_id: devReq, overrides: JSON.stringify(ov), lines: JSON.stringify(costLinesClean(o.lines === undefined ? JSON.parse(prior.lines || '[]') : o.lines, matIds)), note: str(pick('note'), 1000), build: JSON.stringify(costBuildClean(o.build === undefined ? prior.build : o.build)) };
 }
-const COST_ITEM_COLS = ['name', 'spec', 'kind', 'category', 'bom_id', 'unit', 'pieces', 'pack_spec', 'customer', 'sale_price', 'sga_base', 'overrides', 'lines', 'note', 'build'];
+const COST_ITEM_COLS = ['name', 'spec', 'kind', 'category', 'bom_id', 'unit', 'pieces', 'pack_spec', 'customer', 'sale_price', 'sga_base', 'overrides', 'lines', 'note', 'build', 'dev_request_id'];
 const costHeader = f => ({ name: f.name, spec: f.spec, kind: f.kind, unit: f.unit, pieces: f.pieces, pack_spec: f.pack_spec, customer: f.customer, sale_price: f.sale_price, sga_base: f.sga_base, overrides: JSON.parse(f.overrides || '{}'), build: JSON.parse(f.build || '{}') });
 const costRevSql = (itemId, rev, date, reason, cause, f, calc, by) => ({ sql: 'INSERT INTO cost_item_revs(item_id,rev,effective_date,reason,cause,header,lines,rates,totals,created_by) VALUES(?,?,?,?,?,?,?,?,?,?)', args: [itemId, rev, date, reason, cause, JSON.stringify(costHeader(f)), JSON.stringify(calc.lines), JSON.stringify(calc.rates), JSON.stringify(calc.totals), by] });
 const costCostKey = f => JSON.stringify([JSON.parse(f.lines || '[]').map(({ auto, ...l }) => (void auto, l)), f.overrides, f.sga_base, f.pieces ?? null, f.kind]);
@@ -5590,24 +5599,26 @@ route('POST', '/api/cost/materials/bulk', async ({ user, body }) => {
   return out;
 });
 // 품목별 원가
-route('GET', '/api/cost/items', async ({ user }) => {
-  requireCost(user); const t = today(), rows = await costItemsAll(), live = await costLive(rows, t), revs = await db.prepare('SELECT item_id, rev, effective_date, totals FROM cost_item_revs ORDER BY item_id, rev').all();
+route('GET', '/api/cost/items', async ({ user, query }) => {
+  const stage = ['dev', 'all'].includes(query.stage) ? query.stage : 'mass'; if (stage === 'all') { if (!costCanStage(user, 'dev')) requireCost(user); } else requireCostStage(user, stage);
+  const t = today(), rows = (await costItemsAll()).filter(r => (stage === 'all' || r.stage === stage) && costCanStage(user, r.stage)), live = await costLive(rows, t), revs = await db.prepare('SELECT item_id, rev, effective_date, totals FROM cost_item_revs ORDER BY item_id, rev').all();
   return { rows: rows.map((r, i) => costRowOut(r, live[i], revs)), materials: (await costMaterialsOut(t)).filter(m => m.active).map(m => ({ id: m.id, code: m.code, name: m.name, spec: m.spec, unit: m.unit, supplier: m.supplier, category: m.category, krw_price: m.current?.krw_price ?? null, price_date: m.current?.effective_date || null })),
-    rates: await costRatesAt(t), boms: await db.prepare("SELECT id, product, product_code, item_category FROM boms ORDER BY product LIMIT 3000").all().catch(() => []), today: t };
+    rates: await costRatesAt(t), boms: await db.prepare("SELECT id, product, product_code, item_category FROM boms ORDER BY product LIMIT 3000").all().catch(() => []), today: t, stage,
+    dev_requests: costCanStage(user, 'dev') ? await db.prepare("SELECT id, req_no, title, customer, status FROM requests WHERE type='development' ORDER BY id DESC LIMIT 2000").all() : [], can_purchase: hasRole(user, 'purchase') };
 });
 route('GET', '/api/cost/items/:id/revs', async ({ user, params }) => {
-  requireCost(user); const it = await mustGet('cost_items', params.id);
+  const it = await mustGet('cost_items', params.id); requireCostStage(user, it.stage);
   return { item: it, rows: (await db.prepare('SELECT * FROM cost_item_revs WHERE item_id=? ORDER BY rev').all(it.id)).map(r => ({ ...r, header: JSON.parse(r.header), lines: JSON.parse(r.lines), rates: JSON.parse(r.rates), totals: JSON.parse(r.totals), cause_label: COST_CAUSE[r.cause] || r.cause })) };
 });
 route('POST', '/api/cost/items', async ({ user, body }) => {
-  requireCost(user); const key = str(body.request_id, 80) || null;
+  const stage = body.stage === 'dev' ? 'dev' : 'mass'; requireCostStage(user, stage); const key = str(body.request_id, 80) || null;
   if (key) { const old = await db.prepare('SELECT * FROM cost_items WHERE request_id=?').get(key); if (old) return old; }
   const f = await costItemBody(body), date = dateStr(body.effective_date || today(), '원가 산출 시점'), calc = costCompute(f, await costRatesAt(date), await costPricesAt(date));
-  const code = str(body.item_code, 40) || `CI-${String(((await db.prepare('SELECT COUNT(*) c FROM cost_items').get()).c + 1)).padStart(4, '0')}`;
+  const code = str(body.item_code, 40) || `${stage === 'dev' ? 'DEV' : 'CI'}-${String(((await db.prepare('SELECT COUNT(*) c FROM cost_items WHERE stage=?').get(stage)).c + 1)).padStart(4, '0')}`;
   if (await db.prepare('SELECT 1 FROM cost_items WHERE item_code=?').get(code)) throw bad(`이미 있는 품목코드입니다: ${code}`);
   const reason = str(body.reason, 200) || '최초 산출';
   await db.batch([
-    { sql: `INSERT INTO cost_items(item_code,${COST_ITEM_COLS.join(',')},rev,rev_date,totals,history,request_id,created_by) VALUES(?,${COST_ITEM_COLS.map(() => '?').join(',')},0,?,?,?,?,?)`, args: [code, ...COST_ITEM_COLS.map(k => f[k]), date, JSON.stringify(calc.totals), JSON.stringify([{ at: now(), by: user.name, what: `Rev.0 최초 산출 · 원가 ${calc.totals.total}` }]), key, user.name] },
+    { sql: `INSERT INTO cost_items(item_code,stage,${COST_ITEM_COLS.join(',')},rev,rev_date,totals,history,request_id,created_by) VALUES(?,?,${COST_ITEM_COLS.map(() => '?').join(',')},0,?,?,?,?,?)`, args: [code, stage, ...COST_ITEM_COLS.map(k => f[k]), date, JSON.stringify(calc.totals), JSON.stringify([{ at: now(), by: user.name, what: `Rev.0 최초 산출 · 원가 ${calc.totals.total}` }]), key, user.name] },
     { ...costRevSql(0, 0, date, reason, 'create', f, calc, user.name), sql: costRevSql(0, 0, date, reason, 'create', f, calc, user.name).sql.replace('VALUES(?,', 'VALUES((SELECT id FROM cost_items WHERE item_code=?),'), args: [code, ...costRevSql(0, 0, date, reason, 'create', f, calc, user.name).args.slice(1)] },
   ]);
   const t = today(), rows = await costItemsAll(), r = rows.find(x => x.item_code === code); return costRowOut(r, (await costLive([r], t))[0], await db.prepare('SELECT item_id, rev, effective_date, totals FROM cost_item_revs WHERE item_id=? ORDER BY rev').all(r.id));
@@ -5615,7 +5626,7 @@ route('POST', '/api/cost/items', async ({ user, body }) => {
 // 수정: 원가에 영향을 주는 내용(원가 줄·기준 덮어쓰기·판관비 기준·낱개 수·구분)이 바뀌거나 계산 원가가 달라지면 새 리비전(변동 시점·사유 필수).
 // 판매가·고객·포장사양 같은 머리 정보만 바뀌면 리비전 없이 고친다(이력에 남음).
 route('PUT', '/api/cost/items/:id', async ({ user, params, body }) => {
-  requireCost(user); const prior = await mustGet('cost_items', params.id);
+  const prior = await mustGet('cost_items', params.id); requireCostStage(user, prior.stage);
   if (Number(body.revision) !== prior.revision) throw conflict();
   const f = await costItemBody(body, prior), code = body.item_code === undefined ? prior.item_code : reqStr(body.item_code, '품목코드', 40), active = body.active === undefined ? prior.active : (body.active ? 1 : 0);
   if (code !== prior.item_code && await db.prepare('SELECT 1 FROM cost_items WHERE item_code=? AND id<>?').get(code, prior.id)) throw bad(`이미 있는 품목코드입니다: ${code}`);
@@ -5639,10 +5650,22 @@ route('PUT', '/api/cost/items/:id', async ({ user, params, body }) => {
   const res = await db.batch(stmts); if (!(res[0].meta?.changes ?? res[0].changes)) throw conflict();
   const r = await mustGet('cost_items', prior.id); return costRowOut(r, (await costLive([r], today()))[0], await db.prepare('SELECT item_id, rev, effective_date, totals FROM cost_item_revs WHERE item_id=? ORDER BY rev').all(r.id));
 });
+// 15.321 양산 전환: 연구소 예상 원가(stage=dev)를 구매 양산 원가로 넘긴다. 원가표·리비전·사양은 그대로, 이후 수정은 구매가 한다.
+route('POST', '/api/cost/items/:id/promote', async ({ user, params, body }) => {
+  const prior = await mustGet('cost_items', params.id); requireCostStage(user, 'dev'); if (prior.stage !== 'dev') throw bad('이미 양산 원가입니다.');
+  if (Number(body.revision) !== prior.revision) throw conflict();
+  const res = await db.prepare("UPDATE cost_items SET stage='mass',history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?").run(pushHist(prior, { by: user.name, what: `양산 전환(연구소 예상 원가 → 구매 양산 원가) · Rev.${prior.rev} 원가 ${JSON.parse(prior.totals || '{}').total ?? '-'}${str(body.note, 200) ? ' · ' + str(body.note, 200) : ''}` }), user.name, prior.id, prior.revision);
+  if (!(res.meta?.changes ?? res.changes)) throw conflict();
+  const r = await mustGet('cost_items', prior.id); return costRowOut(r, (await costLive([r], today()))[0], await db.prepare('SELECT item_id, rev, effective_date, totals FROM cost_item_revs WHERE item_id=? ORDER BY rev').all(r.id));
+});
 route('POST', '/api/cost/items/recalc', async ({ user, body }) => {
-  requireCost(user); const date = dateStr(body.effective_date || today(), '변동 시점'), reason = str(body.reason, 200);
+  const date = dateStr(body.effective_date || today(), '변동 시점'), reason = str(body.reason, 200);
   if (!body.dry && !reason) throw bad('재산출 사유를 적으세요(예: 2026 공통 기준 적용).');
   const ids = Array.isArray(body.ids) ? body.ids.map(optId).filter(Boolean) : null;
+  if (!hasRole(user, 'purchase')) { /* 15.321 연구소는 자기 예상 원가(stage=dev)만 골라 재산출 */
+    if (!ids?.length || !isResearcher(user)) requireCost(user);
+    const st = await db.prepare(`SELECT stage FROM cost_items WHERE id IN (${ids.map(() => '?').join(',')})`).all(...ids); if (st.some(x => x.stage !== 'dev')) requireCost(user);
+  }
   return costRecalc(user, { ids, material_id: optId(body.material_id), rates: !!body.rates, date, reason, cause: body.rates ? 'rates' : body.material_id ? 'material' : 'manual', dry: !!body.dry });
 });
 // 15.312 통합 번호 검색(메뉴 찾기 칸): NC-·COA-·CHG-·AUD-·VAL-·REL-·RSK-·문서번호·설비번호·시험법·의뢰 번호와 제목으로 기록을 찾는다.
@@ -5662,8 +5685,9 @@ route('GET', '/api/find', async ({ user, query }) => {
   await add('equipment', '설비 대장', '#/prod/equipment', "SELECT id, equip_no, name, status FROM equipment WHERE equip_no LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\' ORDER BY equip_no LIMIT 5", r => ({ id: r.id, no: r.equip_no, label: r.name, state: EQ_STATUS[r.status] }));
   await add('method', '시험법', '#/quality/methods', "SELECT id, method_no, name, status FROM test_methods WHERE method_no LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\' ORDER BY method_no LIMIT 5", r => ({ id: r.id, no: r.method_no, label: r.name, state: r.status === 'active' ? '사용' : '폐지' }));
   await add('ra', '위험성평가', '#/prod/risk', "SELECT id, ra_no, method, title, status FROM risk_assessments WHERE ra_no LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\' ORDER BY id DESC LIMIT 5", r => ({ id: r.id, no: r.ra_no, label: `${RA_METHOD[r.method]} · ${r.title}`, state: RA_STATUS[r.status] }));
-  if (isResearcher(user)) await add('devcost', '개발원가', '#/dev/cost', "SELECT id, cost_no, title, status FROM dev_costs WHERE cost_no LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\' ORDER BY id DESC LIMIT 5", r => ({ id: r.id, no: r.cost_no, label: r.title, state: DC_STATUS[r.status] })); // 15.316 연구소만
-  if (hasRole(user, 'purchase')) await add('costitem', '원가 산출', '#/purchase/cost', "SELECT id, item_code, name, active FROM cost_items WHERE item_code LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\' ORDER BY item_code LIMIT 5", r => ({ id: r.id, no: r.item_code, label: r.name, state: r.active ? '사용' : '중지' })); // 15.318 구매만
+  if (isResearcher(user)) await add('devcost', '개발비 기록', '#/dev/cost/expenses', "SELECT id, cost_no, title, status FROM dev_costs WHERE cost_no LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\' ORDER BY id DESC LIMIT 5", r => ({ id: r.id, no: r.cost_no, label: r.title, state: DC_STATUS[r.status] })); // 15.316 연구소만
+  if (hasRole(user, 'purchase')) await add('costitem', '원가 산출', '#/purchase/cost', "SELECT id, item_code, name, active FROM cost_items WHERE stage='mass' AND (item_code LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\') ORDER BY item_code LIMIT 5", r => ({ id: r.id, no: r.item_code, label: r.name, state: r.active ? '사용' : '중지' })); // 15.318 구매만
+  if (costCanStage(user, 'dev')) await add('costdev', '양산 원가 예측', '#/dev/cost', "SELECT id, item_code, name, active FROM cost_items WHERE stage='dev' AND (item_code LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\') ORDER BY item_code LIMIT 5", r => ({ id: r.id, no: r.item_code, label: r.name, state: r.active ? '사용' : '중지' })); // 15.321 연구소 예상 원가
   await add('request', '의뢰', '', "SELECT id, req_no, type, title, status FROM requests WHERE req_no LIKE ? ESCAPE '\\' OR (req_no IS NOT NULL AND title LIKE ? ESCAPE '\\') ORDER BY id DESC LIMIT 5", r => ({ id: r.id, no: r.req_no, label: r.title, rtype: r.type, state: r.status }));
   return { rows: rows.slice(0, 25) };
 });
@@ -8477,7 +8501,55 @@ route('GET', '/api/org/chart', async ({ user }) => {
   const positions = await db.prepare('SELECT name, sort FROM org_positions WHERE active=1 ORDER BY sort, id').all();
   const duties = (await db.prepare('SELECT * FROM org_duty_assignments WHERE active=1 ORDER BY sort, category, id').all()).map(r => dutyRow(r, byId));
   return { company: cfg.company || co.biz_name || '', ceo: cfg.ceo_user_id ? byId[cfg.ceo_user_id] || null : null, ceo_title: cfg.ceo_title || '대표이사', ceo_name: cfg.ceo_user_id ? byId[cfg.ceo_user_id]?.name || '' : (cfg.ceo_name || co.ceo || ''),
-    departments, positions, users, duties, can_manage: !!user.is_admin, me: user.id };
+    departments, positions, users, duties, can_manage: !!user.is_admin, me: user.id,
+    charts: (await db.prepare('SELECT id, name, note, sort, updated_at, created_at FROM org_charts WHERE active=1 ORDER BY sort, id').all()) };
+});
+// 15.323 저장해 쓰는 조직도(SBL 조직도 등). data = { title, ceo_title, ceo_user_id, ceo_name, nodes: [{ key, name, parent, head:{user_id,name}, members:[{user_id,name,role}], duties }] }
+function orgChartClean(v0, userIds) {
+  const v = v0 && typeof v0 === 'object' && !Array.isArray(v0) ? v0 : {}, nodes0 = Array.isArray(v.nodes) ? v.nodes : [];
+  if (nodes0.length > 300) throw bad('조직도 상자는 300개까지입니다.');
+  const person = (p, l) => { const o = p && typeof p === 'object' ? p : {}, uid = optId(o.user_id); if (uid && !userIds.has(uid)) throw bad(`${l}: 회원을 다시 고르세요.`); const name = str(o.name, 50); return uid || name ? { user_id: uid || null, name, role: str(o.role, 40) } : null; };
+  const keys = new Set(), nodes = nodes0.map((n, i) => {
+    const o = n && typeof n === 'object' ? n : {}, key = /^[a-z0-9]{4,16}$/.test(o.key || '') ? o.key : randomHex(4); if (keys.has(key)) throw bad('조직도 상자가 겹칩니다.'); keys.add(key);
+    const name = reqStr(o.name, `${i + 1}번 상자 이름`, 60), members = (Array.isArray(o.members) ? o.members : []).slice(0, 200).map(m => person(m, `${name} 구성원`)).filter(Boolean);
+    return { key, name, parent: o.parent ? String(o.parent) : null, head: person(o.head, `${name} 장`), members, duties: str(o.duties, 2000) };
+  });
+  for (const n of nodes) { if (n.parent && !keys.has(n.parent)) n.parent = null; let p = n.parent, hop = 0; while (p) { if (p === n.key || ++hop > 300) throw bad(`「${n.name}」의 상위 상자가 돌고 돕니다.`); p = nodes.find(x => x.key === p)?.parent || null; } }
+  const ceo = optId(v.ceo_user_id); if (ceo && !userIds.has(ceo)) throw bad('대표를 다시 고르세요.');
+  return { title: str(v.title, 100), ceo_title: str(v.ceo_title, 30), ceo_user_id: ceo || null, ceo_name: str(v.ceo_name, 50), nodes };
+}
+async function orgChartFromOfficial() {
+  const depts = await db.prepare('SELECT id, name, parent_id, head_user_id, duties FROM org_departments WHERE active=1 ORDER BY sort, id').all(), users = await orgUsers(), cfg = await orgChartSetting(), co = await companyInfo();
+  const key = id => `d${id}`;
+  return { title: cfg.company || co.biz_name || '', ceo_title: cfg.ceo_title || '대표이사', ceo_user_id: cfg.ceo_user_id || null, ceo_name: cfg.ceo_user_id ? '' : cfg.ceo_name || co.ceo || '',
+    nodes: depts.map(d => ({ key: key(d.id), name: d.name, parent: d.parent_id && depts.some(p => p.id === d.parent_id) ? key(d.parent_id) : null, head: d.head_user_id ? { user_id: d.head_user_id, name: '' } : null, members: users.filter(u => u.department === d.name && u.id !== d.head_user_id).map(u => ({ user_id: u.id, name: '', role: '' })), duties: d.duties || '' })) };
+}
+const orgChartUserIds = async () => new Set((await orgUsers()).map(u => u.id));
+const orgChartOut = r => ({ ...r, data: JSON.parse(r.data || '{}'), history: JSON.parse(r.history || '[]'), active: !!r.active });
+route('GET', '/api/org/charts/:id', async ({ params }) => { const r = await mustGet('org_charts', params.id); if (!r.active) throw new HttpError(404, '보관한 조직도입니다.'); return orgChartOut(r); });
+route('POST', '/api/admin/org-charts', async ({ user, body }) => {
+  requireAdmin(user); const key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM org_charts WHERE request_id=?').get(key); if (old) return orgChartOut(old); }
+  const name = reqStr(body.name, '조직도 이름', 60);
+  if (name === '공식 조직도' || await db.prepare('SELECT 1 FROM org_charts WHERE name=? AND active=1').get(name)) throw bad(`이미 있는 조직도 이름입니다: ${name}`);
+  let data = { title: '', nodes: [] };
+  if (body.copy === 'official') data = await orgChartFromOfficial();
+  else if (optId(body.copy)) { const src = await mustGet('org_charts', optId(body.copy)); data = JSON.parse(src.data || '{}'); }
+  data = orgChartClean(data, await orgChartUserIds());
+  const sort = ((await db.prepare('SELECT MAX(sort) m FROM org_charts').get()).m || 0) + 1;
+  const r = await db.prepare('INSERT INTO org_charts(name,note,data,sort,history,request_id,created_by) VALUES(?,?,?,?,?,?,?)').run(name, str(body.note, 300), JSON.stringify(data), sort, JSON.stringify([{ at: now(), by: user.name, what: `만듦${body.copy === 'official' ? ' · 공식 조직도 복사' : optId(body.copy) ? ' · 다른 조직도 복사' : ''}` }]), key, user.name);
+  return orgChartOut(await mustGet('org_charts', r.lastInsertRowid));
+});
+route('PUT', '/api/admin/org-charts/:id', async ({ user, params, body }) => {
+  requireAdmin(user); const prior = await mustGet('org_charts', params.id); if (Number(body.revision) !== prior.revision) throw conflict();
+  const name = body.name === undefined ? prior.name : reqStr(body.name, '조직도 이름', 60);
+  if (name !== prior.name && (name === '공식 조직도' || await db.prepare('SELECT 1 FROM org_charts WHERE name=? AND active=1 AND id<>?').get(name, prior.id))) throw bad(`이미 있는 조직도 이름입니다: ${name}`);
+  const data = body.data === undefined ? prior.data : JSON.stringify(orgChartClean(body.data, await orgChartUserIds())), note = body.note === undefined ? prior.note : str(body.note, 300);
+  const active = body.active === undefined ? prior.active : (body.active ? 1 : 0), sort = body.sort === undefined ? prior.sort : Number(body.sort) || 0;
+  const what = active !== prior.active ? (active ? '다시 사용' : '보관(목록에서 숨김)') : name !== prior.name ? `이름 ${prior.name} → ${name}` : str(body.what, 100) || '수정';
+  const res = await db.prepare("UPDATE org_charts SET name=?,note=?,data=?,active=?,sort=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?").run(name, note, data, active, sort, pushHist(prior, { by: user.name, what }), user.name, prior.id, prior.revision);
+  if (!(res.meta?.changes ?? res.changes)) throw conflict();
+  return orgChartOut(await mustGet('org_charts', prior.id));
 });
 route('PUT', '/api/admin/org-chart', async ({ user, body }) => {
   requireAdmin(user); const cfg = await orgChartSetting();

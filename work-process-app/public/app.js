@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.320';
+const APP_VERSION = '15.323';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -616,7 +616,8 @@ const PAGES = {
   '#/dev/analysis/request': main => pageRndData(main), // 15.288 분석데이터 입력(연구원)
   '#/dev/specs': main => pageRndSpecs(main), // 15.295 연구소 검사규격 항목설정
   '#/dev/ip': main => pageIpRights(main), // 15.302 지식재산권 관리
-  '#/dev/cost': main => pageDevCost(main), // 15.316 개발원가 관리
+  '#/dev/cost': main => managedPage(main, '#/dev/cost', m => pageCostItems(m, { stage: 'dev' })), // 15.321 개발원가 = 양산 원가 예측(구매 원가 산출과 같은 계산)
+  '#/dev/cost/expenses': main => managedPage(main, '#/dev/cost/expenses', async m => { await pageDevCost(m); $('h1', m)?.insertAdjacentHTML('afterend', '<p class="small muted ci-oldnote">예전 방식(개발에 들어간 비용 기록)입니다. 양산 원가 예측은 「양산 원가 예측」 탭을 쓰세요.</p>'); }), // 15.316 개발비 기록(이전)
   '#/dev/schedule': main => pageDevRoadmap(main), // 15.276 개발 스케줄 관리(로드맵)
   '#/prod/request': () => { location.replace('#/sales/sample/product'); }, // 15.183 영업으로 옮김(예전 즐겨찾기)
   '#/sales/sample/product': () => pageIntake('sample'), // 15.183 제품 샘플의뢰(영업)
@@ -751,6 +752,7 @@ const MANAGE = {
   '#/sales/mr': { title: '생산의뢰 관리', tabs: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] },
   '#/sales/pr': { title: '구매의뢰 관리', tabs: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] },
   '#/purchase/po': { title: '발주 관리', tabs: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
+  '#/dev/cost': { title: '개발원가 관리', tabs: [['#/dev/cost', '양산 원가 예측'], ['#/dev/cost/expenses', '개발비 기록(이전)']] }, // 15.321
   '#/purchase/cost': { title: '원가 산출 관리', tabs: [['#/purchase/cost', '품목별 원가'], ['#/purchase/cost/materials', '원가 백데이터'], ['#/purchase/cost/rates', '공통 기준'], ['#/purchase/cost/trend', '원가 추이']] }, // 15.318
   '#/purchase/bills': { title: '매입전표 관리', tabs: [['#/purchase/bills/new', '전표 입력'], ['#/purchase/bills', '전표 목록']] },
   '#/sales/book': { title: '매출 거래처별 장부', tabs: [['#/sales/book', '전표별 장부'], ['#/sales/ledger', '품목 줄별 원장']] },
@@ -768,7 +770,7 @@ const MANAGE = {
   '#/dev/list': { title: '개발 관리', tabs: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
   '#/dev/analysis': { title: '연구 분석 관리', tabs: [['#/dev/analysis/request', '분석데이터 입력'], ['#/dev/analysis', '분석리스트']] }, // 15.285 · 15.288
 };
-const ROUTE_ALIAS = { '#/purchase/cost/materials': '#/purchase/cost', '#/purchase/cost/rates': '#/purchase/cost', '#/purchase/cost/trend': '#/purchase/cost', '#/admin/org/chart': '#/admin/org', '#/admin/org/duties': '#/admin/org', '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/calendar': '#/sales/bills', '#/logistics/qr': '#/logistics/lots', '#/logistics/pallets': '#/logistics/lots', '#/logistics/scan': '#/logistics/lots', '#/sales/reps': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users', '#/logistics/receipt/other': '#/logistics/receipt/new', '#/logistics/ship/new': '#/logistics/ship', '#/purchase/laundry/new': '#/purchase/laundry', '#/prod/semi/new': '#/prod/semi', '#/prod/semi/cut/new': '#/prod/semi/cut', '#/prod/semi/wash/new': '#/prod/semi/wash', '#/quality/request': '#/quality/list', '#/quality/voc/request': '#/quality/voc/list', '#/dev/request': '#/dev/list', '#/dev/analysis/request': '#/dev/analysis' };
+const ROUTE_ALIAS = { '#/dev/cost/expenses': '#/dev/cost', '#/purchase/cost/materials': '#/purchase/cost', '#/purchase/cost/rates': '#/purchase/cost', '#/purchase/cost/trend': '#/purchase/cost', '#/admin/org/chart': '#/admin/org', '#/admin/org/duties': '#/admin/org', '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/calendar': '#/sales/bills', '#/logistics/qr': '#/logistics/lots', '#/logistics/pallets': '#/logistics/lots', '#/logistics/scan': '#/logistics/lots', '#/sales/reps': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users', '#/logistics/receipt/other': '#/logistics/receipt/new', '#/logistics/ship/new': '#/logistics/ship', '#/purchase/laundry/new': '#/purchase/laundry', '#/prod/semi/new': '#/prod/semi', '#/prod/semi/cut/new': '#/prod/semi/cut', '#/prod/semi/wash/new': '#/prod/semi/wash', '#/quality/request': '#/quality/list', '#/quality/voc/request': '#/quality/voc/list', '#/dev/request': '#/dev/list', '#/dev/analysis/request': '#/dev/analysis' };
 const navRoute = r => ROUTE_ALIAS[String(r || '#/').split('?')[0]] || String(r || '#/').split('?')[0];
 const TAB_ON = { '#/logistics/receipt/other': '#/logistics/receipt/new' }; // 15.234 기타입고도 「입고 입력」 탭에 불
 function managedTabs(main, route) {
@@ -798,6 +800,7 @@ const PROCESS_FLOWS = [
   { key: 'pqc', name: '공정품질', on: ['#/quality/pqc'], steps: [['#/quality/pqc', '공정·환경 측정·SPC'], ['#/quality/capa', '이상발생 → CAPA'], ['#/quality/changes', '공정 변경']] },
   { key: 'plant', name: '설비·예방보전', on: ['#/prod/equipment', '#/prod/pm'], steps: [['#/prod/equipment', '설비 등록·PM 항목'], ['#/prod/pm', 'PM 일정·수행'], ['#/prod/reliability', '신뢰도(MTBF·MTTR)'], ['#/quality/validation', '설비 적격성(IQ·OQ·PQ)']] }, // 15.316 신뢰도 단계
   // 15.316 위험성평가는 안전(KOSHA)과 설비·공정(FMEA·HAZOP) 두 흐름으로 나눔(같은 화면에서 위 칩으로 바꿔 봄). 안전은 지정 담당자(15.314)에서 시작해 교육으로 닫힌다.
+  { key: 'org', name: '조직 · 담당', on: ['#/admin/org', '#/admin/org/chart', '#/admin/org/duties'], steps: [['#/admin/org', '부서·직급'], ['#/admin/org/chart', '조직도'], ['#/admin/org/duties', '지정 담당자'], ['#/admin/users/roles', '사용 권한']] },
   { key: 'safety', name: '안전보건 위험성평가', on: ['#/prod/risk', '#/prod/risk/actions', '#/admin/org/duties'], steps: [['#/admin/org/duties', '안전보건 담당 지정'], ['#/prod/risk', '위험성평가 작성·승인'], ['#/prod/risk/actions', '감소대책·재평가'], ['#/quality/training', '근로자 교육·공유']] },
   { key: 'risk', name: '설비·공정 FMEA', on: ['#/prod/reliability', '#/prod/risk', '#/prod/risk/actions'], steps: [['#/prod/equipment', '설비 고장 이력'], ['#/prod/reliability', '설비 신뢰도'], ['#/prod/risk', 'FMEA·HAZOP 작성·승인'], ['#/prod/risk/actions', '권고 조치'], ['#/quality/capa', 'CAPA'], ['#/quality/changes', '변경관리']] }, // 15.313
   { key: 'method', name: '시험·측정', on: ['#/quality/calibration', '#/quality/methods'], steps: [['#/quality/calibration', '계측기 검교정'], ['#/quality/methods', '시험법·신뢰성'], ['#/quality/validation', '시험법 밸리데이션']] },
@@ -805,8 +808,7 @@ const PROCESS_FLOWS = [
   { key: 'qm', name: '품질경영(목표 → 점검 → 개선)', on: ['#/quality/kpi', '#/quality/risks'], steps: [['#/quality/kpi', '품질목표·KPI'], ['#/quality/risks', '리스크 관리'], ['#/quality/audits', '내부심사'], ['#/quality/capa', '개선(CAPA)']] },
   { key: 'semi', name: '반제품 · 포장 생산', steps: [['#/prod/semi', '반제품 계획'], ['#/prod/semi/cut', '커팅/융착'], ['#/prod/semi/wash', '세탁'], ['#/prod/finished', '포장(완제품 실적)'], ['#/logistics/ship', '출하']] },
   // 15.316 연구소: 개발의뢰부터 일정·분석·개발원가·지식재산까지, 조직: 부서 → 조직도 → 지정 담당자 → 사용 권한
-  { key: 'dev', name: '개발 · 원가', on: ['#/dev/request', '#/dev/list', '#/dev/schedule', '#/dev/analysis', '#/dev/cost', '#/dev/ip'], steps: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발 진행'], ['#/dev/schedule', '일정 관리'], ['#/dev/analysis', '시험·분석'], ['#/dev/cost', '개발원가'], ['#/dev/ip', '지식재산권']] },
-  { key: 'org', name: '조직 · 담당', on: ['#/admin/org', '#/admin/org/chart'], steps: [['#/admin/org', '부서·직급'], ['#/admin/org/chart', '조직도'], ['#/admin/org/duties', '지정 담당자'], ['#/admin/users/roles', '사용 권한']] },
+  { key: 'dev', name: '개발 · 원가', on: ['#/dev/request', '#/dev/list', '#/dev/schedule', '#/dev/analysis', '#/dev/cost', '#/dev/cost/expenses', '#/dev/ip'], steps: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발 진행'], ['#/dev/schedule', '일정 관리'], ['#/dev/analysis', '시험·분석'], ['#/dev/cost', '양산 원가 예측'], ['#/purchase/cost', '양산 원가(구매)'], ['#/dev/ip', '지식재산권']] },
 ];
 const FLOW_KEY = 'wpa:flow', FLOW_FOLD = 'wpa:flow-fold';
 const flowStore = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } return null; };
