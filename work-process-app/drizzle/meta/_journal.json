@@ -673,6 +673,13 @@
       "when": 1800010415000,
       "tag": "0095_qdoc_folders",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "6",
+      "when": 1800010416000,
+      "tag": "0096_training_tests",
+      "breakpoints": true
     }
   ]
 }

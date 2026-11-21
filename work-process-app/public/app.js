@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.333';
+const APP_VERSION = '15.334';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -1371,7 +1371,7 @@ function taskTotal(tasks) {
   for (const [type, group] of Object.entries(a.requests)) add(group.count, REQ[type].approve || REQ[type].intake);
   add(a.actual_changes?.count, '#/prod/finished'); add(a.receipt_changes?.count, '#/logistics/receive'); add(a.semi_changes?.count, '#/prod/semi');
   add(a.plans_waiting?.count, '#/prod/finished/plan'); add(a.production_requests?.count, '#/prod/orders'); add(a.purchase_requests?.count, '#/sales/pr'); add(a.purchase_orders_waiting?.count, '#/purchase/po/new');
-  for (const q of a.quality || []) add(q.count, q.href); add(a.training_attend?.count, '#/quality/training'); // 15.309
+  for (const q of a.quality || []) add(q.count, q.href); add(a.training_attend?.count, '#/quality/training'); add(a.training_test?.count, '#/quality/training'); // 15.309 · 15.334
   return n;
 }
 function taskBadgeCounts(tasks) {
@@ -1390,6 +1390,7 @@ function taskBadgeCounts(tasks) {
   if (a.ship_instructions?.count) counts['#/logistics/ship-orders'] = a.ship_instructions.count;
   for (const q of a.quality || []) counts[q.href] = (counts[q.href] || 0) + q.count; // 15.309 품질 승인 대기
   if (a.training_attend?.count) counts['#/quality/training'] = (counts['#/quality/training'] || 0) + a.training_attend.count;
+  if (a.training_test?.count) counts['#/quality/training'] = (counts['#/quality/training'] || 0) + a.training_test.count; // 15.334
   return counts;
 }
 async function refreshNavBadges() {
@@ -1422,6 +1423,7 @@ function tasksCard(tasks) {
   if (a.purchase_orders_waiting?.count) todo.push(`<li><a href="#/purchase/po/new"><b>발주 대기 구매의뢰 ${a.purchase_orders_waiting.count}건</b></a><div class="small muted">${a.purchase_orders_waiting.items.map(r => `<button type="button" class="link-btn" data-task-pr="${r.id}">${esc(r.doc_no)}</button> ${esc(r.title || r.first_item || '')} · ${esc(r.author_name)}`).join(' / ')}${more(a.purchase_orders_waiting.count, a.purchase_orders_waiting.items.length)}</div></li>`);
   for (const q of a.quality || []) todo.push(`<li><a href="${q.href}"><b>${esc(q.label)} ${q.count}건</b></a>${['coa', 'docs'].includes(q.key) && q.count > 1 ? ` <button type="button" class="btn small" data-bulk="${q.key}">한꺼번에 승인</button>` : ''}</li>`); // 15.309 품질 승인·처리 대기 · 15.312 일괄 승인
   if (a.training_attend?.count) todo.push(`<li><a href="#/quality/training"><b>교육 참석 확인 ${a.training_attend.count}건</b></a><div class="small muted">${a.training_attend.items.map(t => `${esc(t.plan_date)} ${esc(t.title)}`).join(' / ')} — 교육·자격관리에서 「참석 확인」을 누르세요.</div></li>`);
+  if (a.training_test?.count) todo.push(`<li><a href="#/quality/training"><b>교육 테스트 응시 ${a.training_test.count}건</b></a><div class="small muted">${a.training_test.items.map(t => `${esc(t.plan_date)} ${esc(t.title)}`).join(' / ')} — 교육·자격관리에서 「📝 테스트 응시」를 누르세요.</div></li>`); // 15.334
   if (a.temp_items?.count) todo.push(`<li><a href="#/admin/bom"><b>임시 제품코드 정리 ${a.temp_items.count}건</b></a><div class="small muted">직접 입력된 품목에 정식 코드를 주거나 기존 품목으로 합치세요.</div></li>`);
   const state = c => `<span class="chip ${c.status === 'rejected' ? 'red' : 'yellow'}">${c.status === 'rejected' ? '반려' : '승인 대기'}</span>`;
   for (const r of m.requests) mine.push(`<li>${state(r)} <a href="${REQ[r.type].intake}">${esc(REQ[r.type].label)} · ${esc(r.title)}</a>${r.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(r.reject_reason)} (${esc(r.approver_name || '')}) · 수정하면 다시 접수됩니다.</div>` : ''}</li>`);
@@ -1429,7 +1431,7 @@ function tasksCard(tasks) {
   for (const c of m.semi_changes || []) mine.push(`<li>${state(c)} <a href="${c.process === 'wash' ? '#/prod/semi/wash' : '#/prod/semi/cut'}">반제품 기록</a> <span class="small">${semiChangeText(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
   for (const r of m.purchase_requests || []) mine.push(`<li>${state(r)} <a href="#/sales/pr">구매의뢰 · ${esc(r.doc_no)} ${esc(r.title || r.first_item || '')}</a>${r.status === 'pending' && r.current_user_name ? ` <span class="small muted">${esc(r.current_user_name)} 결재 차례</span>` : ''}${r.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(r.reject_reason)} (${esc(r.rejected_by || '')}) · 고쳐서 다시 상신하세요.</div>` : ''}</li>`);
   for (const c of m.receipt_changes) mine.push(`<li>${state(c)} <a href="#/logistics/receive">입고 · ${esc(c.item)}</a> <span class="small">${receiptChangeText(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
-  const canApprove = Object.keys(a.requests).length || a.actual_changes || a.receipt_changes || a.semi_changes || a.temp_items || a.purchase_requests || a.production_requests || a.purchase_orders_waiting || a.plans_waiting || a.quality || a.training_attend; // 15.309
+  const canApprove = Object.keys(a.requests).length || a.actual_changes || a.receipt_changes || a.semi_changes || a.temp_items || a.purchase_requests || a.production_requests || a.purchase_orders_waiting || a.plans_waiting || a.quality || a.training_attend || a.training_test; // 15.309 · 15.334
   return `<section class="card tasks" aria-labelledby="dashTasks"><h2 id="dashTasks">내가 처리할 일 ${typeof Notification !== 'undefined' ? `<button type="button" class="btn small notify-btn" data-notify title="새 승인 대기·기한 알림을 컴퓨터·휴대폰 알림으로(앱이 열려 있는 동안)">${notifyOn() ? '🔔 알림 켜짐' : '🔕 알림 받기'}</button>` : ''}</h2><div class="tasks-grid">
     ${canApprove ? `<section><h3>승인할 일 ${todo.length ? `<span class="chip yellow">${todo.length}</span>` : ''}</h3>${todo.length ? `<ul>${todo.join('')}</ul>` : '<p class="small muted">승인 대기 중인 건이 없습니다.</p>'}</section>` : ''}
     <section><h3>내가 올린 요청 ${mine.length ? `<span class="chip">${mine.length}</span>` : ''}</h3>${mine.length ? `<ul>${mine.join('')}</ul>` : '<p class="small muted">대기 중이거나 최근 반려된 요청이 없습니다.</p>'}</section>

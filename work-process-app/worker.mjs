@@ -609,7 +609,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'login_logs', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'qualifications', 'supplier_evals', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests', 'quality_audits', 'audit_findings', 'validations', 'quality_goals', 'quality_kpi_values', 'quality_risks', 'risk_assessments', 'org_duty_assignments', 'dev_costs', 'cost_rates', 'cost_materials', 'cost_material_prices', 'cost_items', 'cost_item_revs', 'org_charts']; // 15.313 위험성평가 · 15.314 지정 담당자
+const backupTables = ['settings', 'users', 'login_logs', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'training_tests', 'training_test_attempts', 'qualifications', 'supplier_evals', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests', 'quality_audits', 'audit_findings', 'validations', 'quality_goals', 'quality_kpi_values', 'quality_risks', 'risk_assessments', 'org_duty_assignments', 'dev_costs', 'cost_rates', 'cost_materials', 'cost_material_prices', 'cost_items', 'cost_item_revs', 'org_charts']; // 15.313 위험성평가 · 15.314 지정 담당자
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -4498,7 +4498,7 @@ async function trSaveAttendees(id, list, prior = [], guardRev = null, tok = '') 
       args: [id, a.user_id, a.user_name, a.dept, a.attended, a.attended ? now() : null, a.score, a.result, a.note, ...ga] })),
   ];
 }
-route('GET', '/api/trainings', async ({ user }) => ({ rows: await trList(), can_manage: isQuality(user), me: user.name, today: today(), kinds: TR_KIND }));
+route('GET', '/api/trainings', async ({ user }) => ({ rows: await trWithTests(await trList(), user), can_manage: isQuality(user), me: user.name, today: today(), kinds: TR_KIND }));
 route('POST', '/api/trainings', async ({ user, body }) => {
   requireRole(user, 'quality', '품질'); const key = str(body.request_id, 80) || null;
   if (key) { const old = await db.prepare('SELECT * FROM trainings WHERE request_id=?').get(key); if (old) return (await trList('WHERE id=?', [old.id]))[0]; }
@@ -4536,6 +4536,129 @@ route('POST', '/api/trainings/:id/attend', async ({ user, params }) => {
   return (await trList('WHERE id=?', [t.id]))[0];
 });
 const QUAL_STATUS = { valid: '유효', expired: '만료', withdrawn: '반납·취소' };
+// 15.334 교육 목록에 테스트 요약(문항 수·열림·합격 점수)과 내 응시 상태
+async function trWithTests(rows, user) {
+  const tests = await db.prepare('SELECT id,training_id,open,pass_score,max_attempts,questions FROM training_tests').all(), tb = Object.fromEntries(tests.map(x => [x.training_id, x]));
+  const mine = await db.prepare('SELECT test_id, COUNT(*) AS n, MAX(passed) AS p, MAX(score) AS best FROM training_test_attempts WHERE user_name=? GROUP BY test_id').all(user.name), mb = Object.fromEntries(mine.map(x => [x.test_id, x]));
+  return rows.map(r => { const x = tb[r.id]; return { ...r, test: x ? { open: !!x.open, pass_score: x.pass_score, max_attempts: x.max_attempts, count: JSON.parse(x.questions || '[]').length, my: mb[x.id] ? { n: mb[x.id].n, p: !!mb[x.id].p, best: mb[x.id].best } : null } : null }; });
+}
+// ── 15.334 교육 후 테스트 · 개인별 교육기록 ──
+// 문항: { type: 'choice'|'ox'|'short', q, options(choice 2~6), answer(choice: 번호 0부터 · ox: 'O'|'X' · short: 정답 여러 개를 「,」로), points 1~20 }
+// 단답은 띄어쓰기·대소문자 무시하고 정답 중 하나와 같으면 맞음. 점수 = 얻은 배점 / 총배점 × 100(반올림).
+const TT_TYPES = ['choice', 'ox', 'short'];
+function ttQuestions(list) {
+  if (!Array.isArray(list) || !list.length || list.length > 50) throw bad('문항은 1~50개 넣으세요.');
+  return list.map((o0, i) => {
+    const o = o0 && typeof o0 === 'object' ? o0 : {}, n = `${i + 1}번 문항`;
+    const type = TT_TYPES.includes(o.type) ? o.type : (() => { throw bad(`${n}: 유형을 고르세요.`); })();
+    const q = str(o.q, 500); if (!q) throw bad(`${n}: 문제를 넣으세요.`);
+    const points = Math.round(Number(o.points ?? 1)); if (!(points >= 1 && points <= 20)) throw bad(`${n}: 배점은 1~20점입니다.`);
+    if (type === 'choice') {
+      const options = (Array.isArray(o.options) ? o.options : []).map(x => str(x, 200)).filter(Boolean);
+      if (options.length < 2 || options.length > 6) throw bad(`${n}: 보기는 2~6개 넣으세요.`);
+      const answer = Number(o.answer); if (!Number.isInteger(answer) || answer < 0 || answer >= options.length) throw bad(`${n}: 정답 보기를 고르세요.`);
+      return { type, q, options, answer, points };
+    }
+    if (type === 'ox') { const answer = String(o.answer || '').toUpperCase(); if (!['O', 'X'].includes(answer)) throw bad(`${n}: 정답 O·X를 고르세요.`); return { type, q, answer, points }; }
+    const answer = str(o.answer, 200); if (!answer.split(',').some(x => x.trim())) throw bad(`${n}: 정답을 넣으세요(여러 개면 「,」로).`);
+    return { type, q, answer, points };
+  });
+}
+const ttNorm = s => String(s ?? '').replace(/\s+/g, '').toLowerCase();
+function ttGrade(questions, answers) {
+  const a = Array.isArray(answers) ? answers : [];
+  let got = 0, total = 0; const detail = questions.map((q, i) => {
+    total += q.points; const v = a[i];
+    const ok = q.type === 'choice' ? Number(v) === q.answer && v !== '' && v != null : q.type === 'ox' ? String(v || '').toUpperCase() === q.answer : q.answer.split(',').map(ttNorm).filter(Boolean).includes(ttNorm(v)) && ttNorm(v) !== '';
+    if (ok) got += q.points; return ok ? 1 : 0;
+  });
+  return { score: total ? Math.round(got / total * 100) : 0, detail };
+}
+const ttPublic = q => q.map(({ answer: _a, ...x }) => x); // 응시자에게는 정답을 빼고
+async function ttGet(trainingId) { return db.prepare('SELECT * FROM training_tests WHERE training_id=?').get(trainingId); }
+const ttAtt = (t, user) => db.prepare('SELECT * FROM training_attendees WHERE training_id=? AND (user_id=? OR user_name=?)').get(t.id, user.id, user.name);
+route('GET', '/api/trainings/:id/test', async ({ user, params }) => {
+  const t = await mustGet('trainings', params.id), test = await ttGet(t.id), manage = isQuality(user);
+  const me = await ttAtt(t, user);
+  if (!test) return { training: { id: t.id, title: t.title, status: t.status }, test: null, can_manage: manage, is_attendee: !!me };
+  const questions = JSON.parse(test.questions || '[]');
+  const mine = await db.prepare('SELECT attempt_no,score,passed,submitted_at,detail FROM training_test_attempts WHERE test_id=? AND user_name=? ORDER BY attempt_no').all(test.id, user.name);
+  const base = { id: test.id, pass_score: test.pass_score, max_attempts: test.max_attempts, time_limit_min: test.time_limit_min, open: !!test.open, revision: test.revision, count: questions.length, total_points: questions.reduce((s, q) => s + q.points, 0) };
+  const out = { training: { id: t.id, title: t.title, status: t.status }, can_manage: manage, is_attendee: !!me, mine: mine.map(m => ({ ...m, detail: JSON.parse(m.detail || '[]') })), passed: mine.some(m => m.passed),
+    can_take: !!me && !!test.open && t.status !== 'void' && !mine.some(m => m.passed) && mine.length < test.max_attempts };
+  if (manage) {
+    const all = await db.prepare('SELECT user_name,attempt_no,score,passed,submitted_at FROM training_test_attempts WHERE test_id=? ORDER BY user_name, attempt_no').all(test.id);
+    return { ...out, test: { ...base, questions }, attempts: all };
+  }
+  return { ...out, test: { ...base, questions: out.can_take ? ttPublic(questions) : [] } };
+});
+route('PUT', '/api/trainings/:id/test', async ({ user, params, body }) => {
+  requireRole(user, 'quality', '품질'); const t = await mustGet('trainings', params.id); if (t.status === 'void') throw bad('취소된 교육입니다.');
+  const prior = await ttGet(t.id);
+  if (prior && Number(body.revision) !== prior.revision) throw conflict();
+  const pass_score = Math.round(Number(body.pass_score ?? prior?.pass_score ?? 70)); if (!(pass_score >= 1 && pass_score <= 100)) throw bad('합격 점수는 1~100점입니다.');
+  const max_attempts = Math.round(Number(body.max_attempts ?? prior?.max_attempts ?? 2)); if (!(max_attempts >= 1 && max_attempts <= 10)) throw bad('응시 횟수는 1~10번입니다.');
+  const time_limit_min = Math.round(Number(body.time_limit_min ?? prior?.time_limit_min ?? 0)); if (!(time_limit_min >= 0 && time_limit_min <= 180)) throw bad('제한 시간은 0(없음)~180분입니다.');
+  const open = body.open === true || body.open === 1 || body.open === '1' ? 1 : 0;
+  const taken = prior ? (await db.prepare('SELECT COUNT(*) AS n FROM training_test_attempts WHERE test_id=?').get(prior.id)).n : 0;
+  let questions = prior ? JSON.parse(prior.questions || '[]') : [];
+  if (body.questions !== undefined) {
+    const next = ttQuestions(body.questions);
+    if (taken && JSON.stringify(next) !== JSON.stringify(questions)) throw bad(`이미 ${taken}번 응시한 테스트라 문항을 바꿀 수 없습니다(채점이 달라짐). 합격 점수·응시 횟수·열기/닫기만 바꿀 수 있습니다.`);
+    questions = next;
+  }
+  if (!questions.length) throw bad('문항을 1개 이상 넣으세요.');
+  if (prior) { const r = await db.prepare("UPDATE training_tests SET questions=?,pass_score=?,max_attempts=?,time_limit_min=?,open=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?").run(JSON.stringify(questions), pass_score, max_attempts, time_limit_min, open, user.name, prior.id, prior.revision); if (!r.changes) throw conflict(); }
+  else await db.prepare('INSERT INTO training_tests(training_id,questions,pass_score,max_attempts,time_limit_min,open,created_by) VALUES(?,?,?,?,?,?,?)').run(t.id, JSON.stringify(questions), pass_score, max_attempts, time_limit_min, open, user.name);
+  return { ok: true };
+});
+route('POST', '/api/trainings/:id/test/submit', async ({ user, params, body }) => {
+  const t = await mustGet('trainings', params.id), test = await ttGet(t.id); if (!test) throw bad('이 교육에는 테스트가 없습니다.');
+  const key = str(body.request_id, 80) || null;
+  if (key) { const old = await db.prepare('SELECT * FROM training_test_attempts WHERE request_id=?').get(key); if (old) { if (old.user_name !== user.name) throw new HttpError(409, '이미 사용된 제출 번호입니다.'); return { score: old.score, passed: !!old.passed, attempt_no: old.attempt_no, detail: JSON.parse(old.detail), pass_score: test.pass_score, duplicate: true }; } }
+  const me = await ttAtt(t, user); if (!me) throw new HttpError(403, '이 교육의 대상자만 응시할 수 있습니다.');
+  if (!test.open) throw bad('테스트가 닫혀 있습니다. 품질 담당에게 문의하세요.');
+  if (t.status === 'void') throw bad('취소된 교육입니다.');
+  const mine = await db.prepare('SELECT attempt_no,passed FROM training_test_attempts WHERE test_id=? AND user_name=?').all(test.id, user.name);
+  if (mine.some(m => m.passed)) throw bad('이미 합격했습니다.');
+  if (mine.length >= test.max_attempts) throw bad(`응시 횟수(${test.max_attempts}번)를 다 썼습니다. 품질 담당에게 재교육을 요청하세요.`);
+  const questions = JSON.parse(test.questions || '[]'), answers = Array.isArray(body.answers) ? body.answers.slice(0, questions.length).map(x => str(x, 200)) : [];
+  const { score, detail } = ttGrade(questions, answers), passed = score >= test.pass_score ? 1 : 0, no = mine.length + 1, last = !passed && no >= test.max_attempts;
+  const best = Math.max(score, ...(me.score != null ? [Number(me.score)] : []));
+  const result = passed ? '이수' : last ? '재교육' : me.result;
+  try {
+    await db.batch([
+      { sql: 'INSERT INTO training_test_attempts(test_id,training_id,user_id,user_name,attempt_no,answers,detail,score,passed,submitted_at,request_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)', args: [test.id, t.id, user.id, user.name, no, JSON.stringify(answers), JSON.stringify(detail), score, passed, now(), key] },
+      { sql: 'UPDATE training_attendees SET score=?, result=? WHERE id=?', args: [best, result, me.id] },
+      { sql: 'UPDATE trainings SET revision=revision+1 WHERE id=?', args: [t.id] }, // 열려 있던 담당자 수정 창이 점수를 덮어쓰지 않게
+    ]);
+  } catch (e) { if (/UNIQUE/i.test(String(e?.message))) throw new HttpError(409, '같은 응시가 이미 제출되었습니다. 새로 불러오세요.'); throw e; }
+  return { score, passed: !!passed, attempt_no: no, max_attempts: test.max_attempts, detail, pass_score: test.pass_score, result };
+});
+// 개인별 교육기록: 품질은 누구나, 그 밖에는 본인만. user 없이 부르면 사람 목록(품질) 또는 본인.
+route('GET', '/api/training-records', async ({ user, query }) => {
+  const manage = isQuality(user);
+  if (!query.user && !manage) query.user = user.name;
+  if (!query.user) {
+    const rows = await db.prepare(`SELECT a.user_name, MAX(a.dept) AS dept, COUNT(*) AS n, SUM(a.attended) AS att, SUM(CASE WHEN a.attended=1 THEN COALESCE(t.hours,0) ELSE 0 END) AS hours,
+        SUM(CASE WHEN a.result='이수' THEN 1 ELSE 0 END) AS passed, SUM(CASE WHEN a.result IN ('미이수','재교육') THEN 1 ELSE 0 END) AS failed, MAX(COALESCE(t.done_date,t.plan_date)) AS last_date
+      FROM training_attendees a JOIN trainings t ON t.id=a.training_id WHERE t.status<>'void' GROUP BY a.user_name ORDER BY MAX(a.dept), a.user_name`).all();
+    const users = await db.prepare("SELECT name, department FROM users WHERE approval_status='approved' ORDER BY department, name").all();
+    const quals = await db.prepare("SELECT user_name, COUNT(*) AS n FROM qualifications WHERE status='valid' GROUP BY user_name").all(), qm = Object.fromEntries(quals.map(q => [q.user_name, q.n]));
+    const seen = new Set(rows.map(r => r.user_name));
+    return { people: [...rows, ...users.filter(u => !seen.has(u.name)).map(u => ({ user_name: u.name, dept: u.department || '', n: 0, att: 0, hours: 0, passed: 0, failed: 0, last_date: null }))].map(p => ({ ...p, quals: qm[p.user_name] || 0 })), can_manage: manage };
+  }
+  const name = str(query.user, 50); if (!manage && name !== user.name) throw new HttpError(403, '다른 사람의 교육기록은 품질 담당만 볼 수 있습니다.');
+  const u = await db.prepare('SELECT name, department, position FROM users WHERE name=?').get(name);
+  const rows = await db.prepare(`SELECT t.id, t.title, t.kind, t.plan_date, t.done_date, t.hours, t.instructor, t.status, t.doc_label, a.attended, a.confirmed_at, a.score, a.result, a.note, a.dept
+    FROM training_attendees a JOIN trainings t ON t.id=a.training_id WHERE a.user_name=? AND t.status<>'void' ORDER BY COALESCE(t.done_date,t.plan_date) DESC, t.id DESC`).all(name);
+  const att = await db.prepare('SELECT training_id, attempt_no, score, passed, submitted_at FROM training_test_attempts WHERE user_name=? ORDER BY training_id, attempt_no').all(name), ab = {};
+  for (const x of att) (ab[x.training_id] ||= []).push(x);
+  const tests = await db.prepare(`SELECT training_id, pass_score, max_attempts, open FROM training_tests WHERE training_id IN (SELECT training_id FROM training_attendees WHERE user_name=?)`).all(name), tb = Object.fromEntries(tests.map(x => [x.training_id, x]));
+  const quals = (await db.prepare('SELECT * FROM qualifications WHERE user_name=? ORDER BY acquired_date DESC, id DESC').all(name)).map(qualRow);
+  return { person: { name, dept: u?.department || rows[0]?.dept || '', position: u?.position || '' }, rows: rows.map(r => ({ ...r, status_label: TR_STATUS[r.status] || r.status, attempts: ab[r.id] || [], test: tb[r.id] ? { pass_score: tb[r.id].pass_score, max_attempts: tb[r.id].max_attempts, open: !!tb[r.id].open } : null })), quals, today: today(), can_manage: manage };
+});
+
 const QUAL_COLS = ['user_id', 'user_name', 'kind', 'cert_no', 'issuer', 'acquired_date', 'expire_date', 'status', 'note'];
 async function qualBody(o0) {
   const o = o0 && typeof o0 === 'object' ? o0 : {};
@@ -8497,6 +8620,11 @@ route('GET', '/api/my-tasks', async ({ user }) => {
   // 15.309 교육 대상자 본인 「참석 확인」 대기
   { const items = await db.prepare("SELECT t.id,t.title,t.plan_date FROM training_attendees a JOIN trainings t ON t.id=a.training_id WHERE (a.user_id=? OR a.user_name=?) AND a.attended=0 AND t.status IN ('planned','done') ORDER BY t.plan_date LIMIT 20").all(user.id, user.name);
     if (items.length) approvals.training_attend = { count: items.length, items: items.slice(0, 5) }; }
+  // 15.334 응시할 교육 테스트(열림 · 대상자 · 아직 합격 안 함 · 횟수 남음)
+  { const items = await db.prepare(`SELECT t.id,t.title,t.plan_date FROM training_tests x JOIN trainings t ON t.id=x.training_id JOIN training_attendees a ON a.training_id=t.id AND (a.user_id=? OR a.user_name=?)
+      WHERE x.open=1 AND t.status<>'void' AND NOT EXISTS(SELECT 1 FROM training_test_attempts p WHERE p.test_id=x.id AND p.user_name=? AND p.passed=1)
+      AND (SELECT COUNT(*) FROM training_test_attempts p WHERE p.test_id=x.id AND p.user_name=?) < x.max_attempts ORDER BY t.plan_date LIMIT 20`).all(user.id, user.name, user.name, user.name);
+    if (items.length) approvals.training_test = { count: items.length, items: items.slice(0, 5) }; }
   // My own requests still waiting, plus rejections from the last 7 days so the requester notices them.
   const recent = "(c.status='pending' OR (c.status='rejected' AND c.reviewed_at>=date('now','+9 hours','-7 days')))";
   const mine = {

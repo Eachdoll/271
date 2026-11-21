@@ -1662,6 +1662,7 @@ async function trOpen(id) {
     ${qStepper(['planned', 'done', 'evaluated'], TR_STATUS_LABEL, t.status)}
     <p class="small muted">${esc(t.kind)}${t.doc_label ? ` · 관련 문서 ${esc(t.doc_label)}` : ''}${t.change_id ? ` · 변경 #${t.change_id}` : ''} · 등록 ${esc(t.created_by)}</p>
     ${me && !me.attended && ['planned', 'done'].includes(t.status) ? '<p><button type="button" class="btn primary" data-tr-attend>참석 확인(본인)</button></p>' : ''}
+    ${trTestCell(t, list.me) || (can ? '' : '')}${can ? ` <button type="button" class="btn small" data-tt-edit>📝 ${t.test ? '테스트 고치기·결과' : '테스트 만들기'}</button>` : ''}
     <form class="stack" data-tr-form>
       <fieldset class="vendor-sec"><legend>교육</legend><div class="form-grid">
         <label class="span3">교육명<input name="title" required maxlength="200" value="${esc(t.title)}"${dis}></label>
@@ -1684,6 +1685,8 @@ async function trOpen(id) {
   $('[data-tr-rpt]', m.el).onclick = () => trReport(t).catch(fail); // 15.312
   $('[data-tr-allok]', m.el)?.addEventListener('click', () => $$('[data-att]', form).forEach(tr => { if ($('[data-a-att]', tr).checked && !$('[data-a-result]', tr).value) $('[data-a-result]', tr).value = '이수'; }));
   form.addEventListener('click', e => { const d = e.target.closest('[data-a-del]'); if (d) d.closest('tr').remove(); });
+  $('[data-tt-edit]', m.el)?.addEventListener('click', () => { m.close(); ttEdit(t.id, () => qReload()).catch(fail); }); // 15.334
+  m.el.addEventListener('click', e => { const tk = e.target.closest('[data-tt-take]'); if (tk) { m.close(); ttTake(t.id, () => qReload()).catch(fail); } });
   $('[data-tr-attend]', m.el)?.addEventListener('click', async () => { try { await api('POST', `/api/trainings/${t.id}/attend`); toast('참석을 확인했습니다.'); m.close(); qReload(); } catch (e) { fail(e); } });
   $('[data-tr-add]', m.el)?.addEventListener('click', async () => {
     const have = atts().map(a => a.user_name), v = await promptBox('대상자 추가', trPicker(people.filter(p => !have.includes(p.name)), []), { wide: true, onOpen: trBindPicker }); if (!v?.att?.length) return;
@@ -1691,6 +1694,124 @@ async function trOpen(id) {
     tb.insertAdjacentHTML('beforeend', v.att.map(n => `<tr data-att="${esc(n)}"><td class="nowrap"><b>${esc(n)}</b></td><td>${esc(people.find(p => p.name === n)?.department || '')}</td><td><input type="checkbox" data-a-att></td><td></td><td><input type="number" min="0" max="100" step="any" data-a-score class="tr-score"></td><td><select data-a-result>${['', '이수', '미이수', '재교육'].map(x => `<option value="${x}">${x || '—'}</option>`).join('')}</select></td><td><input data-a-note maxlength="300"></td><td><button type="button" class="btn small danger" data-a-del>×</button></td></tr>`).join(''));
     toast(`${v.att.length}명을 넣었습니다. 「저장」을 눌러야 반영됩니다.`);
   });
+}
+// ───────────── 15.334 교육 후 테스트(문제 내기 · 응시 · 자동 채점 · 합격/불합격) · 개인별 교육기록 ─────────────
+const TT_TYPE_LABEL = { choice: '객관식', ox: 'O/X', short: '단답형' };
+// 목록 칸: 테스트 상태(담당) · 응시 단추(대상자)
+function trTestCell(r, me) {
+  const x = r.test; if (!x) return '';
+  const mine = x.my, att = r.attendees.some(a => a.user_name === me);
+  const take = att && x.open && r.status !== 'void' && !(mine && mine.p) && (!mine || mine.n < x.max_attempts);
+  return ` <span class="chip ${x.open ? 'green' : ''}" title="테스트 ${x.count}문항 · 합격 ${x.pass_score}점">📝 ${x.open ? '테스트 열림' : '테스트 닫힘'}</span>${mine?.p ? ' <span class="chip green">합격</span>' : mine && !take ? ' <span class="chip red">불합격</span>' : ''}${take ? ` <button type="button" class="btn small primary" data-tt-take="${r.id}">📝 테스트 응시</button>` : ''}`;
+}
+async function ttEdit(trainingId, onDone = () => {}) {
+  const d = await api('GET', `/api/trainings/${trainingId}/test`);
+  const t0 = d.test || { pass_score: 70, max_attempts: 2, time_limit_min: 0, open: false, questions: [] };
+  const taken = (d.attempts || []).length, lock = taken > 0;
+  let qs = JSON.parse(JSON.stringify(t0.questions.length ? t0.questions : [{ type: 'choice', q: '', options: ['', '', '', ''], answer: 0, points: 1 }]));
+  const m = modal(`<h3>📝 교육 후 테스트 · ${esc(d.training.title)}</h3>
+    <p class="small muted">문항을 만들고 「응시 열기」를 켜면 대상자가 시스템에서 바로 풉니다. 자동 채점해 <b>합격 점수 이상이면 이수</b>, 응시 횟수를 다 써도 못 넘으면 <b>재교육</b>으로 대상자 결과에 들어갑니다.${lock ? ` <b>이미 ${taken}번 응시해 문항은 바꿀 수 없습니다</b>(합격 점수·횟수·열기만).` : ''}</p>
+    <form class="stack" data-tt-form>
+      <div class="form-grid tt-set"><label>합격 점수(100점 만점)<input type="number" name="pass_score" min="1" max="100" value="${t0.pass_score}"></label><label>응시 횟수(재응시 포함)<input type="number" name="max_attempts" min="1" max="10" value="${t0.max_attempts}"></label><label>제한 시간(분, 0 = 없음)<input type="number" name="time_limit_min" min="0" max="180" value="${t0.time_limit_min}"></label>
+        <label class="chk"><input type="checkbox" name="open" value="1"${t0.open ? ' checked' : ''}> 응시 열기(대상자가 풀 수 있음)</label></div>
+      <div data-tt-qs></div>
+      ${lock ? '' : '<div class="actions" style="justify-content:flex-start"><button type="button" class="btn" data-tt-addq="choice">＋ 객관식</button><button type="button" class="btn" data-tt-addq="ox">＋ O/X</button><button type="button" class="btn" data-tt-addq="short">＋ 단답형</button></div>'}
+      ${d.attempts?.length ? `<fieldset class="vendor-sec"><legend>응시 결과 (${new Set(d.attempts.map(a => a.user_name)).size}명)</legend><div class="table-wrap"><table class="grid" data-no-filter><thead><tr><th>이름</th><th>회차</th><th class="r">점수</th><th>결과</th><th>제출</th></tr></thead><tbody>${d.attempts.map(a => `<tr><td>${esc(a.user_name)}</td><td>${a.attempt_no}회</td><td class="r"><b>${a.score}</b></td><td><span class="chip ${a.passed ? 'green' : 'red'}">${a.passed ? '합격' : '불합격'}</span></td><td class="small">${esc(String(a.submitted_at).slice(0, 16))}</td></tr>`).join('')}</tbody></table></div></fieldset>` : ''}
+      <div class="actions"><span class="grow small muted" data-tt-sum></span><button type="button" class="btn" data-tt-preview>미리 보기</button><button class="btn primary">저장</button></div>
+    </form>`, { wide: true });
+  const form = $('[data-tt-form]', m.el), box = $('[data-tt-qs]', m.el), dis = lock ? ' disabled' : '';
+  const read = () => { $$('[data-q]', box).forEach(card => { const i = Number(card.dataset.q), q = qs[i]; q.q = $('[data-f="q"]', card).value; q.points = Number($('[data-f="points"]', card).value) || 1;
+    if (q.type === 'choice') { q.options = $$('[data-f="opt"]', card).map(x => x.value); const c = $('[data-f="ans"]:checked', card); q.answer = c ? Number(c.value) : -1; }
+    else if (q.type === 'ox') { const c = $('[data-f="ans"]:checked', card); q.answer = c ? c.value : ''; } else q.answer = $('[data-f="ans"]', card).value; }); };
+  const draw = () => {
+    box.innerHTML = qs.map((q, i) => `<fieldset class="tt-q" data-q="${i}"><legend>${i + 1}번 · ${TT_TYPE_LABEL[q.type]}</legend>
+      <div class="tt-q-head"><label class="grow">문제 *<textarea data-f="q" rows="2" maxlength="500"${dis}>${esc(q.q)}</textarea></label><label class="tt-pts">배점<input type="number" data-f="points" min="1" max="20" value="${q.points}"${dis}></label></div>
+      ${q.type === 'choice' ? `<div class="tt-opts">${q.options.map((o, j) => `<div class="tt-opt"><label class="tt-ans" title="정답"><input type="radio" name="ans${i}" data-f="ans" value="${j}"${q.answer === j ? ' checked' : ''}${dis}> 정답</label><input data-f="opt" maxlength="200" value="${esc(o)}" placeholder="보기 ${j + 1}" aria-label="${i + 1}번 보기 ${j + 1}"${dis}>${lock || q.options.length <= 2 ? '' : `<button type="button" class="btn small" data-tt-delopt="${i}:${j}" aria-label="보기 빼기">×</button>`}</div>`).join('')}${lock || q.options.length >= 6 ? '' : `<button type="button" class="btn small" data-tt-addopt="${i}">＋ 보기</button>`}</div>`
+      : q.type === 'ox' ? `<div class="tt-ox-set">정답 <label class="tt-ans"><input type="radio" name="ans${i}" data-f="ans" value="O"${q.answer === 'O' ? ' checked' : ''}${dis}> O</label><label class="tt-ans"><input type="radio" name="ans${i}" data-f="ans" value="X"${q.answer === 'X' ? ' checked' : ''}${dis}> X</label></div>`
+      : `<label>정답 * <span class="hint">(여러 개면 「,」로 · 띄어쓰기·대소문자 무시)</span><input data-f="ans" maxlength="200" value="${esc(q.answer || '')}" placeholder="예) 5S, 정리정돈"${dis}></label>`}
+      ${lock ? '' : `<div class="tt-q-tools"><button type="button" class="btn small" data-tt-up="${i}"${i ? '' : ' disabled'} aria-label="위로">↑</button><button type="button" class="btn small" data-tt-down="${i}"${i < qs.length - 1 ? '' : ' disabled'} aria-label="아래로">↓</button><button type="button" class="btn small danger" data-tt-delq="${i}">문항 빼기</button></div>`}</fieldset>`).join('');
+    sum();
+  };
+  const sum = () => { const tot = qs.reduce((s, q) => s + (Number(q.points) || 0), 0); $('[data-tt-sum]', m.el).textContent = `${qs.length}문항 · 총 ${tot}점 → 100점으로 환산`; };
+  draw();
+  box.addEventListener('input', e => { if (e.target.matches('[data-f="points"]')) { read(); sum(); } });
+  m.el.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.ttAddq) { read(); const type = b.dataset.ttAddq; qs.push(type === 'choice' ? { type, q: '', options: ['', '', '', ''], answer: -1, points: 1 } : { type, q: '', answer: '', points: 1 }); draw(); $$('[data-q]', box).at(-1)?.querySelector('textarea')?.focus(); return; }
+    if (b.dataset.ttDelq) { read(); qs.splice(Number(b.dataset.ttDelq), 1); draw(); return; }
+    if (b.dataset.ttUp || b.dataset.ttDown) { read(); const i = Number(b.dataset.ttUp ?? b.dataset.ttDown), j = b.dataset.ttUp ? i - 1 : i + 1; [qs[i], qs[j]] = [qs[j], qs[i]]; draw(); return; }
+    if (b.dataset.ttAddopt) { read(); qs[Number(b.dataset.ttAddopt)].options.push(''); draw(); return; }
+    if (b.dataset.ttDelopt) { read(); const [i, j] = b.dataset.ttDelopt.split(':').map(Number), q = qs[i]; q.options.splice(j, 1); if (q.answer === j) q.answer = -1; else if (q.answer > j) q.answer--; draw(); return; }
+    if (b.matches('[data-tt-preview]')) { read(); ttTakeView({ training: d.training, test: { ...t0, ...formObj(form), questions: qs.map(({ answer: _a, ...x }) => x) }, preview: true }); }
+  });
+  form.onsubmit = async e => {
+    e.preventDefault(); read(); const v = formObj(form);
+    try { await api('PUT', `/api/trainings/${trainingId}/test`, { pass_score: v.pass_score, max_attempts: v.max_attempts, time_limit_min: v.time_limit_min, open: !!form.elements.open.checked, ...(lock ? {} : { questions: qs }), revision: d.test?.revision });
+      toast(form.elements.open.checked ? '테스트를 저장하고 응시를 열었습니다. 대상자 「할 일」에 「테스트 응시」가 뜹니다.' : '테스트를 저장했습니다(응시는 닫힘).'); m.close(); onDone(); }
+    catch (err) { fail(err); }
+  };
+}
+// 응시 화면(미리 보기 겸용)
+function ttTakeView(d, onDone = () => {}) {
+  const q = d.test.questions, limit = Number(d.test.time_limit_min) || 0, rid = crypto.randomUUID(); let busy = false, timer = null;
+  const used = (d.mine || []).length;
+  const m = modal(`<h3>📝 ${esc(d.training.title)} · 테스트${d.preview ? ' <span class="chip">미리 보기</span>' : ''}</h3>
+    <p class="small muted">${q.length}문항 · 합격 ${d.test.pass_score}점 이상${d.preview ? '' : ` · ${used + 1}번째 응시(최대 ${d.test.max_attempts}번)`}${limit ? ` · 제한 ${limit}분` : ''}</p>
+    ${limit && !d.preview ? '<div class="tt-timer" data-tt-timer aria-live="polite"></div>' : ''}
+    <form class="stack tt-take" data-tt-take-form>${q.map((x, i) => `<fieldset class="tt-tq" data-tq="${i}"><legend><b>${i + 1}.</b> ${esc(x.q)} <span class="small muted">(${x.points}점)</span></legend>
+      ${x.type === 'choice' ? x.options.map((o, j) => `<label class="tt-choice"><input type="radio" name="a${i}" value="${j}"><span>${['①', '②', '③', '④', '⑤', '⑥'][j]} ${esc(o)}</span></label>`).join('')
+      : x.type === 'ox' ? `<div class="tt-ox"><label class="tt-choice tt-o"><input type="radio" name="a${i}" value="O"><span>O</span></label><label class="tt-choice tt-x"><input type="radio" name="a${i}" value="X"><span>X</span></label></div>`
+      : `<input name="a${i}" maxlength="200" autocomplete="off" placeholder="답을 쓰세요" aria-label="${i + 1}번 답">`}</fieldset>`).join('')}
+      <div class="actions"><span class="grow small muted" data-tt-prog></span>${d.preview ? '<button type="button" class="btn" data-no-close>닫기</button>' : '<button class="btn primary">제출하고 채점</button>'}</div></form>`, { wide: true, onClose: () => clearInterval(timer) });
+  const form = $('[data-tt-take-form]', m.el);
+  const answers = () => q.map((x, i) => x.type === 'short' ? (form.elements['a' + i].value || '') : (form.querySelector(`[name="a${i}"]:checked`)?.value ?? ''));
+  const prog = () => { $('[data-tt-prog]', m.el).textContent = `응답 ${answers().filter(a => a !== '').length} / ${q.length}`; };
+  form.addEventListener('input', prog); form.addEventListener('change', prog); prog();
+  $('[data-no-close]', m.el)?.addEventListener('click', () => m.close());
+  const submit = async (auto = false) => {
+    if (busy || d.preview) return; const a = answers(), blank = a.filter(x => x === '').length;
+    if (!auto && blank && !await confirmBox(`답하지 않은 문항이 ${blank}개 있습니다(오답 처리). 제출할까요?`)) return;
+    busy = true; clearInterval(timer); const btn = $('button.primary', form); if (btn) { btn.disabled = true; btn.textContent = '채점 중…'; }
+    try {
+      const r = await api('POST', `/api/trainings/${d.training.id}/test/submit`, { answers: a, request_id: rid });
+      m.close(); ttResult(d, r); onDone();
+    } catch (err) { fail(err); busy = false; if (btn) { btn.disabled = false; btn.textContent = '제출하고 채점'; } }
+  };
+  form.onsubmit = e => { e.preventDefault(); submit(); };
+  if (limit && !d.preview) { const end = Date.now() + limit * 60000, el = $('[data-tt-timer]', m.el); const tick = () => { const s = Math.max(0, Math.round((end - Date.now()) / 1000)); el.textContent = `남은 시간 ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; el.classList.toggle('tt-timer-low', s <= 60); if (!s) { toast('제한 시간이 끝나 자동 제출합니다.'); submit(true); } }; tick(); timer = setInterval(tick, 1000); }
+}
+function ttResult(d, r) {
+  const left = (r.max_attempts || d.test.max_attempts) - r.attempt_no;
+  const m = modal(`<div class="tt-result ${r.passed ? 'tt-pass' : 'tt-fail'}"><div class="tt-score"><b>${r.score}</b><span>점</span></div>
+    <h2>${r.passed ? '합격' : '불합격'}</h2><p>합격 점수 ${r.pass_score}점 · ${r.attempt_no}번째 응시</p>
+    <div class="tt-marks">${r.detail.map((ok, i) => `<span class="${ok ? 'ok' : 'no'}" title="${i + 1}번 ${ok ? '맞음' : '틀림'}">${i + 1}<b>${ok ? '○' : '✕'}</b></span>`).join('')}</div>
+    <p class="small muted">${r.passed ? '교육 결과가 「이수」로 기록되었습니다.' : left > 0 ? `다시 응시할 수 있습니다(${left}번 남음). 교육 자료를 다시 보고 응시하세요.` : '응시 횟수를 다 썼습니다. 결과가 「재교육」으로 기록되었습니다. 품질 담당에게 재교육을 요청하세요.'}</p>
+    <button type="button" class="btn primary" data-ok>확인</button></div>`);
+  $('[data-ok]', m.el).onclick = () => m.close();
+}
+async function ttTake(trainingId, onDone = () => {}) {
+  const d = await api('GET', `/api/trainings/${trainingId}/test`);
+  if (!d.test) return toast('이 교육에는 테스트가 없습니다.', 'err');
+  if (!d.can_take) return toast(d.passed ? '이미 합격했습니다.' : !d.test.open ? '테스트가 닫혀 있습니다.' : !d.is_attendee ? '이 교육의 대상자가 아닙니다.' : '응시 횟수를 다 썼습니다.', 'err');
+  ttTakeView(d, onDone);
+}
+// ── 개인별 교육기록 ──
+async function trRecord(name) {
+  const d = await api('GET', '/api/training-records?user=' + encodeURIComponent(name)), p = d.person, rows = d.rows;
+  const att = rows.filter(r => r.attended), hours = att.reduce((s, r) => s + (Number(r.hours) || 0), 0);
+  const res = r => r.result ? `<span class="chip ${r.result === '이수' ? 'green' : 'red'}">${esc(r.result)}</span>` : '<span class="muted small">—</span>';
+  const testCell = r => !r.test ? '<span class="muted small">—</span>' : r.attempts.length ? r.attempts.map(a => `<span class="chip ${a.passed ? 'green' : 'red'}" title="${esc(String(a.submitted_at).slice(0, 16))}">${a.attempt_no}회 ${a.score}점</span>`).join(' ') : `<span class="small muted">미응시${r.test.open ? '(열림)' : ''}</span>`;
+  const m = modal(`<div class="tr-record"><h3>개인별 교육기록 · ${esc(p.name)} <span class="small muted">${esc([p.dept, p.position].filter(Boolean).join(' · '))}</span></h3>
+    <div class="ip-tiles tr-rec-tiles"><div class="ip-tile"><span>교육 대상</span><b>${rows.length}</b></div><div class="ip-tile"><span>참석</span><b>${att.length}</b></div><div class="ip-tile"><span>교육 시간(h)</span><b>${fmtNum(hours)}</b></div><div class="ip-tile green"><span>이수</span><b>${rows.filter(r => r.result === '이수').length}</b></div><div class="ip-tile ${rows.some(r => ['미이수', '재교육'].includes(r.result)) ? 'red' : ''}"><span>미이수·재교육</span><b>${rows.filter(r => ['미이수', '재교육'].includes(r.result)).length}</b></div></div>
+    <h4>교육 이력</h4>${rows.length ? `<div class="table-wrap"><table class="grid tr-rec-grid" data-no-filter><thead><tr><th>실시·예정일</th><th>교육명</th><th>유형</th><th class="r">시간</th><th>참석</th><th>테스트</th><th class="r">점수</th><th>결과</th><th>강사</th></tr></thead><tbody>${rows.map(r => `<tr><td class="nowrap">${esc(r.done_date || r.plan_date)}${r.done_date ? '' : ' <span class="small muted">(예정)</span>'}</td><td><b>${esc(r.title)}</b>${r.doc_label ? `<div class="small muted">${esc(r.doc_label)}</div>` : ''}</td><td class="nowrap">${esc(r.kind)}</td><td class="r">${r.hours ?? ''}</td><td>${r.attended ? '✔' : '<span class="muted">—</span>'}</td><td>${testCell(r)}</td><td class="r">${r.score ?? ''}</td><td>${res(r)}</td><td>${esc(r.instructor || '')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">교육 이력이 없습니다.</div>'}
+    <h4>자격</h4>${d.quals.length ? `<div class="table-wrap"><table class="grid" data-no-filter><thead><tr><th>자격명</th><th>번호</th><th>발급처</th><th>취득일</th><th>만료일</th><th>상태</th></tr></thead><tbody>${d.quals.map(q => `<tr><td><b>${esc(q.kind)}</b></td><td>${esc(q.cert_no)}</td><td>${esc(q.issuer)}</td><td>${esc(q.acquired_date || '')}</td><td>${esc(q.expire_date || '')}</td><td>${esc(q.status_label)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="small muted">등록된 자격이 없습니다.</p>'}
+    <div class="actions no-print"><span class="grow small muted">${esc(d.today)} 기준</span><button type="button" class="btn" data-rec-xlsx>엑셀</button><button type="button" class="btn" data-rec-print>인쇄</button></div></div>`, { wide: true });
+  $('[data-rec-print]', m.el).onclick = async () => { try { const co = await rptCompany();
+    rptWindow(`개인별 교육기록 · ${p.name}`, rptRow([[['성명', p.name], ['부서·직급', [p.dept, p.position].filter(Boolean).join(' · ')]], [['교육 대상·참석', `${rows.length}건 · ${att.length}건`], ['교육 시간(h)', fmtNum(hours)]], [['이수', `${rows.filter(r => r.result === '이수').length}건`], ['미이수·재교육', `${rows.filter(r => ['미이수', '재교육'].includes(r.result)).length}건`]]])
+      + rptBlock('교육 이력', `<table class="rpt-list"><thead><tr><th>No</th><th>일자</th><th>교육명</th><th>유형</th><th>시간</th><th>참석</th><th>테스트</th><th>점수</th><th>결과</th></tr></thead><tbody>${rows.map((r, i) => `<tr><td class="c">${i + 1}</td><td>${esc(r.done_date || r.plan_date)}</td><td>${esc(r.title)}</td><td>${esc(r.kind)}</td><td class="c">${r.hours ?? ''}</td><td class="c">${r.attended ? '○' : ''}</td><td>${r.attempts.map(x => `${x.attempt_no}회 ${x.score}점${x.passed ? '(합)' : ''}`).join(', ')}</td><td class="c">${r.score ?? ''}</td><td class="c">${esc(r.result || '')}</td></tr>`).join('')}</tbody></table>`)
+      + rptBlock('자격', d.quals.length ? `<table class="rpt-list"><thead><tr><th>자격명</th><th>번호</th><th>발급처</th><th>취득일</th><th>만료일</th><th>상태</th></tr></thead><tbody>${d.quals.map(q => `<tr><td>${esc(q.kind)}</td><td>${esc(q.cert_no)}</td><td>${esc(q.issuer)}</td><td>${esc(q.acquired_date || '')}</td><td>${esc(q.expire_date || '')}</td><td>${esc(q.status_label)}</td></tr>`).join('')}</tbody></table>` : '없음')
+      + '<div class="rpt-sign"><span>본인</span><span>품질 담당</span><span>승인</span></div>', co); } catch (err) { fail(err); } };
+  $('[data-rec-xlsx]', m.el).onclick = () => { const t = $('.tr-rec-grid', m.el); if (t) tableToXlsx(t, `교육기록_${p.name}`); };
 }
 async function qualEdit(r = null, can = true) {
   const people = await qPeople(), v0 = r || { status: 'valid' };
@@ -1726,15 +1847,16 @@ async function pageTraining(main) {
       qTiles('trTiles', [['계획', rows.filter(r => r.status === 'planned').length, ''], ['실시', rows.filter(r => r.status === 'done').length, ''], ['평가완료', rows.filter(r => r.status === 'evaluated').length, 'green'], ['교육 시간 합(h)', rows.filter(r => r.status !== 'void').reduce((s, r) => s + (r.hours || 0) * r.attendees.filter(a => a.attended).length, 0)], ['내 참석 확인 대기', tr.rows.filter(waitMine).length, tr.rows.some(waitMine) ? 'yellow' : '']]);
       $('#trTools', main).innerHTML = tr.can_manage ? '<button type="button" class="btn primary" id="trNewBtn">＋ 교육 계획</button>' : '';
       const list = rows.filter(r => (v.st === 'mine' ? waitMine(r) : !v.st || r.status === v.st) && (!q || [r.title, r.instructor, r.kind, r.doc_label, ...r.attendees.map(a => a.user_name)].join(' ').toLowerCase().includes(q)));
-      $('#trList', main).innerHTML = list.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>예정일</th><th>교육명</th><th>유형</th><th>강사</th><th>참석 / 대상</th><th>시간</th><th>실시일</th><th>관련 문서</th><th>상태</th><th></th></tr></thead><tbody>${list.map(r => `<tr data-tr-row="${r.id}" class="${r.status === 'void' ? 'row-off' : r.status === 'planned' && r.plan_date < tr.today ? 'ip-over' : ''}"><td class="nowrap">${esc(r.plan_date)}</td><td data-card-primary><b>${esc(r.title)}</b></td><td class="nowrap">${esc(r.kind)}</td><td>${esc(r.instructor)}</td><td class="nowrap">${r.attendees.filter(a => a.attended).length} / ${r.attendees.length}</td><td>${r.hours ?? ''}</td><td class="nowrap">${esc(r.done_date || '')}</td><td class="small">${esc(r.doc_label)}</td><td><span class="chip ${TR_CHIP[r.status]}">${esc(r.status_label)}</span></td><td class="nowrap">${waitMine(r) ? `<button type="button" class="btn small primary" data-tr-att="${r.id}">참석 확인</button> ` : ''}<button type="button" class="btn small" data-tr-open="${r.id}">열기</button></td></tr>`).join('')}</tbody></table></div>`
+      $('#trList', main).innerHTML = list.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>예정일</th><th>교육명</th><th>유형</th><th>강사</th><th>참석 / 대상</th><th>시간</th><th>실시일</th><th>관련 문서</th><th>상태</th><th></th></tr></thead><tbody>${list.map(r => `<tr data-tr-row="${r.id}" class="${r.status === 'void' ? 'row-off' : r.status === 'planned' && r.plan_date < tr.today ? 'ip-over' : ''}"><td class="nowrap">${esc(r.plan_date)}</td><td data-card-primary><b>${esc(r.title)}</b>${trTestCell(r, tr.me)}</td><td class="nowrap">${esc(r.kind)}</td><td>${esc(r.instructor)}</td><td class="nowrap">${r.attendees.filter(a => a.attended).length} / ${r.attendees.length}</td><td>${r.hours ?? ''}</td><td class="nowrap">${esc(r.done_date || '')}</td><td class="small">${esc(r.doc_label)}</td><td><span class="chip ${TR_CHIP[r.status]}">${esc(r.status_label)}</span></td><td class="nowrap">${waitMine(r) ? `<button type="button" class="btn small primary" data-tr-att="${r.id}">참석 확인</button> ` : ''}<button type="button" class="btn small" data-tr-open="${r.id}">열기</button></td></tr>`).join('')}</tbody></table></div>`
         : `<div class="empty">${tr.rows.length ? '조건에 맞는 교육이 없습니다.' : '등록된 교육이 없습니다. 「＋ 교육 계획」으로 연간 교육을 넣으세요.'}</div>`;
     } else if (tab === 'people') {
       const by = new Map();
       for (const r of rows.filter(r => r.status !== 'void')) for (const a of r.attendees) { const p = by.get(a.user_name) || { name: a.user_name, dept: a.dept, n: 0, att: 0, hours: 0, fail: 0, list: [] }; p.n++; if (a.attended) { p.att++; p.hours += r.hours || 0; } if (['미이수', '재교육'].includes(a.result)) p.fail++; p.list.push({ r, a }); by.set(a.user_name, p); }
-      const people = [...by.values()].filter(p => !q || [p.name, p.dept].join(' ').toLowerCase().includes(q)).sort((a, b) => a.dept.localeCompare(b.dept, 'ko') || a.name.localeCompare(b.name, 'ko'));
+      for (const p of by.values()) { p.pass = p.list.filter(x => x.a.result === '이수').length; p.tests = p.list.filter(x => x.r.test).length; } // 15.334
+      const people = [...by.values()].filter(p => (tr.can_manage || p.name === tr.me) && (!q || [p.name, p.dept].join(' ').toLowerCase().includes(q))).sort((a, b) => a.dept.localeCompare(b.dept, 'ko') || a.name.localeCompare(b.name, 'ko')); // 15.334 다른 사람 기록은 품질만
       qTiles('trTiles', [['교육 대상 인원', by.size], ['참석 합계(회)', [...by.values()].reduce((s, p) => s + p.att, 0)], ['교육 시간 합(h)', [...by.values()].reduce((s, p) => s + p.hours, 0)], ['미이수·재교육', [...by.values()].reduce((s, p) => s + p.fail, 0), [...by.values()].some(p => p.fail) ? 'red' : '']]);
-      $('#trTools', main).innerHTML = '';
-      $('#trList', main).innerHTML = people.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>이름</th><th>부서</th><th>대상</th><th>참석</th><th>시간(h)</th><th>미이수·재교육</th><th>자격</th><th>교육 이력</th></tr></thead><tbody>${people.map(p => { const qs = ql.rows.filter(x => x.user_name === p.name && x.status === 'valid'); return `<tr><td class="nowrap" data-card-primary><b>${esc(p.name)}</b></td><td>${esc(p.dept)}</td><td>${p.n}</td><td>${p.att}</td><td>${p.hours}</td><td>${p.fail ? `<span class="chip red">${p.fail}</span>` : '0'}</td><td class="small">${qs.map(x => esc(x.kind)).join(', ')}</td><td class="small">${p.list.sort((x, y) => y.r.plan_date.localeCompare(x.r.plan_date)).slice(0, 6).map(({ r, a }) => `<a href="#/quality/training" data-tr-open="${r.id}">${esc(r.done_date || r.plan_date)} ${esc(r.title)}</a>${a.result ? ` (${esc(a.result)})` : a.attended ? '' : ' <span class="muted">미참석</span>'}`).join('<br>')}${p.list.length > 6 ? `<br><span class="muted">외 ${p.list.length - 6}건</span>` : ''}</td></tr>`; }).join('')}</tbody></table></div>` : '<div class="empty">이 기간의 교육 이력이 없습니다.</div>';
+      $('#trTools', main).innerHTML = `<button type="button" class="btn primary" data-tr-rec="${esc(tr.me)}">📋 내 교육기록</button>`;
+      $('#trList', main).innerHTML = people.length ? `<p class="small muted">이름을 누르면 그 사람의 <b>개인별 교육기록</b>(교육·참석·테스트 점수·결과·자격)이 열리고 인쇄·엑셀로 받을 수 있습니다.${tr.can_manage ? '' : ' 다른 사람의 기록은 품질 담당만 봅니다.'}</p><div class="table-wrap"><table class="grid ip-table"><thead><tr><th>이름</th><th>부서</th><th>대상</th><th>참석</th><th>시간(h)</th><th>이수</th><th>미이수·재교육</th><th>자격</th><th>교육 이력</th></tr></thead><tbody>${people.map(p => { const qs = ql.rows.filter(x => x.user_name === p.name && x.status === 'valid'); return `<tr><td class="nowrap" data-card-primary><button type="button" class="link-btn" data-tr-rec="${esc(p.name)}"><b>${esc(p.name)}</b></button></td><td>${esc(p.dept)}</td><td>${p.n}</td><td>${p.att}</td><td>${p.hours}</td><td>${p.pass}</td><td>${p.fail ? `<span class="chip red">${p.fail}</span>` : '0'}</td><td class="small">${qs.map(x => esc(x.kind)).join(', ')}</td><td class="small">${p.list.sort((x, y) => y.r.plan_date.localeCompare(x.r.plan_date)).slice(0, 6).map(({ r, a }) => `<a href="#/quality/training" data-tr-open="${r.id}">${esc(r.done_date || r.plan_date)} ${esc(r.title)}</a>${a.result ? ` (${esc(a.result)})` : a.attended ? '' : ' <span class="muted">미참석</span>'}`).join('<br>')}${p.list.length > 6 ? `<br><span class="muted">외 ${p.list.length - 6}건</span>` : ''}</td></tr>`; }).join('')}</tbody></table></div>` : '<div class="empty">이 기간의 교육 이력이 없습니다.</div>';
     } else {
       const live = r => r.status === 'valid', dd = r => live(r) && r.expire_date ? ipDday(r.expire_date, ql.today) : null;
       qTiles('trTiles', [['유효 자격', ql.rows.filter(live).length, 'green'], ['90일 안 만료', ql.rows.filter(r => { const d = dd(r); return d !== null && d >= 0 && d <= 90; }).length, ql.rows.some(r => { const d = dd(r); return d !== null && d >= 0 && d <= 90; }) ? 'yellow' : ''], ['만료 지남', ql.rows.filter(r => { const d = dd(r); return d !== null && d < 0; }).length, ql.rows.some(r => { const d = dd(r); return d !== null && d < 0; }) ? 'red' : '']]);
@@ -1749,6 +1871,8 @@ async function pageTraining(main) {
     if (e.target.closest('#trNewBtn')) return trNew().catch(fail);
     if (e.target.closest('#qlNewBtn')) return qualEdit().catch(fail);
     const o = e.target.closest('[data-tr-open]'); if (o) { e.preventDefault(); return trOpen(Number(o.dataset.trOpen)).catch(fail); }
+    const tk = e.target.closest('[data-tt-take]'); if (tk) return ttTake(Number(tk.dataset.ttTake), () => load()).catch(fail); // 15.334
+    const rc = e.target.closest('[data-tr-rec]'); if (rc) return trRecord(rc.dataset.trRec).catch(fail);
     const a = e.target.closest('[data-tr-att]'); if (a) { try { await api('POST', `/api/trainings/${a.dataset.trAtt}/attend`); toast('참석을 확인했습니다.'); load(); } catch (err) { fail(err); } return; }
     const qe = e.target.closest('[data-ql-edit]'); if (qe) return qualEdit(ql.rows.find(r => r.id === Number(qe.dataset.qlEdit))).catch(fail);
     const qd = e.target.closest('[data-ql-del]'); if (qd) { const r = ql.rows.find(x => x.id === Number(qd.dataset.qlDel)); if (!await confirmBox(`${r.user_name} · ${r.kind} 자격을 지울까요?`)) return; try { await api('DELETE', `/api/qualifications/${r.id}?revision=${r.revision}`); toast('지웠습니다.'); load(); } catch (err) { fail(err); } }
@@ -2535,6 +2659,7 @@ async function notifyCheck(first = false) {
     for (const [type, g] of Object.entries(tasks.approvals.requests || {})) if (g.count) now[`${REQ[type]?.label || type} 승인 대기`] = g.count;
     for (const q of tasks.approvals.quality || []) now[q.label] = q.count;
     if (tasks.approvals.training_attend?.count) now['교육 참석 확인'] = tasks.approvals.training_attend.count;
+    if (tasks.approvals.training_test?.count) now['교육 테스트 응시'] = tasks.approvals.training_test.count; // 15.334
     for (const q of alerts.quality_alerts || []) now[q.label] = q.count;
     if (alerts.overdue_po_count) now['납기 지난 미입고 발주'] = alerts.overdue_po_count;
     let seen = {}; try { seen = JSON.parse(localStorage.getItem(NOTIFY_SEEN()) || '{}'); if (Array.isArray(seen)) seen = {}; } catch {}

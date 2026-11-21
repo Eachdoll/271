@@ -1432,3 +1432,24 @@ test('15.333 quality document folders: add (with parents), validate, move docs, 
   assert.equal((await prod('PUT', '/api/qdoc-folders', { action: 'add', path: 'x' })).status, 403);
   assert.equal((await prod('POST', '/api/qdocs/move', { ids: [d1.id], folder: '' })).status, 403);
 });
+
+test('15.334 training test: build, hide answers, auto-grade choice/OX/short (spaces·case), pass → 이수, attempts used → 재교육, lock questions after attempts, personal records only own unless quality', async () => {
+  const t = (await admin('POST', '/api/trainings', { title: '테스트 교육', kind: 'OJT', plan_date: today, attendees: ['생산'], request_id: rid() })).body;
+  const qs = [{ type: 'choice', q: '온도?', options: ['40', '60'], answer: 1, points: 1 }, { type: 'ox', q: '격리?', answer: 'O', points: 1 }, { type: 'short', q: '5S?', answer: '5S, 오에스', points: 2 }];
+  assert.equal((await admin('PUT', `/api/trainings/${t.id}/test`, { questions: [{ type: 'choice', q: 'x', options: ['a'], answer: 0 }] })).status, 400, 'choice needs 2+ options');
+  assert.equal((await prod('PUT', `/api/trainings/${t.id}/test`, { questions: qs })).status, 403);
+  assert.equal((await admin('PUT', `/api/trainings/${t.id}/test`, { questions: qs, pass_score: 75, max_attempts: 2, open: true })).status, 200);
+  const view = (await prod('GET', `/api/trainings/${t.id}/test`)).body;
+  assert.ok(view.can_take); assert.ok(view.test.questions.every(q => !('answer' in q)));
+  const s1 = (await prod('POST', `/api/trainings/${t.id}/test/submit`, { answers: [1, 'x', ''], request_id: rid() })).body;
+  assert.deepEqual([s1.score, s1.passed, s1.detail], [25, false, [1, 0, 0]]);
+  const id2 = rid(), s2 = (await prod('POST', `/api/trainings/${t.id}/test/submit`, { answers: [1, 'o', ' 오 에스 '], request_id: id2 })).body;
+  assert.deepEqual([s2.score, s2.passed, s2.result], [100, true, '이수']);
+  assert.equal((await prod('POST', `/api/trainings/${t.id}/test/submit`, { answers: [1, 'O', '5S'], request_id: id2 })).body.duplicate, true, 'replay');
+  assert.equal((await prod('POST', `/api/trainings/${t.id}/test/submit`, { answers: [1, 'O', '5S'] })).status, 400, 'already passed');
+  const att = (await admin('GET', '/api/trainings')).body.rows.find(r => r.id === t.id).attendees[0]; assert.deepEqual([att.score, att.result], [100, '이수']);
+  assert.match((await admin('PUT', `/api/trainings/${t.id}/test`, { questions: [...qs, { type: 'ox', q: '추가', answer: 'X' }], revision: 1 })).body.error, /문항을 바꿀 수 없습니다/);
+  const rec = (await prod('GET', '/api/training-records')).body; assert.equal(rec.person.name, '생산'); assert.deepEqual(rec.rows.find(r => r.id === t.id).attempts.map(a => a.score), [25, 100]);
+  assert.equal((await prod('GET', '/api/training-records?user=' + encodeURIComponent('관리자'))).status, 403);
+  assert.ok((await admin('GET', '/api/training-records')).body.people.some(p => p.user_name === '생산'));
+});

@@ -4498,3 +4498,37 @@ td.nowrap .btn, td.nowrap label.btn { white-space: nowrap; }
 .qd-bulk .qd-move { display: flex; flex-direction: row; align-items: center; gap: 6px; font-weight: 600; }
 .qd-table .chk-col { width: 34px; text-align: center; }
 .stock-tree .st-set .btn + .btn { margin-left: 4px; }
+/* 15.334 교육 후 테스트 · 개인별 교육기록 */
+.tt-set { align-items: end; }
+.tt-q { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 0 0 10px; }
+.tt-q > legend { font-weight: 700; padding: 0 4px; }
+.tt-q-head { display: flex; gap: 10px; align-items: flex-start; }
+.tt-q-head .grow { flex: 1; }
+.tt-pts { width: 90px; flex: none; }
+.tt-opts { display: grid; gap: 6px; margin-top: 6px; }
+.tt-opt { display: flex; gap: 8px; align-items: center; }
+.tt-opt input[data-f="opt"] { flex: 1; min-width: 0; }
+.tt-ans { display: inline-flex !important; flex-direction: row !important; align-items: center; gap: 4px; white-space: nowrap; font-weight: 600; }
+.tt-ox-set { display: flex; gap: 14px; align-items: center; margin-top: 6px; }
+.tt-q-tools { display: flex; gap: 6px; justify-content: flex-end; margin-top: 8px; }
+.tt-take .tt-tq { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 0 0 10px; }
+.tt-take .tt-tq > legend { font-size: 16px; padding: 0 4px; line-height: 1.5; }
+.tt-choice { display: flex !important; flex-direction: row !important; align-items: center; gap: 10px; padding: 10px 12px; margin: 6px 0; border: 1.5px solid var(--line); border-radius: 10px; cursor: pointer; font-weight: 500 !important; }
+.tt-choice:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.tt-choice input { width: 20px; height: 20px; flex: none; margin: 0; }
+.tt-ox { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tt-ox .tt-choice { justify-content: center; font-size: 28px; font-weight: 800 !important; min-height: 64px; }
+.tt-take input[name^="a"]:not([type=radio]) { width: 100%; min-height: 46px; font-size: 16px; }
+.tt-timer { position: sticky; top: 0; z-index: 2; margin: 0 0 8px; padding: 8px 12px; border-radius: 10px; background: var(--bg); font-weight: 700; text-align: center; }
+.tt-timer-low { color: var(--red); background: var(--red-bg); }
+.tt-result { text-align: center; padding: 6px 4px; }
+.tt-score { display: inline-flex; align-items: baseline; gap: 4px; margin: 6px 0; }
+.tt-score b { font-size: 56px; line-height: 1; }
+.tt-pass h2 { color: var(--green); } .tt-fail h2 { color: var(--red); }
+.tt-result h2 { font-size: 28px; margin: 4px 0; }
+.tt-marks { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 12px 0; }
+.tt-marks span { display: inline-flex; flex-direction: column; align-items: center; min-width: 36px; padding: 4px 6px; border-radius: 8px; font-size: 12px; background: var(--bg); }
+.tt-marks span b { font-size: 16px; }
+.tt-marks .ok b { color: var(--green); } .tt-marks .no b { color: var(--red); }
+.tr-rec-tiles .ip-tile { cursor: default; }
+.tr-record h4 { margin: 14px 0 6px; }
