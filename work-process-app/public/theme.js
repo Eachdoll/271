@@ -132,10 +132,10 @@ function applyTheme(mode) {
           sk.innerHTML = SKINS.map(([k, l]) => `<option value="${k}">스킨: ${l}</option>`).join('');
           sk.value = skinMode(); sk.onchange = () => applySkin(sk.value, { save: true });
           host.append(sk);
-          if (!host.querySelector('.font-select')) { const fs = document.createElement('select'); fs.className = 'font-select'; fs.setAttribute('aria-label', '글꼴'); fs.title = '글꼴(이 기기에 기억)';
-            fs.innerHTML = FONTS.map(([k, l]) => `<option value="${k}">글꼴: ${l}</option>`).join(''); fs.value = fontMode();
-            fs.onchange = () => { try { localStorage.setItem(FONT_KEY, fs.value); } catch { /* 이 화면에만 */ } applyFont(fs.value); if (typeof toast === 'function') toast(`글꼴을 ${FONTS.find(([k]) => k === fs.value)[1]}(으)로 바꿨습니다(이 기기).`); };
-            host.append(fs); } // 15.326
+          if (!host.querySelector('.font-select')) { const fontSel = document.createElement('select'); fontSel.className = 'font-select'; fontSel.setAttribute('aria-label', '글꼴'); fontSel.title = '글꼴(이 기기에 기억)';
+            fontSel.innerHTML = FONTS.map(([k, l]) => `<option value="${k}">글꼴: ${l}</option>`).join(''); fontSel.value = fontMode();
+            fontSel.onchange = () => { try { localStorage.setItem(FONT_KEY, fontSel.value); } catch { /* 이 화면에만 */ } applyFont(fontSel.value); if (typeof toast === 'function') toast(`글꼴을 ${FONTS.find(([k]) => k === fontSel.value)[1]}(으)로 바꿨습니다(이 기기).`); };
+            host.append(fontSel); } // 15.326
           // 15.225 캐릭터 그림 바꾸기(리본 고양이 스킨일 때만 보임)
           const fw = document.createElement('div'); fw.className = 'skin-face'; fw.hidden = skinMode() !== 'cat';
           fw.innerHTML = '<label class="btn small" title="이 기기에서만 바뀝니다">캐릭터 그림 바꾸기<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden data-face-file></label><button type="button" class="btn small" data-face-reset>기본 그림</button>';
