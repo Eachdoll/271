@@ -4557,3 +4557,14 @@ td.nowrap .btn, td.nowrap label.btn { white-space: nowrap; }
 .sp-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 2px 12px; max-height: 260px; overflow: auto; }
 .sp-pick label[hidden] { display: none; }
 form.list-filters [hidden], form.toolbar [hidden] { display: none !important; } /* 15.335 연도 폴더로 대신한 연도 칸 · 탭별 칸 숨김이 display 규칙에 묻히던 것 */
+
+/* 15.339 공무 오퍼레이터 점검표 */
+.op-seg { margin: 0 0 10px; }
+.op-check { border: 1.5px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 0; }
+.op-check > legend { font-weight: 700; font-size: 16px; padding: 0 4px; }
+.op-ok-ng { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0; }
+.op-ok-ng button { min-height: 54px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--panel); color: var(--text); font: inherit; font-size: 17px; font-weight: 800; cursor: pointer; }
+.op-check.is-ok { border-color: var(--green); } .op-check.is-ok .op-ok { background: var(--green-bg); color: var(--green); border-color: var(--green); }
+.op-check.is-ng { border-color: var(--red); } .op-check.is-ng .op-ng { background: var(--red-bg); color: var(--red); border-color: var(--red); }
+.op-check input[data-note] { width: 100%; min-height: 46px; }
+.op-allok { min-height: 48px; }

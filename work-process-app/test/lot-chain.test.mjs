@@ -1502,3 +1502,20 @@ test('15.338 supplier audit carried out → that vendor\'s 현장심사 plan of 
   const p = (await admin('GET', '/api/supplier-plans?year=' + Y)).body.rows.find(x => x.vendor === '심사공급');
   assert.deepEqual([p.status, p.result], ['done', `심사 ${a.audit_no}`]);
 });
+
+test('15.339 maintenance operator: PM checklist + breakdown only; abnormal/breakdown shows in plant to-do until linked to CAPA; PM calendar API', async () => {
+  const op = client();
+  await admin('POST', '/api/admin/users', { name: '공무작업', password: 'password', roles: ['operator_maint'] });
+  assert.equal((await op('POST', '/api/auth/login', { name: '공무작업', password: 'password' })).status, 200);
+  const eq = (await admin('POST', '/api/equipment', { name: '세탁기 3호', pm_items: [{ name: '필터 점검', cycle: 1, unit: 'month', checks: ['필터 막힘', '누수'], last_done: `${today.slice(0, 4)}-01-05` }], request_id: rid() })).body;
+  const due = (await op('GET', '/api/operator/pm-due')).body; const e = due.equipment.find(x => x.id === eq.id); assert.ok(e && e.pm_items[0].checks.length === 2);
+  const lg = await op('POST', `/api/equipment/${eq.id}/logs`, { kind: 'pm', pm_key: e.pm_items[0].key, checks: [{ item: '필터 막힘', ok: true }, { item: '누수', ok: false, note: '배수구 누수' }], revision: e.revision, request_id: rid() });
+  assert.equal(lg.status, 200, JSON.stringify(lg.body)); assert.equal(lg.body.log_result, '이상'); assert.ok(lg.body.log_id);
+  assert.equal((await op('POST', `/api/equipment/${eq.id}/logs`, { kind: 'repair', description: 'x', revision: lg.body.revision })).status, 403, 'operator: pm/failure only');
+  for (const u of ['/api/equipment', '/api/ncs', '/api/pm-calendar']) assert.equal((await op('GET', u)).status, 403, u);
+  let todo = (await prod('GET', '/api/my-tasks')).body.approvals.pm_issue; assert.ok(todo.items.some(x => x.equip_no === eq.equip_no));
+  const nc = (await prod('POST', '/api/ncs', { source_type: 'process', kind: '공정 이상', title: '세탁기 3호 누수', found_date: today, request_id: rid() })).body;
+  assert.equal((await prod('POST', `/api/equipment/logs/${lg.body.log_id}/nc`, { nc_id: nc.id })).status, 200);
+  todo = (await prod('GET', '/api/my-tasks')).body.approvals.pm_issue; assert.ok(!todo || !todo.items.some(x => x.equip_no === eq.equip_no), 'linked → off the list');
+  const cal = (await admin('GET', '/api/pm-calendar?year=' + today.slice(0, 4))).body; assert.ok(cal.equipment.some(x => x.id === eq.id)); assert.ok(cal.logs.some(l => l.equipment_id === eq.id && l.result === '이상'));
+});

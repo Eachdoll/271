@@ -14,7 +14,7 @@ async function getSetting(k) { const r = (await db.prepare('SELECT value FROM se
 async function setSetting(k, v) { (await db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(k, String(v))); }
 
 // ───────────────────────── 공통 ─────────────────────────
-const ROLES = ['operator', 'operator_logistics', 'purchase', 'quality', 'quality_approver', 'dev', 'dev_approver', 'production', 'production_approver', 'logistics', 'logistics_approver', 'sales'];
+const ROLES = ['operator', 'operator_logistics', 'operator_maint', 'purchase', 'quality', 'quality_approver', 'dev', 'dev_approver', 'production', 'production_approver', 'logistics', 'logistics_approver', 'sales'];
 const REQUEST_TYPES = { voc: 'quality', analysis: 'quality', development: 'dev', sample: 'production', sample_goods: 'purchase', rnd_analysis: 'dev' }; // 15.285 rnd_analysis: 연구팀 분석의뢰
 const REQUEST_PREFIX = { voc: 'V', analysis: 'Q', development: 'D', sample: 'S', sample_goods: 'G', rnd_analysis: 'RA' };
 const RND_CATEGORIES = ['의뢰분석', '시제품분석', '원료분석', '경쟁사분석', '기타']; // 15.285
@@ -200,7 +200,8 @@ function cleanPrefs(body, prior) {
 async function meUser(u) { return { ...publicUser(u), menus: await effectiveMenus(u), ui: await userPrefs(u.id) }; }
 function hasRole(user, role) { const roles = publicUser(user).roles; return !!user.is_admin || roles.includes(role) || (['quality','dev','production','logistics'].includes(role) && roles.includes(role + '_approver')); }
 // 15.330 오퍼레이터 두 종류: operator = 생산(반제품·완제품 실적), operator_logistics = 물류(입고·출하). 둘 다 가질 수 있음.
-function isOperator(user) { const r = !!user && !user.is_admin ? publicUser(user).roles : []; return r.includes('operator') || r.includes('operator_logistics'); }
+function isOperator(user) { const r = !!user && !user.is_admin ? publicUser(user).roles : []; return r.includes('operator') || r.includes('operator_logistics') || r.includes('operator_maint'); }
+const opMaint = user => isOperator(user) && publicUser(user).roles.includes('operator_maint'); // 15.339 공무 오퍼레이터(설비 점검·고장 신고)
 const opProd = user => isOperator(user) && publicUser(user).roles.includes('operator');
 const opLog = user => isOperator(user) && publicUser(user).roles.includes('operator_logistics');
 function operatorRequestAllowed(method, path, user) {
@@ -210,6 +211,10 @@ function operatorRequestAllowed(method, path, user) {
     if (method === 'GET' && (/^\/api\/requests\/[1-9]\d*\/inspection(?:\/history\/[1-9]\d*)?$/.test(path) || ['/api/inspections','/api/wash-summary'].includes(path))) return true;
     if (method === 'GET' && ['/api/operator/catalog', '/api/operator/semi-records', '/api/operator/plans', '/api/operator/actuals', '/api/lots/available', '/api/semi-bags', '/api/actuals/progress'].includes(path)) return true; // 15.249 오퍼레이터도 투입 LOT·봉투 LOT 고르기
     if (method === 'POST' && (path === '/api/semi-batches' || /^\/api\/schedules\/[1-9]\d*\/actuals$/.test(path) || /^\/api\/(?:operator\/semi-records|actuals)\/[1-9]\d*\/complete$/.test(path))) return true;
+  }
+  if (opMaint(user)) { // 15.339
+    if (method === 'GET' && path === '/api/operator/pm-due') return true;
+    if (method === 'POST' && /^\/api\/equipment\/[1-9]\d*\/logs$/.test(path)) return true;
   }
   if (opLog(user)) {
     if (method === 'GET' && ['/api/operator/open-po', '/api/operator/ship-pending', '/api/operator/log-history', '/api/warehouses', '/api/lots/available', '/api/inventory/places'].includes(path)) return true; // 15.331 재고 현황(창고·위치·LOT별 수량, 금액 없음)
@@ -4902,11 +4907,32 @@ route('DELETE', '/api/equipment/:id', async ({ user, params, query }) => {
   if (await db.prepare('SELECT 1 FROM equipment_logs WHERE equipment_id=?').get(prior.id)) throw bad('이력이 있는 설비는 지울 수 없습니다. 상태를 「폐기」로 바꾸세요.');
   await db.prepare('DELETE FROM equipment WHERE id=? AND revision=?').run(prior.id, prior.revision); return { ok: true };
 });
+// 15.339 PM 연간 캘린더(설비·PM 항목 + 그 해 PM 기록) · 공무 오퍼레이터 점검 목록 · 점검 이상/고장 → CAPA 연결
+route('GET', '/api/pm-calendar', async ({ query }) => {
+  const year = intIn(query.year, '연도', 2000, 2100, Number(today().slice(0, 4)));
+  const eq = (await db.prepare("SELECT * FROM equipment WHERE status<>'disposed' ORDER BY equip_no").all()).map(r => eqRow(r)).filter(e => e.pm_items.length);
+  const logs = await db.prepare("SELECT id, equipment_id, pm_key, pm_name, log_date, result, worker_name, nc_id FROM equipment_logs WHERE kind='pm' AND substr(log_date,1,4)=? ORDER BY log_date").all(String(year));
+  return { year, equipment: eq.map(e => ({ id: e.id, equip_no: e.equip_no, name: e.name, unit_name: e.unit_name, location: e.location, status: e.status, pm_items: e.pm_items })), logs, today: today() };
+});
+route('GET', '/api/operator/pm-due', async ({ user }) => {
+  if (!canPlant(user) && !opMaint(user)) throw new HttpError(403, '권한이 없습니다.');
+  const eq = (await db.prepare("SELECT * FROM equipment WHERE status<>'disposed' ORDER BY equip_no").all()).map(r => eqRow(r));
+  const mine = await db.prepare("SELECT l.kind, l.log_date, l.pm_name, l.result, e.equip_no, e.name FROM equipment_logs l JOIN equipment e ON e.id=l.equipment_id WHERE l.created_by=? AND l.log_date=? ORDER BY l.id DESC LIMIT 50").all(user.name, today());
+  return { today: today(), equipment: eq.map(e => ({ id: e.id, equip_no: e.equip_no, name: e.name, unit_name: e.unit_name, location: e.location, status: e.status, status_label: e.status_label, revision: e.revision, pm_items: e.pm_items })), mine };
+});
+route('POST', '/api/equipment/logs/:id/nc', async ({ user, params, body }) => {
+  requirePlant(user); const l = await mustGet('equipment_logs', params.id), nc = await mustGet('nonconformities', body.nc_id);
+  if (l.nc_id) throw bad('이미 CAPA에 연결된 기록입니다.');
+  await db.prepare('UPDATE equipment_logs SET nc_id=? WHERE id=? AND nc_id IS NULL').run(nc.id, l.id); return { ok: true, nc_no: nc.nc_no };
+});
 const eqLogRow = r => ({ ...r, checks: JSON.parse(r.checks || '[]'), kind_label: EQ_LOG_KIND[r.kind] || r.kind });
 route('GET', '/api/equipment/:id/logs', async ({ params }) => { const e = await mustGet('equipment', params.id); return { equipment: eqRow(e), rows: (await db.prepare('SELECT * FROM equipment_logs WHERE equipment_id=? ORDER BY log_date DESC, id DESC LIMIT 500').all(e.id)).map(eqLogRow) }; });
 // 이력 기록: PM 수행이면 점검표 결과로 정상/이상을 정하고 그 항목의 직전 수행일·다음 예정일을 넘긴다. 고장·수리는 비가동 시간·조치, 설비 상태도 함께 바꿀 수 있다.
 route('POST', '/api/equipment/:id/logs', async ({ user, params, body }) => {
-  requirePlant(user); const key = str(body.request_id, 80) || null;
+  const opOnly = !canPlant(user) && opMaint(user); if (!opOnly) requirePlant(user); // 15.339 공무 오퍼레이터는 PM 점검·고장 신고만
+  if (opOnly && !['pm', 'failure'].includes(body.kind)) throw new HttpError(403, '오퍼레이터는 예방보전 점검과 고장 신고만 기록합니다.');
+  if (opOnly) { body = { ...body, cost: null, parts: '' }; }
+  const key = str(body.request_id, 80) || null;
   if (key) { const old = await db.prepare('SELECT * FROM equipment_logs WHERE request_id=?').get(key); if (old) return eqLogRow(old); }
   const e = await mustGet('equipment', params.id); if (Number(body.revision) !== e.revision) throw conflict();
   if (e.status === 'disposed') throw bad('폐기된 설비입니다.');
@@ -4930,7 +4956,8 @@ route('POST', '/api/equipment/:id/logs', async ({ user, params, body }) => {
       args: [e.id, kind, date, item?.key || '', item?.name || '', JSON.stringify(checks), result, num0(body.downtime_hours, '비가동 시간'), str(body.description, 1000), str(body.action, 1000), str(body.parts, 300), num0(body.cost, '비용'), str(body.worker_name, 50) || user.name, key, user.name, ...gd.args] },
   ]);
   if (!results[0].meta.changes) throw conflict();
-  return { ...eqRow(await mustGet('equipment', e.id)), log_result: result };
+  const lg = await db.prepare('SELECT id FROM equipment_logs WHERE equipment_id=? ORDER BY id DESC LIMIT 1').get(e.id); // 15.339 CAPA 연결용
+  return { ...eqRow(await mustGet('equipment', e.id)), log_result: result, log_id: lg?.id ?? null };
 });
 
 // C1 공정품질(PQC): 관리항목(공정 조건·환경측정 지점)과 측정값, SPC(X̄-R 또는 I-MR 관리도, Cp·Cpk). 기준은 품질이, 측정값은 생산·품질이 넣는다.
@@ -8690,6 +8717,10 @@ route('GET', '/api/my-tasks', async ({ user }) => {
   // 15.309 교육 대상자 본인 「참석 확인」 대기
   { const items = await db.prepare("SELECT t.id,t.title,t.plan_date FROM training_attendees a JOIN trainings t ON t.id=a.training_id WHERE (a.user_id=? OR a.user_name=?) AND a.attended=0 AND t.status IN ('planned','done') AND NOT EXISTS(SELECT 1 FROM training_tests x WHERE x.training_id=t.id) ORDER BY t.plan_date LIMIT 20").all(user.id, user.name); // 15.336 테스트 있는 교육은 합격이 곧 참석
     if (items.length) approvals.training_attend = { count: items.length, items: items.slice(0, 5) }; }
+  // 15.339 설비 점검 이상·고장 미처리(생산·품질): 최근 60일, CAPA 미연결, 그 뒤 수리 기록 없음
+  if (canPlant(user)) { const items = await db.prepare(`SELECT l.id, l.kind, l.log_date, l.pm_name, e.equip_no, e.name FROM equipment_logs l JOIN equipment e ON e.id=l.equipment_id
+      WHERE (l.result='이상' OR l.kind='failure') AND l.nc_id IS NULL AND l.log_date>=date(?, '-60 days') AND NOT EXISTS(SELECT 1 FROM equipment_logs r WHERE r.equipment_id=l.equipment_id AND r.kind='repair' AND (r.log_date>l.log_date OR (r.log_date=l.log_date AND r.id>l.id))) ORDER BY l.log_date DESC LIMIT 20`).all(today());
+    if (items.length) approvals.pm_issue = { count: items.length, items: items.slice(0, 5) }; }
   // 15.334 응시할 교육 테스트(열림 · 대상자 · 아직 합격 안 함 · 횟수 남음)
   { const items = await db.prepare(`SELECT t.id,t.title,t.plan_date FROM training_tests x JOIN trainings t ON t.id=x.training_id JOIN training_attendees a ON a.training_id=t.id AND (a.user_id=? OR a.user_name=?)
       WHERE x.open=1 AND t.status<>'void' AND NOT EXISTS(SELECT 1 FROM training_test_attempts p WHERE p.test_id=x.id AND p.user_name=? AND p.passed=1)

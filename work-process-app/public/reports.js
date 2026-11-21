@@ -2115,7 +2115,8 @@ async function eqLog(e, kind = 'pm', pmKey = '') {
     ${kind === 'pm' ? '<label class="span2">메모<input name="description" maxlength="1000"></label>' : ''}</div>`, { wide: true,
     onOpen: el => { box = el; const draw = () => { const it = item(), c = $('[data-pm-checks]', el); if (!c || !it) return; c.innerHTML = it.checks.length ? `<table class="grid pm-checks" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>점검 항목</th><th>결과</th><th>메모</th></tr></thead><tbody>${it.checks.map((n, i) => `<tr><td>${esc(n)}</td><td class="nowrap"><label class="chk"><input type="radio" name="ck${i}" value="1" checked> 양호</label> <label class="chk"><input type="radio" name="ck${i}" value="0"> 이상</label></td><td><input name="ckn${i}" maxlength="200"></td></tr>`).join('')}</tbody></table>` : '<p class="small muted">점검표가 없는 항목입니다. 수행만 기록합니다.</p>'; }; $('[name=pm_key]', el)?.addEventListener('change', draw); draw(); },
     submit: async vals => { const it = kind === 'pm' ? item() : null; const checks = it ? it.checks.map((n, i) => ({ item: n, ok: vals['ck' + i] === '1', note: vals['ckn' + i] || '' })) : []; return api('POST', `/api/equipment/${e.id}/logs`, { ...vals, checks, revision: e.revision, request_id: crypto.randomUUID() }); } });
-  if (v) { toast(kind === 'pm' ? `수행을 기록했습니다${v.log_result === '이상' ? ' — 점검 이상이 있습니다' : ''}.` : '기록했습니다.', v.log_result === '이상' ? 'err' : 'ok'); qReload(); }
+  if (v) { toast(kind === 'pm' ? `수행을 기록했습니다${v.log_result === '이상' ? ' — 점검 이상이 있습니다' : ''}.` : '기록했습니다.', v.log_result === '이상' ? 'err' : 'ok'); qReload();
+    if ((v.log_result === '이상' || kind === 'failure') && v.log_id && await confirmBox(`${kind === 'failure' ? '고장' : '점검 이상'}을 부적합·CAPA(공정 이상)로 등록할까요? 등록하면 설비 기록에 연결되고 할 일에서 빠집니다.`)) await pmToCapa(e, v.log_id, kind === 'failure' ? '설비 고장' : `PM 점검 이상(${(e.pm_items.find(p => p.key === pmKey) || {}).name || ''})`); } // 15.339
   return v;
 }
 async function eqOpen(id) {
@@ -2157,16 +2158,62 @@ async function pageEquipment(main) {
   form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }
+// ── 15.339 PM 연간 캘린더 ── 설비 × 월: PM 항목의 그 해 예정(직전·다음 예정일에서 주기로 앞뒤로) vs 실제 수행 기록.
+// 일·주 단위 주기는 달마다 「수행 n / 예정 m」으로 묶는다.
+function pmAddC(date, n, unit) {
+  const [y, m, d] = date.split('-').map(Number);
+  if (unit === 'day' || unit === 'week') return new Date(Date.UTC(y, m - 1, d) + n * (unit === 'week' ? 7 : 1) * 864e5).toISOString().slice(0, 10);
+  const months = unit === 'year' ? n * 12 : n, t = new Date(Date.UTC(y, m - 1 + months, 1)), last = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate();
+  t.setUTCDate(Math.min(d, last)); return t.toISOString().slice(0, 10);
+}
+function pmPlanDates(p, Y) {
+  const anchor = p.next_due || p.last_done; if (!anchor) return [];
+  const out = [], from = `${Y}-01-01`, to = `${Y}-12-31`; let d = anchor, guard = 0;
+  while (d > from && guard++ < 800) d = pmAddC(d, -p.cycle, p.unit);
+  while (d <= to && guard++ < 1600) { if (d >= from) out.push(d); d = pmAddC(d, p.cycle, p.unit); }
+  return out;
+}
+function pmCalItems(data, Y) {
+  const items = [], curM = todayStr().slice(0, 7);
+  for (const e of data.equipment) for (const p of e.pm_items) {
+    const plan = pmPlanDates(p, Y), logs = data.logs.filter(l => l.equipment_id === e.id && l.pm_key === p.key), dense = p.unit === 'day' || p.unit === 'week';
+    for (let m = 1; m <= 12; m++) {
+      const mm = `${Y}-${String(m).padStart(2, '0')}`, exp = plan.filter(d => d.startsWith(mm)).length, done = logs.filter(l => l.log_date.startsWith(mm)), bad = done.some(l => l.result === '이상');
+      if (!exp && !done.length) continue;
+      const state = done.length >= Math.max(1, exp) ? 'done' : mm < curM ? 'late' : 'plan';
+      items.push({ row: `${e.equip_no} ${e.name}`, month: m, done_month: m, state, label: p.name + (bad ? ' ⚠' : ''), sub: dense ? `${done.length}/${exp}` : done.length ? done.map(l => l.log_date.slice(5).replace('-', '/')).join(' ') : '',
+        title: `${e.equip_no} ${e.name} · ${p.name} (${p.cycle}${PM_UNIT_LABEL[p.unit] || ''}마다)${done.length ? ` · 수행 ${done.map(l => `${l.log_date} ${l.result}`).join(', ')}` : ''}`, attr: `data-pm-do="${e.id}" data-key="${p.key}"` });
+    }
+  }
+  return items;
+}
+// PM 점검 이상·고장 → 부적합·CAPA(출처 「공정 이상」) 등록하고 설비 기록에 연결
+async function pmToCapa(e, logId, what) {
+  const nc = await ncNew({ source_type: 'process', kind: '공정 이상', title: `${e.equip_no} ${e.name} · ${what}`, item: `${e.equip_no} ${e.name}` });
+  if (nc && logId) { try { await api('POST', `/api/equipment/logs/${logId}/nc`, { nc_id: nc.id }); toast(`${nc.nc_no}로 등록하고 설비 기록에 연결했습니다.`); } catch (err) { fail(err); } }
+  return nc;
+}
 async function pagePm(main) {
   main.innerHTML = `<h1>예방보전(PM) 일정 <span class="dept">생산 · 공무</span></h1>
   <p class="muted">모든 설비의 예방보전 항목을 다음 예정일 순으로 봅니다. 「수행」으로 점검표를 체크하면 직전 수행일과 다음 예정일(수행일 + 주기)이 바뀌고 설비 이력에 남습니다. 점검 중 「이상」이 하나라도 있으면 결과가 「이상」으로 기록됩니다.</p>
+  <div class="seg q-tabs" id="pmTabs"><button type="button" data-tab="list">기한 목록</button><button type="button" data-tab="cal">연간 PM 캘린더</button></div>
   <div class="ip-tiles" id="pmTiles"></div>
-  <form class="toolbar list-filters" data-read-only id="pmFilters"><label class="lf-sel">기한<select name="due"><option value="30">30일 안·지남</option><option value="7">7일 안·지남</option><option value="over">지남</option><option value="">전체</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="설비·호기·위치·PM 항목"></label></form>
+  <form class="toolbar list-filters" data-read-only id="pmFilters"><label class="lf-sel" data-only="cal">연도<select name="year">${[1, 0, -1, -2].map(i => { const y = Number(todayStr().slice(0, 4)) + i; return `<option${i === 0 ? ' selected' : ''}>${y}</option>`; }).join('')}</select></label><label class="lf-sel">기한<select name="due"><option value="30">30일 안·지남</option><option value="7">7일 안·지남</option><option value="over">지남</option><option value="">전체</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="설비·호기·위치·PM 항목"></label></form>
   <div id="pmList"></div>`;
-  const form = $('#pmFilters', main); let data = { rows: [], today: todayStr() };
-  const load = async () => { data = await api('GET', '/api/equipment'); if (main.isConnected) draw(); };
+  const form = $('#pmFilters', main); let data = { rows: [], today: todayStr() }, cal = null;
+  let pmTab = 'list'; try { pmTab = sessionStorage.getItem('qPmTab') === 'cal' ? 'cal' : 'list'; } catch { /* 편의 */ }
+  const load = async () => { [data, cal] = await Promise.all([api('GET', '/api/equipment'), pmTab === 'cal' ? api('GET', '/api/pm-calendar?year=' + form.elements.year.value) : Promise.resolve(null)]); if (main.isConnected) draw(); };
+  const drawCal = () => { // 15.339 연간 PM 캘린더
+    const Y = Number(form.elements.year.value), q = (formObj(form).q || '').trim().toLowerCase();
+    const items = pmCalItems(cal || { equipment: [], logs: [] }, Y).filter(x => !q || x.row.toLowerCase().includes(q) || x.label.toLowerCase().includes(q));
+    const lv = items.length, dn = items.filter(x => x.state === 'done').length, lt = items.filter(x => x.state === 'late').length, bad = (cal?.logs || []).filter(l => l.result === '이상').length;
+    qTiles('pmTiles', [['예정(칸)', lv], ['수행', `${dn}${lv ? ` (${Math.round(dn / lv * 100)}%)` : ''}`, 'green'], ['지연', lt, lt ? 'red' : ''], ['점검 이상', bad, bad ? 'red' : '']]);
+    $('#pmList', main).innerHTML = annualCalHtml(items, Y, { rowTitle: '설비', empty: `${Y}년 예방보전 예정이 없습니다. 「설비 대장·이력」에서 PM 항목(주기·직전 수행일)을 넣으세요.` });
+  };
   main.qReload = () => load().catch(fail);
   const draw = () => {
+    $$('#pmTabs button', main).forEach(b => b.classList.toggle('on', b.dataset.tab === pmTab)); $$('[data-only]', form).forEach(x => { x.hidden = x.dataset.only !== pmTab; }); form.elements.due.closest('label').hidden = pmTab === 'cal';
+    if (pmTab === 'cal') return drawCal();
     const v = formObj(form), q = (v.q || '').trim().toLowerCase();
     const items = data.rows.filter(e => e.status !== 'disposed').flatMap(e => e.pm_items.map(p => ({ e, p, d: ipDday(p.next_due, data.today) }))).sort((a, b) => (a.p.next_due || '9').localeCompare(b.p.next_due || '9'));
     qTiles('pmTiles', [['PM 항목', items.length], ['지남', items.filter(x => x.d < 0).length, items.some(x => x.d < 0) ? 'red' : ''], ['7일 안', items.filter(x => x.d >= 0 && x.d <= 7).length, items.some(x => x.d >= 0 && x.d <= 7) ? 'yellow' : ''], ['30일 안', items.filter(x => x.d >= 0 && x.d <= 30).length]]);
@@ -2175,11 +2222,12 @@ async function pagePm(main) {
       : `<div class="empty">${items.length ? '조건에 맞는 PM이 없습니다. 「기한」을 「전체」로 바꿔 보세요.' : 'PM 항목이 있는 설비가 없습니다. 「설비 대장·이력」에서 설비와 PM 항목을 넣으세요.'}</div>`;
   };
   main.addEventListener('click', e => {
-    const t = e.target.closest('[data-q-tile]'); if (t) { form.elements.due.value = ['', 'over', '7', '30'][Number(t.dataset.qTile)]; draw(); return; }
+    const tb = e.target.closest('#pmTabs [data-tab]'); if (tb) { pmTab = tb.dataset.tab; try { sessionStorage.setItem('qPmTab', pmTab); } catch { /* 편의 */ } load().catch(fail); return; }
+    const t = e.target.closest('[data-q-tile]'); if (t && pmTab === 'cal') return; if (t) { form.elements.due.value = ['', 'over', '7', '30'][Number(t.dataset.qTile)]; draw(); return; }
     const d = e.target.closest('[data-pm-do]'); if (d) return eqLog(data.rows.find(r => r.id === Number(d.dataset.pmDo)), 'pm', d.dataset.key).catch(fail);
     const o = e.target.closest('[data-pm-eq]'); if (o) eqOpen(Number(o.dataset.pmEq)).catch(fail);
   });
-  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  form.addEventListener('input', draw); form.addEventListener('change', e => { if (e.target.name === 'year') load().catch(fail); else draw(); }); form.onsubmit = e => e.preventDefault();
   await load();
 }
 
@@ -2804,6 +2852,7 @@ async function notifyCheck(first = false) {
     for (const q of tasks.approvals.quality || []) now[q.label] = q.count;
     if (tasks.approvals.training_attend?.count) now['교육 참석 확인'] = tasks.approvals.training_attend.count;
     if (tasks.approvals.training_test?.count) now['교육 테스트 응시'] = tasks.approvals.training_test.count; // 15.334
+    if (tasks.approvals.pm_issue?.count) now['설비 점검 이상·고장'] = tasks.approvals.pm_issue.count; // 15.339
     for (const q of alerts.quality_alerts || []) now[q.label] = q.count;
     if (alerts.overdue_po_count) now['납기 지난 미입고 발주'] = alerts.overdue_po_count;
     let seen = {}; try { seen = JSON.parse(localStorage.getItem(NOTIFY_SEEN()) || '{}'); if (Array.isArray(seen)) seen = {}; } catch {}

@@ -1,6 +1,6 @@
 // Operators have a restricted shell and narrow server endpoints; hiding menus is not authorization.
 // 15.330 오퍼레이터 두 종류: 생산(operator) · 물류(operator_logistics). 휴대폰에서 큰 단추로 고르고 바로 입력.
-const isOperatorMode = () => !!ME && !ME.is_admin && (ME.roles.includes('operator') || ME.roles.includes('operator_logistics'));
+const isOperatorMode = () => !!ME && !ME.is_admin && (ME.roles.includes('operator') || ME.roles.includes('operator_logistics') || ME.roles.includes('operator_maint'));
 const OP_GROUPS = {
   prod: { role: 'operator', icon: '🏭', label: '생산', desc: '반제품 · 완제품 실적 입력', links: [
     ['#/operator/cut', '반제품 · 커팅/융착', '✂️', '라인과 품목을 고르고 작업 수량 입력'],
@@ -12,6 +12,10 @@ const OP_GROUPS = {
     ['#/operator/receive', '입고 입력', '📥', '받은 발주를 고르고 수량·LOT 입력'],
     ['#/operator/ship', '출하 입력', '📤', '출하지시를 고르고 LOT·수량 확인(여러 LOT 섞기 가능)'],
     ['#/operator/stock', '재고 현황', '📊', '품목·LOT·창고 위치별 재고 보기'],
+  ] },
+  maint: { role: 'operator_maint', icon: '🔧', label: '공무', desc: '설비 점검 · 고장 신고', links: [
+    ['#/operator/pm', '설비 점검(PM)', '🔧', '예정 점검을 눌러 점검표 체크'],
+    ['#/operator/breakdown', '고장 신고', '🚨', '고장 난 설비와 증상 알리기'],
   ] },
 };
 const OPERATOR_LINKS = Object.values(OP_GROUPS).flatMap(g => g.links); // 예전 이름(다른 화면에서 참조)
@@ -54,6 +58,8 @@ async function operatorPage(route, main) {
   if (route === '#/operator/receive') return operatorReceive(main);
   if (route === '#/operator/ship') return operatorShip(main);
   if (route === '#/operator/stock') return operatorStock(main);
+  if (route === '#/operator/pm') return operatorPm(main); // 15.339
+  if (route === '#/operator/breakdown') return operatorBreakdown(main);
   return operatorHome(main);
 }
 const opRemain = po => Math.max(0, Math.round((Number(po.qty) - (['ok', 'mismatch'].includes(po.recv_status) ? Number(po.recv_qty) || 0 : 0)) * 1e6) / 1e6);
@@ -296,4 +302,70 @@ async function operatorFinished(main) {
     finally { busy = false; form.inert = false; draft.resume(); planInfo(); }
   };
   await loadPlans();
+}
+
+// ── 15.339 공무: 설비 점검(PM) · 고장 신고 ── 휴대폰에서 지난·오늘·7일 안 점검을 카드로, 누르면 점검표를 큰 「정상 / 이상」 단추로.
+const opDueLabel = (d, today) => { const n = ipDday(d, today); return n === null ? '' : n < 0 ? `${-n}일 지남` : n === 0 ? '오늘' : `${n}일 남음`; };
+async function operatorPm(main) {
+  main.innerHTML = `<h1>🔧 설비 점검(PM)</h1><p class="muted">점검할 설비를 눌러 점검표를 체크하세요. 지난 점검이 맨 위에 있습니다.</p>
+    <label class="op-search"><span class="sr-only">찾기</span><input type="search" id="opQ" placeholder="🔎 설비번호 · 설비명 · 위치" autocomplete="off"></label>
+    <div class="seg op-seg" id="opRange"><button type="button" data-r="7" class="on">7일 안·지남</button><button type="button" data-r="all">전체</button></div>
+    <div id="opList" class="op-cards" aria-live="polite"><p class="muted">불러오는 중…</p></div>
+    <section class="card"><h3>오늘 내가 입력한 기록</h3><div id="opHist"></div></section>`;
+  let d = { equipment: [], mine: [], today: todayStr() }, range = '7';
+  const draw = () => {
+    const q = opKey($('#opQ', main).value);
+    const rows = d.equipment.filter(e => e.status !== 'disposed').flatMap(e => e.pm_items.map(p => ({ e, p, n: ipDday(p.next_due, d.today) })))
+      .filter(x => (range === 'all' || (x.n !== null && x.n <= 7)) && opMatch(q, x.e.equip_no, x.e.name, x.e.location, x.e.unit_name, x.p.name)).sort((a, b) => (a.p.next_due || '9').localeCompare(b.p.next_due || '9'));
+    $('#opList', main).innerHTML = rows.length ? rows.map(({ e, p, n }) => `<button type="button" class="op-card" data-pm-eq="${e.id}" data-key="${p.key}"><span class="op-card-main"><b>${esc(p.name)}</b><span class="op-sub">${esc(e.equip_no)} ${esc(e.name)}${e.location ? ' · ' + esc(e.location) : ''}</span><span class="op-sub">점검표 ${p.checks.length}개 · ${p.cycle}${PM_UNIT_LABEL[p.unit] || ''}마다</span></span>
+      <span class="op-card-side"><span class="op-qty ${n !== null && n < 0 ? 'op-late' : ''}">${esc(opDueLabel(p.next_due, d.today))}</span><span class="op-sub">예정 ${esc((p.next_due || '').slice(5))}</span></span></button>`).join('')
+      : `<div class="empty">${range === '7' ? '7일 안에 할 점검이 없습니다. 「전체」를 눌러 보세요.' : '점검할 설비가 없습니다.'}</div>`;
+    $('#opHist', main).innerHTML = d.mine.length ? `<div class="operator-history">${d.mine.map(r => `<article><div><b>${esc(r.equip_no)} ${esc(r.name)}</b><p class="small muted">${r.kind === 'pm' ? esc(r.pm_name) : '고장 신고'}</p></div><div>${r.kind === 'pm' ? `<span class="chip ${r.result === '이상' ? 'red' : 'green'}">${esc(r.result)}</span>` : '<span class="chip red">고장</span>'}</div></article>`).join('')}</div>` : '<p class="muted">오늘 입력한 기록이 없습니다.</p>';
+  };
+  const load = async () => { d = await api('GET', '/api/operator/pm-due'); draw(); };
+  $('#opQ', main).addEventListener('input', draw);
+  main.addEventListener('click', e => {
+    const r = e.target.closest('#opRange [data-r]'); if (r) { range = r.dataset.r; main.querySelectorAll('#opRange button').forEach(b => b.classList.toggle('on', b === r)); draw(); return; }
+    const c = e.target.closest('[data-pm-eq]'); if (c) { const eq = d.equipment.find(x => x.id === Number(c.dataset.pmEq)); opPmPop(eq, eq.pm_items.find(p => p.key === c.dataset.key), load); }
+  });
+  await load();
+}
+function opPmPop(e, p, reload) {
+  const rid = crypto.randomUUID(); let busy = false; const state = p.checks.map(() => null);
+  const m = modal(`<h2 class="op-pop-title">🔧 ${esc(p.name)}</h2><p class="muted">${esc(e.equip_no)} ${esc(e.name)}${e.location ? ' · ' + esc(e.location) : ''} · 예정 ${esc(p.next_due || '')}</p>
+    <form class="stack op-form" id="opPmForm">
+      ${p.checks.length ? p.checks.map((c, i) => `<fieldset class="op-check" data-ci="${i}"><legend>${i + 1}. ${esc(c)}</legend><div class="op-ok-ng"><button type="button" class="op-ok" data-ok="${i}">✔ 정상</button><button type="button" class="op-ng" data-ng="${i}">✕ 이상</button></div><input data-note="${i}" maxlength="200" placeholder="이상 내용(이상일 때)" hidden></fieldset>`).join('') : '<p class="muted">점검표 항목이 없는 PM입니다. 수행만 기록합니다.</p>'}
+      ${p.checks.length ? '<button type="button" class="btn op-allok" data-allok>모두 정상</button>' : ''}
+      <label>점검일<input type="date" name="log_date" value="${todayStr()}" max="${todayStr()}" required></label>
+      <label>메모<input name="description" maxlength="500" autocomplete="off"></label>
+      <p class="op-warn" data-warn hidden></p>
+      <button class="btn primary op-save">점검 저장</button></form>`);
+  const f = $('#opPmForm', m.el), warn = $('[data-warn]', m.el);
+  const paint = () => { p.checks.forEach((_, i) => { const box = f.querySelector(`[data-ci="${i}"]`); box.classList.toggle('is-ok', state[i] === true); box.classList.toggle('is-ng', state[i] === false); f.querySelector(`[data-note="${i}"]`).hidden = state[i] !== false; });
+    const left = state.filter(x => x === null).length, ng = state.filter(x => x === false).length; warn.hidden = !(left || ng); warn.textContent = left ? `확인 안 한 항목 ${left}개` : `이상 ${ng}개 — 저장하면 공무 담당 할 일에 올라갑니다.`; };
+  f.addEventListener('click', e => { const o = e.target.closest('[data-ok]'), n = e.target.closest('[data-ng]'); if (o) state[Number(o.dataset.ok)] = true; if (n) { state[Number(n.dataset.ng)] = false; setTimeout(() => f.querySelector(`[data-note="${n.dataset.ng}"]`)?.focus(), 0); } if (e.target.closest('[data-allok]')) state.fill(true); if (o || n || e.target.closest('[data-allok]')) paint(); });
+  paint();
+  f.onsubmit = async ev => {
+    ev.preventDefault(); if (busy) return; if (state.some(x => x === null)) { toast('모든 점검 항목을 「정상」 또는 「이상」으로 고르세요.', 'err'); return; }
+    busy = true; const btn = $('.op-save', f); btn.disabled = true; btn.textContent = '저장 중…';
+    try {
+      const r = await api('POST', `/api/equipment/${e.id}/logs`, { kind: 'pm', pm_key: p.key, log_date: f.log_date.value, description: f.description.value, checks: p.checks.map((c, i) => ({ item: c, ok: state[i], note: f.querySelector(`[data-note="${i}"]`).value })), revision: e.revision, request_id: rid });
+      m.close(); opDone(r.log_result === '이상' ? '점검 저장 · 이상 있음' : '점검 저장 완료', `${esc(e.equip_no)} ${esc(e.name)}<br>${esc(p.name)} · <b>${esc(r.log_result)}</b>${r.log_result === '이상' ? '<br>공무 담당에게 알렸습니다.' : ''}`); await reload();
+    } catch (err) { fail(err); btn.disabled = false; btn.textContent = '점검 저장'; busy = false; }
+  };
+}
+async function operatorBreakdown(main) {
+  main.innerHTML = `<h1>🚨 고장 신고</h1><p class="muted">고장 난 설비를 고르고 증상을 적으면 설비가 「정비 중」으로 바뀌고 공무 담당 할 일에 올라갑니다.</p>
+    <label class="op-search"><span class="sr-only">찾기</span><input type="search" id="opQ" placeholder="🔎 설비번호 · 설비명 · 위치" autocomplete="off"></label>
+    <div id="opList" class="op-cards" aria-live="polite"><p class="muted">불러오는 중…</p></div>`;
+  let d = { equipment: [] };
+  const draw = () => { const q = opKey($('#opQ', main).value); const rows = d.equipment.filter(e => e.status !== 'disposed' && opMatch(q, e.equip_no, e.name, e.location, e.unit_name));
+    $('#opList', main).innerHTML = rows.length ? rows.map(e => `<button type="button" class="op-card" data-bd="${e.id}"><span class="op-card-main"><b>${esc(e.equip_no)} ${esc(e.name)}</b><span class="op-sub">${esc([e.unit_name, e.location].filter(Boolean).join(' · '))}</span></span><span class="op-card-side"><span class="chip ${e.status === 'running' ? 'green' : 'yellow'}">${esc(e.status_label)}</span></span></button>`).join('') : '<div class="empty">설비가 없습니다.</div>'; };
+  const load = async () => { d = await api('GET', '/api/operator/pm-due'); draw(); };
+  $('#opQ', main).addEventListener('input', draw);
+  main.addEventListener('click', e => { const b = e.target.closest('[data-bd]'); if (!b) return; const eq = d.equipment.find(x => x.id === Number(b.dataset.bd)); const rid = crypto.randomUUID();
+    const m = modal(`<h2 class="op-pop-title">🚨 ${esc(eq.equip_no)} ${esc(eq.name)}</h2><form class="stack op-form" id="opBdForm"><label>증상 *<textarea name="description" rows="3" maxlength="1000" required placeholder="예) 탈수 때 소음·진동, 에러 E3"></textarea></label><label>멈춘 시간(시간)<input type="number" name="downtime_hours" inputmode="decimal" step="0.5" min="0"></label><label>일자<input type="date" name="log_date" value="${todayStr()}" max="${todayStr()}"></label><button class="btn primary op-save">고장 신고</button></form>`);
+    const f = $('#opBdForm', m.el); f.onsubmit = async ev => { ev.preventDefault(); if (!f.reportValidity()) return; const btn = $('.op-save', f); btn.disabled = true;
+      try { await api('POST', `/api/equipment/${eq.id}/logs`, { kind: 'failure', description: f.description.value, downtime_hours: f.downtime_hours.value, log_date: f.log_date.value, status_after: 'maintenance', revision: eq.revision, request_id: rid }); m.close(); opDone('고장 신고 완료', `${esc(eq.equip_no)} ${esc(eq.name)}<br>「정비 중」으로 바꾸고 공무 담당에게 알렸습니다.`); await load(); } catch (err) { fail(err); btn.disabled = false; } }; });
+  await load();
 }
