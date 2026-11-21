@@ -4353,3 +4353,15 @@ html[data-font]:lang(km) body { font-family: "Noto Sans Khmer", "Khmer OS", "Lee
 /* 글꼴 고르기는 스킨 고르기와 같은 모양 */
 .font-select { min-height: 32px; border-radius: 6px; padding: 2px 8px; font: inherit; font-size: 13px; }
 .side-prefs .font-select { flex: 1 1 100%; width: 100%; min-height: 36px; }
+
+/* 15.327 크게 보기 막대: 떠 있지 않고 화면 위쪽 흐름 안에(제목·표 머리글·입력칸을 가리지 않음). 스크롤해 막대가 안 보이면 오른쪽 아래 둥근 「↙」 */
+.focus-bar { position: static; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; padding: 12px 28px 0; background: none; border: 0; border-radius: 0; box-shadow: none; }
+.focus-bar .grow { flex: 1; }
+.focus-bar .fb-title { max-width: none; padding: 0; }
+body.focus-mode #main { padding-top: 12px; padding-bottom: 88px; }
+.focus-fab { position: fixed; right: 16px; bottom: 16px; z-index: 45; width: 46px; height: 46px; border-radius: 50%; border: 0; background: var(--accent); color: #fff; font-size: 22px; line-height: 1; cursor: pointer; box-shadow: 0 6px 18px rgba(0, 0, 0, .25); }
+.focus-fab:hover, .focus-fab:focus-visible { filter: brightness(1.08); outline: 2px solid color-mix(in srgb, var(--accent) 40%, transparent); outline-offset: 2px; }
+.focus-fab[hidden] { display: none; }
+body:not(.focus-mode) .focus-fab, body:not(.focus-mode) .focus-bar { display: none; }
+@media (max-width: 700px) { .focus-bar { padding: 10px 16px 0; } .focus-bar .fb-title { flex-basis: 100%; } }
+@media print { .focus-fab { display: none !important; } }
