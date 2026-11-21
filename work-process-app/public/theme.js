@@ -30,6 +30,27 @@ function applyFont(mode) {
   if ((mode === 'pretendard' || mode === 'helvetica') && !document.getElementById('pretendardCss')) { const l = document.createElement('link'); l.id = 'pretendardCss'; l.rel = 'stylesheet'; l.href = PRETENDARD_CSS; l.crossOrigin = 'anonymous'; document.head.append(l); }
   for (const s of document.querySelectorAll('.font-select')) s.value = mode;
 }
+// 15.328 PC 화면 모드: 휴대폰에서도 PC 화면(폭 1280px)으로 보기. 브라우저의 「데스크톱 사이트」처럼 화면 폭을 바꾸고, 두 손가락으로 확대해 봅니다. 이 기기에 기억.
+const PCMODE_KEY = 'wpa:pcmode', PC_VIEWPORT = 'width=1280, viewport-fit=cover', MOBILE_VIEWPORT = 'width=device-width, initial-scale=1, viewport-fit=cover';
+function pcMode() { try { return localStorage.getItem(PCMODE_KEY) === '1'; } catch { return false; } }
+function smallDevice() { try { return Math.min(screen.width, screen.height) < 820 || !!window.matchMedia?.('(pointer: coarse)').matches; } catch { return false; } }
+function applyPcMode(on) {
+  const root = document.documentElement; let vp = document.querySelector('meta[name=viewport]');
+  if (!vp) { vp = document.createElement('meta'); vp.name = 'viewport'; document.head.append(vp); }
+  const want = on ? PC_VIEWPORT : MOBILE_VIEWPORT; if (vp.getAttribute('content') !== want) vp.setAttribute('content', want);
+  root.toggleAttribute('data-pcmode', !!on);
+  const show = on || smallDevice();
+  for (const b of document.querySelectorAll('.pcmode-toggle')) { b.hidden = !show; b.setAttribute('aria-pressed', on ? 'true' : 'false'); b.innerHTML = on ? '<span aria-hidden="true">📱</span> 모바일 화면' : '<span aria-hidden="true">🖥</span> PC 화면'; b.title = on ? '휴대폰 화면으로 돌아가기' : '휴대폰에서도 PC 화면으로 보기(두 손가락으로 확대)'; }
+  let chip = document.getElementById('pcmodeChip');
+  if (on && smallDevice()) {
+    if (!chip && document.body) { chip = document.createElement('button'); chip.type = 'button'; chip.id = 'pcmodeChip'; chip.className = 'pcmode-chip'; chip.innerHTML = '<span aria-hidden="true">📱</span> 모바일 화면'; chip.title = '휴대폰 화면으로 돌아가기'; chip.onclick = () => setPcMode(false); document.body.append(chip); }
+  } else chip?.remove();
+}
+function setPcMode(on) {
+  try { if (on) localStorage.setItem(PCMODE_KEY, '1'); else localStorage.removeItem(PCMODE_KEY); } catch { /* 이 화면에만 */ }
+  applyPcMode(on);
+  if (typeof toast === 'function') toast(on ? 'PC 화면으로 봅니다. 두 손가락으로 확대하세요. 왼쪽 아래 「📱 모바일 화면」으로 돌아갑니다.' : '휴대폰 화면으로 돌아왔습니다.');
+}
 function applyDensity(mode) {
   document.documentElement.setAttribute('data-density', mode);
   for (const b of document.querySelectorAll('.density-toggle')) { b.innerHTML = `<span class="theme-icon" aria-hidden="true">${mode === 'compact' ? '☰' : '≡'}</span> <span>${DENSITY_LABEL[mode]}</span>`; b.title = '화면 밀도(촘촘 ↔ 보통)'; b.setAttribute('aria-label', `화면 밀도: ${DENSITY_LABEL[mode]}`); }
@@ -105,7 +126,7 @@ function applyTheme(mode) {
 }
 (function themeStart() {
   if (typeof document === 'undefined' || !document.documentElement) return;
-  applyTheme(themeMode()); applyNavLayout(navLayout()); applyDensity(densityMode()); applyFont(fontMode()); applySkin(skinMode()); applyFace(); applyTopPattern();
+  applyTheme(themeMode()); applyNavLayout(navLayout()); applyDensity(densityMode()); applyFont(fontMode()); applyPcMode(pcMode()); applySkin(skinMode()); applyFace(); applyTopPattern();
   try { window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener('change', () => applySkinColor()); } catch { /* 오래된 브라우저 */ }
   const place = () => {
     for (const found of document.querySelectorAll('.who, .auth-card, .side')) {
@@ -116,11 +137,12 @@ function applyTheme(mode) {
       const lang = host.querySelector('.lang-select');
       if (host.classList.contains('who')) (lang ? lang.after(button) : host.prepend(button)); else if (host.classList.contains('side-prefs')) host.append(button); else host.append(button);
       applyTheme(themeMode());
+      if (!host.querySelector('.pcmode-toggle')) { const pc = document.createElement('button'); pc.type = 'button'; pc.className = 'btn small pcmode-toggle'; pc.setAttribute('aria-label', 'PC 화면 모드'); pc.onclick = () => setPcMode(!pcMode()); button.after(pc); applyPcMode(pcMode()); } /* 15.328 */
       // 메뉴 위치 버튼: 로그인 뒤 머리줄에만(메뉴가 있는 화면)
       if (host.classList.contains('who') && document.querySelector('.side') && !host.querySelector('.nav-layout-toggle')) {
         const nb = document.createElement('button'); nb.type = 'button'; nb.className = 'btn small theme-toggle nav-layout-toggle'; nb.setAttribute('aria-label', '메뉴 위치');
         nb.onclick = () => { const next = navLayout() === 'top' ? 'side' : 'top'; try { localStorage.setItem(NAV_KEY, next); } catch { /* 이 화면에만 */ } applyNavLayout(next); };
-        button.after(nb); applyNavLayout(navLayout());
+        (host.querySelector('.pcmode-toggle') || button).after(nb); applyNavLayout(navLayout());
         const db = document.createElement('button'); db.type = 'button'; db.className = 'btn small theme-toggle density-toggle';
         db.onclick = () => { const next = densityMode() === 'compact' ? 'normal' : 'compact'; try { localStorage.setItem(DENSITY_KEY, next); } catch { /* 이 화면에만 */ } applyDensity(next); };
         nb.after(db); applyDensity(densityMode());

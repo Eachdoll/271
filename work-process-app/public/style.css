@@ -4365,3 +4365,8 @@ body.focus-mode #main { padding-top: 12px; padding-bottom: 88px; }
 body:not(.focus-mode) .focus-fab, body:not(.focus-mode) .focus-bar { display: none; }
 @media (max-width: 700px) { .focus-bar { padding: 10px 16px 0; } .focus-bar .fb-title { flex-basis: 100%; } }
 @media print { .focus-fab { display: none !important; } }
+
+/* 15.328 PC 화면 모드(휴대폰에서 PC 화면 폭으로) */
+.pcmode-toggle[hidden] { display: none !important; }
+.pcmode-chip { position: fixed; left: 16px; bottom: 16px; z-index: 60; font: inherit; font-size: 40px; font-weight: 700; padding: 16px 30px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--text); box-shadow: 0 4px 16px rgba(0,0,0,.22); cursor: pointer; }
+@media print { .pcmode-chip { display: none !important; } }
