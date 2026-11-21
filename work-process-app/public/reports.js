@@ -1355,6 +1355,7 @@ async function qdocNew(pre = {}) {
     ${ext ? `<label>발행처 *<input name="issuer" required maxlength="100" placeholder="국가기술표준원 · ISO · 고객사"></label><label>판·연도<input name="edition" maxlength="60" placeholder="예) 2024 · 3판"></label><label>시행·발행일<input type="date" name="effective_date" value="${todayStr()}"></label>` : ''}
     <label>주관 부서<input name="dept" maxlength="50" list="qdDepts" value="${esc(pre.dept || '품질')}"><datalist id="qdDepts">${list.depts.map(d => `<option value="${esc(d)}">`).join('')}</datalist></label>
     <label>담당자<input name="owner_name" maxlength="50" value="${esc(ME?.name || '')}"></label>
+    ${qdocFolderSel(list.folders || [], pre.folder || '')}
     <label>보존기간(년) <span class="hint">(0 = 영구)</span><input type="number" name="retention_years" min="0" max="99" value="3"></label>
     <label>검토 주기(개월) <span class="hint">(0 = 없음)</span><input type="number" name="review_months" min="0" max="60" value="${ext ? 12 : 12}"></label>
     <label class="span2">파일 (PDF·사진, 8MB)<input type="file" data-q-file accept="application/pdf,image/jpeg,image/png,image/webp"></label>
@@ -1378,6 +1379,7 @@ async function qdocOpen(id) {
         <input type="hidden" name="kind" value="${esc(d.kind)}">
         ${d.internal ? '' : `<label>발행처<input name="issuer" maxlength="100" value="${esc(d.issuer)}"${dis}></label><label>판·연도<input name="edition" maxlength="60" value="${esc(d.edition)}"${dis}></label><label>시행·발행일<input type="date" name="effective_date" value="${esc(d.effective_date || '')}"${dis}></label>`}
         <label>주관 부서<input name="dept" maxlength="50" value="${esc(d.dept)}"${mdis}></label><label>담당자<input name="owner_name" maxlength="50" value="${esc(d.owner_name)}"${mdis}></label>
+        ${qdocFolderSel(list.folders || [], d.folder || '', mdis)}
         <label>보존기간(년)<input type="number" name="retention_years" min="0" max="99" value="${d.retention_years}"${mdis}></label>
         <label>검토 주기(개월)<input type="number" name="review_months" min="0" max="60" value="${d.review_months}"${mdis}></label>
         <label>다음 검토일${qDd(d.next_review, list.today, d.status === 'approved')}<input type="date" name="next_review" value="${esc(d.next_review || '')}"${mdis}></label>
@@ -1420,40 +1422,115 @@ async function qdocOpen(id) {
     } catch (err) { fail(err); }
   }));
 }
+// 15.333 문서관리: 왼쪽에 분류 폴더 창(재고 현황 「자재별·창고별」처럼). 「📑 종류별」(내부·외부 → 매뉴얼·절차서…) · 「📁 폴더별」(품질에서 만드는 분류 폴더, 3단계).
+function qdocFolderSel(folders, value = '', dis = '') {
+  return `<label>폴더<select name="folder"${dis}><option value="">미분류</option>${folders.map(f => { const d = f.split('/').length - 1; return `<option value="${esc(f)}"${f === value ? ' selected' : ''}>${'　'.repeat(d)}${d ? '└ ' : ''}${esc(f.split('/').at(-1))}</option>`; }).join('')}</select></label>`;
+}
 async function pageQDocs(main) {
   main.innerHTML = `<h1>문서관리 <span class="dept">품질</span></h1>
-  <p class="muted">내부문서(매뉴얼·절차서·지침서·양식)는 <b>초안 → 검토 → 승인·배포 → 폐지</b>로 관리하고, 개정하면 판(Rev)이 오르며 이전 판은 이력에 남습니다. 승인 전까지는 현행판이 그대로 배포됩니다. 외부문서(규격·법규·고객 요구서)는 대장으로 관리합니다. 열람 부서를 정하면 그 부서와 품질만 봅니다.</p>
+  <p class="muted">내부문서(매뉴얼·절차서·지침서·양식)는 <b>초안 → 검토 → 승인·배포 → 폐지</b>로 관리하고, 개정하면 판(Rev)이 오르며 이전 판은 이력에 남습니다. 승인 전까지는 현행판이 그대로 배포됩니다. 외부문서(규격·법규·고객 요구서)는 판·발행일과 파일을 등록해 최신본을 관리합니다. 왼쪽 창에서 <b>종류별</b> 또는 <b>폴더별</b>로 골라 보세요.</p>
   <div class="ip-tiles" id="qdTiles"></div>
-  <form class="toolbar list-filters" data-read-only id="qdFilters">
-    <label class="lf-sel">구분<select name="scope"><option value="">전체</option><option value="internal">내부문서</option><option value="external">외부문서</option></select></label>
-    <label class="lf-sel">종류<select name="kind"><option value="">전체</option>${Object.entries(QDOC_KIND_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
+  <div class="stock-ex qd-ex"><details class="stock-tree-box" open><summary>📁 문서 분류 · 폴더</summary><nav id="qdTree" class="stock-tree" aria-label="문서 분류·폴더"></nav></details>
+  <section class="stock-ex-main">
+  <form class="toolbar list-filters" data-read-only id="qdFilters" data-list-for="qdList">
     <label class="lf-sel">상태<select name="st"><option value="live">폐지 빼고</option><option value="">전체</option>${Object.entries(QDOC_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}<option value="due">검토일 30일 안·지남</option></select></label>
     <label class="list-search">찾기<input type="search" name="q" placeholder="문서번호·제목·부서·담당·발행처"></label><span class="grow"></span><span id="qdTools" class="ip-tools"></span></form>
-  <div id="qdList"></div>`;
-  const form = $('#qdFilters', main); let data = { rows: [], today: todayStr() };
-  const load = async () => { data = await api('GET', '/api/qdocs'); if (main.isConnected) draw(); };
+  <div class="stock-path" id="qdPath"></div>
+  <div class="bulk-bar qd-bulk" id="qdBulk" hidden></div>
+  <div id="qdList"></div></section></div>`;
+  const form = $('#qdFilters', main); let data = { rows: [], folders: [], today: todayStr() };
+  let nav = 'kind', sel = { k: 'all', p: [] }, opened = new Set(['internal', 'external']); const picked = new Set();
+  try { nav = sessionStorage.getItem('wpa:qd-nav') === 'folder' ? 'folder' : 'kind'; const s = JSON.parse(sessionStorage.getItem('wpa:qd-sel') || 'null'); if (s && ['all', 'kind', 'folder', 'none'].includes(s.k) && Array.isArray(s.p)) sel = s; const o = JSON.parse(sessionStorage.getItem('wpa:qd-open') || 'null'); if (Array.isArray(o)) opened = new Set(o); } catch { /* 편의 */ }
+  const save = () => { try { sessionStorage.setItem('wpa:qd-nav', nav); sessionStorage.setItem('wpa:qd-sel', JSON.stringify(sel)); sessionStorage.setItem('wpa:qd-open', JSON.stringify([...opened])); } catch { /* 편의 */ } };
+  if (window.matchMedia?.('(max-width: 860px)').matches) $('.stock-tree-box', main).open = false;
+  const load = async () => { data = await api('GET', '/api/qdocs'); if (!main.isConnected) return; if (sel.k === 'folder' && !data.folders.includes(sel.p.join('/'))) sel = { k: 'all', p: [] }; draw(); };
   main.qReload = () => load().catch(fail);
   const due = r => r.status === 'approved' && r.next_review && ipDday(r.next_review, data.today) <= 30;
+  const base = () => { const v = formObj(form), q = (v.q || '').trim().toLowerCase(); return data.rows.filter(r => (v.st === 'live' ? r.status !== 'obsolete' : v.st === 'due' ? due(r) : !v.st || r.status === v.st) && (!q || [r.doc_no, r.title, r.dept, r.owner_name, r.issuer, r.folder].join(' ').toLowerCase().includes(q))); };
+  const inSel = (r, s = sel) => s.k === 'all' ? true : s.k === 'kind' ? r.scope === s.p[0] && (!s.p[1] || r.kind === s.p[1]) : s.k === 'none' ? !r.folder : (r.folder === s.p.join('/') || (r.folder || '').startsWith(s.p.join('/') + '/'));
+  const node = (s, label, icon, n, depth, kids = null, key = '') => { const on = sel.k === s.k && sel.p.join('/') === s.p.join('/'), open = opened.has(key);
+    return `<div class="st-row${on ? ' on' : ''}" style="--d:${depth}">${kids ? `<button type="button" class="st-tw" data-qd-tw="${esc(key)}" aria-expanded="${open}" aria-label="${esc(label)} ${open ? '접기' : '펼치기'}">${open ? '▾' : '▸'}</button>` : '<span class="st-tw"></span>'}<button type="button" class="st-node" data-qd-sel='${esc(JSON.stringify(s))}' aria-current="${on}"><span class="st-ic">${icon}</span>${esc(label)} <span class="st-n">${fmtNum(n)}</span></button></div>${kids && open ? kids : ''}`; };
+  const drawTree = rows => {
+    const cnt = s => rows.filter(r => inSel(r, s)).length;
+    let body = node({ k: 'all', p: [] }, '전체 문서', '🗂', rows.length, 0);
+    if (nav === 'kind') {
+      for (const [scope, label, icon] of [['internal', '내부문서', '📘'], ['external', '외부문서', '📗']]) {
+        const kinds = Object.entries(QDOC_KIND_LABEL).filter(([k]) => QDOC_INT.includes(k) === (scope === 'internal'));
+        body += node({ k: 'kind', p: [scope] }, label, icon, cnt({ k: 'kind', p: [scope] }), 0, kinds.map(([k, l]) => node({ k: 'kind', p: [scope, k] }, l, '📄', cnt({ k: 'kind', p: [scope, k] }), 1)).join(''), scope);
+      }
+    } else {
+      const tree = (parent, depth) => data.folders.filter(f => f.split('/').length === depth + 1 && (depth === 0 || f.startsWith(parent + '/'))).map(f => { const kids = data.folders.some(x => x.startsWith(f + '/')) ? tree(f, depth + 1) : null; return node({ k: 'folder', p: f.split('/') }, f.split('/').at(-1), opened.has('f:' + f) && kids ? '📂' : '📁', cnt({ k: 'folder', p: f.split('/') }), depth, kids, 'f:' + f); }).join('');
+      body += tree('', 0) + node({ k: 'none', p: [] }, '미분류', '🗃', cnt({ k: 'none', p: [] }), 0);
+      if (!data.folders.length) body += `<p class="small muted qd-tree-hint">아직 폴더가 없습니다.${data.can_manage ? ' 아래 「＋ 새 폴더」로 만드세요(예: 생산 › 세탁).' : ''}</p>`;
+    }
+    const fsel = sel.k === 'folder';
+    $('#qdTree', main).innerHTML = `<div class="st-tabs" role="tablist" aria-label="보기"><button type="button" role="tab" data-qd-mode="kind" aria-selected="${nav === 'kind'}">📑 종류별</button><button type="button" role="tab" data-qd-mode="folder" aria-selected="${nav === 'folder'}">📁 폴더별</button></div>${body}
+      ${nav === 'folder' ? `<div class="st-set">${data.can_manage ? `<button type="button" class="btn small" data-qf="add">＋ 새 폴더${fsel ? ' (안에)' : ''}</button>${fsel ? '<button type="button" class="btn small" data-qf="rename">✎ 이름</button><button type="button" class="btn small danger" data-qf="delete">지우기</button>' : ''}` : '<span class="small muted">폴더는 품질 담당이 만듭니다</span>'}</div>` : ''}`;
+  };
   const draw = () => {
-    const v = formObj(form), q = (v.q || '').trim().toLowerCase(), all = data.rows;
+    const all = data.rows, rows0 = base();
     qTiles('qdTiles', [['전체(폐지 빼고)', all.filter(r => r.status !== 'obsolete').length], ['승인·배포', all.filter(r => r.status === 'approved').length, 'green'], ['검토 대기', all.filter(r => r.status === 'review').length, all.some(r => r.status === 'review') ? 'yellow' : ''], ['초안·개정 중', all.filter(r => r.status === 'draft').length], ['검토일 30일 안·지남', all.filter(due).length, all.some(due) ? 'red' : '']]);
+    drawTree(rows0);
+    const path = sel.k === 'all' ? '' : sel.k === 'kind' ? [sel.p[0] === 'internal' ? '내부문서' : '외부문서', sel.p[1] ? QDOC_KIND_LABEL[sel.p[1]] : ''].filter(Boolean) : sel.k === 'none' ? ['미분류'] : sel.p;
+    $('#qdPath', main).innerHTML = path ? `<span class="muted">${nav === 'kind' ? '종류별' : '폴더별'}</span> › ${path.map(x => `<b>${esc(x)}</b>`).join(' › ')} <button type="button" class="link-btn small" data-qd-sel='{"k":"all","p":[]}'>전체 보기</button>` : '';
     $('#qdTools', main).innerHTML = data.can_manage ? '<button type="button" class="btn" id="qdExt">＋ 외부문서</button><button type="button" class="btn primary" id="qdNew">＋ 문서 제정</button>' : '';
-    const rows = all.filter(r => (!v.scope || r.scope === v.scope) && (!v.kind || r.kind === v.kind) && (v.st === 'live' ? r.status !== 'obsolete' : v.st === 'due' ? due(r) : !v.st || r.status === v.st) && (!q || [r.doc_no, r.title, r.dept, r.owner_name, r.issuer].join(' ').toLowerCase().includes(q)));
-    $('#qdList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>문서번호</th><th>제목</th><th>종류</th><th>판</th><th>주관 부서 · 담당</th><th>시행일</th><th>다음 검토</th><th>열람</th><th>상태</th><th>현행판</th><th></th></tr></thead><tbody>${rows.map(r => `<tr data-qd-row="${r.id}" class="${due(r) ? (ipDday(r.next_review, data.today) < 0 ? 'ip-over' : 'ip-soon') : ''}${r.status === 'obsolete' ? ' row-off' : ''}">
+    const rows = rows0.filter(r => inSel(r));
+    for (const id of [...picked]) if (!rows.some(r => r.id === id)) picked.delete(id);
+    const can = data.can_manage;
+    $('#qdList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table qd-table"><thead><tr>${can ? `<th class="chk-col"><input type="checkbox" data-qd-all aria-label="모두 고르기"${rows.length && rows.every(r => picked.has(r.id)) ? ' checked' : ''}></th>` : ''}<th>문서번호</th><th>제목</th><th>종류</th><th>폴더</th><th>판</th><th>주관 부서 · 담당</th><th>시행일</th><th>다음 검토</th><th>상태</th><th>현행판</th><th></th></tr></thead><tbody>${rows.map(r => `<tr>
+      ${can ? `<td class="chk-col"><input type="checkbox" data-qd-pick="${r.id}" aria-label="${esc(r.doc_no)} 고르기"${picked.has(r.id) ? ' checked' : ''}></td>` : ''}
       <td class="nowrap" data-card-primary><b>${esc(r.doc_no)}</b></td><td><b>${esc(r.title)}</b>${r.internal ? '' : `<div class="small muted">${esc(r.issuer)}</div>`}</td><td class="nowrap">${esc(r.kind_label)}</td>
+      <td class="small">${r.folder ? `<button type="button" class="link-btn" data-qd-sel='${esc(JSON.stringify({ k: 'folder', p: r.folder.split('/') }))}' data-qd-nav="folder">📁 ${esc(r.folder.split('/').join(' › '))}</button>` : '<span class="muted">미분류</span>'}</td>
       <td class="nowrap">${qdocRev(r)}${r.internal && r.current && r.current.rev !== r.rev ? `<div class="small muted">현행 Rev.${r.current.rev}</div>` : ''}</td><td>${esc(r.dept)}${r.owner_name ? `<div class="small muted">${esc(r.owner_name)}</div>` : ''}</td>
       <td class="nowrap">${esc(r.current?.effective_date || r.effective_date || '')}</td><td class="nowrap">${esc(r.next_review || '')}${qDd(r.next_review, data.today, r.status === 'approved')}</td>
-      <td class="small">${r.access_depts.length ? r.access_depts.map(esc).join(', ') : '<span class="muted">전 부서</span>'}</td><td><span class="chip ${QDOC_CHIP[r.status]}">${esc(r.status_label)}</span></td>
+      <td><span class="chip ${QDOC_CHIP[r.status]}">${esc(r.status_label)}</span></td>
       <td>${r.current?.file ? qFileLink(r.current.file, '열기') : '<span class="muted small">—</span>'}</td><td><button type="button" class="btn small" data-qd-open="${r.id}">열기</button></td></tr>`).join('')}</tbody></table></div>`
-      : `<div class="empty">${all.length ? '조건에 맞는 문서가 없습니다.' : data.can_manage ? '등록된 문서가 없습니다. 「＋ 문서 제정」으로 품질 매뉴얼·절차서를, 「＋ 외부문서」로 KS·ISO 규격이나 고객 요구서를 넣으세요.' : '볼 수 있는 문서가 없습니다.'}</div>`;
+      : `<div class="empty">${all.length ? (sel.k === 'all' ? '조건에 맞는 문서가 없습니다.' : '이 분류·폴더에 맞는 문서가 없습니다.') : can ? '등록된 문서가 없습니다. 「＋ 문서 제정」으로 품질 매뉴얼·절차서를, 「＋ 외부문서」로 KS·ISO 규격이나 고객 요구서를 넣으세요.' : '볼 수 있는 문서가 없습니다.'}</div>`;
+    drawBulk();
+  };
+  const drawBulk = () => {
+    const bar = $('#qdBulk', main); bar.hidden = !picked.size; if (!picked.size) return;
+    bar.innerHTML = `<b>${picked.size}건 고름</b><label class="qd-move">폴더로 옮기기<select data-qd-to aria-label="옮길 폴더"><option value="">미분류</option>${data.folders.map(f => `<option value="${esc(f)}"${sel.k === 'folder' && f === sel.p.join('/') ? ' selected' : ''}>${esc(f.split('/').join(' › '))}</option>`).join('')}</select></label><button type="button" class="btn primary small" data-qd-move>옮기기</button><button type="button" class="btn small" data-qd-unpick>고르기 해제</button>`;
+  };
+  const folderAct = async act => {
+    const cur = sel.k === 'folder' ? sel.p.join('/') : '';
+    try {
+      if (act === 'add') {
+        if (cur && cur.split('/').length >= 3) return toast('폴더는 3단계까지 만들 수 있습니다. 위쪽 폴더를 고르고 만드세요.', 'err');
+        const v = await promptBox(cur ? `「${cur.split('/').join(' › ')}」 안에 새 폴더` : '새 폴더', `<label>폴더 이름 *<input name="name" required maxlength="40" placeholder="예) 생산 · 세탁 · 고객사별"></label><p class="small muted">「/」 없이 이름만 넣으세요. 하위 폴더는 폴더를 고른 뒤 「＋ 새 폴더 (안에)」로 만듭니다.</p>`,
+          { submit: vals => { if (vals.name.includes('/')) throw new Error('이름에 「/」를 쓸 수 없습니다.'); return api('PUT', '/api/qdoc-folders', { action: 'add', path: (cur ? cur + '/' : '') + vals.name.trim() }); } });
+        if (!v) return; if (cur) opened.add('f:' + cur); save(); toast('폴더를 만들었습니다.'); await load(); return;
+      }
+      if (act === 'rename') {
+        let name = '';
+        const v = await promptBox(`폴더 이름 바꾸기 · ${cur.split('/').join(' › ')}`, `<label>새 이름 *<input name="name" required maxlength="40" value="${esc(cur.split('/').at(-1))}"></label><p class="small muted">하위 폴더와 그 안 문서의 폴더도 함께 바뀝니다.</p>`, { submit: vals => { name = vals.name.trim(); if (name.includes('/')) throw new Error('이름에 「/」를 쓸 수 없습니다.'); return api('PUT', '/api/qdoc-folders', { action: 'rename', from: cur, name }); } });
+        if (!v) return; const to = [...sel.p.slice(0, -1), name].join('/'); opened = new Set([...opened].map(k => k === 'f:' + cur || k.startsWith('f:' + cur + '/') ? 'f:' + to + k.slice(2 + cur.length) : k)); sel = { k: 'folder', p: to.split('/') }; save(); toast('폴더 이름을 바꿨습니다.'); await load(); return;
+      }
+      if (act === 'delete') {
+        if (!await confirmBox(`「${cur.split('/').join(' › ')}」 폴더${data.folders.some(f => f.startsWith(cur + '/')) ? '와 하위 폴더' : ''}를 지울까요? 안에 문서가 있으면 지워지지 않습니다.`)) return;
+        await api('PUT', '/api/qdoc-folders', { action: 'delete', path: cur }); sel = { k: 'all', p: [] }; save(); toast('폴더를 지웠습니다.'); await load();
+      }
+    } catch (err) { fail(err); }
   };
   main.addEventListener('click', e => {
     const t = e.target.closest('[data-q-tile]'); if (t) { form.elements.st.value = ['live', 'approved', 'review', 'draft', 'due'][Number(t.dataset.qTile)]; draw(); return; }
-    if (e.target.closest('#qdNew')) return qdocNew().catch(fail);
-    if (e.target.closest('#qdExt')) return qdocNew({ scope: 'external', kind: 'std' }).catch(fail);
-    const o = e.target.closest('[data-qd-open]'); if (o) qdocOpen(Number(o.dataset.qdOpen)).catch(fail);
+    const md = e.target.closest('[data-qd-mode]'); if (md) { if (md.dataset.qdMode !== nav) { nav = md.dataset.qdMode; sel = { k: 'all', p: [] }; save(); draw(); } return; }
+    const tw = e.target.closest('[data-qd-tw]'); if (tw) { const k = tw.dataset.qdTw; opened.has(k) ? opened.delete(k) : opened.add(k); save(); draw(); return; }
+    const sn = e.target.closest('[data-qd-sel]'); if (sn) { const leaf = !!sn.closest('#qdTree') && !sn.parentElement.querySelector('button.st-tw'); /* 15.333 휴대폰: 맨 아래 칸을 고르면 창 접기(다시 그리기 전에 판단) */
+      sel = JSON.parse(sn.dataset.qdSel); if (sn.dataset.qdNav) nav = sn.dataset.qdNav; if (sel.k === 'folder') sel.p.slice(0, -1).forEach((_, i) => opened.add('f:' + sel.p.slice(0, i + 1).join('/'))); if (sel.k === 'kind') opened.add(sel.p[0]); save(); draw();
+      if (leaf && window.matchMedia?.('(max-width: 860px)').matches) $('.stock-tree-box', main).open = false; return; }
+    const qf = e.target.closest('[data-qf]'); if (qf) return folderAct(qf.dataset.qf);
+    if (e.target.closest('#qdNew')) return qdocNew({ folder: sel.k === 'folder' ? sel.p.join('/') : '', kind: sel.k === 'kind' && sel.p[0] === 'internal' ? sel.p[1] : undefined }).catch(fail);
+    if (e.target.closest('#qdExt')) return qdocNew({ scope: 'external', kind: sel.k === 'kind' && sel.p[0] === 'external' && sel.p[1] ? sel.p[1] : 'std', folder: sel.k === 'folder' ? sel.p.join('/') : '' }).catch(fail);
+    const o = e.target.closest('[data-qd-open]'); if (o) return qdocOpen(Number(o.dataset.qdOpen)).catch(fail);
+    if (e.target.closest('[data-qd-unpick]')) { picked.clear(); draw(); return; }
+    if (e.target.closest('[data-qd-move]')) { const to = $('[data-qd-to]', main).value; api('POST', '/api/qdocs/move', { ids: [...picked], folder: to }).then(r => { toast(`${r.moved}건을 「${to ? to.split('/').join(' › ') : '미분류'}」로 옮겼습니다.`); picked.clear(); return load(); }).catch(fail); }
   });
-  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  main.addEventListener('change', e => {
+    const p = e.target.closest('[data-qd-pick]'); if (p) { const id = Number(p.dataset.qdPick); p.checked ? picked.add(id) : picked.delete(id); drawBulk(); const a = $('[data-qd-all]', main); if (a) a.checked = [...main.querySelectorAll('[data-qd-pick]')].every(x => x.checked); return; }
+    const a = e.target.closest('[data-qd-all]'); if (a) { main.querySelectorAll('[data-qd-pick]').forEach(x => { x.checked = a.checked; const id = Number(x.dataset.qdPick); a.checked ? picked.add(id) : picked.delete(id); }); drawBulk(); }
+  });
+  form.addEventListener('input', draw); form.addEventListener('change', e => { if (!e.target.closest('[data-qd-pick], [data-qd-all]')) draw(); }); form.onsubmit = e => e.preventDefault();
   await load();
 }
 
@@ -2357,7 +2434,7 @@ function tableToXlsx(table, name) {
   xlsxDownload(`${name}_${todayStr()}.xlsx`, { sheet: name.slice(0, 30), titles: [name, `${todayStr()} · ${rows.length}건`], columns: keep.map(([, label], j) => ({ label, type: types[j] })), rows });
 }
 function listAutoTools(form) {
-  if (form.dataset.autoTools) return; const list = form.nextElementSibling; if (!list) return;
+  if (form.dataset.autoTools) return; const list = form.dataset.listFor ? document.getElementById(form.dataset.listFor) : form.nextElementSibling; if (!list) return; // 15.333 목록이 바로 아래가 아니면 data-list-for
   form.dataset.autoTools = '1';
   const tools = form.querySelector(':scope > .ip-tools'), bar = document.createElement('span'); bar.className = 'lf-auto';
   bar.innerHTML = '<span class="small muted" data-auto-count role="status"></span><button type="button" class="btn icon-reset" data-auto-reset title="조건 초기화" aria-label="조건 초기화">↻</button><button type="button" class="btn" data-auto-xlsx title="지금 보이는 목록을 엑셀로">엑셀</button>';
