@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.341';
+const APP_VERSION = '15.342';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -797,15 +797,16 @@ const PROCESS_FLOWS = [
   // 15.309 품질 1~4단계 흐름: 부적합은 CAPA 한 곳으로 모여 변경·문서·교육·밸리데이션으로 닫히고, LOT는 출하검사 합격 → COA로 이어진다.
   { key: 'capa', name: '부적합 개선(CAPA)', steps: [['#/quality/capa', '부적합·CAPA'], ['#/quality/changes', '변경관리'], ['#/quality/docs', '문서 개정'], ['#/quality/training', '개정 교육'], ['#/quality/validation', '재밸리데이션']] },
   { key: 'coa', name: 'LOT별 COA', on: ['#/quality/coa'], steps: [['#/prod/finished', '생산실적'], ['#/quality/list', '출하검사'], ['#/quality/coa', 'COA 발행·승인'], ['#/logistics/ship', '출하']] },
-  { key: 'supplier', name: '협력업체 품질', on: ['#/quality/suppliers'], steps: [['#/logistics/receive', '입고'], ['#/quality/inspections', '수입검사·공급사 COA'], ['#/quality/suppliers', '협력업체 평가'], ['#/quality/changes', '업체 변경점']] },
+  { key: 'supplier', name: '협력업체 품질', on: ['#/quality/suppliers'], steps: [['#/logistics/receive', '입고'], ['#/quality/inspections', '수입검사·공급사 COA'], ['#/quality/suppliers', '연간 평가계획·유효성평가'], ['#/quality/audits', '협력사 현장심사'], ['#/quality/capa', '지적 → CAPA'], ['#/quality/changes', '업체 변경점']] }, // 15.342 평가계획 ↔ 현장심사(심사 실시 → 계획 자동 실시)
   { key: 'pqc', name: '공정품질', on: ['#/quality/pqc'], steps: [['#/quality/pqc', '공정·환경 측정·SPC'], ['#/quality/capa', '이상발생 → CAPA'], ['#/quality/changes', '공정 변경']] },
-  { key: 'plant', name: '설비·예방보전', on: ['#/prod/equipment', '#/prod/pm'], steps: [['#/prod/equipment', '설비 등록·PM 항목'], ['#/prod/pm', 'PM 일정·수행'], ['#/prod/reliability', '신뢰도(MTBF·MTTR)'], ['#/quality/validation', '설비 적격성(IQ·OQ·PQ)']] }, // 15.316 신뢰도 단계
+  { key: 'plant', name: '설비·예방보전', on: ['#/prod/equipment', '#/prod/pm'], steps: [['#/prod/equipment', '설비 등록·PM 항목'], ['#/prod/pm', '연간 PM 캘린더·점검(공무 오퍼레이터)'], ['#/quality/capa', '점검 이상·고장 → CAPA'], ['#/prod/reliability', '신뢰도(MTBF·MTTR)'], ['#/quality/validation', '설비 적격성(IQ·OQ·PQ)']] }, // 15.342
   // 15.316 위험성평가는 안전(KOSHA)과 설비·공정(FMEA·HAZOP) 두 흐름으로 나눔(같은 화면에서 위 칩으로 바꿔 봄). 안전은 지정 담당자(15.314)에서 시작해 교육으로 닫힌다.
   { key: 'org', name: '조직 · 담당', on: ['#/admin/org', '#/admin/org/chart', '#/admin/org/duties'], steps: [['#/admin/org', '부서·직급'], ['#/admin/org/chart', '조직도'], ['#/admin/org/duties', '지정 담당자'], ['#/admin/users/roles', '사용 권한']] },
   { key: 'safety', name: '안전보건 위험성평가', on: ['#/prod/risk', '#/prod/risk/actions', '#/admin/org/duties'], steps: [['#/admin/org/duties', '안전보건 담당 지정'], ['#/prod/risk', '위험성평가 작성·승인'], ['#/prod/risk/actions', '감소대책·재평가'], ['#/quality/training', '근로자 교육·공유']] },
   { key: 'risk', name: '설비·공정 FMEA', on: ['#/prod/reliability', '#/prod/risk', '#/prod/risk/actions'], steps: [['#/prod/equipment', '설비 고장 이력'], ['#/prod/reliability', '설비 신뢰도'], ['#/prod/risk', 'FMEA·HAZOP 작성·승인'], ['#/prod/risk/actions', '권고 조치'], ['#/quality/capa', 'CAPA'], ['#/quality/changes', '변경관리']] }, // 15.313
   { key: 'method', name: '시험·측정', on: ['#/quality/calibration', '#/quality/methods'], steps: [['#/quality/calibration', '계측기 검교정'], ['#/quality/methods', '시험법·신뢰성'], ['#/quality/validation', '시험법 밸리데이션']] },
-  { key: 'audit', name: '심사·인증', on: ['#/quality/audits', '#/quality/certs'], steps: [['#/quality/audits', '심사 계획·실시'], ['#/quality/capa', '지적 → CAPA'], ['#/quality/certs', '인증 유지']] },
+  { key: 'audit', name: '심사·인증', on: ['#/quality/audits', '#/quality/certs'], steps: [['#/quality/audits', '연간 심사 프로그램·실시'], ['#/quality/capa', '지적 → CAPA'], ['#/quality/suppliers', '협력사 심사 → 평가계획 실시'], ['#/quality/certs', '인증 유지·갱신']] }, // 15.342
+  { key: 'edu', name: '교육 · 자격', on: ['#/quality/training'], steps: [['#/admin/org/duties', '지정 담당(법정교육)'], ['#/quality/docs', '문서 제·개정'], ['#/quality/training', '연간 교육·테스트·자격 시험'], ['#/quality/audits', '내부심사(교육·자격 기록 확인)']] }, // 15.342 테스트 합격 → 이수·참석, 자격 시험 합격 → 자격 부여, 만료 90일 → 재교육 계획
   { key: 'qm', name: '품질경영(목표 → 점검 → 개선)', on: ['#/quality/kpi', '#/quality/risks'], steps: [['#/quality/kpi', '품질목표·KPI'], ['#/quality/risks', '리스크 관리'], ['#/quality/audits', '내부심사'], ['#/quality/capa', '개선(CAPA)']] },
   { key: 'semi', name: '반제품 · 포장 생산', steps: [['#/prod/semi', '반제품 계획'], ['#/prod/semi/cut', '커팅/융착'], ['#/prod/semi/wash', '세탁'], ['#/prod/finished', '포장(완제품 실적)'], ['#/logistics/ship', '출하']] },
   // 15.316 연구소: 개발의뢰부터 일정·분석·개발원가·지식재산까지, 조직: 부서 → 조직도 → 지정 담당자 → 사용 권한
