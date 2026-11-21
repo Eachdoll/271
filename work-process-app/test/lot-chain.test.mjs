@@ -1453,3 +1453,29 @@ test('15.334 training test: build, hide answers, auto-grade choice/OX/short (spa
   assert.equal((await prod('GET', '/api/training-records?user=' + encodeURIComponent('관리자'))).status, 403);
   assert.ok((await admin('GET', '/api/training-records')).body.people.some(p => p.user_name === '생산'));
 });
+
+test('15.335 supplier annual evaluation plan: bulk plan, edit/done/undo/cancel, eval auto-marks plan done, copy to next year, quality only', async () => {
+  const Y = Number(today.slice(0, 4));
+  const r = await admin('POST', '/api/supplier-plans', { year: Y, vendors: ['계획공급A', '계획공급B'], kind: 'regular', plan_month: 3, request_id: rid() });
+  assert.equal(r.body.created, 2);
+  assert.equal((await prod('POST', '/api/supplier-plans', { year: Y, vendors: ['x'], kind: 'regular', plan_month: 1 })).status, 403);
+  assert.equal((await admin('POST', '/api/supplier-plans', { year: Y, vendors: ['x'], kind: 'nope', plan_month: 1 })).status, 400);
+  await admin('POST', '/api/supplier-plans', { year: Y, vendors: ['계획공급C'], kind: 'audit', plan_month: 1, request_id: rid() });
+  let list = (await admin('GET', '/api/supplier-plans?year=' + Y)).body;
+  const a = list.rows.find(p => p.vendor === '계획공급A'), c = list.rows.find(p => p.vendor === '계획공급C');
+  assert.equal(list.years.find(y => y.year === Y).n, 3);
+  assert.equal((await admin('PUT', `/api/supplier-plans/${c.id}`, { action: 'done', done_date: `${Y + 1}-01-01`, revision: c.revision })).status, 400, 'date in that year and not future');
+  const cd = (await admin('PUT', `/api/supplier-plans/${c.id}`, { action: 'done', done_date: today, result: '적합', revision: c.revision })).body;
+  assert.deepEqual([cd.status, cd.result], ['done', '적합']);
+  const ev = await admin('POST', '/api/supplier-evals', { vendor: '계획공급A', year: Y, quality_score: 90, delivery_score: 90, response_score: 90 });
+  assert.equal(ev.status, 200, JSON.stringify(ev.body));
+  list = (await admin('GET', '/api/supplier-plans?year=' + Y)).body;
+  const a2 = list.rows.find(p => p.id === a.id); assert.equal(a2.status, 'done'); assert.match(a2.result, /A등급/); assert.equal(a2.eval_id, ev.body.id);
+  const b = list.rows.find(p => p.vendor === '계획공급B');
+  assert.equal((await admin('PUT', `/api/supplier-plans/${b.id}`, { action: 'cancel', revision: b.revision })).status, 400, 'reason');
+  assert.equal((await admin('PUT', `/api/supplier-plans/${b.id}`, { action: 'cancel', reason: '거래 중단', revision: b.revision })).body.status, 'cancelled');
+  assert.equal((await admin('DELETE', `/api/supplier-plans/${a.id}`)).status, 400, 'done cannot be deleted');
+  const cp = (await admin('POST', '/api/supplier-plans/copy', { from: Y, to: Y + 1 })).body; assert.equal(cp.created, 2, 'cancelled not copied');
+  assert.equal((await admin('POST', '/api/supplier-plans/copy', { from: Y, to: Y + 1 })).body.created, 0, 'no duplicates');
+  assert.ok((await prod('GET', '/api/supplier-plans?year=' + Y)).body.rows.length >= 3, 'readable');
+});

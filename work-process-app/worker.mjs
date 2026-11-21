@@ -609,7 +609,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'login_logs', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'training_tests', 'training_test_attempts', 'qualifications', 'supplier_evals', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests', 'quality_audits', 'audit_findings', 'validations', 'quality_goals', 'quality_kpi_values', 'quality_risks', 'risk_assessments', 'org_duty_assignments', 'dev_costs', 'cost_rates', 'cost_materials', 'cost_material_prices', 'cost_items', 'cost_item_revs', 'org_charts']; // 15.313 위험성평가 · 15.314 지정 담당자
+const backupTables = ['settings', 'users', 'login_logs', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'training_tests', 'training_test_attempts', 'qualifications', 'supplier_evals', 'supplier_eval_plans', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests', 'quality_audits', 'audit_findings', 'validations', 'quality_goals', 'quality_kpi_values', 'quality_risks', 'risk_assessments', 'org_duty_assignments', 'dev_costs', 'cost_rates', 'cost_materials', 'cost_material_prices', 'cost_items', 'cost_item_revs', 'org_charts']; // 15.313 위험성평가 · 15.314 지정 담당자
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -4727,6 +4727,68 @@ route('GET', '/api/supplier-quality/detail', async ({ query }) => {
   const changes = (await db.prepare("SELECT * FROM quality_changes WHERE source_type='supplier' ORDER BY id DESC").all()).filter(c => vkey(c.vendor) === k).map(r => chgRow(r));
   return { vendor, inspections: insp.map(r => ({ ...r, coa_files: JSON.parse(r.coa_files || '[]') })), evals: evals.map(e => ({ ...e, history: JSON.parse(e.history || '[]') })), changes };
 });
+// ── 15.335 협력업체 연간 평가계획 ── 계획(업체·종류·월) → 실시(실시일·결과). 유효성평가 저장 때 같은 해 정기·재평가 계획을 자동 실시.
+const SP_KIND = { regular: '정기평가(서류)', audit: '현장심사', reeval: '재평가', new: '신규 등록평가' };
+const SP_STATUS = { planned: '계획', done: '실시', cancelled: '취소' };
+const spRow = r => ({ ...r, history: JSON.parse(r.history || '[]'), kind_label: SP_KIND[r.kind] || r.kind, status_label: SP_STATUS[r.status] || r.status });
+async function supPlanLink(ev, user) {
+  if (!ev) return ev;
+  const plans = await db.prepare("SELECT * FROM supplier_eval_plans WHERE vendor_key=? AND year=? AND status='planned' AND kind IN ('regular','reeval') ORDER BY plan_month, id").all(ev.vendor_key, ev.year);
+  if (plans.length) { const p = plans[0]; await db.prepare("UPDATE supplier_eval_plans SET status='done',done_date=?,result=?,eval_id=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=?").run(today(), `${ev.grade}등급 ${ev.total}점`, ev.id, pushHist(p, { by: user.name, what: '유효성평가 저장으로 실시', grade: ev.grade }), user.name, p.id); }
+  return ev;
+}
+route('GET', '/api/supplier-plans', async ({ user, query }) => {
+  const year = intIn(query.year, '연도', 2000, 2100, Number(today().slice(0, 4)));
+  const rows = (await db.prepare('SELECT * FROM supplier_eval_plans WHERE year=? ORDER BY plan_month, vendor, id').all(year)).map(spRow);
+  const years = await db.prepare("SELECT year, COUNT(*) AS n, SUM(CASE WHEN status='done' THEN 1 ELSE 0 END) AS done FROM supplier_eval_plans WHERE status<>'cancelled' GROUP BY year ORDER BY year DESC").all();
+  const vendors = (await db.prepare('SELECT name FROM vendors WHERE is_purchase=1 ORDER BY name').all()).map(v => v.name);
+  return { year, rows, years, vendors, kinds: SP_KIND, can_manage: isQuality(user), today: today() };
+});
+route('POST', '/api/supplier-plans', async ({ user, body }) => {
+  requireRole(user, 'quality', '품질'); const key = str(body.request_id, 80) || null;
+  if (key && await db.prepare('SELECT 1 FROM supplier_eval_plans WHERE request_id=? OR request_id LIKE ?').get(key, key + ':%')) return { created: 0, duplicate: true };
+  const year = intIn(body.year, '연도', 2000, 2100, Number(today().slice(0, 4))), month = intIn(body.plan_month, '계획 월', 1, 12, 0);
+  const kind = SP_KIND[body.kind] ? body.kind : (() => { throw bad('평가 종류를 고르세요.'); })();
+  const vendors = [...new Set((Array.isArray(body.vendors) ? body.vendors : [body.vendor]).map(v => str(v, 100)).filter(Boolean))];
+  if (!vendors.length || vendors.length > 300) throw bad('업체를 고르세요(300곳까지).');
+  const owner = str(body.owner_name, 50), note = str(body.note, 500), hist = JSON.stringify([{ at: now(), by: user.name, what: '계획 등록' }]);
+  await db.batch(vendors.map((v, i) => ({ sql: 'INSERT INTO supplier_eval_plans(year,vendor,vendor_key,kind,plan_month,owner_name,note,history,request_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?)', args: [year, v, vkey(v), kind, month, owner, note, hist, key ? `${key}:${i}` : null, user.name] })));
+  return { created: vendors.length };
+});
+route('POST', '/api/supplier-plans/copy', async ({ user, body }) => {
+  requireRole(user, 'quality', '품질');
+  const from = intIn(body.from, '가져올 연도', 2000, 2100, 0), to = intIn(body.to, '만들 연도', 2000, 2100, 0); if (from === to) throw bad('다른 연도를 고르세요.');
+  const src = await db.prepare("SELECT * FROM supplier_eval_plans WHERE year=? AND status<>'cancelled'").all(from); if (!src.length) throw bad(`${from}년 계획이 없습니다.`);
+  const have = new Set((await db.prepare("SELECT vendor_key, kind FROM supplier_eval_plans WHERE year=? AND status<>'cancelled'").all(to)).map(r => r.vendor_key + '|' + r.kind));
+  const add = src.filter(r => !have.has(r.vendor_key + '|' + r.kind)); if (!add.length) return { created: 0 };
+  const hist = JSON.stringify([{ at: now(), by: user.name, what: `${from}년 계획에서 복사` }]);
+  await db.batch(add.map(r => ({ sql: 'INSERT INTO supplier_eval_plans(year,vendor,vendor_key,kind,plan_month,owner_name,note,history,created_by) VALUES(?,?,?,?,?,?,?,?,?)', args: [to, r.vendor, r.vendor_key, r.kind, r.plan_month, r.owner_name, r.note, hist, user.name] })));
+  return { created: add.length };
+});
+route('PUT', '/api/supplier-plans/:id', async ({ user, params, body }) => {
+  requireRole(user, 'quality', '품질'); const p = await mustGet('supplier_eval_plans', params.id);
+  if (Number(body.revision) !== p.revision) throw conflict();
+  const act = String(body.action || 'edit'); let sql, args, what;
+  if (act === 'edit') {
+    if (p.status !== 'planned') throw bad('계획 상태에서만 고칩니다. 실시를 취소한 뒤 고치세요.');
+    const month = intIn(body.plan_month ?? p.plan_month, '계획 월', 1, 12, p.plan_month), kind = SP_KIND[body.kind] ? body.kind : p.kind;
+    sql = 'plan_month=?,kind=?,owner_name=?,note=?'; args = [month, kind, str(body.owner_name ?? p.owner_name, 50), str(body.note ?? p.note, 500)]; what = '수정';
+  } else if (act === 'done') {
+    if (p.status !== 'planned') throw bad('계획 상태에서만 실시로 넘깁니다.');
+    const d = dateStr(body.done_date || today(), '실시일'); if (d > today()) throw bad('실시일은 오늘 이전으로 넣으세요.'); if (Number(d.slice(0, 4)) !== p.year) throw bad(`실시일은 ${p.year}년 안이어야 합니다.`);
+    sql = "status='done',done_date=?,result=?,note=?"; args = [d, str(body.result, 200), str(body.note ?? p.note, 500)]; what = '실시';
+  } else if (act === 'undo') { if (p.status === 'planned') throw bad('이미 계획 상태입니다.'); sql = "status='planned',done_date=NULL,result='',eval_id=NULL"; args = []; what = p.status === 'done' ? '실시 취소' : '다시 계획';
+  } else if (act === 'cancel') { if (p.status !== 'planned') throw bad('계획 상태에서만 취소합니다.'); const reason = str(body.reason, 300); if (!reason) throw bad('취소 사유를 적으세요.'); sql = "status='cancelled',note=?"; args = [reason]; what = '계획 취소';
+  } else throw bad('작업을 확인하세요.');
+  const r = await db.prepare(`UPDATE supplier_eval_plans SET ${sql},history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`).run(...args, pushHist(p, { by: user.name, what }), user.name, p.id, p.revision);
+  if (!r.changes) throw conflict();
+  return spRow(await mustGet('supplier_eval_plans', p.id));
+});
+route('DELETE', '/api/supplier-plans/:id', async ({ user, params }) => {
+  requireRole(user, 'quality', '품질'); const p = await mustGet('supplier_eval_plans', params.id);
+  if (p.status === 'done') throw bad('실시한 계획은 지울 수 없습니다(실시 취소 후 지우세요).');
+  await db.prepare('DELETE FROM supplier_eval_plans WHERE id=?').run(p.id); return { ok: true };
+});
 route('POST', '/api/supplier-evals', async ({ user, body }) => {
   requireRole(user, 'quality', '품질');
   const vendor = reqStr(body.vendor, '업체', 100), k = vkey(vendor), year = intIn(body.year, '평가 연도', 2000, 2100, Number(today().slice(0, 4)));
@@ -4739,12 +4801,12 @@ route('POST', '/api/supplier-evals', async ({ user, body }) => {
     const r = await db.prepare("UPDATE supplier_evals SET vendor=?,quality_score=?,delivery_score=?,response_score=?,total=?,grade=?,iqc_total=?,iqc_fail=?,note=?,evaluated_by=?,evaluated_at=?,history=?,revision=revision+1 WHERE id=? AND revision=?")
       .run(vendor, q, d, rs, total, grade, s.total || 0, s.fail || 0, str(body.note, 1000), user.name, now(), pushHist(prior, { by: user.name, what: '재평가', from: [prior.total, prior.grade], to: [total, grade] }), prior.id, prior.revision);
     if (!r.changes) throw conflict();
-    return db.prepare('SELECT * FROM supplier_evals WHERE id=?').get(prior.id);
+    return supPlanLink(await db.prepare('SELECT * FROM supplier_evals WHERE id=?').get(prior.id), user); // 15.335
   }
   const r = await db.prepare('INSERT INTO supplier_evals(vendor,vendor_key,year,quality_score,delivery_score,response_score,total,grade,iqc_total,iqc_fail,note,evaluated_by,evaluated_at,history) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(vendor_key,year) DO NOTHING')
     .run(vendor, k, year, q, d, rs, total, grade, s.total || 0, s.fail || 0, str(body.note, 1000), user.name, now(), JSON.stringify([{ at: now(), by: user.name, what: '평가', to: [total, grade] }]));
   if (!r.changes) throw conflict();
-  return db.prepare('SELECT * FROM supplier_evals WHERE id=?').get(r.lastInsertRowid);
+  return supPlanLink(await db.prepare('SELECT * FROM supplier_evals WHERE id=?').get(r.lastInsertRowid), user); // 15.335
 });
 // 공급사 COA 수령: 수입검사 의뢰(입고 LOT) 하나에 파일 여러 개(최대 5).
 async function iqcRequest(id) { const r = await getRequest(Number(id) || 0); if (r.type !== 'analysis' || r.category !== '수입검사') throw bad('수입검사 의뢰에만 공급사 COA를 붙입니다.'); return r; }
