@@ -615,7 +615,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'login_logs', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'training_tests', 'training_test_attempts', 'question_bank', 'qualifications', 'supplier_evals', 'supplier_eval_plans', 'env_zones', 'env_sheets', 'env_records', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests', 'quality_audits', 'audit_findings', 'validations', 'quality_goals', 'quality_kpi_values', 'quality_risks', 'risk_assessments', 'org_duty_assignments', 'dev_costs', 'cost_rates', 'cost_materials', 'cost_material_prices', 'cost_items', 'cost_item_revs', 'org_charts']; // 15.313 위험성평가 · 15.314 지정 담당자
+const backupTables = ['settings', 'users', 'login_logs', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'training_tests', 'training_test_attempts', 'question_bank', 'qualifications', 'supplier_evals', 'supplier_eval_plans', 'env_zones', 'env_sheets', 'env_records', 'env_days', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests', 'quality_audits', 'audit_findings', 'validations', 'quality_goals', 'quality_kpi_values', 'quality_risks', 'risk_assessments', 'org_duty_assignments', 'dev_costs', 'cost_rates', 'cost_materials', 'cost_material_prices', 'cost_items', 'cost_item_revs', 'org_charts']; // 15.313 위험성평가 · 15.314 지정 담당자
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -4979,7 +4979,8 @@ function envZoneInput(body, prior = {}) {
 }
 // 그날 점검해야 할 구역: 사용 중이고 그날 이전에 만든 구역(청소는 라인 구역 중 항목이 있는 곳)
 async function envNeeded(area, date) {
-  const zs = (await db.prepare("SELECT * FROM env_zones WHERE area=? AND active=1 AND substr(created_at,1,10)<=? ORDER BY sort, id").all(area, date)).map(envZoneRow);
+  const c = (await envCal(area, date, date))[date]; // 15.344 휴무일(특근 없음) · 비가동 구역은 점검 대상 아님
+  const zs = (await db.prepare("SELECT * FROM env_zones WHERE area=? AND active=1 AND substr(created_at,1,10)<=? ORDER BY sort, id").all(area, date)).map(envZoneRow).filter(z => !envOffZone(c, z.id));
   return { th: zs, clean: area === 'line' ? zs.filter(z => z.clean_items.length) : [] };
 }
 async function envMissing(sheet) {
@@ -4988,6 +4989,86 @@ async function envMissing(sheet) {
   return need.flatMap(z => (sheet.kind === 'th' ? ['am', 'pm'] : ['day']).filter(s => !have.has(z.id + '|' + s)).map(s => `${z.name} ${ENV_SLOT[s]}`));
 }
 const envCan = (user, area) => ({ check: canEnvCheck(user, area), confirm: canEnvConfirm(user, area), approve: canEnvApprove(user, area), setup: canEnvSetup(user) });
+// ── 15.344 휴무일(토·일·공휴일)은 점검하지 않는다(블락). 특근을 지정한 날만 예외로 점검. 라인은 구역별(또는 라인 전체) 비가동 지정 ──
+// 공휴일: 고정 공휴일 + 음력 공휴일 표(2025~2030, 천문연구원 월력요항 기준) + 대체공휴일 규칙(설·추석은 일요일·겹침, 그 밖은 토·일·겹침) + 임시공휴일. 표에 없는 해·임시공휴일은 「회사 휴일」로 넣는다.
+const KR_LUNAR = { 2025: ['2025-01-28', '2025-10-05', '2025-05-05'], 2026: ['2026-02-16', '2026-09-24', '2026-05-24'], 2027: ['2027-02-06', '2027-09-14', '2027-05-13'], 2028: ['2028-01-26', '2028-10-02', '2028-05-02'], 2029: ['2029-02-12', '2029-09-21', '2029-05-20'], 2030: ['2030-02-02', '2030-09-11', '2030-05-09'] }; // [설 연휴 첫날, 추석 연휴 첫날, 부처님오신날]
+const KR_TEMP = { '2025-01-27': '임시공휴일', '2025-06-03': '대통령 선거일', '2026-06-03': '전국동시지방선거일', '2028-04-12': '국회의원 선거일' };
+const krAdd = (d, n) => { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+const krDow = d => new Date(d + 'T00:00:00Z').getUTCDay();
+const KR_HOL_CACHE = new Map();
+function krHolidays(y) {
+  if (KR_HOL_CACHE.has(y)) return KR_HOL_CACHE.get(y);
+  const list = [], P = s => `${y}-${s}`; // [날짜, 이름, 대체 규칙('all' 토·일·겹침 / 'sun' 일·겹침 / null), 묶음]
+  list.push([P('01-01'), '신정', null], [P('03-01'), '삼일절', 'all'], [P('05-01'), '노동절', y >= 2026 ? 'all' : null], [P('05-05'), '어린이날', 'all'], [P('06-06'), '현충일', null]);
+  if (y >= 2026) list.push([P('07-17'), '제헌절', 'all']);
+  list.push([P('08-15'), '광복절', 'all'], [P('10-03'), '개천절', 'all'], [P('10-09'), '한글날', 'all'], [P('12-25'), '성탄절', 'all']);
+  const L = KR_LUNAR[y];
+  if (L) { [0, 1, 2].forEach(i => list.push([krAdd(L[0], i), i === 1 ? '설날' : '설날 연휴', 'sun', 'seol'])); [0, 1, 2].forEach(i => list.push([krAdd(L[1], i), i === 1 ? '추석' : '추석 연휴', 'sun', 'chu'])); list.push([L[2], '부처님오신날', 'all']); }
+  const map = new Map(); for (const [d, n] of list) map.set(d, map.has(d) ? `${map.get(d)}·${n}` : n);
+  for (const [d, n] of Object.entries(KR_TEMP)) if (d.startsWith(y + '-')) map.set(d, n);
+  // 대체공휴일: 묶음(설·추석)은 연휴 마지막 날 다음, 그 밖은 그날 다음의 첫 평일(공휴일 아님)
+  const keys = new Map();
+  for (const [d, , rule, grp] of list) { if (!rule) continue; const dow = krDow(d), overlap = list.filter(x => x[0] === d).length > 1;
+    if ((rule === 'all' && (dow === 0 || dow === 6)) || (rule === 'sun' && dow === 0) || overlap) { const og = overlap ? list.find(x => x[0] === d && x[3])?.[3] : null, k = grp || og || d; if (!keys.has(k)) keys.set(k, { last: grp || og ? list.filter(x => x[3] === (grp || og)).map(x => x[0]).sort().at(-1) : d, name: (grp || og) === 'seol' ? '설날' : (grp || og) === 'chu' ? '추석' : map.get(d).split('·')[0] }); } }
+  for (const { last, name } of [...keys.values()].sort((a, b) => a.last.localeCompare(b.last))) { let s = krAdd(last, 1); while (krDow(s) === 0 || krDow(s) === 6 || map.has(s)) s = krAdd(s, 1); map.set(s, `대체공휴일(${name})`); }
+  KR_HOL_CACHE.set(y, map); return map;
+}
+const krHoliday = d => krHolidays(Number(d.slice(0, 4))).get(d) || '';
+// 기간 안의 날짜별 정보: 주말·공휴일·회사 휴일·특근·비가동
+async function envCal(area, from, to) {
+  const rows = await db.prepare("SELECT * FROM env_days WHERE day BETWEEN ? AND ? AND (area='' OR area=?) ORDER BY day, id").all(from, to, area);
+  const out = {};
+  for (let d = from; d <= to; d = krAdd(d, 1)) {
+    const dow = krDow(d), comp = rows.find(r => r.day === d && r.kind === 'holiday'), work = rows.find(r => r.day === d && r.kind === 'workday' && r.area === area);
+    const holiday = krHoliday(d) || (comp ? comp.note || '회사 휴일' : '');
+    const restBase = dow === 0 || dow === 6 || !!holiday;
+    out[d] = { dow, weekend: dow === 0 || dow === 6, holiday, company: comp ? { id: comp.id, note: comp.note } : null, workday: work ? { id: work.id, note: work.note, by: work.created_by } : null, rest: restBase && !work,
+      off: rows.filter(r => r.day === d && r.kind === 'off' && r.area === area).map(r => ({ id: r.id, zone_id: r.zone_id, note: r.note, by: r.created_by })) };
+  }
+  return out;
+}
+const envOffZone = (c, zid) => !!c && (c.rest || c.off.some(o => o.zone_id === 0 || o.zone_id === zid));
+route('GET', '/api/env/holidays', async ({ user, query }) => {
+  const y = intIn(query.year, '연도', 2000, 2100, Number(today().slice(0, 4)));
+  const builtin = [...krHolidays(y).entries()].sort(([a], [b]) => a.localeCompare(b)).map(([day, name]) => ({ day, name }));
+  const company = await db.prepare("SELECT * FROM env_days WHERE kind='holiday' AND substr(day,1,4)=? ORDER BY day").all(String(y));
+  return { year: y, builtin, company, table: !!KR_LUNAR[y], can_setup: canEnvSetup(user) };
+});
+// 특근(휴무일에 점검) · 라인 비가동(구역 또는 전체) · 회사 휴일
+route('POST', '/api/env/days', async ({ user, body }) => {
+  const kind = String(body.kind || ''), day = dateStr(body.day, '날짜'), note = str(body.note, 100);
+  if (kind === 'holiday') {
+    if (!canEnvSetup(user)) throw new HttpError(403, '회사 휴일은 생산·물류 담당자가 넣습니다.'); if (!note) throw bad('휴일 이름(예: 창립기념일)을 적으세요.');
+    if (krHoliday(day)) throw bad(`${day}은(는) 이미 공휴일(${krHoliday(day)})입니다.`);
+    await db.prepare("INSERT OR IGNORE INTO env_days(day,kind,area,zone_id,note,created_by) VALUES(?,?,'',0,?,?)").run(day, kind, note, user.name); return { ok: true };
+  }
+  const area = envArea(body.area); if (!canEnvConfirm(user, area)) throw new HttpError(403, '특근·비가동 지정은 생산 담당자(창고는 물류도)·품질이 합니다.');
+  const c = (await envCal(area, day, day))[day];
+  if (kind === 'workday') {
+    if (!c.rest && !c.workday) throw bad('평일은 특근 지정 없이 점검합니다.'); if (c.workday) return { ok: true };
+    await db.prepare("INSERT OR IGNORE INTO env_days(day,kind,area,zone_id,note,created_by) VALUES(?,?,?,0,?,?)").run(day, kind, area, note || '특근', user.name); return { ok: true };
+  }
+  if (kind === 'off') {
+    if (area !== 'line') throw bad('비가동은 라인 구역에 지정합니다.'); if (c.rest) throw bad('휴무일입니다(비가동 지정 필요 없음).');
+    const zid = Number(body.zone_id) || 0; if (zid) { const z = await mustGet('env_zones', zid); if (z.area !== 'line') throw bad('라인 구역을 고르세요.'); }
+    if (!note) throw bad('비가동 사유(예: 생산 계획 없음 · 설비 수리)를 적으세요.');
+    const locked = await db.prepare("SELECT 1 FROM env_sheets WHERE area=? AND check_date=? AND status<>'open'").get(area, day); if (locked) throw bad('확인·승인된 점검일지가 있는 날입니다. 확인을 취소한 뒤 지정하세요.');
+    const has = await db.prepare(`SELECT r.zone_name FROM env_records r JOIN env_sheets s ON s.id=r.sheet_id WHERE s.area=? AND s.check_date=? AND r.skipped=0 ${zid ? 'AND r.zone_id=?' : ''} LIMIT 1`).get(area, day, ...(zid ? [zid] : []));
+    if (has) throw bad(`${has.zone_name}에 그날 점검 기록이 있어 비가동으로 지정할 수 없습니다. (점검하지 못한 때만 「미점검」으로 남기세요)`);
+    await db.prepare("INSERT OR IGNORE INTO env_days(day,kind,area,zone_id,note,created_by) VALUES(?,?,?,?,?,?)").run(day, kind, area, zid, note, user.name); return { ok: true };
+  }
+  throw bad('지정할 종류를 확인하세요.');
+});
+route('DELETE', '/api/env/days/:id', async ({ user, params }) => {
+  const r = await mustGet('env_days', params.id);
+  if (r.kind === 'holiday') { if (!canEnvSetup(user)) throw new HttpError(403, '회사 휴일은 생산·물류 담당자가 고칩니다.'); }
+  else {
+    if (!canEnvConfirm(user, r.area)) throw new HttpError(403, '특근·비가동 취소는 생산 담당자(창고는 물류도)·품질이 합니다.');
+    if (await db.prepare("SELECT 1 FROM env_sheets WHERE area=? AND check_date=? AND status<>'open'").get(r.area, r.day)) throw bad('확인·승인된 점검일지가 있는 날입니다. 확인을 취소한 뒤 바꾸세요.');
+    if (r.kind === 'workday' && await db.prepare('SELECT 1 FROM env_records x JOIN env_sheets s ON s.id=x.sheet_id WHERE s.area=? AND s.check_date=? LIMIT 1').get(r.area, r.day)) throw bad('그날 점검 기록이 있어 특근을 취소할 수 없습니다.');
+  }
+  await db.prepare('DELETE FROM env_days WHERE id=?').run(r.id); return { ok: true };
+});
 route('GET', '/api/env/zones', async ({ user, query }) => {
   const where = query.area ? 'WHERE area=?' : '', args = query.area ? [envArea(query.area)] : [];
   const zones = (await db.prepare(`SELECT * FROM env_zones ${where} ORDER BY area, active DESC, sort, id`).all(...args)).map(envZoneRow);
@@ -5037,10 +5118,10 @@ route('GET', '/api/env/day', async ({ user, query }) => {
   const area = envArea(query.area), date = dateStr(query.date || today(), '점검일');
   const sheets = Object.fromEntries((await db.prepare('SELECT * FROM env_sheets WHERE area=? AND check_date=?').all(area, date)).map(s => [s.kind, envSheetRow(s)]));
   const records = (await db.prepare('SELECT r.* FROM env_records r JOIN env_sheets s ON s.id=r.sheet_id WHERE s.area=? AND s.check_date=? ORDER BY r.id').all(area, date)).map(envRecRow);
-  const need = await envNeeded(area, date), ids = new Set([...need.th.map(z => z.id), ...records.map(r => r.zone_id)]);
+  const need = await envNeeded(area, date), ids = new Set([...(await db.prepare("SELECT id FROM env_zones WHERE area=? AND active=1 AND substr(created_at,1,10)<=?").all(area, date)).map(z => z.id), ...records.map(r => r.zone_id)]); // 15.344 휴무·비가동 구역도 빗금으로 보이게
   const zones = (await db.prepare('SELECT * FROM env_zones WHERE area=? ORDER BY sort, id').all(area)).map(envZoneRow).filter(z => ids.has(z.id));
   const missing = { th: sheets.th ? await envMissing(sheets.th) : need.th.flatMap(z => [`${z.name} 오전`, `${z.name} 오후`]), clean: sheets.clean ? await envMissing(sheets.clean) : need.clean.map(z => `${z.name} 일일`) };
-  return { area, date, today: today(), zones, sheets, records, missing, need: { th: need.th.map(z => z.id), clean: need.clean.map(z => z.id) }, can: envCan(user, area) };
+  return { area, date, today: today(), zones, sheets, records, missing, need: { th: need.th.map(z => z.id), clean: need.clean.map(z => z.id) }, cal: (await envCal(area, date, date))[date], can: envCan(user, area) };
 });
 // 점검 기록(여러 구역 한꺼번에). 같은 구역·같은 때(오전/오후/일일)는 고쳐 쓴다. 확인이 끝난 일지는 잠김.
 route('POST', '/api/env/records', async ({ user, body }) => {
@@ -5050,8 +5131,11 @@ route('POST', '/api/env/records', async ({ user, body }) => {
   if (kind === 'clean' && area !== 'line') throw bad('청소 체크시트는 라인에만 있습니다.');
   const entries = Array.isArray(body.entries) ? body.entries.slice(0, 200) : []; if (!entries.length) throw bad('기록할 구역이 없습니다.');
   const zones = new Map((await db.prepare('SELECT * FROM env_zones WHERE area=?').all(area)).map(z => [z.id, envZoneRow(z)]));
+  const cal = (await envCal(area, date, date))[date]; // 15.344 휴무일 블락(특근 지정 시 예외) · 비가동 구역 블락
+  if (cal.rest) throw bad(`${date}은(는) 휴무일(${cal.holiday || (cal.dow === 0 ? '일요일' : '토요일')})이라 점검하지 않습니다. 특근이면 「특근 지정」 뒤에 기록하세요.`);
   const rows = entries.map(e => {
     const z = zones.get(Number(e.zone_id)); if (!z) throw bad('구역을 확인하세요.'); if (!z.active) throw bad(`${z.name}은(는) 사용 안 함 구역입니다.`);
+    if (envOffZone(cal, z.id)) throw bad(`${z.name}은(는) ${date} 비가동으로 지정되어 있습니다. 가동했다면 비가동을 취소한 뒤 기록하세요.`);
     const slot = kind === 'th' ? (['am', 'pm'].includes(e.slot) ? e.slot : (() => { throw bad('오전·오후를 고르세요.'); })()) : 'day';
     const skipped = e.skipped ? 1 : 0, action = str(e.action, 300), where = `${z.name} ${ENV_SLOT[slot]}`;
     if (skipped) { if (!action) throw bad(`${where}: 점검하지 않은 사유(휴무·미가동 등)를 적으세요.`); return { z, slot, temp: null, hum: null, results: '[]', ok: 1, skipped, action }; }
@@ -5115,7 +5199,8 @@ route('GET', '/api/env/month', async ({ user, query }) => {
   const zones = (await db.prepare('SELECT * FROM env_zones WHERE area=? ORDER BY active DESC, sort, id').all(area)).map(envZoneRow);
   const years = await db.prepare("SELECT substr(check_date,1,4) AS year, COUNT(*) AS n FROM env_sheets WHERE area=? GROUP BY 1 ORDER BY 1 DESC").all(area);
   const months = await db.prepare("SELECT substr(check_date,1,7) AS ym, COUNT(*) AS n, SUM(CASE WHEN status='approved' THEN 1 ELSE 0 END) AS approved FROM env_sheets WHERE area=? AND substr(check_date,1,4)=? GROUP BY 1").all(area, ym.slice(0, 4));
-  return { area, ym, sheets, records, zones, years, months, today: today(), can: envCan(user, area) };
+  const last = new Date(Date.UTC(+ym.slice(0, 4), +ym.slice(5, 7), 0)).getUTCDate(); // 15.344 날짜별 휴무·특근·비가동
+  return { area, ym, sheets, records, zones, years, months, days: await envCal(area, ym + '-01', `${ym}-${String(last).padStart(2, '0')}`), today: today(), can: envCan(user, area) };
 });
 route('GET', '/api/pm-calendar', async ({ query }) => {
   const year = intIn(query.year, '연도', 2000, 2100, Number(today().slice(0, 4)));

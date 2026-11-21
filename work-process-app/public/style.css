@@ -4639,3 +4639,13 @@ input.env-out { border-color: var(--red) !important; }
   .env-sign-box { min-width: 80px; }
 }
 .seg[hidden], .q-tabs[hidden] { display: none !important; }
+
+/* 15.344 휴무일·비가동 빗금 음영 */
+.env-hatch, tr.env-hatch > td, td.env-hatch, th.env-hatch { background-image: repeating-linear-gradient(135deg, color-mix(in srgb, var(--muted) 30%, transparent) 0 1.5px, transparent 1.5px 7px) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+tr.env-hatch > td { color: var(--muted); }
+.env-off-t { color: var(--muted); font-weight: 600; }
+.env-rest { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 12px; }
+.env-rest.env-work { border-style: solid; border-color: color-mix(in srgb, #f59e0b 55%, var(--line)); }
+.env-hol { color: var(--red); font-weight: 600; }
+.env-cs th.env-hol-h { color: var(--red); }
+.env-cs th small { font-weight: 400; color: var(--muted); }

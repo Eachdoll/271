@@ -1546,6 +1546,8 @@ test('15.343 env checks: zones (warehouse/line), AM/PM temp·humidity with out-o
   assert.ok(z.id && z.clean_items.length >= 5, 'line zone gets default cleaning items');
   const w = (await prod('POST', '/api/env/zones', { area: 'warehouse', name: '원자재 창고', temp_max: 30 })).body; assert.deepEqual(w.clean_items, []);
   assert.equal((await prod('POST', '/api/env/zones', { area: 'line', name: '1라인' })).status, 400, 'duplicate name');
+  const cal0 = (await prod('GET', `/api/env/day?area=line&date=${today}`)).body.cal; // 15.344 주말·공휴일이면 특근 지정 뒤 점검
+  if (cal0.rest) assert.equal((await prod('POST', '/api/env/days', { kind: 'workday', day: today, area: 'line' })).status, 200);
   const base = { area: 'line', kind: 'th', date: today };
   assert.equal((await prod('POST', '/api/env/records', { ...base, entries: [{ zone_id: z.id, slot: 'am', temp: 31, hum: 50 }] })).status, 400, 'out of range needs action');
   const am = (await prod('POST', '/api/env/records', { ...base, entries: [{ zone_id: z.id, slot: 'am', temp: 31, hum: 50, action: '에어컨 가동' }] })).body;
@@ -1570,4 +1572,36 @@ test('15.343 env checks: zones (warehouse/line), AM/PM temp·humidity with out-o
   assert.equal(mon.sheets.length, 2); assert.ok(mon.records.some(r => r.kind === 'clean' && !r.ok)); assert.equal(mon.years[0].year, today.slice(0, 4));
   assert.equal((await prod('DELETE', `/api/env/zones/${z.id}`)).status, 400, 'zone with records cannot be deleted');
   assert.equal((await prod('DELETE', `/api/env/zones/${w.id}`)).status, 200);
+});
+
+test('15.344 env rest days: weekends/public holidays (with substitute rules) blocked unless 특근; company holidays; line zone/whole-line 비가동', async () => {
+  const h27 = (await prod('GET', '/api/env/holidays?year=2027')).body.builtin.map(x => `${x.day} ${x.name}`);
+  for (const d of ['2027-02-09 대체공휴일(설날)', '2027-07-19 대체공휴일(제헌절)', '2027-12-27 대체공휴일(성탄절)', '2027-09-15 추석']) assert.ok(h27.includes(d), d);
+  assert.ok((await prod('GET', '/api/env/holidays?year=2028')).body.builtin.some(x => x.day === '2028-10-05' && /추석/.test(x.name)), '2028 추석·개천절 겹침 → 10/5');
+  const z = (await prod('POST', '/api/env/zones', { area: 'line', name: '휴무검사 라인' })).body;
+  const sun = '2026-11-15', mon = '2026-11-16', fri = '2026-11-20';
+  const rec = (date, zone = z.id) => prod('POST', '/api/env/records', { area: 'line', kind: 'th', date, entries: [{ zone_id: zone, slot: 'am', temp: 20, hum: 40 }] });
+  let r = await rec(sun); assert.equal(r.status, 400); assert.match(r.body.error || r.body.message || JSON.stringify(r.body), /휴무일/);
+  assert.equal((await prod('GET', `/api/env/day?area=line&date=${sun}`)).body.cal.rest, true);
+  assert.equal((await prod('POST', '/api/env/days', { kind: 'workday', day: mon, area: 'line' })).status, 400, 'weekday needs no 특근');
+  assert.equal((await prod('POST', '/api/env/days', { kind: 'workday', day: sun, area: 'line', note: '주말 특근' })).status, 200);
+  const dc = (await prod('GET', `/api/env/day?area=line&date=${sun}`)).body.cal; assert.equal(dc.rest, false); assert.equal(dc.workday.note, '주말 특근');
+  assert.equal((await rec(sun)).status, 200, '특근 day → can check');
+  assert.equal((await prod('GET', `/api/env/day?area=warehouse&date=${sun}`)).body.cal.rest, true, '특근 is per area');
+  assert.equal((await prod('DELETE', `/api/env/days/${dc.workday.id}`)).status, 400, 'records exist → cannot cancel 특근');
+  // 비가동: 구역 / 라인 전체(0), 창고 불가, 기록 있으면 불가
+  assert.equal((await prod('POST', '/api/env/days', { kind: 'off', day: mon, area: 'warehouse', note: 'x' })).status, 400);
+  assert.equal((await prod('POST', '/api/env/days', { kind: 'off', day: mon, area: 'line', zone_id: z.id })).status, 400, 'reason required');
+  assert.equal((await prod('POST', '/api/env/days', { kind: 'off', day: mon, area: 'line', zone_id: z.id, note: '생산 계획 없음' })).status, 200);
+  r = await rec(mon); assert.equal(r.status, 400, 'off zone blocked');
+  const m = (await prod('GET', `/api/env/month?area=line&ym=2026-11`)).body;
+  assert.equal(m.days[sun].workday.note, '주말 특근'); assert.ok(m.days[mon].off.some(o => o.zone_id === z.id)); assert.equal(m.days['2026-11-08'].rest, true);
+  const off = m.days[mon].off.find(o => o.zone_id === z.id); assert.equal((await prod('DELETE', `/api/env/days/${off.id}`)).status, 200);
+  assert.equal((await rec(mon)).status, 200);
+  assert.equal((await prod('POST', '/api/env/days', { kind: 'off', day: mon, area: 'line', zone_id: 0, note: '정전' })).status, 400, 'records exist → no whole-line off');
+  // 회사 휴일
+  assert.equal((await prod('POST', '/api/env/days', { kind: 'holiday', day: fri, note: '창립기념일' })).status, 200);
+  const fc = (await prod('GET', `/api/env/day?area=warehouse&date=${fri}`)).body.cal; assert.deepEqual([fc.rest, fc.holiday], [true, '창립기념일']);
+  assert.equal((await prod('POST', '/api/env/days', { kind: 'holiday', day: '2026-12-25', note: 'x' })).status, 400, 'already public holiday');
+  assert.equal((await prod('DELETE', `/api/env/days/${fc.company.id}`)).status, 200);
 });
