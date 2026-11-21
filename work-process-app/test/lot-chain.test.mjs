@@ -1410,3 +1410,25 @@ test('15.330 logistics operator: open POs / pending ship instructions without pr
   assert.equal((await both('GET', '/api/operator/plans?date=' + today)).status, 200);
   assert.equal((await both('GET', '/api/operator/open-po')).status, 200);
 });
+
+test('15.333 quality document folders: add (with parents), validate, move docs, rename carries docs and subfolders, delete only when empty, quality only', async () => {
+  const f = b => admin('PUT', '/api/qdoc-folders', b);
+  assert.deepEqual((await f({ action: 'add', path: '생산/세탁' })).body.folders, ['생산', '생산/세탁']);
+  assert.equal((await f({ action: 'add', path: 'a/b/c/d' })).status, 400, 'depth 3');
+  assert.equal((await f({ action: 'add', path: '생산' })).status, 400, 'duplicate');
+  const d1 = (await admin('POST', '/api/qdocs', { kind: 'procedure', title: '세탁 절차', folder: '생산/세탁', request_id: rid() })).body;
+  assert.equal(d1.folder, '생산/세탁');
+  assert.equal((await admin('POST', '/api/qdocs', { kind: 'procedure', title: 'x', folder: '없는폴더', request_id: rid() })).status, 400);
+  const d2 = (await admin('POST', '/api/qdocs', { kind: 'form', title: '점검표', request_id: rid() })).body;
+  assert.equal(d2.folder, '');
+  assert.equal((await admin('POST', '/api/qdocs/move', { ids: [d2.id], folder: '생산' })).body.moved, 1);
+  const r = await f({ action: 'rename', from: '생산', name: '제조' });
+  assert.deepEqual(r.body.folders, ['제조', '제조/세탁']);
+  const rows = (await admin('GET', '/api/qdocs')).body.rows;
+  assert.equal(rows.find(x => x.id === d1.id).folder, '제조/세탁'); assert.equal(rows.find(x => x.id === d2.id).folder, '제조');
+  assert.match((await f({ action: 'delete', path: '제조' })).body.error, /문서 2건/);
+  await admin('POST', '/api/qdocs/move', { ids: [d1.id, d2.id], folder: '' });
+  assert.deepEqual((await f({ action: 'delete', path: '제조' })).body.folders, []);
+  assert.equal((await prod('PUT', '/api/qdoc-folders', { action: 'add', path: 'x' })).status, 403);
+  assert.equal((await prod('POST', '/api/qdocs/move', { ids: [d1.id], folder: '' })).status, 403);
+});

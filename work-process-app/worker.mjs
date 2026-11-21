@@ -4223,7 +4223,16 @@ const QDOC_KIND = { manual: '품질 매뉴얼', procedure: '절차서', instruct
 const QDOC_INTERNAL = ['manual', 'procedure', 'instruction', 'form'];
 const QDOC_PREFIX = { manual: 'QM-', procedure: 'QP-', instruction: 'QI-', form: 'QF-', std: 'EX-', law: 'EX-', customer: 'EX-', ext_other: 'EX-' };
 const QDOC_STATUS = { draft: '초안', review: '검토', approved: '승인·배포', obsolete: '폐지' };
-const QDOC_COLS = ['title', 'kind', 'edition', 'issuer', 'dept', 'owner_name', 'summary', 'effective_date', 'review_months', 'next_review', 'retention_years', 'dispose_date', 'access_depts', 'training_needed', 'change_id', 'note'];
+const QDOC_COLS = ['title', 'kind', 'edition', 'issuer', 'dept', 'owner_name', 'summary', 'effective_date', 'review_months', 'next_review', 'retention_years', 'dispose_date', 'access_depts', 'training_needed', 'change_id', 'note', 'folder'];
+// 15.333 분류 폴더: 경로 'a/b/c'(3단계까지, 이름 40자). 목록은 settings qdoc_folders(빈 폴더도 둠). '' = 미분류.
+function qdocFolderPath(v, label = '폴더') {
+  const segs = String(v ?? '').split('/').map(x => x.trim()).filter(Boolean);
+  if (segs.length > 3) throw bad(`${label}는 3단계까지 만들 수 있습니다.`);
+  if (segs.some(x => x.length > 40)) throw bad(`${label} 이름은 40자까지입니다.`);
+  return segs.join('/');
+}
+async function qdocFolders() { let v = []; try { v = JSON.parse(await getSetting('qdoc_folders') || '[]'); } catch { v = []; } return Array.isArray(v) ? [...new Set(v.filter(x => typeof x === 'string' && x))].sort((a, b) => a.localeCompare(b, 'ko')) : []; }
+async function qdocCheckFolder(folder) { if (folder && !(await qdocFolders()).includes(folder)) throw bad(`없는 폴더입니다: ${folder}. 폴더 설정에서 먼저 만드세요.`); }
 function qdocBody(o0, prior = {}) {
   const o = o0 && typeof o0 === 'object' ? o0 : {}, pick = k => o[k] === undefined ? prior[k] : o[k];
   const kind = pick('kind'); if (!QDOC_KIND[kind]) throw bad('문서 종류를 고르세요.');
@@ -4233,7 +4242,7 @@ function qdocBody(o0, prior = {}) {
   const f = { title: reqStr(pick('title'), '문서 제목', 200), kind, edition: str(pick('edition'), 60), issuer: str(pick('issuer'), 100), dept: str(pick('dept'), 50), owner_name: str(pick('owner_name'), 50), summary: str(pick('summary'), 1000),
     effective_date: qDate(pick('effective_date'), '시행일'), review_months: intIn(pick('review_months'), '검토 주기(개월)', 0, 60, 12), next_review: qDate(pick('next_review'), '다음 검토일'),
     retention_years: intIn(pick('retention_years'), '보존기간(년)', 0, 99, 3), dispose_date: qDate(pick('dispose_date'), '폐기 예정일'), access_depts: JSON.stringify(depts),
-    training_needed: pick('training_needed') === true || pick('training_needed') === 1 || pick('training_needed') === '1' || pick('training_needed') === 'on' ? 1 : 0, change_id: optId(pick('change_id')), note: str(pick('note'), 1000) };
+    training_needed: pick('training_needed') === true || pick('training_needed') === 1 || pick('training_needed') === '1' || pick('training_needed') === 'on' ? 1 : 0, change_id: optId(pick('change_id')), note: str(pick('note'), 1000), folder: qdocFolderPath(pick('folder')) };
   return f;
 }
 const isQuality = user => hasRole(user, 'quality');
@@ -4249,12 +4258,55 @@ async function qdocDropFile(file, versions) { if (file?.file && !versions.some(v
 route('GET', '/api/qdocs', async ({ user }) => {
   const rows = (await db.prepare('SELECT * FROM quality_docs ORDER BY doc_no LIMIT 2000').all()).filter(r => qdocVisible(r, user)).map(r => qdocRow(r, user));
   const lists = await orgLists(true);
-  return { rows, can_manage: isQuality(user), can_approve: hasRole(user, 'quality_approver'), today: today(), depts: lists.departments.map(d => d.name), me: { name: user.name, department: user.department || '' } };
+  return { rows, folders: await qdocFolders(), can_manage: isQuality(user), can_approve: hasRole(user, 'quality_approver'), today: today(), depts: lists.departments.map(d => d.name), me: { name: user.name, department: user.department || '' } };
+});
+// 15.333 문서 분류 폴더: 만들기 · 이름 바꾸기(하위 폴더·문서 경로 함께) · 지우기(비어 있을 때만) · 문서 옮기기
+route('PUT', '/api/qdoc-folders', async ({ user, body }) => {
+  requireRole(user, 'quality', '품질');
+  const list = await qdocFolders(), action = String(body.action || '');
+  const withParents = p => p.split('/').map((_, i, a) => a.slice(0, i + 1).join('/'));
+  const under = (f, p) => f === p || f.startsWith(p + '/');
+  if (action === 'add') {
+    const path = qdocFolderPath(body.path); if (!path) throw bad('폴더 이름을 넣으세요.');
+    if (list.includes(path)) throw bad(`이미 있는 폴더입니다: ${path}`);
+    if (list.length >= 300) throw bad('폴더는 300개까지 만들 수 있습니다.');
+    await setSetting('qdoc_folders', JSON.stringify([...new Set([...list, ...withParents(path)])]));
+  } else if (action === 'rename') {
+    const from = qdocFolderPath(body.from), name = qdocFolderPath(body.name, '새 이름');
+    if (!from || !list.includes(from)) throw bad('바꿀 폴더를 고르세요.');
+    if (!name || name.includes('/')) throw bad('새 이름을 넣으세요(「/」 없이).');
+    const to = [...from.split('/').slice(0, -1), name].join('/');
+    if (to === from) return { folders: list };
+    if (list.includes(to)) throw bad(`같은 이름의 폴더가 이미 있습니다: ${to}`);
+    const next = list.map(f => under(f, from) ? to + f.slice(from.length) : f);
+    await db.batch([
+      { sql: "UPDATE quality_docs SET folder=? || substr(folder, ?), revision=revision+1, updated_by=?, updated_at=datetime('now','+9 hours') WHERE folder=? OR substr(folder,1,?)=?", args: [to, from.length + 1, user.name, from, from.length + 1, from + '/'] },
+      { sql: "INSERT INTO settings(key,value) VALUES('qdoc_folders',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", args: [JSON.stringify(next)] },
+    ]);
+  } else if (action === 'delete') {
+    const path = qdocFolderPath(body.path); if (!path || !list.includes(path)) throw bad('지울 폴더를 고르세요.');
+    const n = (await db.prepare('SELECT COUNT(*) AS n FROM quality_docs WHERE folder=? OR substr(folder,1,?)=?').get(path, path.length + 1, path + '/')).n;
+    if (n) throw bad(`이 폴더(하위 포함)에 문서 ${n}건이 있습니다. 문서를 다른 폴더로 옮긴 뒤 지우세요.`);
+    await setSetting('qdoc_folders', JSON.stringify(list.filter(f => !under(f, path))));
+  } else throw bad('폴더 작업을 확인하세요.');
+  return { folders: await qdocFolders() };
+});
+route('POST', '/api/qdocs/move', async ({ user, body }) => {
+  requireRole(user, 'quality', '품질');
+  const folder = qdocFolderPath(body.folder); await qdocCheckFolder(folder);
+  const ids = Array.isArray(body.ids) ? [...new Set(body.ids.map(Number))] : [];
+  if (!ids.length || ids.length > 500 || ids.some(i => !Number.isSafeInteger(i) || i < 1)) throw bad('옮길 문서를 고르세요.');
+  const rows = await db.prepare(`SELECT * FROM quality_docs WHERE id IN (${ids.map(() => '?').join(',')})`).all(...ids);
+  if (rows.length !== ids.length) throw bad('없는 문서가 있습니다. 새로 불러오세요.');
+  const moving = rows.filter(r => (r.folder || '') !== folder);
+  if (moving.length) await db.batch(moving.map(r => ({ sql: "UPDATE quality_docs SET folder=?, history=?, revision=revision+1, updated_by=?, updated_at=datetime('now','+9 hours') WHERE id=?", args: [folder, pushHist(r, { by: user.name, what: `폴더 옮김: ${r.folder || '미분류'} → ${folder || '미분류'}` }), user.name, r.id] })));
+  return { moved: moving.length, folder };
 });
 route('POST', '/api/qdocs', async ({ user, body }) => {
   requireRole(user, 'quality', '품질'); const key = str(body.request_id, 80) || null;
   if (key) { const old = await db.prepare('SELECT * FROM quality_docs WHERE request_id=?').get(key); if (old) return qdocRow(old, user); }
   const f = qdocBody(body), internal = QDOC_INTERNAL.includes(f.kind), docNo = str(body.doc_no, 40).toUpperCase();
+  await qdocCheckFolder(f.folder); // 15.333
   if (docNo && await db.prepare('SELECT 1 FROM quality_docs WHERE doc_no=?').get(docNo)) throw bad(`이미 있는 문서번호입니다: ${docNo}`);
   if (!internal && !f.issuer) throw bad('외부문서는 발행처(예: 국가기술표준원·고객사)를 넣으세요.');
   const files = await saveDocFiles(body.files, 1), file = files[0] || {};
@@ -4275,8 +4327,9 @@ route('PUT', '/api/qdocs/:id', async ({ user, params, body }) => {
   if (prior.status === 'obsolete') throw bad('폐지된 문서는 고칠 수 없습니다.');
   const internal = QDOC_INTERNAL.includes(prior.kind), locked = internal && prior.status !== 'draft'; // 15.309 검토 요청 뒤에는 내용·파일 잠금(반려하면 초안으로)
   // 승인·배포된 내부문서는 관리 정보(주관 부서·담당·열람 부서·보존·검토 주기·메모)만 고친다. 내용·파일은 「개정」으로.
-  const src = locked ? Object.fromEntries(Object.entries(body).filter(([k]) => ['dept', 'owner_name', 'access_depts', 'retention_years', 'review_months', 'next_review', 'note', 'training_needed'].includes(k))) : body;
+  const src = locked ? Object.fromEntries(Object.entries(body).filter(([k]) => ['dept', 'owner_name', 'access_depts', 'retention_years', 'review_months', 'next_review', 'note', 'training_needed', 'folder'].includes(k))) : body;
   const f = qdocBody(src, prior);
+  if (f.folder !== (prior.folder || '')) await qdocCheckFolder(f.folder); // 15.333 폴더는 승인된 문서도 옮길 수 있음(관리 정보)
   const versions = JSON.parse(prior.versions || '[]'), oldFile = JSON.parse(prior.file_json || '{}');
   const files = !locked ? await saveDocFiles(body.files, 1) : [];
   try {

@@ -4491,3 +4491,10 @@ body:not(.focus-mode) .focus-fab, body:not(.focus-mode) .focus-bar { display: no
   #main form.list-filters > label.grow > input, #main form.list-filters > label.grow > select { min-width: 0; max-width: 100%; }
 }
 td.nowrap .btn, td.nowrap label.btn { white-space: nowrap; }
+/* 15.333 문서관리 폴더 창 */
+.qd-tree-hint { margin: 8px 6px; }
+.qd-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 6px 0 10px; padding: 8px 12px; border: 1px solid var(--accent); border-radius: 10px; background: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
+.qd-bulk[hidden] { display: none; }
+.qd-bulk .qd-move { display: flex; flex-direction: row; align-items: center; gap: 6px; font-weight: 600; }
+.qd-table .chk-col { width: 34px; text-align: center; }
+.stock-tree .st-set .btn + .btn { margin-left: 4px; }
