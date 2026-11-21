@@ -14,7 +14,7 @@ async function getSetting(k) { const r = (await db.prepare('SELECT value FROM se
 async function setSetting(k, v) { (await db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(k, String(v))); }
 
 // ───────────────────────── 공통 ─────────────────────────
-const ROLES = ['operator', 'purchase', 'quality', 'quality_approver', 'dev', 'dev_approver', 'production', 'production_approver', 'logistics', 'logistics_approver', 'sales'];
+const ROLES = ['operator', 'operator_logistics', 'purchase', 'quality', 'quality_approver', 'dev', 'dev_approver', 'production', 'production_approver', 'logistics', 'logistics_approver', 'sales'];
 const REQUEST_TYPES = { voc: 'quality', analysis: 'quality', development: 'dev', sample: 'production', sample_goods: 'purchase', rnd_analysis: 'dev' }; // 15.285 rnd_analysis: 연구팀 분석의뢰
 const REQUEST_PREFIX = { voc: 'V', analysis: 'Q', development: 'D', sample: 'S', sample_goods: 'G', rnd_analysis: 'RA' };
 const RND_CATEGORIES = ['의뢰분석', '시제품분석', '원료분석', '경쟁사분석', '기타']; // 15.285
@@ -199,11 +199,23 @@ function cleanPrefs(body, prior) {
 }
 async function meUser(u) { return { ...publicUser(u), menus: await effectiveMenus(u), ui: await userPrefs(u.id) }; }
 function hasRole(user, role) { const roles = publicUser(user).roles; return !!user.is_admin || roles.includes(role) || (['quality','dev','production','logistics'].includes(role) && roles.includes(role + '_approver')); }
-function isOperator(user) { return !!user && !user.is_admin && publicUser(user).roles.includes('operator'); }
-function operatorRequestAllowed(method, path) {
-  if (method === 'GET' && (/^\/api\/requests\/[1-9]\d*\/inspection(?:\/history\/[1-9]\d*)?$/.test(path) || ['/api/inspections','/api/wash-summary'].includes(path))) return true;
-  if (method === 'GET') return ['/api/me', '/api/operator/catalog', '/api/operator/semi-records', '/api/operator/plans', '/api/operator/actuals', '/api/lots/available', '/api/semi-bags', '/api/actuals/progress'].includes(path); // 15.249 오퍼레이터도 투입 LOT·봉투 LOT 고르기
-  return (method === 'PUT' && path === '/api/me/password') || (method === 'POST' && (['/api/auth/logout', '/api/auth/login', '/api/semi-batches'].includes(path) || /^\/api\/schedules\/[1-9]\d*\/actuals$/.test(path) || /^\/api\/(?:operator\/semi-records|actuals)\/[1-9]\d*\/complete$/.test(path)));
+// 15.330 오퍼레이터 두 종류: operator = 생산(반제품·완제품 실적), operator_logistics = 물류(입고·출하). 둘 다 가질 수 있음.
+function isOperator(user) { const r = !!user && !user.is_admin ? publicUser(user).roles : []; return r.includes('operator') || r.includes('operator_logistics'); }
+const opProd = user => isOperator(user) && publicUser(user).roles.includes('operator');
+const opLog = user => isOperator(user) && publicUser(user).roles.includes('operator_logistics');
+function operatorRequestAllowed(method, path, user) {
+  if (['/api/me', '/api/me/logins'].includes(path) && method === 'GET') return true;
+  if ((method === 'PUT' && path === '/api/me/password') || (method === 'POST' && ['/api/auth/logout', '/api/auth/login'].includes(path))) return true;
+  if (opProd(user)) {
+    if (method === 'GET' && (/^\/api\/requests\/[1-9]\d*\/inspection(?:\/history\/[1-9]\d*)?$/.test(path) || ['/api/inspections','/api/wash-summary'].includes(path))) return true;
+    if (method === 'GET' && ['/api/operator/catalog', '/api/operator/semi-records', '/api/operator/plans', '/api/operator/actuals', '/api/lots/available', '/api/semi-bags', '/api/actuals/progress'].includes(path)) return true; // 15.249 오퍼레이터도 투입 LOT·봉투 LOT 고르기
+    if (method === 'POST' && (path === '/api/semi-batches' || /^\/api\/schedules\/[1-9]\d*\/actuals$/.test(path) || /^\/api\/(?:operator\/semi-records|actuals)\/[1-9]\d*\/complete$/.test(path))) return true;
+  }
+  if (opLog(user)) {
+    if (method === 'GET' && ['/api/operator/open-po', '/api/operator/ship-pending', '/api/operator/log-history', '/api/warehouses', '/api/lots/available'].includes(path)) return true;
+    if (method === 'POST' && ['/api/receipts', '/api/ship-instructions/ship'].includes(path)) return true;
+  }
+  return false;
 }
 function isRequestApprover(user, type) {
   return hasRole(user, { voc: 'quality_approver', analysis: 'quality_approver', development: 'dev_approver', sample: 'production', sample_goods: 'purchase', rnd_analysis: 'dev_approver' }[type]);
@@ -1208,6 +1220,7 @@ route('POST', '/api/receipts', async ({ user, body }) => {
     if (['ok', 'mismatch'].includes(po.recv_status)) cmds.push({ sql: `INSERT INTO progress_comments(entity_type,entity_id,content,author_id,author_name) SELECT 'request',q.id,'[추가 입고] ' || r.receipt_no || ' · ' || ?,?,? FROM requests q, receipts r WHERE q.source_type='purchase_order' AND q.source_id=? AND r.request_id=?`, args: [text, user.id, user.name, poId, token] });
     else cmds.push(receiptAnalysisQuery('purchase_order', poId, user));
   }
+  if (otherLines.length && isOperator(user)) throw bad('오퍼레이터는 발주 입고만 입력합니다. 발주 없이 들어온 물건은 물류 담당자에게 알리세요.'); // 15.330
   if (otherLines.length) await ensureVendor(vendor, user, 'purchase');
   for (const l of otherLines) {
     let fields;
@@ -6249,6 +6262,29 @@ async function schedFields(b, previous = null) {
   return { kind, period, start_date: normStart(period, dateStr(b.start_date, '날짜')), product: bomId ? snapshot.product : reqStr(b.product, '제품명', 200), qty, note: str(b.note, 500), bom_id: bomId, bom_snapshot: JSON.stringify(snapshot) };
 }
 function decodeSchedule(row) { return { ...row, bom_snapshot: JSON.parse(row.bom_snapshot || '{}') }; }
+
+// 15.330 물류 오퍼레이터(휴대폰 입고·출하): 단가·금액 없이 필요한 칸만.
+const canLogOp = user => !!user.is_admin || hasRole(user, 'logistics') || hasRole(user, 'purchase') || opLog(user);
+route('GET', '/api/operator/open-po', async ({ user }) => {
+  if (!canLogOp(user)) throw new HttpError(403, '입고 입력 권한이 없습니다.');
+  return db.prepare(`SELECT id, req_no, vendor, item, spec, unit, qty, recv_qty, recv_status, due_date, lot, item_category,
+      (SELECT 1 FROM receipt_qty_changes c WHERE c.po_id=purchase_orders.id AND c.status='pending') AS pending_change
+    FROM purchase_orders WHERE recv_status IN ('','checking','mismatch') ORDER BY (due_date IS NULL OR due_date=''), due_date, vendor, id LIMIT 500`).all();
+});
+route('GET', '/api/operator/ship-pending', async ({ user }) => {
+  if (!canLogOp(user)) throw new HttpError(403, '출하 입력 권한이 없습니다.');
+  return db.prepare(`SELECT i.id, i.ship_date, i.customer, i.item, i.spec, i.unit, i.qty, i.product_code, i.note, o.order_no, o.customer_po
+    FROM ship_instructions i LEFT JOIN sales_order_lines ol ON ol.id=i.order_line_id LEFT JOIN sales_orders o ON o.id=ol.order_id
+    WHERE i.status='pending' AND i.held=0 ORDER BY i.ship_date, i.customer, i.id LIMIT 500`).all();
+});
+route('GET', '/api/operator/log-history', async ({ user, query }) => {
+  if (!canLogOp(user)) throw new HttpError(403, '권한이 없습니다.');
+  const date = query.date ? listFilterDate(query.date, '날짜') : today();
+  const receipts = await db.prepare(`SELECT r.receipt_no, r.receipt_date, r.vendor, p.item, p.spec, p.unit, l.qty, l.lot, l.sub_lot, l.warehouse, l.location, l.voided_at
+    FROM po_receipt_lots l JOIN receipts r ON r.id=l.receipt_id LEFT JOIN purchase_orders p ON p.id=l.po_id WHERE r.created_by_id=? AND r.receipt_date=? ORDER BY l.id DESC LIMIT 100`).all(user.id, date);
+  const shipments = await db.prepare(`SELECT s.ship_date, s.customer, s.item, s.spec, s.unit, s.qty, s.lot FROM shipments s WHERE s.created_by=? AND s.ship_date=? ORDER BY s.id DESC LIMIT 100`).all(user.name, date);
+  return { date, receipts, shipments };
+});
 // Narrow read models for the operator UI. No prices, BOM recipes, or other users' logs.
 route('GET', '/api/operator/catalog', async () => ({
   units: await db.prepare('SELECT id,kind,name,active FROM production_units WHERE active=1 ORDER BY sort_order,name').all(),
@@ -8966,7 +9002,8 @@ route('GET', '/api/ship-instructions', async ({ query }) => {
 });
 // 출하 처리: 지시마다 출하 한 줄(재고 차감)을 만들고 매출전표 줄을 그 출하로 연결. lots: { 지시 id: LOT }
 route('POST', '/api/ship-instructions/ship', async ({ user, body }) => {
-  if (!hasRole(user, 'logistics')) throw new HttpError(403, '출하 처리는 물류 담당자가 합니다.');
+  if (!hasRole(user, 'logistics') && !opLog(user)) throw new HttpError(403, '출하 처리는 물류 담당자가 합니다.'); // 15.330 물류 오퍼레이터도
+  if (opLog(user) && !hasRole(user, 'logistics') && (!Array.isArray(body.ids) || body.ids.length !== 1)) throw bad('오퍼레이터는 출하지시를 한 건씩 처리합니다.');
   const ids = Array.isArray(body.ids) ? [...new Set(body.ids.map(Number))] : [];
   if (!ids.length || ids.length > 50 || ids.some(id => !Number.isSafeInteger(id) || id <= 0)) throw bad('출하할 지시를 1~50건 고르세요.');
   const date = dateStr(body.ship_date || today(), '출고일'); if (date > today()) throw bad('출고일은 오늘 이전으로 선택하세요.');
@@ -9709,7 +9746,7 @@ return { async fetch(req) {
       }
       if (user) await touchSeen(req, user);
       if (r.auth && !user) throw new HttpError(401, '로그인이 필요합니다.');
-      if (isOperator(user) && !operatorRequestAllowed(req.method, p)) throw new HttpError(403, '오퍼레이터는 반제품·완제품 실적 입력과 본인 기록 조회만 사용할 수 있습니다.');
+      if (isOperator(user) && !operatorRequestAllowed(req.method, p, user)) throw new HttpError(403, '오퍼레이터는 맡은 입력(생산: 반제품·완제품 실적 / 물류: 입고·출하)과 본인 기록 조회만 사용할 수 있습니다.');
       const body = req.method === 'GET' ? {} : await readBody(req);
       return Response.json(await r.handler({ req, res, user, params, body, query: Object.fromEntries(url.searchParams) }), { headers: res });
     }
