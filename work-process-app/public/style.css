@@ -4581,3 +4581,6 @@ form.list-filters [hidden], form.toolbar [hidden] { display: none !important; } 
 .qb-row { display: flex !important; flex-direction: row !important; align-items: baseline; gap: 6px; padding: 6px 8px; border-bottom: 1px dashed var(--line); font-weight: 400 !important; }
 .qb-cat { margin: 8px 0; } .qb-cat > summary { cursor: pointer; padding: 6px 0; }
 .tt-qual { padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 10%, transparent); font-weight: 600; }
+
+/* 15.342 분류 폴더: 긴 분류 이름(예: OEKO-TEX STANDARD 100)은 줄임표 대신 줄바꿈 */
+.cat-tree .st-node { white-space: normal; overflow: visible; overflow-wrap: anywhere; line-height: 1.35; }
