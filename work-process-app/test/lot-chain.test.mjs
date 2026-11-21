@@ -1492,3 +1492,13 @@ test('15.336 passing a training test marks attendance automatically; trainings w
   a = (await admin('GET', '/api/trainings')).body.rows.find(r => r.id === t.id).attendees[0];
   assert.deepEqual([a.attended, a.result], [1, '이수']); assert.ok(a.confirmed_at);
 });
+
+test('15.338 supplier audit carried out → that vendor\'s 현장심사 plan of the year is marked done', async () => {
+  const Y = Number(today.slice(0, 4));
+  await admin('POST', '/api/supplier-plans', { year: Y, vendors: ['심사공급'], kind: 'audit', plan_month: 1, request_id: rid() });
+  const a = (await admin('POST', '/api/audits', { title: '심사공급 현장심사', kind: 'supplier', target: '심사 공급', plan_date: today, request_id: rid() })).body;
+  const r = await admin('PUT', `/api/audits/${a.id}`, { ...a, checklist: a.checklist, status: 'done', done_date: today, revision: a.revision });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const p = (await admin('GET', '/api/supplier-plans?year=' + Y)).body.rows.find(x => x.vendor === '심사공급');
+  assert.deepEqual([p.status, p.result], ['done', `심사 ${a.audit_no}`]);
+});

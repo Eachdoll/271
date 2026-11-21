@@ -4737,6 +4737,13 @@ async function supPlanLink(ev, user) {
   if (plans.length) { const p = plans[0]; await db.prepare("UPDATE supplier_eval_plans SET status='done',done_date=?,result=?,eval_id=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=?").run(today(), `${ev.grade}등급 ${ev.total}점`, ev.id, pushHist(p, { by: user.name, what: '유효성평가 저장으로 실시', grade: ev.grade }), user.name, p.id); }
   return ev;
 }
+// 15.338 협력사 심사를 실시하면 같은 해 그 업체의 현장심사 계획을 실시로(심사번호를 결과에).
+async function supPlanAuditLink(a, user) {
+  if (a.kind !== 'supplier' || !a.target) return;
+  const y = Number(String(a.done_date || a.plan_date).slice(0, 4));
+  const p = await db.prepare("SELECT * FROM supplier_eval_plans WHERE vendor_key=? AND year=? AND status='planned' AND kind='audit' ORDER BY plan_month, id").get(vkey(a.target), y); if (!p) return;
+  await db.prepare("UPDATE supplier_eval_plans SET status='done',done_date=?,result=?,history=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND status='planned'").run(a.done_date || today(), `심사 ${a.audit_no}`, pushHist(p, { by: user.name, what: `심사 ${a.audit_no} 실시로 현장심사 실시` }), user.name, p.id);
+}
 route('GET', '/api/supplier-plans', async ({ user, query }) => {
   const year = intIn(query.year, '연도', 2000, 2100, Number(today().slice(0, 4)));
   const rows = (await db.prepare('SELECT * FROM supplier_eval_plans WHERE year=? ORDER BY plan_month, vendor, id').all(year)).map(spRow);
@@ -5190,6 +5197,7 @@ route('PUT', '/api/audits/:id', async ({ user, params, body }) => {
     if (!r.changes) throw conflict();
   } catch (error) { await removePhotos(added.map(x => x.file)); throw error; }
   await removePhotos(cur0.filter(x => !keepNames.includes(x.file)).map(x => x.file));
+  if (prior.status === 'planned' && ['done', 'correcting', 'closed'].includes(to)) await supPlanAuditLink(await mustGet('quality_audits', prior.id), user); // 15.338
   return audOne(prior.id);
 });
 route('POST', '/api/audits/:id/findings', async ({ user, params, body }) => {
