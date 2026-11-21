@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.329';
+const APP_VERSION = '15.332';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -68,8 +68,8 @@ const searchKey = s => String(s ?? '').normalize('NFC').toLowerCase().replace(/\
 const sumLine = parts => `<div class="list-sum" role="status">${parts.filter(p => p && p[1] !== '' && p[1] != null).map(([k, v]) => `<span><span>${esc(k)}</span> <b>${v}</b></span>`).join('')}</div>`;
 
 // 표 머리글용 짧은 이름(15.63): 긴 이름은 머리글 title·체크박스 aria-label로 그대로 보여 준다.
-const ROLE_SHORT = { operator: '오퍼레이터', purchase: '구매', quality: '품질', quality_approver: '품질책임자', dev: '개발', dev_approver: '개발책임자', production: '생산', production_approver: '생산팀장', logistics: '물류', logistics_approver: '물류팀장', sales: '영업' };
-const ROLE_LABEL = { operator: '오퍼레이터(입력 전용)', purchase: '구매', quality: '품질', quality_approver: '품질책임자(승인권자)', dev: '개발(연구소)', dev_approver: '개발책임자(승인권자)', production: '생산', production_approver: '생산팀장(실적 수정 승인)', logistics: '물류', logistics_approver: '물류팀장(입고 수량 수정 승인)', sales: '영업(수주·매출전표·입금)' };
+const ROLE_SHORT = { operator: '생산 오퍼레이터', operator_logistics: '물류 오퍼레이터', purchase: '구매', quality: '품질', quality_approver: '품질책임자', dev: '개발', dev_approver: '개발책임자', production: '생산', production_approver: '생산팀장', logistics: '물류', logistics_approver: '물류팀장', sales: '영업' };
+const ROLE_LABEL = { operator: '생산 오퍼레이터(실적 입력 전용)', operator_logistics: '물류 오퍼레이터(입고·출하 입력 전용)', purchase: '구매', quality: '품질', quality_approver: '품질책임자(승인권자)', dev: '개발(연구소)', dev_approver: '개발책임자(승인권자)', production: '생산', production_approver: '생산팀장(실적 수정 승인)', logistics: '물류', logistics_approver: '물류팀장(입고 수량 수정 승인)', sales: '영업(수주·매출전표·입금)' };
 const STATUS = { pending: '접수대기', rejected: '반려', waiting: '대기', progress: '진행', done: '완료' };
 const RECV = { '': '미입고', ok: '입고완료', mismatch: '수량상이', checking: '확인중' };
 

@@ -4382,3 +4382,112 @@ body:not(.focus-mode) .focus-fab, body:not(.focus-mode) .focus-bar { display: no
 #geoCard label.check { display: flex; flex-direction: row; align-items: center; gap: 8px; margin: 6px 0; font-weight: 500; }
 #geoCard label.check input[type=checkbox] { width: 18px; height: 18px; margin: 0; flex: none; }
 #geoCard .geo-list label.check, #geoCard .geo-users label.check { margin: 2px 0; min-height: 32px; }
+
+/* 15.330 오퍼레이터 모드: 큰 단추(팝) · 입고/출하 카드 · 팝업 입력 */
+@keyframes op-pop { from { opacity: 0; transform: scale(.86); } 60% { transform: scale(1.03); } to { opacity: 1; transform: none; } }
+.op-hello { font-size: 24px; margin: 4px 0 16px; }
+.op-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; margin: 12px 0 18px; }
+.op-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.op-big { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 170px !important; padding: 20px 14px; border-radius: 22px; border: 2px solid var(--line); background: var(--panel); color: var(--text); text-decoration: none; font: inherit; cursor: pointer; text-align: center; box-shadow: 0 6px 18px rgba(0,0,0,.08); animation: op-pop .38s cubic-bezier(.2,.9,.3,1.2) both; animation-delay: calc(var(--i, 0) * 70ms); transition: transform .12s, border-color .12s; }
+.op-big:hover, .op-big:focus-visible { border-color: var(--accent); }
+.op-big:active { transform: scale(.96); }
+.op-icon { font-size: 52px; line-height: 1; }
+.op-label { font-size: 22px; font-weight: 800; }
+.op-desc { font-size: 14px; color: var(--muted); }
+.op-grid-2 .op-big { min-height: 240px !important; }
+.op-grid-2 .op-icon { font-size: 72px; }
+.op-grid-2 .op-label { font-size: 30px; }
+.op-pop-title { font-size: 22px; margin: 0 0 6px; padding-right: 36px; }
+.op-pop { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.op-pop .op-big { min-height: 150px !important; }
+.operator-tabs .op-home { flex: 0 0 auto; font-weight: 700; }
+.op-search { display: block; margin: 8px 0 12px; }
+.op-search input { width: 100%; min-height: 52px; font-size: 17px; border-radius: 14px; }
+.op-cards { display: grid; gap: 10px; margin-bottom: 18px; }
+.op-card { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; min-height: 84px !important; padding: 14px 16px; border: 1.5px solid var(--line); border-radius: 16px; background: var(--panel); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.op-card:hover, .op-card:focus-visible { border-color: var(--accent); }
+.op-card:active { transform: scale(.985); }
+.op-card[disabled] { opacity: .55; cursor: not-allowed; }
+.op-card-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.op-card-main b { font-size: 18px; overflow-wrap: anywhere; }
+.op-card-side { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex: none; text-align: right; }
+.op-spec { font-weight: 500; color: var(--muted); }
+.op-sub { font-size: 13px; color: var(--muted); }
+.op-late { color: var(--red); font-weight: 700; }
+.op-qty { font-size: 22px; font-weight: 800; white-space: nowrap; }
+.op-qty small { font-size: 13px; font-weight: 600; color: var(--muted); }
+.op-form label { font-weight: 600; }
+.op-form input, .op-form select { min-height: 52px; font-size: 17px; }
+.op-qty-input { display: flex; align-items: center; gap: 10px; }
+.op-qty-input input { flex: 1; font-size: 26px; font-weight: 800; min-height: 64px; text-align: right; }
+.op-qty-input b { font-size: 18px; }
+.op-quick { display: flex; flex-wrap: wrap; gap: 8px; }
+.op-quick .btn { min-height: 46px; }
+.op-save { min-height: 60px !important; font-size: 19px !important; font-weight: 800; width: 100%; border-radius: 14px; }
+.op-warn { color: var(--yellow); background: var(--yellow-bg); border-radius: 10px; padding: 10px 12px; font-weight: 600; margin: 0; }
+.op-lots { border: 0; padding: 0; margin: 0; display: grid; gap: 8px; }
+.op-lots legend { font-weight: 700; margin-bottom: 6px; }
+.op-lots [data-lots] { display: grid; gap: 8px; }
+.op-lot { display: flex !important; flex-direction: row !important; align-items: center; gap: 12px; min-height: 58px; padding: 10px 14px; border: 1.5px solid var(--line); border-radius: 14px; cursor: pointer; font-weight: 500 !important; }
+.op-lot:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.op-lot input { width: 22px; height: 22px; min-height: 0 !important; flex: none; margin: 0; }
+.op-lot span { display: flex; flex-direction: column; gap: 2px; }
+.op-lot b { font-size: 17px; }
+.op-lot small { color: var(--muted); }
+.op-lot-bad { opacity: .55; cursor: not-allowed; }
+.op-done { text-align: center; padding: 8px 4px; }
+.op-done-mark { width: 84px; height: 84px; margin: 4px auto 12px; border-radius: 50%; display: grid; place-items: center; font-size: 46px; font-weight: 900; color: #fff; background: var(--green, #1a7f37); animation: op-pop .4s cubic-bezier(.2,.9,.3,1.2) both; }
+.op-done h2 { font-size: 24px; margin: 0 0 8px; }
+.op-done p { font-size: 17px; margin: 0 0 16px; }
+@media (max-width: 600px) {
+  .op-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .op-big { min-height: 150px !important; padding: 14px 8px; }
+  .op-icon { font-size: 44px; }
+  .op-label { font-size: 18px; }
+  .op-desc { font-size: 12px; }
+  .op-grid-2 { grid-template-columns: 1fr; }
+  .op-grid-2 .op-big { min-height: 190px !important; }
+  .op-grid-2 .op-icon { font-size: 60px; }
+  .op-grid-2 .op-label { font-size: 28px; }
+  .operator-tabs { flex-wrap: nowrap; overflow-x: auto; }
+  .operator-tabs .btn { flex: 0 0 auto; white-space: nowrap; }
+}
+@media (prefers-reduced-motion: reduce) { .op-big, .op-done-mark { animation: none; } }
+.op-qty-input input { min-width: 0; width: auto !important; flex: 1 1 0; }
+.op-qty-input b { flex: none; white-space: nowrap; }
+.op-form, .op-form > * { min-width: 0; max-width: 100%; }
+/* 15.331 출하: LOT별 수량 · 재고 현황 */
+.op-lotq { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 14px; }
+.op-lotq:has(input:not(:placeholder-shown)) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.op-lotq-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.op-lotq-name b { font-size: 17px; overflow-wrap: anywhere; }
+.op-lotq-name small { color: var(--muted); }
+.op-lotq-in { display: flex; align-items: center; gap: 6px; flex: none; }
+.op-lotq-in input { width: 96px !important; min-width: 0; min-height: 52px; font-size: 20px; font-weight: 800; text-align: right; }
+.op-lotq-in .btn { min-height: 44px; }
+.op-lot-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.op-lot-tools .btn { min-height: 46px; }
+.op-total { font-size: 18px; padding: 10px 12px; border-radius: 12px; background: var(--bg); }
+.op-total b { font-size: 22px; }
+.op-total-ok { background: var(--green-bg); color: var(--green); }
+.op-warn-bad { color: var(--red); background: var(--red-bg); }
+.op-stock-filters { display: flex; gap: 8px; align-items: center; }
+.op-stock-filters .op-search { flex: 1; }
+.op-wh-filter select { min-height: 52px; font-size: 16px; border-radius: 14px; max-width: 42vw; }
+.op-stock { border: 1.5px solid var(--line); border-radius: 16px; background: var(--panel); }
+.op-stock > summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 72px; padding: 12px 16px; cursor: pointer; list-style: none; }
+.op-stock > summary::-webkit-details-marker { display: none; }
+.op-stock[open] > summary { border-bottom: 1px solid var(--line); }
+.op-stock-lots { padding: 4px 16px 10px; }
+.op-stock-lot { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px dashed var(--line); }
+.op-stock-lot:last-child { border-bottom: 0; }
+.op-stock-lot span:first-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.op-stock-lot small { color: var(--muted); }
+.op-stock-q { font-size: 18px; font-weight: 800; white-space: nowrap; }
+@media (max-width: 600px) { .op-pop { grid-template-columns: 1fr 1fr; } }
+/* 15.332 태블릿(701~820px) 점검: 조회 줄의 검색칸이 줄어든 이름표 밖으로 넘치던 것(수주 목록 768px에서 10px 넘쳐 화면이 축소됨) · 좁은 칸의 「첨부」 단추가 두 줄로 꺾이던 것 */
+@media (max-width: 820px) {
+  #main form.list-filters > label.grow { flex: 1 1 200px; min-width: 0; }
+  #main form.list-filters > label.grow > input, #main form.list-filters > label.grow > select { min-width: 0; max-width: 100%; }
+}
+td.nowrap .btn, td.nowrap label.btn { white-space: nowrap; }

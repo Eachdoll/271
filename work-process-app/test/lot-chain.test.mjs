@@ -1385,3 +1385,28 @@ test('15.329 login log with IP/location, last seen per user, country allowlist w
   assert.equal((await kr('PUT', '/api/admin/security/geo', { enabled: false, countries: ['KR'] })).status, 200);
   assert.equal((await tor('GET', '/api/dashboard')).status, 200);
 });
+
+test('15.330 logistics operator: open POs / pending ship instructions without prices, receive against PO only, ship one instruction, no other APIs; production operator unchanged', async () => {
+  const lg = client(), both = client();
+  await admin('POST', '/api/admin/users', { name: '물류작업', password: 'password', roles: ['operator_logistics'] });
+  await admin('POST', '/api/admin/users', { name: '겸직작업', password: 'password', roles: ['operator', 'operator_logistics'] });
+  assert.equal((await lg('POST', '/api/auth/login', { name: '물류작업', password: 'password' })).status, 200);
+  assert.equal((await both('POST', '/api/auth/login', { name: '겸직작업', password: 'password' })).status, 200);
+  await admin('POST', '/api/po', { req_no: 'OP-330', vendor: '오퍼공급', item: '오퍼원단', unit: 'YD', qty: 10, due_date: today, item_category: '원자재' });
+  const open = (await lg('GET', '/api/operator/open-po')).body, po = open.find(p => p.req_no === 'OP-330');
+  assert.ok(po); assert.ok(!('price' in po) && !('unit_price' in po) && !('amount' in po));
+  const r = await lg('POST', '/api/receipts', { request_id: rid(), receipt_date: today, vendor: '오퍼공급', lines: [{ po_id: po.id, qty: 4, lot: 'OPL-1' }] });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.match((await lg('POST', '/api/receipts', { request_id: rid(), receipt_date: today, vendor: '오퍼공급', lines: [{ item: '아무거나', qty: 1 }] })).body.error, /발주 입고만/);
+  const h = (await lg('GET', '/api/operator/log-history')).body; assert.deepEqual(h.receipts.map(x => [x.item, x.qty, x.lot]), [['오퍼원단', 4, 'OPL-1']]);
+  assert.ok(Array.isArray((await lg('GET', '/api/operator/ship-pending')).body));
+  assert.equal((await lg('POST', '/api/ship-instructions/ship', { ids: [1, 2] })).status, 400, 'one at a time');
+  const places = (await lg('GET', '/api/inventory/places')).body; assert.ok(places.rows.some(r => r.item === '오퍼원단' && r.lot === 'OPL-1' && r.qty === 4)); assert.ok(!JSON.stringify(places).includes('price')); // 15.331 재고 현황
+  assert.equal((await lg('POST', '/api/ship-instructions/999999/ship-lots', { lines: [{ lot: 'X', qty: 1 }] })).status, 404, '15.331 operator may split by LOT');
+  assert.equal((await lg('GET', '/api/inventory/lots')).status, 403);
+  for (const u of ['/api/po', '/api/ship-instructions', '/api/operator/plans?date=' + today, '/api/sales-bills']) assert.equal((await lg('GET', u)).status, 403, u);
+  assert.equal((await lg('POST', '/api/semi-batches', {})).status, 403);
+  assert.equal((await prod('GET', '/api/operator/open-po')).status, 200, 'logistics staff may read it too');
+  assert.equal((await both('GET', '/api/operator/plans?date=' + today)).status, 200);
+  assert.equal((await both('GET', '/api/operator/open-po')).status, 200);
+});

@@ -114,7 +114,7 @@ async function pageOrg(main) {
 //  · 사용 권한: 승인·처리 같은 업무 권한(역할)과 관리자 — 사람 × 권한 표, 누르면 바로 저장
 //  · 메뉴 보기: 화면 메뉴에 보이는 업무 묶음 — 사람 × 메뉴 표(부서 기본/전체/직접 지정)
 // 사용 권한이 있는 업무는 그 화면이 있어야 일을 하므로 메뉴를 꺼도 보인다(표에 「권한」으로 따로 표시).
-const MEMBER_ROLE_COLS = [['sales', '영업'], ['purchase', '구매'], ['quality', '품질'], ['quality_approver', '품질책임자'], ['dev', '개발'], ['dev_approver', '개발책임자'], ['production', '생산'], ['production_approver', '생산팀장'], ['logistics', '물류'], ['logistics_approver', '물류팀장'], ['operator', '오퍼레이터']];
+const MEMBER_ROLE_COLS = [['sales', '영업'], ['purchase', '구매'], ['quality', '품질'], ['quality_approver', '품질책임자'], ['dev', '개발'], ['dev_approver', '개발책임자'], ['production', '생산'], ['production_approver', '생산팀장'], ['logistics', '물류'], ['logistics_approver', '물류팀장'], ['operator', '생산 오퍼레이터'], ['operator_logistics', '물류 오퍼레이터']];
 const MEMBER_APPROVER = ['quality_approver', 'dev_approver', 'production_approver', 'logistics_approver'];
 const MEMBER_STATE = { pending: ['승인 대기', 'yellow'], approved: ['승인 완료', 'green'], rejected: ['반려', 'red'] };
 const memberMenuName = k => (MENU_GROUP_LABELS.find(([x]) => x === k) || [, k])[1].replace(/ \(.*\)$/, '');
@@ -142,7 +142,7 @@ async function pageMembers(main, tab) {
   const org = await api('GET', '/api/org');
   const intro = {
     info: '가입 승인과 회원 기본 정보(이름·부서·직급·비밀번호)를 관리합니다. 업무 권한은 「사용 권한」, 화면 메뉴는 「메뉴 보기」 탭에서 따로 정합니다.',
-    roles: '무엇을 <b>할 수 있는지</b>(입력·처리·승인)를 정합니다. 체크하면 바로 저장됩니다. 책임자(승인권자)는 가입 승인된 사람만 지정할 수 있습니다. 오퍼레이터는 입력 전용 화면으로 제한됩니다(관리자 제외).',
+    roles: '무엇을 <b>할 수 있는지</b>(입력·처리·승인)를 정합니다. 체크하면 바로 저장됩니다. 책임자(승인권자)는 가입 승인된 사람만 지정할 수 있습니다. 오퍼레이터는 입력 전용 화면으로 제한됩니다(관리자 제외): 생산 오퍼레이터 = 반제품·완제품 실적, 물류 오퍼레이터 = 입고·출하. 둘 다 주면 처음 화면에서 고릅니다.',
     menus: '화면 메뉴에 무엇이 <b>보이는지</b>만 정합니다. 숨긴 메뉴는 메뉴·대시보드에서 빠지고 주소로 들어와도 열리지 않습니다. 단, 사용 권한이 있는 업무는 일을 해야 하므로 메뉴를 꺼도 보입니다(<span class="chip">권한</span> 표시). 반대로 영업·구매의 전표·계산서·장부·달력 화면은 메뉴를 켜도 영업·구매 <b>사용 권한</b>이 있어야 보입니다. 「부서 기본」은 관리 › 조직 구성의 부서 설정을 따릅니다.',
   }[tab];
   main.innerHTML = `<h1>회원 관리</h1><p class="muted">${intro}</p>

@@ -38,7 +38,7 @@ test('Plan queries ignore late responses and never enable saving when no valid p
   assert.equal(elements.schedule_id.value,'');assert.equal(nodes['[type=submit]'].disabled,true);assert.match(nodes['#operatorPlan'].textContent,/계획이 없습니다/);assert.ok(!elements.schedule_id.innerHTML.includes('stale'));
 });
 test('Operator routes cannot render admin or ordinary business pages; admin is exempt from operator mode',async()=>{
-  const {c}=setup();const main={};await c.operatorPage('#/admin',main);assert.match(main.innerHTML,/오늘의 작업/);assert.ok(!main.innerHTML.includes('가입 승인'));
+  const {c}=setup();const main={};await c.operatorPage('#/admin',main);assert.match(main.innerHTML,/무엇을 입력할까요/);assert.ok(!main.innerHTML.includes('가입 승인'));
   assert.equal(vm.runInContext('isOperatorMode()',c),true);c.ME.is_admin=true;assert.equal(vm.runInContext('isOperatorMode()',c),false);
 });
 test('Closing confirmation or reason dialogs resolves cancellation; explicit confirmation remains true',async()=>{
