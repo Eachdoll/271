@@ -4344,3 +4344,12 @@ body.focus-mode #main { max-width: none; width: auto; margin: 0; padding-top: 56
 /* 세탁 검수 표 머리글·합계 칸 기본 바탕(#eceef2)도 다크에서 어둡게 */
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .lr-grid thead th:not([class*="lr-c-"]), :root:not([data-theme="light"]) .lr-grid tfoot th, :root:not([data-theme="light"]) .lr-grid tfoot td, :root:not([data-theme="light"]) .lr-grid tbody th { background: #2a303b; color: #e8ebf0; } }
 :root[data-theme="dark"] .lr-grid thead th:not([class*="lr-c-"]), :root[data-theme="dark"] .lr-grid tfoot th, :root[data-theme="dark"] .lr-grid tfoot td, :root[data-theme="dark"] .lr-grid tbody th { background: #2a303b; color: #e8ebf0; }
+
+/* 15.326 글꼴 고르기(화면 설정): 기본 · Pretendard · Helvetica(한글은 Pretendard·애플 SD 고딕·맑은 고딕) */
+html[data-font="pretendard"] body { font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif; }
+html[data-font="helvetica"] body { font-family: "Helvetica Neue", Helvetica, Arial, "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; letter-spacing: -.01em; }
+html[data-font]:lang(km) body { font-family: "Noto Sans Khmer", "Khmer OS", "Leelawadee UI", "Khmer UI", -apple-system, system-ui, sans-serif; }
+.font-select { min-height: 32px; font-size: 13px; }
+/* 글꼴 고르기는 스킨 고르기와 같은 모양 */
+.font-select { min-height: 32px; border-radius: 6px; padding: 2px 8px; font: inherit; font-size: 13px; }
+.side-prefs .font-select { flex: 1 1 100%; width: 100%; min-height: 36px; }
