@@ -1479,3 +1479,16 @@ test('15.335 supplier annual evaluation plan: bulk plan, edit/done/undo/cancel, 
   assert.equal((await admin('POST', '/api/supplier-plans/copy', { from: Y, to: Y + 1 })).body.created, 0, 'no duplicates');
   assert.ok((await prod('GET', '/api/supplier-plans?year=' + Y)).body.rows.length >= 3, 'readable');
 });
+
+test('15.336 passing a training test marks attendance automatically; trainings with a test do not ask for separate attendance', async () => {
+  const t = (await admin('POST', '/api/trainings', { title: '자동 참석 교육', kind: 'OJT', plan_date: today, attendees: ['생산'], request_id: rid() })).body;
+  const todo = async () => ((await prod('GET', '/api/my-tasks')).body?.approvals?.training_attend?.items || []).map(x => x.id);
+  assert.ok((await todo()).includes(t.id), 'no test yet → attendance to-do');
+  await admin('PUT', `/api/trainings/${t.id}/test`, { questions: [{ type: 'ox', q: 'O?', answer: 'O', points: 1 }], pass_score: 60, max_attempts: 2, open: true });
+  assert.ok(!(await todo()).includes(t.id), 'with a test → no separate attendance to-do');
+  await prod('POST', `/api/trainings/${t.id}/test/submit`, { answers: ['X'], request_id: rid() });
+  let a = (await admin('GET', '/api/trainings')).body.rows.find(r => r.id === t.id).attendees[0]; assert.equal(a.attended, 0, 'fail does not mark attendance');
+  await prod('POST', `/api/trainings/${t.id}/test/submit`, { answers: ['O'], request_id: rid() });
+  a = (await admin('GET', '/api/trainings')).body.rows.find(r => r.id === t.id).attendees[0];
+  assert.deepEqual([a.attended, a.result], [1, '이수']); assert.ok(a.confirmed_at);
+});

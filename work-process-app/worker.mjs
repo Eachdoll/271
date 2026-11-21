@@ -4629,7 +4629,7 @@ route('POST', '/api/trainings/:id/test/submit', async ({ user, params, body }) =
   try {
     await db.batch([
       { sql: 'INSERT INTO training_test_attempts(test_id,training_id,user_id,user_name,attempt_no,answers,detail,score,passed,submitted_at,request_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)', args: [test.id, t.id, user.id, user.name, no, JSON.stringify(answers), JSON.stringify(detail), score, passed, now(), key] },
-      { sql: 'UPDATE training_attendees SET score=?, result=? WHERE id=?', args: [best, result, me.id] },
+      { sql: 'UPDATE training_attendees SET score=?, result=?, attended=CASE WHEN ?=1 THEN 1 ELSE attended END, confirmed_at=CASE WHEN ?=1 THEN COALESCE(confirmed_at, ?) ELSE confirmed_at END WHERE id=?', args: [best, result, passed, passed, now(), me.id] }, // 15.336 합격하면 참석도 자동
       { sql: 'UPDATE trainings SET revision=revision+1 WHERE id=?', args: [t.id] }, // 열려 있던 담당자 수정 창이 점수를 덮어쓰지 않게
     ]);
   } catch (e) { if (/UNIQUE/i.test(String(e?.message))) throw new HttpError(409, '같은 응시가 이미 제출되었습니다. 새로 불러오세요.'); throw e; }
@@ -8680,7 +8680,7 @@ route('GET', '/api/my-tasks', async ({ user }) => {
   // 15.313 위험성평가 승인 대기(생산·품질 책임자)
   if (canRaApprove(user)) { const c = (await db.prepare("SELECT COUNT(*) c FROM risk_assessments WHERE status='review'").get()).c; if (c) (approvals.quality ||= []).push({ key: 'risk_assess', label: '위험성평가 승인 대기(검토 요청)', href: '#/prod/risk', count: c }); }
   // 15.309 교육 대상자 본인 「참석 확인」 대기
-  { const items = await db.prepare("SELECT t.id,t.title,t.plan_date FROM training_attendees a JOIN trainings t ON t.id=a.training_id WHERE (a.user_id=? OR a.user_name=?) AND a.attended=0 AND t.status IN ('planned','done') ORDER BY t.plan_date LIMIT 20").all(user.id, user.name);
+  { const items = await db.prepare("SELECT t.id,t.title,t.plan_date FROM training_attendees a JOIN trainings t ON t.id=a.training_id WHERE (a.user_id=? OR a.user_name=?) AND a.attended=0 AND t.status IN ('planned','done') AND NOT EXISTS(SELECT 1 FROM training_tests x WHERE x.training_id=t.id) ORDER BY t.plan_date LIMIT 20").all(user.id, user.name); // 15.336 테스트 있는 교육은 합격이 곧 참석
     if (items.length) approvals.training_attend = { count: items.length, items: items.slice(0, 5) }; }
   // 15.334 응시할 교육 테스트(열림 · 대상자 · 아직 합격 안 함 · 횟수 남음)
   { const items = await db.prepare(`SELECT t.id,t.title,t.plan_date FROM training_tests x JOIN trainings t ON t.id=x.training_id JOIN training_attendees a ON a.training_id=t.id AND (a.user_id=? OR a.user_name=?)
