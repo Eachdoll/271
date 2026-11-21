@@ -5392,6 +5392,9 @@ function costCompute(item0, rates, prices) {
     else amount = qty * unit_price;
     return { ...l, qty_v: cr4(qty), unit_price: cr4(unit_price), capa_v: capa == null ? null : cr4(capa), workers_v: workers, amount: cr4(amount), price_src, price_date };
   });
+  // 15.322 비율 줄(보험료·관세 등): 기준 줄(auto 이름)들의 금액 합 × 비율%. 앞 줄부터 차례로(보험료 → 관세 과세가격에 보험료 포함).
+  lines.forEach((l, i) => { if (l.type !== 'exp' || l.pct == null || l.pct === '') return; const pct = costExpr(l.pct, `${i + 1}번 줄 비율(%)`) ?? 0, base = lines.filter(x => x !== l && (l.base || []).includes(x.auto)).reduce((s2, x) => s2 + x.amount, 0);
+    lines[i] = { ...l, qty_v: cr4(pct / 100), unit_price: cr4(base), amount: cr4(base * pct / 100), price_src: 'pct' }; });
   const sum = t => lines.filter(l => l.type === t).reduce((s, l) => s + l.amount, 0);
   const material = sum('mat'), labor = sum('labor'), other = sum('exp'), direct = material + labor + other;
   const defect = direct * used.defect_rate / 100, mfg = direct * used.mfg_rate / 100, sga = (item.sga_base === 'mfg' ? direct + mfg : direct) * used.sga_rate / 100, total = direct + defect + mfg + sga;
@@ -5401,15 +5404,16 @@ function costCompute(item0, rates, prices) {
   return { lines, totals, rates: used };
 }
 // 15.320 제품 사양(포장 구조·포장당/외포장당/박스당 sh·시트·원단 폭·자재 매입가) — 화면이 이 값으로 원가 줄(auto)을 만든다. 정해진 칸만 받는다.
-const COST_AUTO = ['fabric', 'pack', 'outer', 'box', 'cut', 'packing'];
-const COST_BUILD_ENUM = { pack: ['double', 'triple'], unit: ['pack', 'sheet', 'box'], dim: ['in', 'mm'], fdim: ['in', 'mm'], fbasis: ['', 'yd', 'sqm', 'm'], pk_cu: ['pack', 'sh'] };
-const COST_BUILD_VAL = ['sw', 'sl', 'fw', 'floss', 'spy', 'spp', 'spo', 'spb', 'puse', 'ouse', 'buse', 'fprice', 'pprice', 'oprice', 'bprice', 'cut_capa', 'cut_workers', 'pk_capa', 'pk_workers'];
+const COST_AUTO = ['fabric', 'pack', 'outer', 'box', 'cut', 'packing', 'goods', 'origin', 'freight', 'insurance', 'duty', 'dest', 'imp_etc']; // 15.322 상품 수입 물류비
+const COST_BUILD_ENUM = { i_inc: ['EXW', 'FOB', 'CFR', 'CIF', 'DAP', 'DDP'], pack: ['double', 'triple'], unit: ['pack', 'sheet', 'box'], dim: ['in', 'mm'], fdim: ['in', 'mm'], fbasis: ['', 'yd', 'sqm', 'm'], pk_cu: ['pack', 'sh'] };
+const COST_BUILD_VAL = ['sw', 'sl', 'fw', 'floss', 'spy', 'spp', 'spo', 'spb', 'puse', 'ouse', 'buse', 'fprice', 'pprice', 'oprice', 'bprice', 'cut_capa', 'cut_workers', 'pk_capa', 'pk_workers', 'i_price', 'i_gq', 'i_qty', 'i_freight', 'i_origin', 'i_dest', 'i_ins', 'i_duty', 'i_etc'];
 function costBuildClean(v0) {
   let v = v0; if (typeof v === 'string') { try { v = JSON.parse(v || '{}'); } catch { v = {}; } } if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
-  const o = { on: !!v.on };
+  const o = { on: !!v.on, i_on: !!v.i_on };
+  for (const k of ['i_cont', 'i_route']) if (String(v[k] ?? '').trim()) o[k] = str(String(v[k]), 40);
   for (const [k, list] of Object.entries(COST_BUILD_ENUM)) if (list.includes(v[k])) o[k] = v[k];
   for (const k of COST_BUILD_VAL) if (v[k] !== undefined && v[k] !== null && String(v[k]).trim() !== '') { const x = str(String(v[k]), 40); costExpr(x, `제품 사양(${k}) `); o[k] = x; }
-  for (const k of ['fmat', 'pmat', 'omat', 'bmat']) { const id = optId(v[k]); if (id) o[k] = id; }
+  for (const k of ['fmat', 'pmat', 'omat', 'bmat', 'i_mat']) { const id = optId(v[k]); if (id) o[k] = id; }
   return o;
 }
 function costLinesClean(list, matIds) {
@@ -5425,6 +5429,7 @@ function costLinesClean(list, matIds) {
     const line = { key, type, material_id: mid, manual_price: !!(mid && o.manual_price), name: str(o.name, 100), spec: str(o.spec, 100), unit: str(o.unit, 20), qty: ex('qty', '소요량·작업량'), price: ex('price', '단가'), loss: type === 'mat' ? loss : 0,
       capa: type === 'labor' ? ex('capa', '시간당 처리량') : '', workers: type === 'labor' ? ex('workers', '인원') : '', note: str(o.note, 200) };
     if (COST_AUTO.includes(o.auto)) line.auto = o.auto; /* 15.320 제품 사양에서 만든 줄 */
+    if (type === 'exp' && String(o.pct ?? '').trim() !== '') { line.pct = ex('pct', '비율(%)'); line.base = Array.isArray(o.base) ? [...new Set(o.base.filter(k => COST_AUTO.includes(k)))].slice(0, 10) : []; } /* 15.322 보험료·관세 같은 비율 줄 */
     if (!line.name && !mid) throw bad(n + '항목 이름을 넣으세요.');
     return line;
   });

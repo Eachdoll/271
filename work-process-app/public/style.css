@@ -4293,3 +4293,6 @@ label.ci-chk input[type=checkbox] { width: auto; min-height: 0; margin: 0; }
 :root[data-theme="dark"] .chip.ci-devchip { color: #d0bfff; border-color: #7048e8; }
 .ci-nodev { margin-top: 14px; }
 .ci-nodev h2 { font-size: 15px; margin: 0 0 8px; }
+/* 15.322 수입 물류비: 인코텀즈상 매입가에 포함된 비용 칸은 흐리게 */
+.ci-brow > label.ci-off { opacity: .45; }
+.ci-imp .ci-bpart h4 + .ci-brow { margin-top: 0; }

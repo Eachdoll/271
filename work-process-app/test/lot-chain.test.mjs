@@ -1294,3 +1294,25 @@ test('15.321 R&D estimates (stage=dev) share the purchase engine: researchers cr
     assert.equal((await admin('POST', `/api/cost/items/${est.id}/promote`, { revision: pr.revision })).status, 400);
   } finally { await admin('PUT', `/api/admin/users/${u.id}`, { roles: ['production', 'logistics'] }); }
 });
+test('15.322 goods landed cost: 40ft FOB Shanghai→Busan 1,600,000 ÷ 100 boxes = 16,000/box, duty % on CIF value (goods + freight + insurance), follows price changes', async () => {
+  await admin('POST', '/api/cost/rates', { effective_date: '2026-01-01', labor_rate: 13853.3979, mfg_rate: 10, sga_rate: 12, defect_rate: 0, fx: { USD: 1400 }, reason: '322', request_id: rid() });
+  const g = (await admin('POST', '/api/cost/materials', { code: 'T322-GLOVE', name: '니트릴 장갑(박스)', unit: 'BOX', currency: 'USD', price: 50, effective_date: '2026-01-01', request_id: rid() })).body;
+  const build = { i_on: true, i_inc: 'FOB', i_mat: g.id, i_qty: '100', i_cont: '40ft', i_route: '상하이→부산', i_freight: '1600000', i_ins: '0', i_duty: '8', i_dest: '300000' };
+  const lines = [
+    { auto: 'goods', type: 'mat', name: '상품 매입가(FOB)', material_id: g.id, qty: '1' },
+    { auto: 'freight', type: 'exp', name: '운임(40ft FOB 상하이→부산)', qty: '1/100', price: '1600000' },
+    { auto: 'duty', type: 'exp', name: '관세(8% · CIF 과세가격)', pct: '8', base: ['goods', 'freight', 'insurance', 'bogus'] },
+    { auto: 'dest', type: 'exp', name: '도착지 비용', qty: '1/100', price: '300000' }];
+  const it = (await admin('POST', '/api/cost/items', { item_code: 'T322-GL', name: '니트릴 장갑 100매', kind: 'goods', unit: 'BOX', overrides: { mfg_rate: 0 }, build, lines, effective_date: '2026-01-02', request_id: rid() })).body;
+  assert.deepEqual(it.lines[2].base, ['goods', 'freight', 'insurance'], 'unknown base keys dropped');
+  assert.equal(it.build.i_inc, 'FOB'); assert.equal(it.build.i_route, '상하이→부산');
+  const revs = (await admin('GET', `/api/cost/items/${it.id}/revs`)).body.rows, rl = revs[0].lines;
+  assert.equal(rl[1].amount, 16000, 'freight per box');
+  assert.equal(rl[2].amount, (70000 + 16000) * 0.08, 'duty on goods + freight'); assert.equal(rl[2].price_src, 'pct');
+  assert.equal(it.totals.other, 16000 + 6880 + 3000); assert.equal(it.totals.direct, 95880); assert.equal(it.totals.mfg, 0); assert.equal(it.totals.total, 107385.6);
+  // 매입가가 USD 55로 오르면 관세도 따라 바뀜(재산출)
+  await admin('POST', `/api/cost/materials/${g.id}/prices`, { currency: 'USD', price: 55, effective_date: '2026-03-01', reason: '인상', recalc: true, request_id: rid() });
+  const it2 = (await admin('GET', '/api/cost/items')).body.rows.find(r => r.id === it.id);
+  assert.equal(it2.rev, 1); assert.equal(it2.totals.direct, 77000 + 16000 + (77000 + 16000) * 0.08 + 3000);
+  assert.equal((await admin('POST', '/api/cost/items', { item_code: 'T322-BAD', name: 'x', lines: [{ type: 'exp', name: 'a', pct: 'alert(1)', base: ['goods'] }] })).status, 400);
+});
