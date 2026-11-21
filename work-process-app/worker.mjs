@@ -212,6 +212,7 @@ function operatorRequestAllowed(method, path, user) {
     if (method === 'GET' && ['/api/operator/catalog', '/api/operator/semi-records', '/api/operator/plans', '/api/operator/actuals', '/api/lots/available', '/api/semi-bags', '/api/actuals/progress'].includes(path)) return true; // 15.249 오퍼레이터도 투입 LOT·봉투 LOT 고르기
     if (method === 'POST' && (path === '/api/semi-batches' || /^\/api\/schedules\/[1-9]\d*\/actuals$/.test(path) || /^\/api\/(?:operator\/semi-records|actuals)\/[1-9]\d*\/complete$/.test(path))) return true;
   }
+  if ((opProd(user) || opLog(user)) && ((method === 'GET' && path === '/api/env/day') || (method === 'POST' && path === '/api/env/records'))) return true; // 15.343 환경점검
   if (opMaint(user)) { // 15.339
     if (method === 'GET' && path === '/api/operator/pm-due') return true;
     if (method === 'POST' && /^\/api\/equipment\/[1-9]\d*\/logs$/.test(path)) return true;
@@ -614,7 +615,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'login_logs', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'training_tests', 'training_test_attempts', 'question_bank', 'qualifications', 'supplier_evals', 'supplier_eval_plans', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests', 'quality_audits', 'audit_findings', 'validations', 'quality_goals', 'quality_kpi_values', 'quality_risks', 'risk_assessments', 'org_duty_assignments', 'dev_costs', 'cost_rates', 'cost_materials', 'cost_material_prices', 'cost_items', 'cost_item_revs', 'org_charts']; // 15.313 위험성평가 · 15.314 지정 담당자
+const backupTables = ['settings', 'users', 'login_logs', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'training_tests', 'training_test_attempts', 'question_bank', 'qualifications', 'supplier_evals', 'supplier_eval_plans', 'env_zones', 'env_sheets', 'env_records', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests', 'quality_audits', 'audit_findings', 'validations', 'quality_goals', 'quality_kpi_values', 'quality_risks', 'risk_assessments', 'org_duty_assignments', 'dev_costs', 'cost_rates', 'cost_materials', 'cost_material_prices', 'cost_items', 'cost_item_revs', 'org_charts']; // 15.313 위험성평가 · 15.314 지정 담당자
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -4951,6 +4952,171 @@ route('DELETE', '/api/equipment/:id', async ({ user, params, query }) => {
   await db.prepare('DELETE FROM equipment WHERE id=? AND revision=?').run(prior.id, prior.revision); return { ok: true };
 });
 // 15.339 PM 연간 캘린더(설비·PM 항목 + 그 해 PM 기록) · 공무 오퍼레이터 점검 목록 · 점검 이상/고장 → CAPA 연결
+// ── 15.343 생산 › 환경점검 ── 큰 구분(창고·라인) 아래 구역을 두고, 일별 점검일지(온습도 오전·오후 / 라인 청소 체크시트)를 점검자 → 확인자 → 승인자 순으로 결재한다.
+const ENV_AREA = { warehouse: '창고', line: '라인' }, ENV_KIND = { th: '온습도 점검', clean: '청소 체크시트' }, ENV_SLOT = { am: '오전', pm: '오후', day: '일일' };
+const ENV_STATUS = { open: '점검 중', confirmed: '확인 완료', approved: '승인 완료' };
+const ENV_CLEAN_DEFAULT = ['바닥 청소 상태(먼지·물기 없음)', '작업대·설비 표면 청결', '이물(실밥·포장재·필름 조각) 제거', '쓰레기통 비움·분리배출', '공구·자재 정리정돈(지정 위치)', '출입문·창문 닫힘(해충 유입 방지)'];
+const envArea = v => { if (!ENV_AREA[v]) throw bad('구분(창고·라인)을 고르세요.'); return v; };
+const envKind = v => { if (!ENV_KIND[v]) throw bad('점검 종류를 확인하세요.'); return v; };
+// 점검자: 생산·물류·품질 담당 + 그 구역의 오퍼레이터(라인 = 생산 오퍼레이터, 창고 = 물류 오퍼레이터)
+const canEnvCheck = (user, area) => isOperator(user) ? (area === 'line' ? opProd(user) : opLog(user)) : hasRole(user, 'production') || hasRole(user, 'logistics') || hasRole(user, 'quality');
+const canEnvConfirm = (user, area) => !isOperator(user) && (hasRole(user, 'production') || hasRole(user, 'quality') || (area === 'warehouse' && hasRole(user, 'logistics')));
+const canEnvApprove = (user, area) => !!user.is_admin || publicUser(user).roles.includes('production_approver') || (area === 'warehouse' && publicUser(user).roles.includes('logistics_approver'));
+const canEnvSetup = user => !isOperator(user) && (hasRole(user, 'production') || hasRole(user, 'logistics'));
+const envNum = (v, label, lo, hi) => { if (v === '' || v == null) return null; const n = Number(v); if (!Number.isFinite(n) || n < lo || n > hi) throw bad(`${label}은(는) ${lo}~${hi} 사이 숫자로 넣으세요.`); return Math.round(n * 10) / 10; };
+const envZoneRow = r => ({ ...r, clean_items: JSON.parse(r.clean_items || '[]'), active: !!r.active, area_label: ENV_AREA[r.area] || r.area });
+const envSheetRow = r => r && ({ ...r, history: JSON.parse(r.history || '[]'), status_label: ENV_STATUS[r.status] || r.status, kind_label: ENV_KIND[r.kind] || r.kind, area_label: ENV_AREA[r.area] || r.area });
+const envRecRow = r => ({ ...r, results: JSON.parse(r.results || '[]'), ok: !!r.ok, skipped: !!r.skipped, slot_label: ENV_SLOT[r.slot] || r.slot });
+const envInRange = (z, t, h) => (t == null || ((z.temp_min == null || t >= z.temp_min) && (z.temp_max == null || t <= z.temp_max))) && (h == null || ((z.hum_min == null || h >= z.hum_min) && (z.hum_max == null || h <= z.hum_max)));
+function envZoneInput(body, prior = {}) {
+  const g = k => body[k] !== undefined ? body[k] : prior[k];
+  const z = { name: reqStr(g('name'), '구역 이름', 60), temp_min: envNum(g('temp_min'), '온도 하한', -50, 100), temp_max: envNum(g('temp_max'), '온도 상한', -50, 100), hum_min: envNum(g('hum_min'), '습도 하한', 0, 100), hum_max: envNum(g('hum_max'), '습도 상한', 0, 100), note: str(g('note'), 300) };
+  if (z.temp_min != null && z.temp_max != null && z.temp_min > z.temp_max) throw bad('온도 하한이 상한보다 큽니다.');
+  if (z.hum_min != null && z.hum_max != null && z.hum_min > z.hum_max) throw bad('습도 하한이 상한보다 큽니다.');
+  const items = body.clean_items !== undefined ? body.clean_items : (prior.clean_items != null ? JSON.parse(prior.clean_items) : null);
+  if (items != null) { if (!Array.isArray(items)) throw bad('청소 항목을 확인하세요.'); z.clean_items = [...new Set(items.map(x => str(x, 100)).filter(Boolean))]; if (z.clean_items.length > 40) throw bad('청소 항목은 40개까지입니다.'); }
+  return z;
+}
+// 그날 점검해야 할 구역: 사용 중이고 그날 이전에 만든 구역(청소는 라인 구역 중 항목이 있는 곳)
+async function envNeeded(area, date) {
+  const zs = (await db.prepare("SELECT * FROM env_zones WHERE area=? AND active=1 AND substr(created_at,1,10)<=? ORDER BY sort, id").all(area, date)).map(envZoneRow);
+  return { th: zs, clean: area === 'line' ? zs.filter(z => z.clean_items.length) : [] };
+}
+async function envMissing(sheet) {
+  if (!sheet) return [];
+  const need = (await envNeeded(sheet.area, sheet.check_date))[sheet.kind], have = new Set((await db.prepare('SELECT zone_id, slot FROM env_records WHERE sheet_id=?').all(sheet.id)).map(r => r.zone_id + '|' + r.slot));
+  return need.flatMap(z => (sheet.kind === 'th' ? ['am', 'pm'] : ['day']).filter(s => !have.has(z.id + '|' + s)).map(s => `${z.name} ${ENV_SLOT[s]}`));
+}
+const envCan = (user, area) => ({ check: canEnvCheck(user, area), confirm: canEnvConfirm(user, area), approve: canEnvApprove(user, area), setup: canEnvSetup(user) });
+route('GET', '/api/env/zones', async ({ user, query }) => {
+  const where = query.area ? 'WHERE area=?' : '', args = query.area ? [envArea(query.area)] : [];
+  const zones = (await db.prepare(`SELECT * FROM env_zones ${where} ORDER BY area, active DESC, sort, id`).all(...args)).map(envZoneRow);
+  const used = new Set((await db.prepare('SELECT DISTINCT zone_id FROM env_records').all()).map(r => r.zone_id));
+  const warehouses = (await db.prepare('SELECT name FROM warehouses WHERE active=1 ORDER BY sort, name').all()).map(r => r.name);
+  const lines = (await db.prepare("SELECT name FROM production_units WHERE active=1 ORDER BY kind, sort_order, name").all()).map(r => r.name);
+  return { zones: zones.map(z => ({ ...z, used: used.has(z.id) })), suggest: { warehouse: warehouses, line: lines }, clean_default: ENV_CLEAN_DEFAULT, can_setup: canEnvSetup(user) };
+});
+route('POST', '/api/env/zones', async ({ user, body }) => {
+  if (!canEnvSetup(user)) throw new HttpError(403, '구역 설정은 생산·물류 담당자가 합니다.');
+  const area = envArea(body.area), z = envZoneInput(body);
+  if (await db.prepare('SELECT 1 FROM env_zones WHERE area=? AND name=? AND active=1').get(area, z.name)) throw bad(`${ENV_AREA[area]}에 같은 이름의 구역이 있습니다.`);
+  const items = area === 'line' ? (z.clean_items ?? ENV_CLEAN_DEFAULT) : (z.clean_items ?? []);
+  const sort = ((await db.prepare('SELECT MAX(sort) m FROM env_zones WHERE area=?').get(area))?.m ?? 0) + 1;
+  const r = await db.prepare('INSERT INTO env_zones(area,name,temp_min,temp_max,hum_min,hum_max,clean_items,sort,note,created_by) VALUES(?,?,?,?,?,?,?,?,?,?)').run(area, z.name, z.temp_min, z.temp_max, z.hum_min, z.hum_max, JSON.stringify(items), sort, z.note, user.name);
+  return envZoneRow(await mustGet('env_zones', r.lastInsertRowid));
+});
+route('PUT', '/api/env/zones/:id', async ({ user, params, body }) => {
+  if (!canEnvSetup(user)) throw new HttpError(403, '구역 설정은 생산·물류 담당자가 합니다.');
+  const p = await mustGet('env_zones', params.id); if (Number(body.revision) !== p.revision) throw conflict();
+  const z = envZoneInput(body, p), active = body.active === undefined ? p.active : (body.active ? 1 : 0);
+  if (active && await db.prepare('SELECT 1 FROM env_zones WHERE area=? AND name=? AND active=1 AND id<>?').get(p.area, z.name, p.id)) throw bad(`${ENV_AREA[p.area]}에 같은 이름의 구역이 있습니다.`);
+  const r = await db.prepare("UPDATE env_zones SET name=?,temp_min=?,temp_max=?,hum_min=?,hum_max=?,clean_items=?,note=?,active=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?").run(z.name, z.temp_min, z.temp_max, z.hum_min, z.hum_max, JSON.stringify(z.clean_items ?? []), z.note, active, user.name, p.id, p.revision);
+  if (!r.changes) throw conflict(); return envZoneRow(await mustGet('env_zones', p.id));
+});
+route('POST', '/api/env/zones/reorder', async ({ user, body }) => {
+  if (!canEnvSetup(user)) throw new HttpError(403, '구역 설정은 생산·물류 담당자가 합니다.');
+  const area = envArea(body.area), ids = (Array.isArray(body.ids) ? body.ids : []).map(Number).filter(n => Number.isInteger(n) && n > 0).slice(0, 300); if (!ids.length) throw bad('순서를 확인하세요.');
+  await db.batch(ids.map((id, i) => ({ sql: 'UPDATE env_zones SET sort=? WHERE id=? AND area=?', args: [i + 1, id, area] }))); return { ok: true };
+});
+// 청소 항목을 다른 라인 구역에 그대로 적용(체크시트 양식 통일)
+route('POST', '/api/env/zones/:id/apply-items', async ({ user, params, body }) => {
+  if (!canEnvSetup(user)) throw new HttpError(403, '구역 설정은 생산·물류 담당자가 합니다.');
+  const src = await mustGet('env_zones', params.id); if (src.area !== 'line') throw bad('청소 체크시트는 라인 구역에만 있습니다.');
+  const to = Array.isArray(body.to) ? body.to.map(Number) : null;
+  const targets = (await db.prepare("SELECT id FROM env_zones WHERE area='line' AND active=1 AND id<>?").all(src.id)).map(r => r.id).filter(id => !to || to.includes(id));
+  if (targets.length) await db.batch(targets.map(id => ({ sql: "UPDATE env_zones SET clean_items=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=?", args: [src.clean_items, user.name, id] })));
+  return { updated: targets.length };
+});
+route('DELETE', '/api/env/zones/:id', async ({ user, params }) => {
+  if (!canEnvSetup(user)) throw new HttpError(403, '구역 설정은 생산·물류 담당자가 합니다.');
+  const z = await mustGet('env_zones', params.id);
+  if (await db.prepare('SELECT 1 FROM env_records WHERE zone_id=? LIMIT 1').get(z.id)) throw bad('점검 기록이 있는 구역은 지울 수 없습니다. 「사용 안 함」으로 바꾸세요(기록은 그대로 남음).');
+  await db.prepare('DELETE FROM env_zones WHERE id=?').run(z.id); return { ok: true };
+});
+route('GET', '/api/env/day', async ({ user, query }) => {
+  const area = envArea(query.area), date = dateStr(query.date || today(), '점검일');
+  const sheets = Object.fromEntries((await db.prepare('SELECT * FROM env_sheets WHERE area=? AND check_date=?').all(area, date)).map(s => [s.kind, envSheetRow(s)]));
+  const records = (await db.prepare('SELECT r.* FROM env_records r JOIN env_sheets s ON s.id=r.sheet_id WHERE s.area=? AND s.check_date=? ORDER BY r.id').all(area, date)).map(envRecRow);
+  const need = await envNeeded(area, date), ids = new Set([...need.th.map(z => z.id), ...records.map(r => r.zone_id)]);
+  const zones = (await db.prepare('SELECT * FROM env_zones WHERE area=? ORDER BY sort, id').all(area)).map(envZoneRow).filter(z => ids.has(z.id));
+  const missing = { th: sheets.th ? await envMissing(sheets.th) : need.th.flatMap(z => [`${z.name} 오전`, `${z.name} 오후`]), clean: sheets.clean ? await envMissing(sheets.clean) : need.clean.map(z => `${z.name} 일일`) };
+  return { area, date, today: today(), zones, sheets, records, missing, need: { th: need.th.map(z => z.id), clean: need.clean.map(z => z.id) }, can: envCan(user, area) };
+});
+// 점검 기록(여러 구역 한꺼번에). 같은 구역·같은 때(오전/오후/일일)는 고쳐 쓴다. 확인이 끝난 일지는 잠김.
+route('POST', '/api/env/records', async ({ user, body }) => {
+  const area = envArea(body.area), kind = envKind(body.kind), date = dateStr(body.date, '점검일');
+  if (!canEnvCheck(user, area)) throw new HttpError(403, `${ENV_AREA[area]} 환경점검을 기록할 권한이 없습니다.`);
+  if (date > today()) throw bad('앞날짜에는 기록할 수 없습니다.');
+  if (kind === 'clean' && area !== 'line') throw bad('청소 체크시트는 라인에만 있습니다.');
+  const entries = Array.isArray(body.entries) ? body.entries.slice(0, 200) : []; if (!entries.length) throw bad('기록할 구역이 없습니다.');
+  const zones = new Map((await db.prepare('SELECT * FROM env_zones WHERE area=?').all(area)).map(z => [z.id, envZoneRow(z)]));
+  const rows = entries.map(e => {
+    const z = zones.get(Number(e.zone_id)); if (!z) throw bad('구역을 확인하세요.'); if (!z.active) throw bad(`${z.name}은(는) 사용 안 함 구역입니다.`);
+    const slot = kind === 'th' ? (['am', 'pm'].includes(e.slot) ? e.slot : (() => { throw bad('오전·오후를 고르세요.'); })()) : 'day';
+    const skipped = e.skipped ? 1 : 0, action = str(e.action, 300), where = `${z.name} ${ENV_SLOT[slot]}`;
+    if (skipped) { if (!action) throw bad(`${where}: 점검하지 않은 사유(휴무·미가동 등)를 적으세요.`); return { z, slot, temp: null, hum: null, results: '[]', ok: 1, skipped, action }; }
+    if (kind === 'th') {
+      const temp = envNum(e.temp, `${where} 온도`, -50, 100), hum = envNum(e.hum, `${where} 습도`, 0, 100);
+      if (temp == null || hum == null) throw bad(`${where}: 온도와 습도를 넣으세요.`);
+      const ok = envInRange(z, temp, hum); if (!ok && !action) throw bad(`${where}: 기준을 벗어났습니다. 조치 내용을 적으세요.`);
+      return { z, slot, temp, hum, results: '[]', ok: ok ? 1 : 0, skipped, action };
+    }
+    const given = new Map((Array.isArray(e.results) ? e.results : []).map(r => [str(r.item, 100), String(r.v || '')]));
+    if (!z.clean_items.length) throw bad(`${z.name}: 청소 항목이 없습니다. 구역 설정에서 항목을 넣으세요.`);
+    const res = z.clean_items.map(item => { const v = given.get(item); if (!['O', 'X', '-'].includes(v)) throw bad(`${where}: 「${item}」 결과(양호 O · 불량 X · 해당 없음 -)를 고르세요.`); return { item, v }; });
+    const ok = !res.some(r => r.v === 'X'); if (!ok && !action) throw bad(`${where}: 불량(X) 항목의 조치 내용을 적으세요.`);
+    return { z, slot, temp: null, hum: null, results: JSON.stringify(res), ok: ok ? 1 : 0, skipped, action };
+  });
+  await db.prepare("INSERT OR IGNORE INTO env_sheets(kind,area,check_date,history,created_by) VALUES(?,?,?,?,?)").run(kind, area, date, JSON.stringify([{ at: now(), by: user.name, what: '점검 시작' }]), user.name);
+  const sheet = await db.prepare('SELECT * FROM env_sheets WHERE kind=? AND area=? AND check_date=?').get(kind, area, date);
+  if (sheet.status !== 'open') throw bad(`이 점검일지는 ${ENV_STATUS[sheet.status]} 상태라 고칠 수 없습니다. 확인자·승인자에게 취소를 요청하세요.`);
+  await db.batch([...rows.map(r => ({ sql: `INSERT INTO env_records(sheet_id,zone_id,slot,zone_name,temp,hum,results,ok,skipped,action,checked_by) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(sheet_id,zone_id,slot) DO UPDATE SET zone_name=excluded.zone_name,temp=excluded.temp,hum=excluded.hum,results=excluded.results,ok=excluded.ok,skipped=excluded.skipped,action=excluded.action,checked_by=excluded.checked_by,updated_at=datetime('now','+9 hours')`, args: [sheet.id, r.z.id, r.slot, r.z.name, r.temp, r.hum, r.results, r.ok, r.skipped, r.action, user.name] })),
+    { sql: "UPDATE env_sheets SET history=?,revision=revision+1,updated_at=datetime('now','+9 hours') WHERE id=?", args: [pushHist(sheet, { by: user.name, what: `기록 ${rows.map(r => `${r.z.name} ${ENV_SLOT[r.slot]}`).join(', ').slice(0, 200)}` }), sheet.id] }]);
+  return { saved: rows.length, deviations: rows.filter(r => !r.ok).length, sheet: envSheetRow(await mustGet('env_sheets', sheet.id)), missing: await envMissing(sheet) };
+});
+// 결재: confirm(확인) · unconfirm(확인 취소) · approve(승인) · reject(반려 → 점검 중) · unapprove(승인 취소 → 확인 완료)
+route('PUT', '/api/env/sheets/:id', async ({ user, params, body }) => {
+  const s = await mustGet('env_sheets', params.id); if (Number(body.revision) !== s.revision) throw conflict();
+  const act = String(body.action || ''), reason = str(body.comment, 300); let set, args, what;
+  if (act === 'confirm') {
+    if (!canEnvConfirm(user, s.area)) throw new HttpError(403, '확인은 생산(창고는 물류도)·품질 담당자가 합니다.');
+    if (s.status !== 'open') throw bad('점검 중인 일지만 확인합니다.');
+    const miss = await envMissing(s); if (miss.length) throw bad(`아직 점검하지 않은 곳이 있습니다: ${miss.slice(0, 8).join(', ')}${miss.length > 8 ? ` 외 ${miss.length - 8}곳` : ''}`);
+    set = "status='confirmed',confirmed_by=?,confirmed_at=?,comment=?"; args = [user.name, now(), reason]; what = '확인';
+  } else if (act === 'unconfirm') {
+    if (s.status !== 'confirmed') throw bad('확인 완료 상태가 아닙니다.');
+    if (s.confirmed_by !== user.name && !canEnvApprove(user, s.area)) throw new HttpError(403, '확인한 사람이나 승인자만 확인을 취소합니다.');
+    set = "status='open',confirmed_by='',confirmed_at=NULL"; args = []; what = '확인 취소';
+  } else if (act === 'approve' || act === 'reject') {
+    if (!canEnvApprove(user, s.area)) throw new HttpError(403, s.area === 'line' ? '승인은 생산책임자·관리자가 합니다.' : '승인은 생산·물류 책임자·관리자가 합니다.');
+    if (s.status !== 'confirmed') throw bad('확인이 끝난 일지만 승인·반려합니다.');
+    if (act === 'approve') { if (s.confirmed_by === user.name && !user.is_admin) throw bad('확인한 사람과 승인하는 사람은 달라야 합니다.'); set = "status='approved',approved_by=?,approved_at=?"; args = [user.name, now()]; what = '승인'; }
+    else { if (!reason) throw bad('반려 사유를 적으세요.'); set = "status='open',confirmed_by='',confirmed_at=NULL,comment=?"; args = [reason]; what = `반려: ${reason}`; }
+  } else if (act === 'unapprove') {
+    if (!canEnvApprove(user, s.area)) throw new HttpError(403, '승인자만 승인을 취소합니다.');
+    if (s.status !== 'approved') throw bad('승인 완료 상태가 아닙니다.'); if (!reason) throw bad('승인 취소 사유를 적으세요.');
+    set = "status='confirmed',approved_by='',approved_at=NULL,comment=?"; args = [reason]; what = `승인 취소: ${reason}`;
+  } else throw bad('처리할 일을 확인하세요.');
+  const r = await db.prepare(`UPDATE env_sheets SET ${set},history=?,revision=revision+1,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?`).run(...args, pushHist(s, { by: user.name, what }), s.id, s.revision);
+  if (!r.changes) throw conflict(); return envSheetRow(await mustGet('env_sheets', s.id));
+});
+// 이탈·불량 → 부적합·CAPA 연결
+route('POST', '/api/env/sheets/:id/nc', async ({ user, params, body }) => {
+  const s = await mustGet('env_sheets', params.id); if (!canEnvConfirm(user, s.area)) throw new HttpError(403, 'CAPA 연결은 생산·품질 담당자가 합니다.');
+  const nc = await mustGet('nonconformities', body.nc_id); if (s.nc_id) throw bad('이미 CAPA에 연결된 점검일지입니다.');
+  await db.prepare("UPDATE env_sheets SET nc_id=?,history=?,revision=revision+1 WHERE id=? AND nc_id IS NULL").run(nc.id, pushHist(s, { by: user.name, what: `CAPA ${nc.nc_no} 연결` }), s.id); return { ok: true, nc_no: nc.nc_no };
+});
+// 월간 기록(점검일지 대장·인쇄): 그 달의 일지·기록 + 연도 폴더용 연도별 건수
+route('GET', '/api/env/month', async ({ user, query }) => {
+  const area = envArea(query.area), ym = /^\d{4}-\d{2}$/.test(String(query.ym || '')) ? query.ym : today().slice(0, 7);
+  const sheets = (await db.prepare("SELECT * FROM env_sheets WHERE area=? AND substr(check_date,1,7)=? ORDER BY check_date").all(area, ym)).map(envSheetRow);
+  const records = (await db.prepare("SELECT r.*, s.check_date, s.kind FROM env_records r JOIN env_sheets s ON s.id=r.sheet_id WHERE s.area=? AND substr(s.check_date,1,7)=? ORDER BY s.check_date, r.id").all(area, ym)).map(envRecRow);
+  const zones = (await db.prepare('SELECT * FROM env_zones WHERE area=? ORDER BY active DESC, sort, id').all(area)).map(envZoneRow);
+  const years = await db.prepare("SELECT substr(check_date,1,4) AS year, COUNT(*) AS n FROM env_sheets WHERE area=? GROUP BY 1 ORDER BY 1 DESC").all(area);
+  const months = await db.prepare("SELECT substr(check_date,1,7) AS ym, COUNT(*) AS n, SUM(CASE WHEN status='approved' THEN 1 ELSE 0 END) AS approved FROM env_sheets WHERE area=? AND substr(check_date,1,4)=? GROUP BY 1").all(area, ym.slice(0, 4));
+  return { area, ym, sheets, records, zones, years, months, today: today(), can: envCan(user, area) };
+});
 route('GET', '/api/pm-calendar', async ({ query }) => {
   const year = intIn(query.year, '연도', 2000, 2100, Number(today().slice(0, 4)));
   const eq = (await db.prepare("SELECT * FROM equipment WHERE status<>'disposed' ORDER BY equip_no").all()).map(r => eqRow(r)).filter(e => e.pm_items.length);
@@ -8757,6 +8923,16 @@ route('GET', '/api/my-tasks', async ({ user }) => {
   }
   // 15.313 위험성평가 승인 대기(생산·품질 책임자)
   if (canRaApprove(user)) { const c = (await db.prepare("SELECT COUNT(*) c FROM risk_assessments WHERE status='review'").get()).c; if (c) (approvals.quality ||= []).push({ key: 'risk_assess', label: '위험성평가 승인 대기(검토 요청)', href: '#/prod/risk', count: c }); }
+  // 15.343 환경점검 결재 대기: 확인(점검 기록이 있는 점검 중 일지) · 승인(확인 완료 일지). 구분(창고·라인)별 권한.
+  { const conf = [], appr = [];
+    for (const area of ['warehouse', 'line']) { if (canEnvConfirm(user, area)) conf.push(area); if (canEnvApprove(user, area)) appr.push(area); }
+    const cnt = async (st, areas) => areas.length ? (await db.prepare(`SELECT COUNT(*) c FROM env_sheets s WHERE s.status=? AND s.area IN (${areas.map(() => '?').join(',')}) AND s.check_date<=? AND EXISTS(SELECT 1 FROM env_records r WHERE r.sheet_id=s.id)`).get(st, ...areas, today())).c : 0;
+    let c1 = 0; if (conf.length) { // 지난날 열린 일지 + 오늘 점검이 다 끝난 일지
+      const open = await db.prepare(`SELECT s.* FROM env_sheets s WHERE s.status='open' AND s.area IN (${conf.map(() => '?').join(',')}) AND s.check_date<=? AND EXISTS(SELECT 1 FROM env_records r WHERE r.sheet_id=s.id) LIMIT 200`).all(...conf, today());
+      for (const s of open) if (s.check_date < today() || !(await envMissing(s)).length) c1++; }
+    const c2 = await cnt('confirmed', appr);
+    if (c1) (approvals.quality ||= []).push({ key: 'env_confirm', label: '환경점검 확인 대기(점검일지)', href: '#/prod/env', count: c1 });
+    if (c2) (approvals.quality ||= []).push({ key: 'env_approve', label: '환경점검 승인 대기(점검일지)', href: '#/prod/env', count: c2 }); }
   // 15.309 교육 대상자 본인 「참석 확인」 대기
   { const items = await db.prepare("SELECT t.id,t.title,t.plan_date FROM training_attendees a JOIN trainings t ON t.id=a.training_id WHERE (a.user_id=? OR a.user_name=?) AND a.attended=0 AND t.status IN ('planned','done') AND NOT EXISTS(SELECT 1 FROM training_tests x WHERE x.training_id=t.id) ORDER BY t.plan_date LIMIT 20").all(user.id, user.name); // 15.336 테스트 있는 교육은 합격이 곧 참석
     if (items.length) approvals.training_attend = { count: items.length, items: items.slice(0, 5) }; }

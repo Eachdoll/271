@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.342';
+const APP_VERSION = '15.343';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -400,6 +400,7 @@ const NAV = [
     { sub: '반제품 생산', items: [['#/prod/semi', '반제품 생산 관리'], ['#/prod/semi/cut', '커팅/융착 작업 관리'], ['#/prod/semi/wash', '세탁(호기별) 작업 관리']] },
     ['#/prod/lot-trace', 'LOT 연결 조회'], // 15.249 완제품 ↔ 봉투(반제품) ↔ 원자재 LOT
     { sub: '공무', items: [['#/prod/equipment', '설비 대장·이력'], ['#/prod/pm', '예방보전(PM) 일정']] }, // 15.307 생산설비·예방보전
+    ['#/prod/env', '환경점검(온습도·청소)'], // 15.343 창고·라인 구역별 일일 점검일지 + 결재
     { sub: '위험성평가', items: [['#/prod/risk', '위험성평가(KOSHA·FMEA·HAZOP)'], ['#/prod/risk/actions', '개선 조치 추적'], ['#/prod/reliability', '설비 신뢰도(MTBF·MTTR)']] }, // 15.313
   ] },
   { group: '물류', items: [
@@ -686,6 +687,7 @@ const PAGES = {
   '#/prod/lot-trace': main => pageLotTrace(main), // 15.249
   '#/prod/equipment': main => pageEquipment(main), // 15.307 공무
   '#/prod/pm': main => pagePm(main), // 15.307 공무
+  '#/prod/env': main => pageEnv(main), // 15.343 환경점검
   '#/prod/risk': main => pageRiskAssess(main), // 15.313 위험성평가
   '#/prod/risk/actions': main => pageRiskActions(main),
   '#/prod/reliability': main => pageReliability(main),
@@ -799,6 +801,7 @@ const PROCESS_FLOWS = [
   { key: 'coa', name: 'LOT별 COA', on: ['#/quality/coa'], steps: [['#/prod/finished', '생산실적'], ['#/quality/list', '출하검사'], ['#/quality/coa', 'COA 발행·승인'], ['#/logistics/ship', '출하']] },
   { key: 'supplier', name: '협력업체 품질', on: ['#/quality/suppliers'], steps: [['#/logistics/receive', '입고'], ['#/quality/inspections', '수입검사·공급사 COA'], ['#/quality/suppliers', '연간 평가계획·유효성평가'], ['#/quality/audits', '협력사 현장심사'], ['#/quality/capa', '지적 → CAPA'], ['#/quality/changes', '업체 변경점']] }, // 15.342 평가계획 ↔ 현장심사(심사 실시 → 계획 자동 실시)
   { key: 'pqc', name: '공정품질', on: ['#/quality/pqc'], steps: [['#/quality/pqc', '공정·환경 측정·SPC'], ['#/quality/capa', '이상발생 → CAPA'], ['#/quality/changes', '공정 변경']] },
+  { key: 'env', name: '환경점검(창고·라인)', on: ['#/prod/env'], steps: [['#/prod/env', '구역 설정(기준 온습도·청소 항목)'], ['#/prod/env', '일일 온습도(오전·오후)·청소 체크(작업자·오퍼레이터)'], ['#/prod/env', '확인 → 승인(결재)'], ['#/quality/capa', '기준 이탈·청소 불량 → CAPA'], ['#/quality/audits', '내부심사(점검일지 확인)']] }, // 15.343
   { key: 'plant', name: '설비·예방보전', on: ['#/prod/equipment', '#/prod/pm'], steps: [['#/prod/equipment', '설비 등록·PM 항목'], ['#/prod/pm', '연간 PM 캘린더·점검(공무 오퍼레이터)'], ['#/quality/capa', '점검 이상·고장 → CAPA'], ['#/prod/reliability', '신뢰도(MTBF·MTTR)'], ['#/quality/validation', '설비 적격성(IQ·OQ·PQ)']] }, // 15.342
   // 15.316 위험성평가는 안전(KOSHA)과 설비·공정(FMEA·HAZOP) 두 흐름으로 나눔(같은 화면에서 위 칩으로 바꿔 봄). 안전은 지정 담당자(15.314)에서 시작해 교육으로 닫힌다.
   { key: 'org', name: '조직 · 담당', on: ['#/admin/org', '#/admin/org/chart', '#/admin/org/duties'], steps: [['#/admin/org', '부서·직급'], ['#/admin/org/chart', '조직도'], ['#/admin/org/duties', '지정 담당자'], ['#/admin/users/roles', '사용 권한']] },

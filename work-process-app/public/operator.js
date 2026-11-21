@@ -7,11 +7,13 @@ const OP_GROUPS = {
     ['#/operator/wash', '반제품 · 세탁', '🫧', '호기와 품목을 고르고 세탁 수량 입력'],
     ['#/operator/finished', '완제품 실적', '📦', '생산계획을 고르고 생산량 입력'],
     ['#/operator/inspections', '검사 결과 조회', '🔍', '수입·출하 검사 결과 보기'],
+    ['#/operator/env-line', '라인 환경점검', '🌡', '온습도(오전·오후)와 청소 체크시트'], // 15.343
   ] },
   log: { role: 'operator_logistics', icon: '🚚', label: '물류', desc: '입고 · 출하 입력', links: [
     ['#/operator/receive', '입고 입력', '📥', '받은 발주를 고르고 수량·LOT 입력'],
     ['#/operator/ship', '출하 입력', '📤', '출하지시를 고르고 LOT·수량 확인(여러 LOT 섞기 가능)'],
     ['#/operator/stock', '재고 현황', '📊', '품목·LOT·창고 위치별 재고 보기'],
+    ['#/operator/env-wh', '창고 온습도 점검', '🌡', '창고 구역별 오전·오후 온도·습도'], // 15.343
   ] },
   maint: { role: 'operator_maint', icon: '🔧', label: '공무', desc: '설비 점검 · 고장 신고', links: [
     ['#/operator/pm', '설비 점검(PM)', '🔧', '예정 점검을 눌러 점검표 체크'],
@@ -60,6 +62,8 @@ async function operatorPage(route, main) {
   if (route === '#/operator/stock') return operatorStock(main);
   if (route === '#/operator/pm') return operatorPm(main); // 15.339
   if (route === '#/operator/breakdown') return operatorBreakdown(main);
+  if (route === '#/operator/env-line') return pageEnv(main, { operator: true, area: 'line' }); // 15.343
+  if (route === '#/operator/env-wh') return pageEnv(main, { operator: true, area: 'warehouse' });
   return operatorHome(main);
 }
 const opRemain = po => Math.max(0, Math.round((Number(po.qty) - (['ok', 'mismatch'].includes(po.recv_status) ? Number(po.recv_qty) || 0 : 0)) * 1e6) / 1e6);

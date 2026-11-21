@@ -1540,3 +1540,34 @@ test('15.341 question bank (dedupe per category, quality only) · qualification 
   const q = (await admin('GET', '/api/qualifications')).body.rows.find(x => x.user_name === '생산' && x.kind === '세탁 검사원');
   assert.equal(q.status, 'valid'); assert.equal(q.acquired_date, today); assert.equal(q.expire_date.slice(0, 4), String(Number(today.slice(0, 4)) + 2));
 });
+
+test('15.343 env checks: zones (warehouse/line), AM/PM temp·humidity with out-of-range action, line cleaning sheet, confirm → approve sign-off, locks, operator entry, my-tasks', async () => {
+  const z = (await prod('POST', '/api/env/zones', { area: 'line', name: '1라인', temp_min: 15, temp_max: 28, hum_min: 30, hum_max: 70 })).body;
+  assert.ok(z.id && z.clean_items.length >= 5, 'line zone gets default cleaning items');
+  const w = (await prod('POST', '/api/env/zones', { area: 'warehouse', name: '원자재 창고', temp_max: 30 })).body; assert.deepEqual(w.clean_items, []);
+  assert.equal((await prod('POST', '/api/env/zones', { area: 'line', name: '1라인' })).status, 400, 'duplicate name');
+  const base = { area: 'line', kind: 'th', date: today };
+  assert.equal((await prod('POST', '/api/env/records', { ...base, entries: [{ zone_id: z.id, slot: 'am', temp: 31, hum: 50 }] })).status, 400, 'out of range needs action');
+  const am = (await prod('POST', '/api/env/records', { ...base, entries: [{ zone_id: z.id, slot: 'am', temp: 31, hum: 50, action: '에어컨 가동' }] })).body;
+  assert.equal(am.deviations, 1); assert.deepEqual(am.missing, ['1라인 오후']);
+  const op = client(); await admin('POST', '/api/admin/users', { name: '라인작업', password: 'password', roles: ['operator'] });
+  assert.equal((await op('POST', '/api/auth/login', { name: '라인작업', password: 'password' })).status, 200);
+  assert.equal((await op('POST', '/api/env/records', { area: 'warehouse', kind: 'th', date: today, entries: [{ zone_id: w.id, slot: 'am', temp: 20, hum: 40 }] })).status, 403, 'production operator: line only');
+  assert.equal((await op('POST', '/api/env/records', { ...base, entries: [{ zone_id: z.id, slot: 'pm', temp: 22, hum: 45 }] })).status, 200);
+  const day = (await op('GET', `/api/env/day?area=line&date=${today}`)).body; assert.equal(day.can.confirm, false); assert.equal(day.records.length, 2);
+  const th = day.sheets.th; assert.equal(th.status, 'open');
+  const res = z.clean_items.map(item => ({ item, v: 'O' })); res[0].v = 'X';
+  assert.equal((await prod('POST', '/api/env/records', { area: 'line', kind: 'clean', date: today, entries: [{ zone_id: z.id, results: res }] })).status, 400, 'X needs action');
+  assert.equal((await prod('POST', '/api/env/records', { area: 'line', kind: 'clean', date: today, entries: [{ zone_id: z.id, results: res, action: '재청소' }] })).body.deviations, 1);
+  assert.equal((await op('PUT', `/api/env/sheets/${th.id}`, { action: 'confirm', revision: th.revision })).status, 403);
+  const c = await prod('PUT', `/api/env/sheets/${th.id}`, { action: 'confirm', revision: th.revision }); assert.equal(c.status, 200, JSON.stringify(c.body)); assert.equal(c.body.confirmed_by, '생산');
+  assert.equal((await prod('POST', '/api/env/records', { ...base, entries: [{ zone_id: z.id, slot: 'pm', temp: 22, hum: 45 }] })).status, 400, 'confirmed sheet is locked');
+  assert.equal((await prod('PUT', `/api/env/sheets/${th.id}`, { action: 'approve', revision: c.body.revision })).status, 403, 'production (not approver) cannot approve');
+  assert.ok((await admin('GET', '/api/my-tasks')).body.approvals.quality.some(q => q.key === 'env_approve'));
+  const a = (await admin('PUT', `/api/env/sheets/${th.id}`, { action: 'approve', revision: c.body.revision })).body; assert.equal(a.status, 'approved');
+  assert.equal((await admin('PUT', `/api/env/sheets/${th.id}`, { action: 'unapprove', revision: a.revision })).status, 400, 'reason required');
+  const mon = (await prod('GET', `/api/env/month?area=line&ym=${today.slice(0, 7)}`)).body;
+  assert.equal(mon.sheets.length, 2); assert.ok(mon.records.some(r => r.kind === 'clean' && !r.ok)); assert.equal(mon.years[0].year, today.slice(0, 4));
+  assert.equal((await prod('DELETE', `/api/env/zones/${z.id}`)).status, 400, 'zone with records cannot be deleted');
+  assert.equal((await prod('DELETE', `/api/env/zones/${w.id}`)).status, 200);
+});

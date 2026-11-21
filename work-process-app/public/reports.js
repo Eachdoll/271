@@ -1247,7 +1247,7 @@ async function ncNew(pre = {}) {
     <label>유형<select name="kind">${['OOS', 'OOT', '공정 이상', '고객 불만', '심사 지적', '기타'].map(k => `<option${(pre.kind || 'OOS') === k ? ' selected' : ''}>${k}</option>`).join('')}</select></label>
     <label>등급<select name="grade">${Object.entries(NC_GRADE_LABEL).map(([k, l]) => `<option value="${k}"${k === 'minor' ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
     <label class="span3">부적합 내용(제목) *<input name="title" required maxlength="200" value="${esc(pre.title || '')}"></label>
-    <label class="span3">상세<textarea name="detail" rows="2" maxlength="2000" placeholder="무엇이 규격·기준을 벗어났는지(측정값·수량·발견 경위)"></textarea></label>
+    <label class="span3">상세<textarea name="detail" rows="2" maxlength="2000" placeholder="무엇이 규격·기준을 벗어났는지(측정값·수량·발견 경위)">${esc(pre.detail || '')}</textarea></label>
     <label>품목<input name="item" maxlength="200" value="${esc(pre.item || '')}"></label><label>LOT<input name="lot" maxlength="100" value="${esc(pre.lot || '')}"></label><label>수량<input type="number" step="any" name="qty"></label>
     <label>발생일 *<input type="date" name="found_date" required value="${todayStr()}"></label><label>담당자<input name="owner_name" maxlength="50" value="${esc(ME?.name || '')}"></label><label>조치 기한 <span class="hint">(기본 30일)</span><input type="date" name="due_date" value="${due}"></label>
     <label class="span3">즉시 조치(격리·선별 등)<input name="containment" maxlength="1000" placeholder="예) 해당 LOT 출하 보류·격리, 재고 전수 선별"></label></div>`, { wide: true,
