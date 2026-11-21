@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.347';
+const APP_VERSION = '15.350';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -715,6 +715,7 @@ const PAGES = {
   '#/prod/equipment': main => pageEquipment(main), // 15.307 공무
   '#/prod/pm': main => pagePm(main), // 15.307 공무
   '#/prod/env': main => pageEnv(main), // 15.343 환경점검
+  '#/env-jump': () => envJumpGo(), // 15.349 구역 QR로 들어옴
   '#/prod/risk': main => pageRiskAssess(main), // 15.313 위험성평가
   '#/prod/risk/actions': main => pageRiskActions(main),
   '#/prod/reliability': main => pageReliability(main),
@@ -1020,7 +1021,7 @@ async function render() {
   refreshNavBadges();
   const seq = render.seq = (render.seq || 0) + 1; // 15.317 빠르게 메뉴를 옮기면 앞 화면의 늦게 끝난 그리기가 새 화면에 탭·경로(HOME 등)를 덮어쓰던 것: 앞 그리기는 페이지 뒤 단계를 건너뜀
   const page = canSeeRoute(route) ? PAGES[location.hash || '#/'] || pageHome : pageNoMenu;
-  try { await page($('#main')); if (seq !== render.seq) return; if (page === pageHome || page === pageTasks) applyMenuAccess($('#main')); if (page !== pageNoMenu) { favoriteTools($('#main'), route); focusToggle($('#main')); } if (POPOUT || document.body.classList.contains('focus-mode')) focusBar(); if (POPOUT) document.title = `${screenTitle($('#main')) || '화면'} · 분리한 창`; applyView($('#main'), route); routeHelp($('#main'), route); foldHelp($('#main')); erpEntryBar($('#main'), route); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  try { await page($('#main')); if (seq !== render.seq) return; if (page === pageHome || page === pageTasks) applyMenuAccess($('#main')); if (page !== pageNoMenu) { favoriteTools($('#main'), route); focusToggle($('#main')); } if (POPOUT || document.body.classList.contains('focus-mode')) focusBar(); if (POPOUT) document.title = `${screenTitle($('#main')) || '화면'} · 분리한 창`; applyView($('#main'), route); routeHelp($('#main'), route); foldHelp($('#main')); if (typeof assistMount === 'function') { assistMount(); assistRemember(route, $('#main')); } erpEntryBar($('#main'), route); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   if (seq !== render.seq) return;
   try { autoRememberLists($('#main')); } catch { /* 15.281 조회 조건 기억은 편의 기능 */ }
   try { managedTabs($('#main'), route.split('?')[0]); } catch { /* 15.213 */ }
@@ -1461,7 +1462,7 @@ function tasksCard(tasks) {
   if (a.production_requests?.count) todo.push(`<li><a href="#/prod/orders"><b>생산의뢰 접수 대기 ${a.production_requests.count}건</b></a><div class="small muted">${a.production_requests.items.map(r => `<button type="button" class="link-btn" data-open-mr="${r.id}">${esc(r.req_no)}</button> ${esc(r.customer)}${r.ship_text || r.ship_date ? ' · 출고 ' + esc(r.ship_text || r.ship_date) : ''}`).join(' / ')}${more(a.production_requests.count, a.production_requests.items.length)}</div></li>`);
   if (a.purchase_requests?.count) todo.push(`<li><a href="#/sales/pr"><b>구매의뢰 결재 차례 ${a.purchase_requests.count}건</b></a><div class="small muted">${a.purchase_requests.items.map(r => `<button type="button" class="link-btn" data-task-pr="${r.id}">${esc(r.doc_no)}</button> ${esc(r.title || r.first_item || '')}${r.item_count > 1 ? ` 외 ${r.item_count - 1}건` : ''} · ${esc(r.author_name)}`).join(' / ')}${more(a.purchase_requests.count, a.purchase_requests.items.length)}</div></li>`);
   if (a.purchase_orders_waiting?.count) todo.push(`<li><a href="#/purchase/po/new"><b>발주 대기 구매의뢰 ${a.purchase_orders_waiting.count}건</b></a><div class="small muted">${a.purchase_orders_waiting.items.map(r => `<button type="button" class="link-btn" data-task-pr="${r.id}">${esc(r.doc_no)}</button> ${esc(r.title || r.first_item || '')} · ${esc(r.author_name)}`).join(' / ')}${more(a.purchase_orders_waiting.count, a.purchase_orders_waiting.items.length)}</div></li>`);
-  for (const q of a.quality || []) todo.push(`<li><a href="${q.href}"><b>${esc(q.label)} ${q.count}건</b></a>${['coa', 'docs'].includes(q.key) && q.count > 1 ? ` <button type="button" class="btn small" data-bulk="${q.key}">한꺼번에 승인</button>` : ''}</li>`); // 15.309 품질 승인·처리 대기 · 15.312 일괄 승인
+  for (const q of a.quality || []) todo.push(`<li><a href="${q.href}"><b>${esc(q.label)} ${q.count}건</b></a>${['coa', 'docs', 'env_approve'].includes(q.key) && q.count > 1 ? ` <button type="button" class="btn small" data-bulk="${q.key === 'env_approve' ? 'env' : q.key}">한꺼번에 승인</button>` : ''}</li>`); // 15.309 품질 승인·처리 대기 · 15.312 일괄 승인
   if (a.training_attend?.count) todo.push(`<li><a href="#/quality/training"><b>교육 참석 확인 ${a.training_attend.count}건</b></a><div class="small muted">${a.training_attend.items.map(t => `${esc(t.plan_date)} ${esc(t.title)}`).join(' / ')} — 교육·자격관리에서 「참석 확인」을 누르세요.</div></li>`);
   if (a.training_test?.count) todo.push(`<li><a href="#/quality/training"><b>교육 테스트 응시 ${a.training_test.count}건</b></a><div class="small muted">${a.training_test.items.map(t => `${esc(t.plan_date)} ${esc(t.title)}`).join(' / ')} — 교육·자격관리에서 「📝 테스트 응시」를 누르세요.</div></li>`); // 15.334
   if (a.pm_issue?.count) todo.push(`<li><a href="#/prod/pm"><b>설비 점검 이상·고장 ${a.pm_issue.count}건</b></a><div class="small muted">${a.pm_issue.items.map(t => `${esc(t.log_date)} ${esc(t.equip_no)} ${esc(t.kind === 'failure' ? '고장' : t.pm_name + ' 이상')}`).join(' / ')} — 설비 이력에서 수리 기록 또는 부적합·CAPA로 처리하세요.</div></li>`); // 15.339
@@ -2014,6 +2015,13 @@ async function pageHome(main) {
       row('#/prod/equipment', q.eqMaintenance, '정비 중 설비', 'yellow'),
       row('#/prod/equipment', q.eqFailMonth, '이번 달 고장'),
       row('#/quality/pqc', q.pqcOutMonth, '이번 달 공정 기준 이탈', 'red'),
+    ]) : '' },
+    { key: 'ov:env', label: '환경점검', html: (d.env || []).length ? card('production', 'Environment Check', '환경점검(오늘)', '#/prod/env', [ // 15.348
+      ...d.env.flatMap(s => s.rest ? [row('#/prod/env', '휴무', `${s.area_label} 오늘`, '', s.holiday || '')] : [
+        row('#/prod/env', s.am_missing, `${s.area_label} 오전 미입력 구역`, 'yellow'), row('#/prod/env', s.pm_missing, `${s.area_label} 오후 미입력 구역`, 'yellow'),
+        s.area === 'line' ? row('#/prod/env', s.clean_missing, '라인 청소 미체크 구역', 'yellow') : '', row('#/prod/env', s.dev, `${s.area_label} 오늘 이탈·불량`, 'red')]),
+      ...d.env.map(s => row('#/prod/env', s.confirmed, `${s.area_label} 승인 대기 일지`, 'yellow')),
+      ...d.env.map(s => s.open_past ? row('#/prod/env', s.open_past, `${s.area_label} 지난 일지 확인 안 됨`, 'red') : ''),
     ]) : '' },
     { key: 'ov:requests', label: '의뢰 접수 대기', html: card('requests', 'Requests', '의뢰 접수 대기', '#/quality/list', [
       row('#/quality/request', r.analysis.pending, '분석 접수대기', 'yellow'),

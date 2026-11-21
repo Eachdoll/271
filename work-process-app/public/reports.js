@@ -2898,6 +2898,7 @@ async function bulkApprove(kind, rtype = '') {
   let items = [], label = '';
   if (kind === 'coa') { label = 'COA 승인'; items = (await api('GET', '/api/coas')).rows.filter(c => c.status === 'draft').map(c => ({ id: c.id, rev: c.revision, text: `${c.coa_no} · ${c.item} · LOT ${c.lot}`, sub: `작성 ${c.created_by}` })); }
   else if (kind === 'docs') { label = '문서 승인·배포'; items = (await api('GET', '/api/qdocs')).rows.filter(d => d.status === 'review').map(d => ({ id: d.id, rev: d.revision, text: `${d.doc_no} Rev.${d.rev} ${d.title}`, sub: d.summary || '' })); }
+  else if (kind === 'env') { label = '환경점검 일지 승인'; items = (await api('GET', '/api/env/pending')).rows.filter(s => !s.self).map(s => ({ id: s.id, rev: s.revision, text: `${s.check_date} ${s.area_label} ${s.kind_label}`, sub: `확인 ${s.confirmed_by} · 기록 ${s.n}건${s.dev ? ` · 이탈·불량 ${s.dev}건` : ''}` })); } // 15.348 (내가 확인한 일지는 빼고)
   else { label = `${REQ[rtype]?.label || ''} 의뢰 승인`; items = (await api('GET', '/api/requests?type=' + encodeURIComponent(rtype))).filter(r => r.status === 'pending').map(r => ({ id: r.id, text: `${r.title}${r.customer ? ' · ' + r.customer : ''}`, sub: `의뢰 ${r.requester_name || ''} ${String(r.created_at || '').slice(0, 10)}` })); }
   if (!items.length) return toast('승인할 건이 없습니다.');
   const m = modal(`<h3>한꺼번에 ${esc(label)} <span class="chip yellow">${items.length}건</span></h3><p class="small muted">승인할 건을 고르세요. 내용을 봐야 하는 건은 체크를 풀고 화면에서 하나씩 여세요.</p>
@@ -2911,11 +2912,11 @@ async function bulkApprove(kind, rtype = '') {
     form.inert = true; let ok = 0; const bad = [], train = [];
     for (const [i, x] of picked.entries()) {
       $('[data-bulk-msg]', form).textContent = `${i + 1}/${picked.length} 승인 중…`;
-      try { if (kind === 'coa') await api('POST', `/api/coas/${x.id}/approve`, { revision: x.rev }); else if (kind === 'docs') { const r = await api('POST', `/api/qdocs/${x.id}/step`, { to: 'approved', revision: x.rev }); if (r.training_suggest) train.push(r); } else await api('POST', `/api/requests/${x.id}/approve`); ok++; }
+      try { if (kind === 'env') await api('PUT', `/api/env/sheets/${x.id}`, { action: 'approve', revision: x.rev }); else if (kind === 'coa') await api('POST', `/api/coas/${x.id}/approve`, { revision: x.rev }); else if (kind === 'docs') { const r = await api('POST', `/api/qdocs/${x.id}/step`, { to: 'approved', revision: x.rev }); if (r.training_suggest) train.push(r); } else await api('POST', `/api/requests/${x.id}/approve`); ok++; }
       catch (err) { bad.push(`${x.text}: ${err.message}`); }
     }
     m.close(); toast(bad.length ? `${ok}건 승인, ${bad.length}건 실패 — ${bad[0]}` : `${ok}건을 승인했습니다.`, bad.length ? 'err' : 'ok');
-    if (location.hash === '#/' || location.hash === '' || location.hash === '#/tasks') render(); refreshNavBadges();
+    if (location.hash === '#/' || location.hash === '' || location.hash === '#/tasks') render(); else qReload(); refreshNavBadges(); // 15.348 다른 화면(환경점검)에서 눌렀으면 그 화면 새로
     // 15.315 하나씩 승인할 때처럼 「교육 필요」 문서는 개정 교육 계획을 권함
     for (const r of train) { if (!await confirmBox(`${r.doc_no} Rev.${r.rev} 교육이 필요한 문서입니다. 교육 계획을 지금 만들까요?${train.length > 1 ? ` (${train.indexOf(r) + 1}/${train.length})` : ''}`)) continue; await trNew({ doc_id: r.id, kind: '문서 개정 교육', title: `${r.doc_no} ${r.title} Rev.${r.rev} 개정 교육`, change_id: r.change_id }); break; }
   };

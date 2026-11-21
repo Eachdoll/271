@@ -44,10 +44,12 @@ function operatorHome(main) {
   }
   const [, g] = groups[0];
   main.innerHTML = `<h1 class="op-hello">${esc(ME.name)}님, 무엇을 입력할까요?</h1><p class="muted">${g.icon} ${g.label} · ${g.desc}</p><div class="op-grid">${g.links.map(([href, label, icon, desc], i) => opTile(href, icon, label, desc, i)).join('')}</div><p class="small muted">입력 내용을 정정해야 하면 담당자에게 요청하세요.</p>`;
+  if (typeof envOpBadges === 'function') envOpBadges(main).catch(() => {}); // 15.348 환경점검 미입력 표시
 }
 function opGroupPop(key) {
   const g = OP_GROUPS[key];
-  modal(`<h2 class="op-pop-title"><span aria-hidden="true">${g.icon}</span> ${g.label}</h2><div class="op-grid op-pop">${g.links.map(([href, label, icon, desc], i) => opTile(href, icon, label, desc, i)).join('')}</div>`);
+  const m = modal(`<h2 class="op-pop-title"><span aria-hidden="true">${g.icon}</span> ${g.label}</h2><div class="op-grid op-pop">${g.links.map(([href, label, icon, desc], i) => opTile(href, icon, label, desc, i)).join('')}</div>`);
+  if (typeof envOpBadges === 'function') envOpBadges(m.el).catch(() => {}); // 15.348
 }
 async function operatorPage(route, main) {
   const grp = opGroupOf(route), known = OPERATOR_LINKS.some(l => l[0] === route);
@@ -62,6 +64,7 @@ async function operatorPage(route, main) {
   if (route === '#/operator/stock') return operatorStock(main);
   if (route === '#/operator/pm') return operatorPm(main); // 15.339
   if (route === '#/operator/breakdown') return operatorBreakdown(main);
+  if (route === '#/env-jump') return envJumpGo(); // 15.349 구역 QR
   if (route === '#/operator/env-line') return pageEnv(main, { operator: true, area: 'line' }); // 15.343
   if (route === '#/operator/env-wh') return pageEnv(main, { operator: true, area: 'warehouse' });
   return operatorHome(main);
