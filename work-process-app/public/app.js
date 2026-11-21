@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.328';
+const APP_VERSION = '15.329';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -73,7 +73,7 @@ const ROLE_LABEL = { operator: '오퍼레이터(입력 전용)', purchase: '구�
 const STATUS = { pending: '접수대기', rejected: '반려', waiting: '대기', progress: '진행', done: '완료' };
 const RECV = { '': '미입고', ok: '입고완료', mismatch: '수량상이', checking: '확인중' };
 
-let ME = null;
+let ME = null, GEO_BLOCKED = ''; // 15.329 막힌 국가에서 접속하면 서버가 알려 주는 이유
 
 // Every current and dynamically opened form shows the signed-in operator.
 // This is display-only; the server records authors from its authenticated session.
@@ -481,7 +481,7 @@ function applyMenuAccess(main) {
 }
 // 관리 메뉴(15.38): 거래처·검사규격 같은 기준 정보는 업무 메뉴가 아닌 관리 묶음에 둔다. 주소는 그대로다.
 const NAV_MANAGE = [['#/purchase/vendors', '거래처 관리'], ['#/logistics/warehouses', '창고 관리'], ['#/purchase/prices', '단가표'], ['#/quality/specs', '검사규격 설정']]; // 15.230 창고 관리
-const NAV_ADMIN = [['#/admin/users', '회원 관리'], ['#/admin', '관리자 설정'], ['#/admin/org', '조직 구성'], ['#/admin/approval', '결재선 설정'], ['#/admin/bom', '제품등록'], ['#/admin/bom-sheet', 'BOM 소요량']]; // 15.175 회원 관리 분리
+const NAV_ADMIN = [['#/admin/users', '회원 관리'], ['#/admin', '관리자 설정'], ['#/admin/org', '조직 구성'], ['#/admin/approval', '결재선 설정'], ['#/admin/security', '접속 보안'], ['#/admin/bom', '제품등록'], ['#/admin/bom-sheet', 'BOM 소요량']]; // 15.175 회원 관리 분리
 // Entry and list screens built from one page: the page renders both parts and the view hides one.
 // key: route → [page route, view, title, other route, link label]
 const VIEW_SPLIT = {
@@ -712,6 +712,7 @@ const PAGES = {
   '#/admin/org/chart': main => managedPage(main, '#/admin/org/chart', pageOrgChart), // 15.314 조직도
   '#/admin/org/duties': main => managedPage(main, '#/admin/org/duties', pageOrgDuties), // 15.314 지정 담당자
   '#/admin/approval': main => pageApprovalRules(main), // 15.185 결재선 기본값
+  '#/admin/security': main => pageSecurity(main), // 15.329 접속 보안
   '#/admin/bom': pageBoms,
   '#/logistics/warehouses': main => pageWarehouses(main), // 15.230 관리 › 창고 관리
   '#/logistics/qr': main => managedPage(main, '#/logistics/qr', pageQrBulk), // 15.230 QR 일괄 발행
@@ -1310,6 +1311,7 @@ const menuSummary = list => !list ? '전체' : list.length ? list.map(key => (ME
 
 // ───────────── 로그인 / 가입 ─────────────
 function pageAuth(mode = 'login', notice = '') {
+  if (!notice && GEO_BLOCKED) notice = GEO_BLOCKED; // 15.329
   document.body.classList.remove('operator-mode');
   $('#app').innerHTML = `
   <div class="auth">
@@ -3306,17 +3308,18 @@ async function pageMe(main) {
   <div class="card"><p><b>${esc(ME.name)}</b> ${ME.is_admin ? '<span class="tag">관리자</span>' : ''}</p><p class="muted small">담당: ${ME.roles.map((r) => ROLE_LABEL[r]).join(', ') || '없음 (승인 권한이 필요하면 관리자에게 요청)'}</p></div>
   <div class="card"><h3>부서 · 직급</h3><p><b>${esc(ME.department || '부서 미지정')}</b> · ${esc(ME.position || '직급 미지정')}</p><p class="small muted">구매의뢰서의 의뢰부서·요청자 직급으로 자동 표시됩니다. 바꾸려면 관리자에게 요청하세요(관리 › 조직 구성).</p></div>
   <div class="card" id="meDuties"><h3>지정 담당 업무</h3><p class="small muted">불러오는 중…</p></div>
+  <div class="card" id="meLogins"><h3>최근 로그인</h3><p class="small muted">불러오는 중…</p></div>
   <form class="card stack" id="pwForm"><h3>비밀번호 변경</h3>
     <label>현재 비밀번호<input type="password" name="current" required autocomplete="current-password"></label>
     <label>새 비밀번호<input type="password" name="password" required minlength="4" autocomplete="new-password"></label>
     <div class="actions"><button class="btn primary">변경</button></div></form>`;
-  meDutiesCard($('#meDuties')); // 15.314
+  meDutiesCard($('#meDuties')); meLoginsCard($('#meLogins')); // 15.314 · 15.329
   $('#pwForm').onsubmit = async (e) => { e.preventDefault(); try { await api('PUT', '/api/me/password', formObj(e.target)); e.target.reset(); toast('비밀번호를 변경했습니다.'); } catch (err) { fail(err); } };
 }
 
 // ───────────── 시작 ─────────────
 (async () => {
-  try { ME = (await api('GET', '/api/me')).user; } catch { ME = null; }
+  try { const r = await api('GET', '/api/me'); ME = r.user; GEO_BLOCKED = r.geo_blocked || ''; } catch { ME = null; }
   render();
 })();
 

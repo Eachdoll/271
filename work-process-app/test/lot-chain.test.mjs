@@ -1340,3 +1340,48 @@ test('15.323 multiple saved org charts: create from official copy / blank / anot
   assert.match((await admin('GET', `/api/org/charts/${off.id}`)).body.history.at(-1).what, /상자 수정/);
   await admin('PUT', `/api/admin/users/${u.id}`, { department: '', position: '' }); await admin('PUT', `/api/admin/org/departments/${d1.id}`, { active: false });
 });
+
+test('15.329 login log with IP/location, last seen per user, country allowlist with exempt users, lock-out guard, env override', async () => {
+  const geoClient = (cf, ip) => { let cookie = ''; return async (method, url, body) => {
+    const req = new Request('https://lot249.test' + url, { method, headers: { cookie, 'content-type': 'application/json', 'cf-connecting-ip': ip }, body: body === undefined ? undefined : JSON.stringify(body) });
+    if (cf) Object.defineProperty(req, 'cf', { value: cf });
+    const r = await worker.fetch(req, env); if (r.headers.has('set-cookie')) cookie = r.headers.get('set-cookie').split(';')[0];
+    return { status: r.status, body: await r.json().catch(() => null) };
+  }; };
+  const kr = geoClient({ country: 'KR', city: 'Seoul', region: 'Seoul' }, '211.36.1.10'), us = geoClient({ country: 'US', city: 'Los Angeles', region: 'California' }, '8.8.4.4');
+  assert.equal((await kr('POST', '/api/auth/login', { name: '관리자', password: 'password' })).status, 200);
+  assert.equal((await us('POST', '/api/auth/login', { name: '생산', password: 'wrong' })).status, 401);
+  assert.equal((await us('POST', '/api/auth/login', { name: '생산', password: 'password' })).status, 200);
+  let sec = (await kr('GET', '/api/admin/security')).body;
+  assert.deepEqual([sec.here.ip, sec.here.country, sec.here.city, sec.here.known], ['211.36.1.10', 'KR', 'Seoul', true]);
+  const p = sec.users.find(u => u.name === '생산'), a = sec.users.find(u => u.name === '관리자');
+  assert.deepEqual([p.last_ip, p.last_country, p.last_city, p.fails_7d], ['8.8.4.4', 'US', 'Los Angeles', 1]);
+  assert.equal(a.last_country, 'KR'); assert.ok(a.last_login_at);
+  const logs = (await kr('GET', '/api/admin/security/logs?user_id=' + p.id)).body.rows;
+  assert.deepEqual(logs.slice(0, 2).map(l => l.result), ['ok', 'fail']); assert.equal(logs[0].region, 'California');
+  assert.equal((await prod('GET', '/api/admin/security')).status, 403);
+  assert.deepEqual((await us('GET', '/api/me/logins')).body.rows.slice(0, 2).map(l => l.country), ['US', 'US']);
+  // guards: unknown location (no cf) cannot enable; current country must stay allowed; codes validated
+  assert.equal((await admin('PUT', '/api/admin/security/geo', { enabled: true, countries: ['KR'] })).status, 400);
+  assert.match((await kr('PUT', '/api/admin/security/geo', { enabled: true, countries: ['US'] })).body.error, /KR/);
+  assert.equal((await kr('PUT', '/api/admin/security/geo', { enabled: true, countries: ['KOR'] })).status, 400);
+  assert.equal((await kr('PUT', '/api/admin/security/geo', { enabled: true, countries: ['KR'], exempt_user_ids: [99999] })).status, 400);
+  assert.equal((await kr('PUT', '/api/admin/security/geo', { enabled: true, countries: ['kr', 'JP'] })).status, 200);
+  // US blocked: existing session, /api/me reason, login (logged as blocked, password not checked)
+  assert.equal((await us('GET', '/api/dashboard')).status, 403);
+  assert.match((await us('GET', '/api/me')).body.geo_blocked, /US/);
+  const bl = await us('POST', '/api/auth/login', { name: '생산', password: 'anything' }); assert.equal(bl.status, 403);
+  assert.equal((await kr('GET', '/api/admin/security/logs?result=blocked')).body.rows[0].name, '생산');
+  assert.equal((await kr('GET', '/api/dashboard')).status, 200);
+  assert.equal((await admin('GET', '/api/me')).body.user.name, '관리자'); // no location (local) is not blocked
+  // exempt user may connect from anywhere
+  assert.equal((await kr('PUT', '/api/admin/security/geo', { enabled: true, countries: ['KR'], exempt_user_ids: [p.id], block_unknown: true })).status, 200);
+  assert.equal((await us('POST', '/api/auth/login', { name: '생산', password: 'password' })).status, 200);
+  const tor = geoClient({ country: 'T1' }, '185.220.101.1');
+  assert.equal((await tor('POST', '/api/auth/login', { name: '관리자', password: 'password' })).status, 403);
+  // emergency override
+  env.GEO_BLOCK_OFF = '1';
+  try { assert.equal((await tor('POST', '/api/auth/login', { name: '관리자', password: 'password' })).status, 200); } finally { delete env.GEO_BLOCK_OFF; }
+  assert.equal((await kr('PUT', '/api/admin/security/geo', { enabled: false, countries: ['KR'] })).status, 200);
+  assert.equal((await tor('GET', '/api/dashboard')).status, 200);
+});
