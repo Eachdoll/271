@@ -33,7 +33,7 @@ function applyFont(mode) {
 // 15.328 PC 화면 모드: 휴대폰에서도 PC 화면(폭 1280px)으로 보기. 브라우저의 「데스크톱 사이트」처럼 화면 폭을 바꾸고, 두 손가락으로 확대해 봅니다. 이 기기에 기억.
 const PCMODE_KEY = 'wpa:pcmode', PC_VIEWPORT = 'width=1280, viewport-fit=cover', MOBILE_VIEWPORT = 'width=device-width, initial-scale=1, viewport-fit=cover';
 function pcMode() { try { return localStorage.getItem(PCMODE_KEY) === '1'; } catch { return false; } }
-function smallDevice() { try { return Math.min(screen.width, screen.height) < 820 || !!window.matchMedia?.('(pointer: coarse)').matches; } catch { return false; } }
+function smallDevice() { try { return Math.min(screen.width, screen.height) < 600 || !!window.matchMedia?.('(pointer: coarse)').matches; } catch { return false; } }
 function applyPcMode(on) {
   const root = document.documentElement; let vp = document.querySelector('meta[name=viewport]');
   if (!vp) { vp = document.createElement('meta'); vp.name = 'viewport'; document.head.append(vp); }

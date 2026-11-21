@@ -4370,3 +4370,15 @@ body:not(.focus-mode) .focus-fab, body:not(.focus-mode) .focus-bar { display: no
 .pcmode-toggle[hidden] { display: none !important; }
 .pcmode-chip { position: fixed; left: 16px; bottom: 16px; z-index: 60; font: inherit; font-size: 40px; font-weight: 700; padding: 16px 30px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--text); box-shadow: 0 4px 16px rgba(0,0,0,.22); cursor: pointer; }
 @media print { .pcmode-chip { display: none !important; } }
+
+/* 15.329 접속 보안 */
+.geo-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 4px 12px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
+.geo-list legend { font-weight: 600; padding: 0 4px; }
+.geo-users { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 4px 12px; padding: 8px 0; }
+.geo-add { margin: 4px 0 8px; align-items: flex-end; }
+.geo-ex { margin: 8px 0; }
+.geo-warn { color: var(--red); background: var(--red-bg); border-radius: 8px; padding: 8px 12px; font-weight: 600; }
+.sec-here p { margin: 4px 0; }
+#geoCard label.check { display: flex; flex-direction: row; align-items: center; gap: 8px; margin: 6px 0; font-weight: 500; }
+#geoCard label.check input[type=checkbox] { width: 18px; height: 18px; margin: 0; flex: none; }
+#geoCard .geo-list label.check, #geoCard .geo-users label.check { margin: 2px 0; min-height: 32px; }

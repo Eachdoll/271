@@ -302,6 +302,35 @@ function sessionToken(req) {
   return cookies.wpa_sid || cookies.sid;
 }
 
+
+// ───────────────────────── 15.329 접속 보안(접속 위치 기록 · 국가별 접속 제한) ─────────────────────────
+// 위치는 Cloudflare가 붙여 주는 값(request.cf, 없으면 CF-IPCountry·CF-Connecting-IP 머리글)만 씁니다. 로컬 실행처럼 값이 없으면 「알 수 없음」.
+// 비상: 허용 국가를 잘못 정해 모두 막혔으면 Sites 환경변수 GEO_BLOCK_OFF=1로 제한을 끄고 다시 고치세요.
+function clientGeo(req) {
+  const cf = req.cf || null, h = k => str(req.headers.get(k), 100);
+  const country = str(cf?.country || h('cf-ipcountry'), 2).toUpperCase();
+  return { ip: h('cf-connecting-ip'), country: /^[A-Z][A-Z0-9]$/.test(country) ? country : '', region: str(cf?.region || h('cf-region'), 80), city: str(cf?.city || h('cf-ipcity'), 80), known: /^[A-Z]{2}$/.test(country) && country !== 'XX' && country !== 'T1' };
+}
+const GEO_POLICY_DEFAULT = { enabled: false, countries: [], exempt_user_ids: [], block_unknown: false };
+async function geoPolicy() { let v = {}; try { v = JSON.parse(await getSetting('geo_policy') || '{}'); } catch { v = {}; } return { ...GEO_POLICY_DEFAULT, ...v }; }
+// 막아야 하면 이유 글자, 아니면 ''. 위치를 알 수 없는 요청(로컬 등)은 「알 수 없는 곳 막기」를 켠 때만 막음.
+function geoBlockReason(policy, geo, user) {
+  if (!policy.enabled || env.GEO_BLOCK_OFF === '1') return '';
+  if (user && policy.exempt_user_ids.includes(user.id)) return '';
+  if (!geo.known) return policy.block_unknown && (geo.country || geo.ip) ? '접속한 국가를 확인할 수 없어 접속을 막았습니다. 관리자에게 문의하세요.' : '';
+  return policy.countries.includes(geo.country) ? '' : `이 국가(${geo.country})에서는 접속할 수 없습니다. 허용된 국가에서 접속하거나 관리자에게 문의하세요.`;
+}
+async function logLogin(req, u, name, result) {
+  const g = clientGeo(req);
+  await db.prepare('INSERT INTO login_logs(user_id,name,result,ip,country,region,city,ua,created_at) VALUES(?,?,?,?,?,?,?,?,?)').run(u?.id ?? null, str(name, 30), result, g.ip, g.country, g.region, g.city, str(req.headers.get('user-agent'), 200), now());
+}
+// 최근 접속: 10분에 한 번 또는 IP·국가가 바뀌면 사용자에 적음(요청마다 쓰지 않게).
+async function touchSeen(req, u) {
+  const g = clientGeo(req), t = now();
+  if (u.last_seen_at && u.last_ip === g.ip && u.last_country === g.country && Date.parse(t.replace(' ', 'T')) - Date.parse(String(u.last_seen_at).replace(' ', 'T')) < 600000) return;
+  await db.prepare('UPDATE users SET last_seen_at=?, last_ip=?, last_country=?, last_city=? WHERE id=?').run(t, g.ip, g.country, g.city, u.id);
+}
+
 // ───────────────────────── 라우터 ─────────────────────────
 const routes = [];
 function route(method, pattern, handler, { auth = true } = {}) {
@@ -397,7 +426,10 @@ route('POST', '/api/auth/login', async ({ body, req, res }) => {
   const f = await db.prepare('SELECT failures AS n, until_at AS until FROM login_attempts WHERE name=?').get(name);
   if (f && f.until > Date.now()) throw new HttpError(429, '로그인 시도가 많습니다. 1분 후 다시 시도하세요.');
   const u = (await db.prepare('SELECT * FROM users WHERE name=?').get(name));
+  const geoMsg = geoBlockReason(await geoPolicy(), clientGeo(req), u); // 15.329 막힌 국가면 비밀번호를 확인하지 않고 막음(기록만)
+  if (geoMsg) { await logLogin(req, u, name, 'blocked'); throw new HttpError(403, geoMsg); }
   if (!u || !(await pwMatches(u, body.password || ''))) {
+    await logLogin(req, u, name, 'fail');
     const n = (f && f.until > Date.now() - 60000 ? f.n : 0) + 1;
     await db.prepare('INSERT INTO login_attempts(name,failures,until_at) VALUES(?,?,?) ON CONFLICT(name) DO UPDATE SET failures=excluded.failures, until_at=excluded.until_at').run(name, n, n >= 5 ? Date.now() + 60000 : Date.now());
     throw new HttpError(401, '이름 또는 비밀번호가 올바르지 않습니다.');
@@ -406,6 +438,7 @@ route('POST', '/api/auth/login', async ({ body, req, res }) => {
   if (u.approval_status === 'pending') throw new HttpError(403, '관리자 승인 대기 중입니다. 승인 후 로그인해 주세요.');
   if (u.approval_status !== 'approved') throw new HttpError(403, '가입이 반려되었습니다. 관리자에게 문의하세요.' + (u.approval_note ? ' 사유: ' + u.approval_note : ''));
   (await startSession(req, res, u.id));
+  await logLogin(req, u, name, 'ok'); await db.prepare('UPDATE users SET last_login_at=? WHERE id=?').run(now(), u.id); await touchSeen(req, { ...u, last_seen_at: null });
   return { user: await meUser(u) };
 }, { auth: false });
 
@@ -430,6 +463,46 @@ route('PUT', '/api/me/password', async ({ user, body }) => {
   (await db.prepare('UPDATE users SET pw_salt=?, pw_hash=? WHERE id=?').run(salt, (await hashPw(body.password, salt)), user.id));
   return { ok: true };
 });
+
+
+// 15.329 접속 보안(관리자): 지금 접속 위치 · 국가별 접속 제한 · 사용자별 최근 접속 · 로그인 기록
+route('GET', '/api/admin/security', async ({ user, req }) => {
+  requireAdmin(user);
+  const users = await db.prepare("SELECT id,name,department,position,approval_status,last_seen_at,last_ip,last_country,last_city,last_login_at FROM users WHERE approval_status='approved' ORDER BY (last_seen_at IS NULL), last_seen_at DESC, id").all();
+  const fails = await db.prepare("SELECT user_id, COUNT(*) AS n FROM login_logs WHERE result<>'ok' AND created_at>=? AND user_id IS NOT NULL GROUP BY user_id").all(new Date(Date.now() + 9 * 3600e3 - 7 * 864e5).toISOString().slice(0, 19).replace('T', ' '));
+  const fm = Object.fromEntries(fails.map(f => [f.user_id, f.n]));
+  return { policy: await geoPolicy(), here: clientGeo(req), override_off: env.GEO_BLOCK_OFF === '1', users: users.map(u => ({ ...u, fails_7d: fm[u.id] || 0 })) };
+});
+route('PUT', '/api/admin/security/geo', async ({ user, req, body }) => {
+  requireAdmin(user);
+  const countries = [...new Set((Array.isArray(body.countries) ? body.countries : []).map(c => String(c || '').trim().toUpperCase()))];
+  if (countries.some(c => !/^[A-Z]{2}$/.test(c))) throw bad('국가 코드는 영문 두 글자(예: KR)로 넣으세요.');
+  if (countries.length > 60) throw bad('허용 국가는 60개까지 정할 수 있습니다.');
+  const ids = [...new Set((Array.isArray(body.exempt_user_ids) ? body.exempt_user_ids : []).map(Number))];
+  if (ids.some(i => !Number.isSafeInteger(i) || i < 1)) throw bad('예외 사용자가 올바르지 않습니다.');
+  if (ids.length) { const ok = await db.prepare(`SELECT COUNT(*) AS n FROM users WHERE id IN (${ids.map(() => '?').join(',')})`).get(...ids); if (ok.n !== ids.length) throw bad('없는 사용자가 예외에 들어 있습니다.'); }
+  const policy = { enabled: !!body.enabled, countries, exempt_user_ids: ids, block_unknown: !!body.block_unknown };
+  if (policy.enabled) {
+    if (!countries.length) throw bad('허용할 국가를 하나 이상 고르세요.');
+    const here = clientGeo(req);
+    if (!here.known) throw bad('지금 접속한 국가를 확인할 수 없어 제한을 켤 수 없습니다(로컬 실행 등). 운영 사이트에서 켜세요.');
+    if (!countries.includes(here.country) && !ids.includes(user.id)) throw bad(`지금 접속한 국가(${here.country})가 허용 목록에 없어 저장하면 관리자도 막힙니다. ${here.country}를 넣거나 본인을 예외로 두세요.`);
+  }
+  await setSetting('geo_policy', JSON.stringify(policy));
+  return { policy };
+});
+route('GET', '/api/admin/security/logs', async ({ user, query }) => {
+  requireAdmin(user);
+  const where = [], args = [];
+  if (query.user_id) { if (!/^[1-9]\d*$/.test(query.user_id)) throw bad('사용자가 올바르지 않습니다.'); where.push('user_id=?'); args.push(Number(query.user_id)); }
+  if (query.result) { if (!['ok', 'fail', 'blocked'].includes(query.result)) throw bad('결과가 올바르지 않습니다.'); where.push('result=?'); args.push(query.result); }
+  if (query.q) { where.push('(name LIKE ? OR ip LIKE ? OR country LIKE ? OR city LIKE ?)'); const q = '%' + str(query.q, 50) + '%'; args.push(q, q, q, q); }
+  if (query.from) { if (!/^\d{4}-\d{2}-\d{2}$/.test(query.from)) throw bad('시작일이 올바르지 않습니다.'); where.push('created_at>=?'); args.push(query.from); }
+  if (query.to) { if (!/^\d{4}-\d{2}-\d{2}$/.test(query.to)) throw bad('종료일이 올바르지 않습니다.'); where.push('created_at<?'); args.push(query.to + ' 99'); }
+  const rows = await db.prepare(`SELECT id,user_id,name,result,ip,country,region,city,ua,created_at FROM login_logs ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY id DESC LIMIT 501`).all(...args);
+  return { rows: rows.slice(0, 500), more: rows.length > 500 };
+});
+route('GET', '/api/me/logins', async ({ user }) => ({ rows: await db.prepare('SELECT result,ip,country,region,city,ua,created_at FROM login_logs WHERE user_id=? ORDER BY id DESC LIMIT 10').all(user.id) }));
 
 // 관리자
 route('GET', '/api/admin/settings', async ({ user }) => { requireAdmin(user); return { invite_code: (await getSetting('invite_code')) }; });
@@ -524,7 +597,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'qualifications', 'supplier_evals', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests', 'quality_audits', 'audit_findings', 'validations', 'quality_goals', 'quality_kpi_values', 'quality_risks', 'risk_assessments', 'org_duty_assignments', 'dev_costs', 'cost_rates', 'cost_materials', 'cost_material_prices', 'cost_items', 'cost_item_revs', 'org_charts']; // 15.313 위험성평가 · 15.314 지정 담당자
+const backupTables = ['settings', 'users', 'login_logs', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes', 'quotes', 'quote_lines', 'bill_notes', 'pallets', 'pallet_lines', 'semi_lot_inputs', 'pack_bag_links', 'ip_rights', 'certifications', 'instruments', 'coas', 'nonconformities', 'quality_docs', 'quality_changes', 'trainings', 'training_attendees', 'qualifications', 'supplier_evals', 'supplier_coas', 'equipment', 'equipment_logs', 'process_points', 'process_measures', 'test_methods', 'reliability_tests', 'quality_audits', 'audit_findings', 'validations', 'quality_goals', 'quality_kpi_values', 'quality_risks', 'risk_assessments', 'org_duty_assignments', 'dev_costs', 'cost_rates', 'cost_materials', 'cost_material_prices', 'cost_items', 'cost_item_revs', 'org_charts']; // 15.313 위험성평가 · 15.314 지정 담당자
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -9629,6 +9702,12 @@ return { async fetch(req) {
       if (!r) throw new HttpError(404, 'API를 찾을 수 없습니다.');
       const m = r.re.exec(p); const params = {}; r.keys.forEach((k, i) => params[k] = m[i + 1]);
       const user = await currentUser(req);
+      // 15.329 국가별 접속 제한: 로그인은 처리 안에서(기록), /api/me는 막힌 이유를 알려 로그인 화면에 보이게.
+      if (p !== '/api/auth/login' && p !== '/api/auth/logout') {
+        const geoMsg = geoBlockReason(await geoPolicy(), clientGeo(req), user);
+        if (geoMsg) { if (p === '/api/me') return Response.json({ user: null, geo_blocked: geoMsg }, { headers: res }); throw new HttpError(403, geoMsg); }
+      }
+      if (user) await touchSeen(req, user);
       if (r.auth && !user) throw new HttpError(401, '로그인이 필요합니다.');
       if (isOperator(user) && !operatorRequestAllowed(req.method, p)) throw new HttpError(403, '오퍼레이터는 반제품·완제품 실적 입력과 본인 기록 조회만 사용할 수 있습니다.');
       const body = req.method === 'GET' ? {} : await readBody(req);
@@ -9637,6 +9716,7 @@ return { async fetch(req) {
     if (p.startsWith('/uploads/')) {
       const user = await currentUser(req);
       if (!user) throw new HttpError(401, '로그인이 필요합니다.');
+      { const geoMsg = geoBlockReason(await geoPolicy(), clientGeo(req), user); if (geoMsg) throw new HttpError(403, geoMsg); } // 15.329
       if (isOperator(user)) throw new HttpError(403, '오퍼레이터는 첨부 파일을 조회할 수 없습니다.');
       const file = p.slice('/uploads/'.length);
       if (!/^[a-f0-9]{24}\.(jpg|png|webp|pdf)$/.test(file)) throw new HttpError(404, '사진을 찾을 수 없습니다.'); // 15.306 품질 문서·공급사 COA PDF

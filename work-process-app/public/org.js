@@ -512,3 +512,92 @@ async function meDutiesCard(box) {
     box.innerHTML = `<h3>지정 담당 업무</h3>${rows.length ? rows.map(d => `<div class="duty-line">${dutyBadge(d, d.user_id !== ME.id)} <b>${esc(d.title)}</b>${d.user_id !== ME.id ? ' <span class="small muted">(대리자)</span>' : ''}${d.next_training ? ` <span class="small">· 다음 법정교육 ${dutyTrainChip(d)}</span>` : ''}${dutyTasksHtml(d.tasks)}</div>`).join('') : '<p class="small muted">지정된 담당 업무가 없습니다.</p>'}<div class="actions" style="justify-content:flex-start"><a class="btn" href="#/admin/org/chart">조직도 보기</a><a class="btn" href="#/admin/org/duties">지정 담당자 현황</a></div>`;
   } catch { box.remove(); }
 }
+
+// ───────────── 15.329 접속 보안: 사용자별 최근 접속 위치 · 국가별 접속 제한 · 로그인 기록 ─────────────
+const GEO_COMMON = ['KR', 'US', 'CN', 'JP', 'VN', 'TW', 'HK', 'SG', 'TH', 'ID', 'PH', 'MY', 'IN', 'BD', 'DE', 'GB', 'FR', 'IT', 'CA', 'AU', 'MX'];
+function geoName(code) { if (!code) return ''; if (code === 'T1') return 'Tor(익명망)'; if (code === 'XX') return '알 수 없음'; try { return new Intl.DisplayNames(['ko'], { type: 'region' }).of(code) || code; } catch { return code; } }
+function geoPlace(r) { const parts = [r.city, r.region && r.region !== r.city ? r.region : '', r.country ? `${geoName(r.country)}(${r.country})` : ''].filter(Boolean); return parts.length ? parts.join(' · ') : '알 수 없음'; }
+function uaShort(ua) {
+  ua = String(ua || ''); if (!ua) return '';
+  const os = /iPhone|iPad/.test(ua) ? 'iPhone/iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS X|Macintosh/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : '기타';
+  const br = /Edg\//.test(ua) ? 'Edge' : /Whale\//.test(ua) ? 'Whale' : /SamsungBrowser\//.test(ua) ? '삼성 인터넷' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : '';
+  return br ? `${os} · ${br}` : os;
+}
+const LOGIN_RESULT = { ok: ['성공', 'green'], fail: ['비밀번호 틀림', 'yellow'], blocked: ['국가 차단', 'red'] };
+async function pageSecurity(main) {
+  if (!ME.is_admin) { main.innerHTML = '<h1>접속 보안</h1><div class="empty">관리자만 볼 수 있습니다.</div>'; return; }
+  const data = await api('GET', '/api/admin/security');
+  let policy = { ...data.policy, countries: [...data.policy.countries], exempt_user_ids: [...data.policy.exempt_user_ids] };
+  const here = data.here, users = data.users;
+  main.innerHTML = `<h1>접속 보안</h1>
+    <p class="muted">사용자마다 최근에 접속한 IP와 장소(국가·도시)를 기록합니다. 「국가별 접속 제한」을 켜면 고른 국가에서만 로그인·사용할 수 있습니다. 위치는 접속한 인터넷 주소로 추정한 값이라 VPN을 쓰면 다르게 보일 수 있습니다.</p>
+    <div class="card sec-here"><h3>지금 이 접속</h3><p><b>${esc(here.ip || '알 수 없음')}</b> · ${esc(geoPlace(here))}</p>${here.known ? '' : '<p class="small muted">위치를 알 수 없습니다(로컬 실행 등). 운영 사이트에서는 Cloudflare가 알려 주는 국가·도시로 보입니다.</p>'}</div>
+    <section class="card" id="geoCard"></section>
+    <section class="card"><h3>사용자별 최근 접속</h3><div id="secUsers"></div></section>
+    <section class="card"><h3>로그인 기록</h3>
+      <form class="list-filters toolbar lf-oneline" data-read-only id="secLogFilters">
+        <label class="lf-sel lf-wide">사용자<select name="user_id"><option value="">전체</option>${users.map(u => `<option value="${u.id}">${esc(u.name)}</option>`).join('')}</select></label>
+        <label class="lf-sel">결과<select name="result"><option value="">전체</option><option value="ok">성공</option><option value="fail">비밀번호 틀림</option><option value="blocked">국가 차단</option></select></label>
+        <label class="lf-date">시작일<input type="date" name="from"></label><label class="lf-date">종료일<input type="date" name="to"></label>
+        <label class="grow lf-q">찾기<input type="search" name="q" placeholder="이름·IP·국가·도시"></label>
+        <span class="small muted" data-log-count></span></form>
+      <div id="secLogs"></div></section>`;
+  const drawGeo = () => {
+    const list = [...new Set([...GEO_COMMON, ...policy.countries])];
+    const warn = policy.enabled && here.known && !policy.countries.includes(here.country) && !policy.exempt_user_ids.includes(ME.id);
+    $('#geoCard', main).innerHTML = `<h3>국가별 접속 제한 ${data.policy.enabled ? '<span class="chip green">켜짐</span>' : '<span class="chip">꺼짐</span>'}${data.override_off ? ' <span class="chip red">비상 해제 중(GEO_BLOCK_OFF)</span>' : ''}</h3>
+      <label class="check"><input type="checkbox" data-geo-on ${policy.enabled ? 'checked' : ''}> 아래에서 고른 국가에서만 접속 허용</label>
+      <fieldset class="geo-list"><legend>허용 국가</legend>${list.map(c => `<label class="check geo-c"><input type="checkbox" data-geo-c="${c}" ${policy.countries.includes(c) ? 'checked' : ''}> ${esc(geoName(c))} <span class="muted small">${c}</span>${here.country === c ? ' <span class="chip green">지금 여기</span>' : ''}</label>`).join('')}</fieldset>
+      <div class="toolbar geo-add"><label>다른 국가 코드<input data-geo-code maxlength="2" placeholder="예) BR" autocomplete="off" style="width:7em;text-transform:uppercase"></label><button type="button" class="btn small" data-geo-add>+ 추가</button></div>
+      <details class="geo-ex"${policy.exempt_user_ids.length ? ' open' : ''}><summary>예외 사용자(어느 국가에서나 접속 · 해외 출장 등) ${policy.exempt_user_ids.length ? `<span class="chip">${policy.exempt_user_ids.length}명</span>` : ''}</summary>
+        <div class="geo-users">${users.map(u => `<label class="check"><input type="checkbox" data-geo-ex="${u.id}" ${policy.exempt_user_ids.includes(u.id) ? 'checked' : ''}> ${esc(u.name)}${u.department ? ` <span class="muted small">${esc(u.department)}</span>` : ''}</label>`).join('')}</div></details>
+      <label class="check"><input type="checkbox" data-geo-unknown ${policy.block_unknown ? 'checked' : ''}> 국가를 알 수 없는 접속(Tor·위치 미상)도 막기</label>
+      ${warn ? `<p class="geo-warn" role="alert">지금 접속한 국가(${esc(geoName(here.country))})가 허용 목록에 없습니다. 이대로는 저장할 수 없습니다(관리자도 막힘).</p>` : ''}
+      <p class="small muted">막힌 국가에서는 로그인 화면에 「이 국가에서는 접속할 수 없습니다」가 보이고, 이미 로그인한 사람도 다음 동작부터 막힙니다. 잘못 정해 모두 막혔다면 배포 설정(환경변수)에 GEO_BLOCK_OFF=1을 넣으면 제한이 꺼집니다.</p>
+      <div class="actions" style="justify-content:flex-start"><button type="button" class="btn primary" data-geo-save>저장</button></div>`;
+  };
+  const drawUsers = () => {
+    $('#secUsers', main).innerHTML = users.length ? `<div class="table-wrap"><table class="grid sec-users"><thead><tr><th>이름</th><th>부서</th><th>최근 접속</th><th>IP</th><th>장소</th><th>마지막 로그인</th><th>7일 실패·차단</th><th></th></tr></thead><tbody>${users.map(u => {
+      const off = u.last_country && data.policy.enabled && !data.policy.countries.includes(u.last_country) && !data.policy.exempt_user_ids.includes(u.id);
+      return `<tr><td>${esc(u.name)}${data.policy.exempt_user_ids.includes(u.id) ? ' <span class="chip">예외</span>' : ''}</td><td>${esc(u.department || '')}</td><td>${esc(u.last_seen_at ? u.last_seen_at.slice(0, 16) : '기록 없음')}</td><td class="mono">${esc(u.last_ip || '')}</td><td>${u.last_seen_at ? esc(geoPlace({ city: u.last_city, country: u.last_country })) : ''}${off ? ' <span class="chip red">허용 밖</span>' : ''}</td><td>${esc(u.last_login_at ? u.last_login_at.slice(0, 16) : '')}</td><td class="num">${u.fails_7d ? `<span class="chip yellow">${u.fails_7d}</span>` : '0'}</td><td><button type="button" class="btn small" data-sec-logs="${u.id}" aria-label="${esc(u.name)} 로그인 기록">기록</button></td></tr>`;
+    }).join('')}</tbody></table></div>` : '<div class="empty">승인된 사용자가 없습니다.</div>';
+  };
+  const loadLogs = async () => {
+    const q = new URLSearchParams(Object.entries(formObj($('#secLogFilters', main))).filter(([, v]) => v));
+    const r = await api('GET', '/api/admin/security/logs?' + q);
+    $('[data-log-count]', main).textContent = `${r.rows.length}${r.more ? '+' : ''}건`;
+    $('#secLogs', main).innerHTML = r.rows.length ? `<div class="table-wrap"><table class="grid sec-logs"><thead><tr><th>일시</th><th>이름</th><th>결과</th><th>IP</th><th>장소</th><th>기기</th></tr></thead><tbody>${r.rows.map(l => { const [t, c] = LOGIN_RESULT[l.result] || [l.result, '']; return `<tr><td>${esc(l.created_at.slice(0, 16))}</td><td>${esc(l.name)}${l.user_id ? '' : ' <span class="muted small">(없는 이름)</span>'}</td><td><span class="chip ${c}">${t}</span></td><td class="mono">${esc(l.ip || '')}</td><td>${esc(geoPlace(l))}</td><td title="${esc(l.ua)}">${esc(uaShort(l.ua))}</td></tr>`; }).join('')}</tbody></table></div>${r.more ? '<p class="small muted">최근 500건만 보입니다. 조건을 좁혀 보세요.</p>' : ''}` : '<div class="empty">조건에 맞는 로그인 기록이 없습니다.</div>';
+  };
+  drawGeo(); drawUsers(); await loadLogs();
+  let tm; $('#secLogFilters', main).addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(() => loadLogs().catch(fail), 250); });
+  $('#secLogFilters', main).addEventListener('submit', e => e.preventDefault());
+  main.addEventListener('change', e => {
+    const t = e.target;
+    if (t.matches('[data-geo-on]')) { policy.enabled = t.checked; drawGeo(); }
+    else if (t.matches('[data-geo-c]')) { const c = t.dataset.geoC; policy.countries = t.checked ? [...policy.countries, c] : policy.countries.filter(x => x !== c); drawGeo(); }
+    else if (t.matches('[data-geo-ex]')) { const id = Number(t.dataset.geoEx); policy.exempt_user_ids = t.checked ? [...policy.exempt_user_ids, id] : policy.exempt_user_ids.filter(x => x !== id); drawGeo(); }
+    else if (t.matches('[data-geo-unknown]')) policy.block_unknown = t.checked;
+  });
+  main.addEventListener('click', async e => {
+    if (e.target.closest('[data-geo-add]')) {
+      const inp = $('[data-geo-code]', main), c = inp.value.trim().toUpperCase();
+      if (!/^[A-Z]{2}$/.test(c) || geoName(c) === c && !GEO_COMMON.includes(c)) { toast('국가 코드는 영문 두 글자(예: BR = 브라질)로 넣으세요.', 'err'); inp.focus(); return; }
+      if (!policy.countries.includes(c)) policy.countries.push(c); drawGeo(); toast(`${geoName(c)}(${c})를 허용 국가에 넣었습니다. 「저장」을 눌러야 적용됩니다.`); return;
+    }
+    if (e.target.closest('[data-geo-save]')) {
+      try { const r = await api('PUT', '/api/admin/security/geo', policy); data.policy = r.policy; policy = { ...r.policy, countries: [...r.policy.countries], exempt_user_ids: [...r.policy.exempt_user_ids] }; drawGeo(); drawUsers(); toast(r.policy.enabled ? `국가별 접속 제한을 켰습니다: ${r.policy.countries.map(geoName).join(', ')}` : '국가별 접속 제한을 껐습니다.'); }
+      catch (err) { fail(err); }
+      return;
+    }
+    const lg = e.target.closest('[data-sec-logs]');
+    if (lg) { const f = $('#secLogFilters', main); f.user_id.value = lg.dataset.secLogs; await loadLogs().catch(fail); f.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
+  });
+}
+// 내 정보: 내 최근 로그인 10건(모르는 접속이 있으면 비밀번호를 바꾸게)
+async function meLoginsCard(host) {
+  if (!host) return;
+  try {
+    const r = await api('GET', '/api/me/logins');
+    host.innerHTML = `<h3>최근 로그인</h3>${r.rows.length ? `<div class="table-wrap"><table class="grid" data-no-filter><thead><tr><th>일시</th><th>결과</th><th>IP</th><th>장소</th><th>기기</th></tr></thead><tbody>${r.rows.map(l => { const [t, c] = LOGIN_RESULT[l.result] || [l.result, '']; return `<tr><td>${esc(l.created_at.slice(0, 16))}</td><td><span class="chip ${c}">${t}</span></td><td class="mono">${esc(l.ip || '')}</td><td>${esc(geoPlace(l))}</td><td>${esc(uaShort(l.ua))}</td></tr>`; }).join('')}</tbody></table></div><p class="small muted">모르는 접속이 있으면 아래에서 비밀번호를 바꾸고 관리자에게 알려 주세요.</p>` : '<p class="small muted">아직 기록이 없습니다.</p>'}`;
+  } catch { host.innerHTML = '<h3>최근 로그인</h3><p class="small muted">불러오지 못했습니다.</p>'; }
+}
