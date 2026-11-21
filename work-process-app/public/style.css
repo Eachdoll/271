@@ -4498,3 +4498,158 @@ td.nowrap .btn, td.nowrap label.btn { white-space: nowrap; }
 .qd-bulk .qd-move { display: flex; flex-direction: row; align-items: center; gap: 6px; font-weight: 600; }
 .qd-table .chk-col { width: 34px; text-align: center; }
 .stock-tree .st-set .btn + .btn { margin-left: 4px; }
+/* 15.334 교육 후 테스트 · 개인별 교육기록 */
+.tt-set { align-items: end; }
+.tt-q { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 0 0 10px; }
+.tt-q > legend { font-weight: 700; padding: 0 4px; }
+.tt-q-head { display: flex; gap: 10px; align-items: flex-start; }
+.tt-q-head .grow { flex: 1; }
+.tt-pts { width: 90px; flex: none; }
+.tt-opts { display: grid; gap: 6px; margin-top: 6px; }
+.tt-opt { display: flex; gap: 8px; align-items: center; }
+.tt-opt input[data-f="opt"] { flex: 1; min-width: 0; }
+.tt-ans { display: inline-flex !important; flex-direction: row !important; align-items: center; gap: 4px; white-space: nowrap; font-weight: 600; }
+.tt-ox-set { display: flex; gap: 14px; align-items: center; margin-top: 6px; }
+.tt-q-tools { display: flex; gap: 6px; justify-content: flex-end; margin-top: 8px; }
+.tt-take .tt-tq { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 0 0 10px; }
+.tt-take .tt-tq > legend { font-size: 16px; padding: 0 4px; line-height: 1.5; }
+.tt-choice { display: flex !important; flex-direction: row !important; align-items: center; gap: 10px; padding: 10px 12px; margin: 6px 0; border: 1.5px solid var(--line); border-radius: 10px; cursor: pointer; font-weight: 500 !important; }
+.tt-choice:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.tt-choice input { width: 20px; height: 20px; flex: none; margin: 0; }
+.tt-ox { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tt-ox .tt-choice { justify-content: center; font-size: 28px; font-weight: 800 !important; min-height: 64px; }
+.tt-take input[name^="a"]:not([type=radio]) { width: 100%; min-height: 46px; font-size: 16px; }
+.tt-timer { position: sticky; top: 0; z-index: 2; margin: 0 0 8px; padding: 8px 12px; border-radius: 10px; background: var(--bg); font-weight: 700; text-align: center; }
+.tt-timer-low { color: var(--red); background: var(--red-bg); }
+.tt-result { text-align: center; padding: 6px 4px; }
+.tt-score { display: inline-flex; align-items: baseline; gap: 4px; margin: 6px 0; }
+.tt-score b { font-size: 56px; line-height: 1; }
+.tt-pass h2 { color: var(--green); } .tt-fail h2 { color: var(--red); }
+.tt-result h2 { font-size: 28px; margin: 4px 0; }
+.tt-marks { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 12px 0; }
+.tt-marks span { display: inline-flex; flex-direction: column; align-items: center; min-width: 36px; padding: 4px 6px; border-radius: 8px; font-size: 12px; background: var(--bg); }
+.tt-marks span b { font-size: 16px; }
+.tt-marks .ok b { color: var(--green); } .tt-marks .no b { color: var(--red); }
+.tr-rec-tiles .ip-tile { cursor: default; }
+.tr-record h4 { margin: 14px 0 6px; }
+/* 15.335 연도 폴더 · 협력업체 연간 평가 캘린더 */
+.yr-tree .yr-now { font-size: 11px; color: var(--accent-ink, var(--accent)); font-weight: 700; margin-left: 4px; }
+.sp-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 8px; }
+.sp-wrap { overflow-x: auto; }
+.sp-cal { min-width: 980px; table-layout: fixed; }
+.sp-cal th, .sp-cal td { text-align: center; padding: 4px 3px; vertical-align: middle; }
+.sp-cal .sp-v { text-align: left; width: 150px; position: sticky; left: 0; background: var(--panel); z-index: 1; }
+.sp-cal th:last-child, .sp-cal td:last-child { width: 64px; }
+.sp-cal .sp-now { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.sp-chip { display: inline-flex; flex-direction: column; align-items: center; gap: 1px; width: 100%; padding: 3px 2px; margin: 1px 0; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font: inherit; font-size: 11.5px; line-height: 1.25; cursor: pointer; }
+.sp-legend .sp-chip { width: auto; flex-direction: row; padding: 2px 8px; cursor: default; }
+.sp-chip small { font-size: 10.5px; opacity: .85; }
+.sp-plan { border-style: dashed; }
+.sp-done { background: var(--green-bg); color: var(--green); border-color: transparent; font-weight: 700; }
+.sp-late { background: var(--red-bg); color: var(--red); border-color: transparent; font-weight: 700; }
+.sp-cancel { opacity: .5; text-decoration: line-through; }
+.sp-cum td { font-size: 11px; }
+.sp-bar { position: relative; height: 34px; margin: 0 auto 2px; width: 22px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.sp-bar i, .sp-bar b { position: absolute; bottom: 0; left: 0; right: 0; }
+.sp-bar i { background: color-mix(in srgb, var(--accent) 25%, transparent); }
+.sp-bar b { left: 5px; right: 5px; background: var(--green); border-radius: 2px 2px 0 0; }
+.sp-q { width: 100%; margin: 4px 0 8px; }
+.sp-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 2px 12px; max-height: 260px; overflow: auto; }
+.sp-pick label[hidden] { display: none; }
+form.list-filters [hidden], form.toolbar [hidden] { display: none !important; } /* 15.335 연도 폴더로 대신한 연도 칸 · 탭별 칸 숨김이 display 규칙에 묻히던 것 */
+
+/* 15.339 공무 오퍼레이터 점검표 */
+.op-seg { margin: 0 0 10px; }
+.op-check { border: 1.5px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 0; }
+.op-check > legend { font-weight: 700; font-size: 16px; padding: 0 4px; }
+.op-ok-ng { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0; }
+.op-ok-ng button { min-height: 54px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--panel); color: var(--text); font: inherit; font-size: 17px; font-weight: 800; cursor: pointer; }
+.op-check.is-ok { border-color: var(--green); } .op-check.is-ok .op-ok { background: var(--green-bg); color: var(--green); border-color: var(--green); }
+.op-check.is-ng { border-color: var(--red); } .op-check.is-ng .op-ng { background: var(--red-bg); color: var(--red); border-color: var(--red); }
+.op-check input[data-note] { width: 100%; min-height: 46px; }
+.op-allok { min-height: 48px; }
+
+/* 15.340 월별 불합격률 · 분류 폴더 */
+.tr-trend th, .tr-trend td { text-align: center; white-space: nowrap; }
+.tr-trend td:first-child, .tr-trend th:first-child { text-align: left; }
+.tr-trend td small { display: block; font-size: 11px; color: var(--muted); }
+.tr-trend td.tr-bad { color: var(--red); font-weight: 700; background: var(--red-bg); }
+.tr-trend td.tr-bad small { color: var(--red); }
+
+/* 15.341 문제은행 · 자격 시험 */
+.qb-pick { display: grid; gap: 4px; max-height: 50vh; overflow: auto; margin: 8px 0; }
+.qb-row { display: flex !important; flex-direction: row !important; align-items: baseline; gap: 6px; padding: 6px 8px; border-bottom: 1px dashed var(--line); font-weight: 400 !important; }
+.qb-cat { margin: 8px 0; } .qb-cat > summary { cursor: pointer; padding: 6px 0; }
+.tt-qual { padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 10%, transparent); font-weight: 600; }
+
+/* 15.342 분류 폴더: 긴 분류 이름(예: OEKO-TEX STANDARD 100)은 줄임표 대신 줄바꿈 */
+.cat-tree .st-node { white-space: normal; overflow: visible; overflow-wrap: anywhere; line-height: 1.35; }
+
+/* 15.343 환경점검 */
+.env-areas button { font-size: 1.02rem; }
+.env-datebar input[type=date] { min-width: 10.5em; }
+.env-sec { margin: 14px 0 22px; }
+.env-sec-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
+.env-sec-head h2 { margin: 0; font-size: 1.1rem; }
+.env-sign { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel, transparent); }
+.env-sign-boxes { display: flex; flex-wrap: wrap; gap: 6px; }
+.env-sign-box { display: grid; min-width: 92px; padding: 4px 10px; border: 1px dashed var(--line); border-radius: 10px; text-align: center; line-height: 1.3; }
+.env-sign-box.on { border-style: solid; border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.env-sign-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.env-out { color: var(--red) !important; font-weight: 700; }
+input.env-out { border-color: var(--red) !important; }
+.env-warn { color: var(--red); }
+.env-in-list { display: grid; gap: 8px; }
+.env-in { display: grid; grid-template-columns: minmax(140px, 1.4fr) minmax(90px, 1fr) minmax(90px, 1fr) auto; gap: 8px; align-items: end; padding: 8px; border: 1px solid var(--line); border-radius: 10px; }
+.env-in.env-bad { border-color: var(--red); }
+.env-in-name { display: grid; align-self: center; }
+.env-in .env-act { grid-column: 1 / -1; }
+.env-skip { align-self: center; white-space: nowrap; }
+.env-clean { margin: 0; padding-left: 1.4em; display: grid; gap: 6px; }
+.env-ci { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+.env-ci-t { flex: 1 1 200px; }
+.env-ox { display: inline-flex; gap: 4px; }
+.env-ox-b { display: inline-flex !important; flex-direction: row !important; margin: 0 !important; }
+.env-ox-b input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.env-ox-b span { display: inline-flex; align-items: center; gap: 4px; min-height: 40px; min-width: 64px; justify-content: center; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; font-weight: 700; }
+.env-ox-b small { font-weight: 400; }
+.env-ox-b input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.env-ox-b.vO input:checked + span { background: color-mix(in srgb, #2e7d32 18%, transparent); border-color: #2e7d32; }
+.env-ox-b.vX input:checked + span { background: color-mix(in srgb, #c62828 18%, transparent); border-color: #c62828; }
+.env-ox-b.vn input:checked + span { background: color-mix(in srgb, var(--muted, #888) 22%, transparent); border-color: var(--muted, #888); }
+.env-ox-b input:disabled + span { opacity: .55; cursor: default; }
+.env-ci-edit { margin: 6px 0; padding-left: 1.6em; display: grid; gap: 4px; }
+.env-ci-edit li { display: flex; gap: 4px; align-items: center; }
+.env-ci-edit li input { flex: 1; min-width: 0; }
+.env-months { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+.env-mon { display: inline-grid; justify-items: center; min-width: 54px; min-height: 40px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 10px; background: none; color: var(--text); cursor: pointer; font: inherit; }
+.env-mon small { font-size: .72rem; color: var(--muted); }
+.env-mon.ok { border-color: #2e7d32; }
+.env-mon.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.env-mon.on small { color: inherit; }
+.env-month td, .env-month th { white-space: nowrap; }
+.env-we { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.env-cs td.c, .env-cs th.c { text-align: center; min-width: 26px; padding-left: 2px; padding-right: 2px; }
+.env-cs-sign td { font-size: .75rem; }
+.env-print .rpt-list { font-size: 9pt; }
+@media (max-width: 700px) {
+  .env-in { grid-template-columns: 1fr 1fr; }
+  .env-in-name, .env-skip { grid-column: 1 / -1; }
+  .env-sign-btns { margin-left: 0; }
+  .env-sign-box { min-width: 80px; }
+}
+.seg[hidden], .q-tabs[hidden] { display: none !important; }
+
+/* 15.344 휴무일·비가동 빗금 음영 */
+.env-hatch, tr.env-hatch > td, td.env-hatch, th.env-hatch { background-image: repeating-linear-gradient(135deg, color-mix(in srgb, var(--muted) 30%, transparent) 0 1.5px, transparent 1.5px 7px) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+tr.env-hatch > td { color: var(--muted); }
+.env-off-t { color: var(--muted); font-weight: 600; }
+.env-rest { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 12px; }
+.env-rest.env-work { border-style: solid; border-color: color-mix(in srgb, #f59e0b 55%, var(--line)); }
+.env-hol { color: var(--red); font-weight: 600; }
+.env-cs th.env-hol-h { color: var(--red); }
+.env-cs th small { font-weight: 400; color: var(--muted); }
+
+/* 15.345 점검 조건 켜기/끄기 */
+.env-cond { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 10px; }
+.env-cond label.chk { display: inline-flex !important; flex-direction: row !important; align-items: center; gap: 6px; margin: 0; font-weight: 600; }

@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.333';
+const APP_VERSION = '15.345';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -68,8 +68,8 @@ const searchKey = s => String(s ?? '').normalize('NFC').toLowerCase().replace(/\
 const sumLine = parts => `<div class="list-sum" role="status">${parts.filter(p => p && p[1] !== '' && p[1] != null).map(([k, v]) => `<span><span>${esc(k)}</span> <b>${v}</b></span>`).join('')}</div>`;
 
 // 표 머리글용 짧은 이름(15.63): 긴 이름은 머리글 title·체크박스 aria-label로 그대로 보여 준다.
-const ROLE_SHORT = { operator: '생산 오퍼레이터', operator_logistics: '물류 오퍼레이터', purchase: '구매', quality: '품질', quality_approver: '품질책임자', dev: '개발', dev_approver: '개발책임자', production: '생산', production_approver: '생산팀장', logistics: '물류', logistics_approver: '물류팀장', sales: '영업' };
-const ROLE_LABEL = { operator: '생산 오퍼레이터(실적 입력 전용)', operator_logistics: '물류 오퍼레이터(입고·출하 입력 전용)', purchase: '구매', quality: '품질', quality_approver: '품질책임자(승인권자)', dev: '개발(연구소)', dev_approver: '개발책임자(승인권자)', production: '생산', production_approver: '생산팀장(실적 수정 승인)', logistics: '물류', logistics_approver: '물류팀장(입고 수량 수정 승인)', sales: '영업(수주·매출전표·입금)' };
+const ROLE_SHORT = { operator: '생산 오퍼레이터', operator_logistics: '물류 오퍼레이터', operator_maint: '공무 오퍼레이터', purchase: '구매', quality: '품질', quality_approver: '품질책임자', dev: '개발', dev_approver: '개발책임자', production: '생산', production_approver: '생산팀장', logistics: '물류', logistics_approver: '물류팀장', sales: '영업' };
+const ROLE_LABEL = { operator: '생산 오퍼레이터(실적 입력 전용)', operator_logistics: '물류 오퍼레이터(입고·출하 입력 전용)', operator_maint: '공무 오퍼레이터(설비 점검·고장 신고 전용)', purchase: '구매', quality: '품질', quality_approver: '품질책임자(승인권자)', dev: '개발(연구소)', dev_approver: '개발책임자(승인권자)', production: '생산', production_approver: '생산팀장(실적 수정 승인)', logistics: '물류', logistics_approver: '물류팀장(입고 수량 수정 승인)', sales: '영업(수주·매출전표·입금)' };
 const STATUS = { pending: '접수대기', rejected: '반려', waiting: '대기', progress: '진행', done: '완료' };
 const RECV = { '': '미입고', ok: '입고완료', mismatch: '수량상이', checking: '확인중' };
 
@@ -400,6 +400,7 @@ const NAV = [
     { sub: '반제품 생산', items: [['#/prod/semi', '반제품 생산 관리'], ['#/prod/semi/cut', '커팅/융착 작업 관리'], ['#/prod/semi/wash', '세탁(호기별) 작업 관리']] },
     ['#/prod/lot-trace', 'LOT 연결 조회'], // 15.249 완제품 ↔ 봉투(반제품) ↔ 원자재 LOT
     { sub: '공무', items: [['#/prod/equipment', '설비 대장·이력'], ['#/prod/pm', '예방보전(PM) 일정']] }, // 15.307 생산설비·예방보전
+    ['#/prod/env', '환경점검(온습도·청소)'], // 15.343 창고·라인 구역별 일일 점검일지 + 결재
     { sub: '위험성평가', items: [['#/prod/risk', '위험성평가(KOSHA·FMEA·HAZOP)'], ['#/prod/risk/actions', '개선 조치 추적'], ['#/prod/reliability', '설비 신뢰도(MTBF·MTTR)']] }, // 15.313
   ] },
   { group: '물류', items: [
@@ -686,6 +687,7 @@ const PAGES = {
   '#/prod/lot-trace': main => pageLotTrace(main), // 15.249
   '#/prod/equipment': main => pageEquipment(main), // 15.307 공무
   '#/prod/pm': main => pagePm(main), // 15.307 공무
+  '#/prod/env': main => pageEnv(main), // 15.343 환경점검
   '#/prod/risk': main => pageRiskAssess(main), // 15.313 위험성평가
   '#/prod/risk/actions': main => pageRiskActions(main),
   '#/prod/reliability': main => pageReliability(main),
@@ -797,15 +799,17 @@ const PROCESS_FLOWS = [
   // 15.309 품질 1~4단계 흐름: 부적합은 CAPA 한 곳으로 모여 변경·문서·교육·밸리데이션으로 닫히고, LOT는 출하검사 합격 → COA로 이어진다.
   { key: 'capa', name: '부적합 개선(CAPA)', steps: [['#/quality/capa', '부적합·CAPA'], ['#/quality/changes', '변경관리'], ['#/quality/docs', '문서 개정'], ['#/quality/training', '개정 교육'], ['#/quality/validation', '재밸리데이션']] },
   { key: 'coa', name: 'LOT별 COA', on: ['#/quality/coa'], steps: [['#/prod/finished', '생산실적'], ['#/quality/list', '출하검사'], ['#/quality/coa', 'COA 발행·승인'], ['#/logistics/ship', '출하']] },
-  { key: 'supplier', name: '협력업체 품질', on: ['#/quality/suppliers'], steps: [['#/logistics/receive', '입고'], ['#/quality/inspections', '수입검사·공급사 COA'], ['#/quality/suppliers', '협력업체 평가'], ['#/quality/changes', '업체 변경점']] },
+  { key: 'supplier', name: '협력업체 품질', on: ['#/quality/suppliers'], steps: [['#/logistics/receive', '입고'], ['#/quality/inspections', '수입검사·공급사 COA'], ['#/quality/suppliers', '연간 평가계획·유효성평가'], ['#/quality/audits', '협력사 현장심사'], ['#/quality/capa', '지적 → CAPA'], ['#/quality/changes', '업체 변경점']] }, // 15.342 평가계획 ↔ 현장심사(심사 실시 → 계획 자동 실시)
   { key: 'pqc', name: '공정품질', on: ['#/quality/pqc'], steps: [['#/quality/pqc', '공정·환경 측정·SPC'], ['#/quality/capa', '이상발생 → CAPA'], ['#/quality/changes', '공정 변경']] },
-  { key: 'plant', name: '설비·예방보전', on: ['#/prod/equipment', '#/prod/pm'], steps: [['#/prod/equipment', '설비 등록·PM 항목'], ['#/prod/pm', 'PM 일정·수행'], ['#/prod/reliability', '신뢰도(MTBF·MTTR)'], ['#/quality/validation', '설비 적격성(IQ·OQ·PQ)']] }, // 15.316 신뢰도 단계
+  { key: 'env', name: '환경점검(창고·라인)', on: ['#/prod/env'], steps: [['#/prod/env', '구역 설정(기준 온습도·청소 항목)'], ['#/prod/env', '일일 온습도(오전·오후)·청소 체크(작업자·오퍼레이터)'], ['#/prod/env', '확인 → 승인(결재)'], ['#/quality/capa', '기준 이탈·청소 불량 → CAPA'], ['#/quality/audits', '내부심사(점검일지 확인)']] }, // 15.343
+  { key: 'plant', name: '설비·예방보전', on: ['#/prod/equipment', '#/prod/pm'], steps: [['#/prod/equipment', '설비 등록·PM 항목'], ['#/prod/pm', '연간 PM 캘린더·점검(공무 오퍼레이터)'], ['#/quality/capa', '점검 이상·고장 → CAPA'], ['#/prod/reliability', '신뢰도(MTBF·MTTR)'], ['#/quality/validation', '설비 적격성(IQ·OQ·PQ)']] }, // 15.342
   // 15.316 위험성평가는 안전(KOSHA)과 설비·공정(FMEA·HAZOP) 두 흐름으로 나눔(같은 화면에서 위 칩으로 바꿔 봄). 안전은 지정 담당자(15.314)에서 시작해 교육으로 닫힌다.
   { key: 'org', name: '조직 · 담당', on: ['#/admin/org', '#/admin/org/chart', '#/admin/org/duties'], steps: [['#/admin/org', '부서·직급'], ['#/admin/org/chart', '조직도'], ['#/admin/org/duties', '지정 담당자'], ['#/admin/users/roles', '사용 권한']] },
   { key: 'safety', name: '안전보건 위험성평가', on: ['#/prod/risk', '#/prod/risk/actions', '#/admin/org/duties'], steps: [['#/admin/org/duties', '안전보건 담당 지정'], ['#/prod/risk', '위험성평가 작성·승인'], ['#/prod/risk/actions', '감소대책·재평가'], ['#/quality/training', '근로자 교육·공유']] },
   { key: 'risk', name: '설비·공정 FMEA', on: ['#/prod/reliability', '#/prod/risk', '#/prod/risk/actions'], steps: [['#/prod/equipment', '설비 고장 이력'], ['#/prod/reliability', '설비 신뢰도'], ['#/prod/risk', 'FMEA·HAZOP 작성·승인'], ['#/prod/risk/actions', '권고 조치'], ['#/quality/capa', 'CAPA'], ['#/quality/changes', '변경관리']] }, // 15.313
   { key: 'method', name: '시험·측정', on: ['#/quality/calibration', '#/quality/methods'], steps: [['#/quality/calibration', '계측기 검교정'], ['#/quality/methods', '시험법·신뢰성'], ['#/quality/validation', '시험법 밸리데이션']] },
-  { key: 'audit', name: '심사·인증', on: ['#/quality/audits', '#/quality/certs'], steps: [['#/quality/audits', '심사 계획·실시'], ['#/quality/capa', '지적 → CAPA'], ['#/quality/certs', '인증 유지']] },
+  { key: 'audit', name: '심사·인증', on: ['#/quality/audits', '#/quality/certs'], steps: [['#/quality/audits', '연간 심사 프로그램·실시'], ['#/quality/capa', '지적 → CAPA'], ['#/quality/suppliers', '협력사 심사 → 평가계획 실시'], ['#/quality/certs', '인증 유지·갱신']] }, // 15.342
+  { key: 'edu', name: '교육 · 자격', on: ['#/quality/training'], steps: [['#/admin/org/duties', '지정 담당(법정교육)'], ['#/quality/docs', '문서 제·개정'], ['#/quality/training', '연간 교육·테스트·자격 시험'], ['#/quality/audits', '내부심사(교육·자격 기록 확인)']] }, // 15.342 테스트 합격 → 이수·참석, 자격 시험 합격 → 자격 부여, 만료 90일 → 재교육 계획
   { key: 'qm', name: '품질경영(목표 → 점검 → 개선)', on: ['#/quality/kpi', '#/quality/risks'], steps: [['#/quality/kpi', '품질목표·KPI'], ['#/quality/risks', '리스크 관리'], ['#/quality/audits', '내부심사'], ['#/quality/capa', '개선(CAPA)']] },
   { key: 'semi', name: '반제품 · 포장 생산', steps: [['#/prod/semi', '반제품 계획'], ['#/prod/semi/cut', '커팅/융착'], ['#/prod/semi/wash', '세탁'], ['#/prod/finished', '포장(완제품 실적)'], ['#/logistics/ship', '출하']] },
   // 15.316 연구소: 개발의뢰부터 일정·분석·개발원가·지식재산까지, 조직: 부서 → 조직도 → 지정 담당자 → 사용 권한
@@ -1371,7 +1375,7 @@ function taskTotal(tasks) {
   for (const [type, group] of Object.entries(a.requests)) add(group.count, REQ[type].approve || REQ[type].intake);
   add(a.actual_changes?.count, '#/prod/finished'); add(a.receipt_changes?.count, '#/logistics/receive'); add(a.semi_changes?.count, '#/prod/semi');
   add(a.plans_waiting?.count, '#/prod/finished/plan'); add(a.production_requests?.count, '#/prod/orders'); add(a.purchase_requests?.count, '#/sales/pr'); add(a.purchase_orders_waiting?.count, '#/purchase/po/new');
-  for (const q of a.quality || []) add(q.count, q.href); add(a.training_attend?.count, '#/quality/training'); // 15.309
+  for (const q of a.quality || []) add(q.count, q.href); add(a.training_attend?.count, '#/quality/training'); add(a.training_test?.count, '#/quality/training'); add(a.pm_issue?.count, '#/prod/pm'); // 15.309 · 15.334 · 15.339
   return n;
 }
 function taskBadgeCounts(tasks) {
@@ -1390,6 +1394,8 @@ function taskBadgeCounts(tasks) {
   if (a.ship_instructions?.count) counts['#/logistics/ship-orders'] = a.ship_instructions.count;
   for (const q of a.quality || []) counts[q.href] = (counts[q.href] || 0) + q.count; // 15.309 품질 승인 대기
   if (a.training_attend?.count) counts['#/quality/training'] = (counts['#/quality/training'] || 0) + a.training_attend.count;
+  if (a.training_test?.count) counts['#/quality/training'] = (counts['#/quality/training'] || 0) + a.training_test.count; // 15.334
+  if (a.pm_issue?.count) counts['#/prod/pm'] = (counts['#/prod/pm'] || 0) + a.pm_issue.count; // 15.339
   return counts;
 }
 async function refreshNavBadges() {
@@ -1422,6 +1428,8 @@ function tasksCard(tasks) {
   if (a.purchase_orders_waiting?.count) todo.push(`<li><a href="#/purchase/po/new"><b>발주 대기 구매의뢰 ${a.purchase_orders_waiting.count}건</b></a><div class="small muted">${a.purchase_orders_waiting.items.map(r => `<button type="button" class="link-btn" data-task-pr="${r.id}">${esc(r.doc_no)}</button> ${esc(r.title || r.first_item || '')} · ${esc(r.author_name)}`).join(' / ')}${more(a.purchase_orders_waiting.count, a.purchase_orders_waiting.items.length)}</div></li>`);
   for (const q of a.quality || []) todo.push(`<li><a href="${q.href}"><b>${esc(q.label)} ${q.count}건</b></a>${['coa', 'docs'].includes(q.key) && q.count > 1 ? ` <button type="button" class="btn small" data-bulk="${q.key}">한꺼번에 승인</button>` : ''}</li>`); // 15.309 품질 승인·처리 대기 · 15.312 일괄 승인
   if (a.training_attend?.count) todo.push(`<li><a href="#/quality/training"><b>교육 참석 확인 ${a.training_attend.count}건</b></a><div class="small muted">${a.training_attend.items.map(t => `${esc(t.plan_date)} ${esc(t.title)}`).join(' / ')} — 교육·자격관리에서 「참석 확인」을 누르세요.</div></li>`);
+  if (a.training_test?.count) todo.push(`<li><a href="#/quality/training"><b>교육 테스트 응시 ${a.training_test.count}건</b></a><div class="small muted">${a.training_test.items.map(t => `${esc(t.plan_date)} ${esc(t.title)}`).join(' / ')} — 교육·자격관리에서 「📝 테스트 응시」를 누르세요.</div></li>`); // 15.334
+  if (a.pm_issue?.count) todo.push(`<li><a href="#/prod/pm"><b>설비 점검 이상·고장 ${a.pm_issue.count}건</b></a><div class="small muted">${a.pm_issue.items.map(t => `${esc(t.log_date)} ${esc(t.equip_no)} ${esc(t.kind === 'failure' ? '고장' : t.pm_name + ' 이상')}`).join(' / ')} — 설비 이력에서 수리 기록 또는 부적합·CAPA로 처리하세요.</div></li>`); // 15.339
   if (a.temp_items?.count) todo.push(`<li><a href="#/admin/bom"><b>임시 제품코드 정리 ${a.temp_items.count}건</b></a><div class="small muted">직접 입력된 품목에 정식 코드를 주거나 기존 품목으로 합치세요.</div></li>`);
   const state = c => `<span class="chip ${c.status === 'rejected' ? 'red' : 'yellow'}">${c.status === 'rejected' ? '반려' : '승인 대기'}</span>`;
   for (const r of m.requests) mine.push(`<li>${state(r)} <a href="${REQ[r.type].intake}">${esc(REQ[r.type].label)} · ${esc(r.title)}</a>${r.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(r.reject_reason)} (${esc(r.approver_name || '')}) · 수정하면 다시 접수됩니다.</div>` : ''}</li>`);
@@ -1429,7 +1437,7 @@ function tasksCard(tasks) {
   for (const c of m.semi_changes || []) mine.push(`<li>${state(c)} <a href="${c.process === 'wash' ? '#/prod/semi/wash' : '#/prod/semi/cut'}">반제품 기록</a> <span class="small">${semiChangeText(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
   for (const r of m.purchase_requests || []) mine.push(`<li>${state(r)} <a href="#/sales/pr">구매의뢰 · ${esc(r.doc_no)} ${esc(r.title || r.first_item || '')}</a>${r.status === 'pending' && r.current_user_name ? ` <span class="small muted">${esc(r.current_user_name)} 결재 차례</span>` : ''}${r.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(r.reject_reason)} (${esc(r.rejected_by || '')}) · 고쳐서 다시 상신하세요.</div>` : ''}</li>`);
   for (const c of m.receipt_changes) mine.push(`<li>${state(c)} <a href="#/logistics/receive">입고 · ${esc(c.item)}</a> <span class="small">${receiptChangeText(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
-  const canApprove = Object.keys(a.requests).length || a.actual_changes || a.receipt_changes || a.semi_changes || a.temp_items || a.purchase_requests || a.production_requests || a.purchase_orders_waiting || a.plans_waiting || a.quality || a.training_attend; // 15.309
+  const canApprove = Object.keys(a.requests).length || a.actual_changes || a.receipt_changes || a.semi_changes || a.temp_items || a.purchase_requests || a.production_requests || a.purchase_orders_waiting || a.plans_waiting || a.quality || a.training_attend || a.training_test || a.pm_issue; // 15.309 · 15.334 · 15.339
   return `<section class="card tasks" aria-labelledby="dashTasks"><h2 id="dashTasks">내가 처리할 일 ${typeof Notification !== 'undefined' ? `<button type="button" class="btn small notify-btn" data-notify title="새 승인 대기·기한 알림을 컴퓨터·휴대폰 알림으로(앱이 열려 있는 동안)">${notifyOn() ? '🔔 알림 켜짐' : '🔕 알림 받기'}</button>` : ''}</h2><div class="tasks-grid">
     ${canApprove ? `<section><h3>승인할 일 ${todo.length ? `<span class="chip yellow">${todo.length}</span>` : ''}</h3>${todo.length ? `<ul>${todo.join('')}</ul>` : '<p class="small muted">승인 대기 중인 건이 없습니다.</p>'}</section>` : ''}
     <section><h3>내가 올린 요청 ${mine.length ? `<span class="chip">${mine.length}</span>` : ''}</h3>${mine.length ? `<ul>${mine.join('')}</ul>` : '<p class="small muted">대기 중이거나 최근 반려된 요청이 없습니다.</p>'}</section>

@@ -801,7 +801,8 @@ async function pageIpRights(main) {
   </form>
   <div id="ipList"></div>`;
   const form = $('#ipFilters', main); let data = { rows: [], can_manage: false, today: todayStr() };
-  const load = async () => { data = await api('GET', '/api/ip-rights'); if (main.isConnected) draw(); };
+  const ipRail = selectRail(main, form, 'kind', { title: '구분', icon: '💡', counts: () => countBy((typeof data !== 'undefined' && data.rows) || [], r => r.kind) }); // 15.340
+  const load = async () => { data = await api('GET', '/api/ip-rights'); if (main.isConnected) { ipRail.draw(); draw(); } };
   const dueCls = r => { const d = ipDday(r.next_due, data.today); return d === null || !['registered', 'filed', 'exam'].includes(r.status) ? '' : d < 0 ? 'over' : d <= 90 ? 'soon' : ''; };
   const live = r => !['rejected', 'abandoned', 'expired'].includes(r.status);
   const filtered = () => { const v = formObj(form), q = (v.q || '').trim().toLowerCase();
@@ -923,7 +924,8 @@ async function pageCerts(main) {
   </form>
   <div id="ctList"></div>`;
   const form = $('#ctFilters', main); let data = { rows: [], can_manage: false, today: todayStr() };
-  const load = async () => { data = await api('GET', '/api/certs'); if (main.isConnected) draw(); };
+  const ctRail = selectRail(main, form, 'kind', { title: '인증 종류', icon: '🏅', counts: () => countBy(data.rows, r => r.kind) }); // 15.340
+  const load = async () => { data = await api('GET', '/api/certs'); if (main.isConnected) { ctRail.draw(); draw(); } };
   const live = r => ['valid', 'suspended', 'prep'].includes(r.status);
   const firstDue = r => [r.next_audit, r.expire_date].filter(Boolean).sort()[0] || null; // 심사·만료 중 먼저 오는 것
   const dueCls = r => { const d = ipDday(firstDue(r), data.today); return d === null || !live(r) ? '' : d < 0 ? 'over' : d <= 90 ? 'soon' : ''; };
@@ -1210,13 +1212,14 @@ async function pageCoa(main) {
   main.innerHTML = `<h1>COA 발행 <span class="dept">품질</span></h1>
   <p class="muted">완제품·상품 <b>LOT마다 시험성적서(COA)</b>를 만듭니다. 그 LOT의 출하검사(없으면 공정·의뢰검사) 측정값을 그대로 옮기고, 품질책임자가 승인하면 발행(인쇄·PDF)됩니다. 승인 뒤 고치면 Rev가 올라 다시 승인합니다. 출하검사 창의 「COA 발행」으로도 바로 만들 수 있습니다.</p>
   <div class="ip-tiles" id="coaTiles"></div>
-  <form class="toolbar list-filters" data-read-only id="coaFilters"><label class="lf-sel">상태<select name="status"><option value="">전체</option>${Object.entries(COA_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="list-search">찾기<input type="search" name="q" placeholder="발행번호·LOT·품목·고객사"></label><span class="grow"></span><span id="coaTools" class="ip-tools"></span></form>
+  <form class="toolbar list-filters" data-read-only id="coaFilters"><label class="lf-sel">연도<select name="year"><option>${todayStr().slice(0, 4)}</option></select></label><label class="lf-sel">상태<select name="status"><option value="">전체</option>${Object.entries(COA_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="list-search">찾기<input type="search" name="q" placeholder="발행번호·LOT·품목·고객사"></label><span class="grow"></span><span id="coaTools" class="ip-tools"></span></form>
   <div id="coaList"></div>`;
   const form = $('#coaFilters', main); let data = { rows: [] };
-  const load = async () => { const v = formObj(form); data = await api('GET', '/api/coas?' + new URLSearchParams(Object.entries(v).filter(([, x]) => x))); if (main.isConnected) draw(); };
+  const rail = yearRail(main, form, { title: '연도 폴더', counts: () => Object.fromEntries(Object.entries(data.rows.reduce((m, r) => { const y = String(r.created_at || '').slice(0, 4); if (y) m[y] = (m[y] || 0) + 1; return m; }, {}))) }); // 15.336
+  const load = async () => { const v = formObj(form); delete v.year; data = await api('GET', '/api/coas?' + new URLSearchParams(Object.entries(v).filter(([, x]) => x))); if (!main.isConnected) return; yearOptions(form.elements.year, data.rows.map(r => String(r.created_at).slice(0, 4)), todayStr().slice(0, 4), true); rail.draw(); draw(); };
   main.coaReload = () => load().catch(fail);
   const draw = () => {
-    const rows = data.rows;
+    const yv = form.elements.year.value, rows = data.rows.filter(r => !yv || String(r.created_at).startsWith(yv)); // 15.336
     $('#coaTiles', main).innerHTML = [['전체', rows.length, ''], ['승인 대기', rows.filter(r => r.status === 'draft').length, rows.some(r => r.status === 'draft') ? 'yellow' : ''], ['발행', rows.filter(r => r.status === 'approved').length, 'green'], ['무효', rows.filter(r => r.status === 'void').length, '']].map(([l, n, c], i) => `<button type="button" class="ip-tile ${c}" data-coa-tile="${i}"><span>${l}</span><b>${n}</b></button>`).join('');
     $('#coaTools', main).innerHTML = data.can_manage ? '<button type="button" class="btn primary" id="coaNewBtn">＋ LOT로 COA 작성</button>' : '';
     $('#coaList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>발행번호</th><th>LOT</th><th>품목</th><th>고객사</th><th>제조일</th><th>유효기간</th><th>근거</th><th>상태</th><th>승인</th><th></th></tr></thead><tbody>${rows.map(r => `<tr data-coa-row="${r.id}"${r.status === 'void' ? ' class="row-off"' : ''}><td class="nowrap" data-card-primary><b>${esc(r.coa_no)}</b>${r.rev ? ` <span class="chip">Rev.${r.rev}</span>` : ''}</td><td class="nowrap">${esc(r.lot)}</td><td>${esc(r.item)}${r.product_code ? `<div class="small muted">${esc(r.product_code)}</div>` : ''}</td><td>${esc(r.customer)}</td><td class="nowrap">${esc(r.mfg_date || '')}</td><td class="nowrap">${esc(r.exp_date || '')}</td><td class="small">${esc(r.source_no)}</td><td><span class="chip ${COA_STATUS_CHIP[r.status] || ''}">${esc(COA_STATUS_LABEL[r.status] || r.status)}</span></td><td class="small">${esc(r.approved_by || '')}${r.approved_at ? `<div class="muted">${esc(String(r.approved_at).slice(0, 10))}</div>` : ''}</td><td><button type="button" class="btn small" data-coa-open="${r.id}">열기</button></td></tr>`).join('')}</tbody></table></div>`
@@ -1244,7 +1247,7 @@ async function ncNew(pre = {}) {
     <label>유형<select name="kind">${['OOS', 'OOT', '공정 이상', '고객 불만', '심사 지적', '기타'].map(k => `<option${(pre.kind || 'OOS') === k ? ' selected' : ''}>${k}</option>`).join('')}</select></label>
     <label>등급<select name="grade">${Object.entries(NC_GRADE_LABEL).map(([k, l]) => `<option value="${k}"${k === 'minor' ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
     <label class="span3">부적합 내용(제목) *<input name="title" required maxlength="200" value="${esc(pre.title || '')}"></label>
-    <label class="span3">상세<textarea name="detail" rows="2" maxlength="2000" placeholder="무엇이 규격·기준을 벗어났는지(측정값·수량·발견 경위)"></textarea></label>
+    <label class="span3">상세<textarea name="detail" rows="2" maxlength="2000" placeholder="무엇이 규격·기준을 벗어났는지(측정값·수량·발견 경위)">${esc(pre.detail || '')}</textarea></label>
     <label>품목<input name="item" maxlength="200" value="${esc(pre.item || '')}"></label><label>LOT<input name="lot" maxlength="100" value="${esc(pre.lot || '')}"></label><label>수량<input type="number" step="any" name="qty"></label>
     <label>발생일 *<input type="date" name="found_date" required value="${todayStr()}"></label><label>담당자<input name="owner_name" maxlength="50" value="${esc(ME?.name || '')}"></label><label>조치 기한 <span class="hint">(기본 30일)</span><input type="date" name="due_date" value="${due}"></label>
     <label class="span3">즉시 조치(격리·선별 등)<input name="containment" maxlength="1000" placeholder="예) 해당 LOT 출하 보류·격리, 재고 전수 선별"></label></div>`, { wide: true,
@@ -1292,17 +1295,18 @@ async function pageNcs(main) {
   main.innerHTML = `<h1>부적합·CAPA <span class="dept">품질</span></h1>
   <p class="muted">수입·출하검사 불합격, 분석 불합격, 공정 이상, 고객 불만(VOC), 심사 지적을 한곳에 모아 <b>등록 → 원인분석 → 조치 → 유효성검증 → 종결</b>로 관리합니다. 검사·분석·VOC 창의 「CAPA 등록」으로도 바로 등록됩니다. 종결은 유효성검증이 「유효」일 때 품질책임자가 합니다.</p>
   <div class="ip-tiles" id="ncTiles"></div>
-  <form class="toolbar list-filters" data-read-only id="ncFilters"><label class="lf-sel">단계<select name="st"><option value="live">진행 중(종결·취소 빼고)</option><option value="">전체</option>${Object.entries(NC_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">출처<select name="src"><option value="">전체</option>${Object.entries(NC_SOURCE_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="list-search">찾기<input type="search" name="q" placeholder="번호·내용·품목·LOT·출처 번호·담당"></label><span class="grow"></span><span id="ncTools" class="ip-tools"></span></form>
+  <form class="toolbar list-filters" data-read-only id="ncFilters"><label class="lf-sel">연도<select name="year"><option value="" selected>전체</option></select></label><label class="lf-sel">단계<select name="st"><option value="live">진행 중(종결·취소 빼고)</option><option value="">전체</option>${Object.entries(NC_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">출처<select name="src"><option value="">전체</option>${Object.entries(NC_SOURCE_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="list-search">찾기<input type="search" name="q" placeholder="번호·내용·품목·LOT·출처 번호·담당"></label><span class="grow"></span><span id="ncTools" class="ip-tools"></span></form>
   <div id="ncList"></div>`;
   const form = $('#ncFilters', main); let data = { rows: [], today: todayStr() };
-  const load = async () => { data = await api('GET', '/api/ncs'); if (main.isConnected) draw(); };
+  const rail = yearRail(main, form, { title: '연도 폴더', counts: () => Object.fromEntries(Object.entries(data.rows.reduce((m, r) => { const y = String(r.found_date || '').slice(0, 4); if (y) m[y] = (m[y] || 0) + 1; return m; }, {}))) }); // 15.335
+  const load = async () => { data = await api('GET', '/api/ncs'); if (!main.isConnected) return; yearOptions(form.elements.year, data.rows.map(r => String(r.found_date).slice(0, 4)), '', true); rail.draw(); draw(); }; // 15.337 CAPA는 지난해 미결도 보이게 기본 「전체 연도」
   main.ncReload = () => load().catch(fail);
   const live = r => !['closed', 'void'].includes(r.status), over = r => live(r) && r.due_date && r.due_date < data.today;
   const draw = () => {
     const v = formObj(form), q = (v.q || '').trim().toLowerCase(), all = data.rows;
     $('#ncTiles', main).innerHTML = [['진행 중', all.filter(live).length, ''], ['기한 지남', all.filter(over).length, all.some(over) ? 'red' : ''], ['원인분석', all.filter(r => r.status === 'analysis').length, ''], ['조치', all.filter(r => r.status === 'action').length, ''], ['유효성검증', all.filter(r => r.status === 'verify').length, ''], ['종결', all.filter(r => r.status === 'closed').length, 'green']].map(([l, n, c], i) => `<button type="button" class="ip-tile ${c}" data-nc-tile="${i}"><span>${l}</span><b>${n}</b></button>`).join('');
     $('#ncTools', main).innerHTML = data.can_manage ? '<button type="button" class="btn primary" id="ncNewBtn">＋ 부적합 등록</button>' : '';
-    const rows = all.filter(r => (v.st === 'live' ? live(r) : !v.st || r.status === v.st) && (!v.src || r.source_type === v.src) && (!q || [r.nc_no, r.title, r.item, r.lot, r.source_no, r.owner_name].join(' ').toLowerCase().includes(q)));
+    const rows = all.filter(r => (!v.year || String(r.found_date).startsWith(v.year)) && (v.st === 'live' ? live(r) : !v.st || r.status === v.st) && (!v.src || r.source_type === v.src) && (!q || [r.nc_no, r.title, r.item, r.lot, r.source_no, r.owner_name].join(' ').toLowerCase().includes(q)));
     $('#ncList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>번호</th><th>출처</th><th>유형 · 등급</th><th>부적합 내용</th><th>품목 · LOT</th><th>발생일</th><th>담당</th><th>조치 기한</th><th>단계</th><th></th></tr></thead><tbody>${rows.map(r => { const d = r.due_date && live(r) ? ipDday(r.due_date, data.today) : null, cls = d === null ? '' : d < 0 ? 'over' : d <= 7 ? 'soon' : '';
       return `<tr data-nc-row="${r.id}" class="${cls ? 'ip-' + cls : ''}${r.status === 'void' ? ' row-off' : ''}"><td class="nowrap" data-card-primary><b>${esc(r.nc_no)}</b></td><td>${esc(r.source_label)}${r.source_no ? `<div class="small muted">${esc(r.source_no)}</div>` : ''}</td><td class="nowrap">${esc(r.kind)} <span class="chip ${r.grade === 'critical' ? 'red' : r.grade === 'major' ? 'yellow' : ''}">${esc(r.grade_label)}</span></td><td><b>${esc(r.title)}</b></td><td>${esc(r.item)}${r.lot ? `<div class="small muted">${esc(r.lot)}</div>` : ''}</td><td class="nowrap">${esc(r.found_date)}</td><td>${esc(r.owner_name)}</td><td class="nowrap">${esc(r.due_date || '')}${d !== null ? ` <span class="ip-dd ${cls}">${d < 0 ? `D+${-d}` : d === 0 ? 'D-DAY' : `D-${d}`}</span>` : ''}</td><td><span class="chip ${NC_STATUS_CHIP[r.status] || ''}">${esc(r.status_label)}</span></td><td><button type="button" class="btn small" data-nc-open="${r.id}">열기</button></td></tr>`; }).join('')}</tbody></table></div>`
       : `<div class="empty">${all.length ? '조건에 맞는 부적합이 없습니다.' : '등록된 부적합이 없습니다. 검사·분석·VOC 창의 「CAPA 등록」이나 「＋ 부적합 등록」으로 시작합니다.'}</div>`;
@@ -1601,17 +1605,18 @@ async function pageChanges(main) {
   main.innerHTML = `<h1>변경관리 <span class="dept">품질</span></h1>
   <p class="muted">사람·설비·원자재·방법(4M)과 설계·규격 변경을 <b>요청 → 영향평가 → 승인 → 적용(초물 LOT) → 검증완료</b>로 관리합니다. 누구나 요청할 수 있고, 영향평가·진행은 품질, 승인은 품질책임자가 합니다. CAPA 조치와 협력업체 변경점에서도 바로 요청됩니다.</p>
   <div class="ip-tiles" id="chgTiles"></div>
-  <form class="toolbar list-filters" data-read-only id="chgFilters"><label class="lf-sel">단계<select name="st"><option value="live">진행 중</option><option value="">전체</option>${Object.entries(CHG_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">유형<select name="kind"><option value="">전체</option>${Object.entries(CHG_KIND_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">출처<select name="src"><option value="">전체</option>${Object.entries(CHG_SOURCE_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="list-search">찾기<input type="search" name="q" placeholder="번호·내용·품목·업체·초물 LOT·요청자"></label><span class="grow"></span><span id="chgTools" class="ip-tools"></span></form>
+  <form class="toolbar list-filters" data-read-only id="chgFilters"><label class="lf-sel">연도<select name="year"><option>${todayStr().slice(0, 4)}</option></select></label><label class="lf-sel">단계<select name="st"><option value="live">진행 중</option><option value="">전체</option>${Object.entries(CHG_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">유형<select name="kind"><option value="">전체</option>${Object.entries(CHG_KIND_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">출처<select name="src"><option value="">전체</option>${Object.entries(CHG_SOURCE_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="list-search">찾기<input type="search" name="q" placeholder="번호·내용·품목·업체·초물 LOT·요청자"></label><span class="grow"></span><span id="chgTools" class="ip-tools"></span></form>
   <div id="chgList"></div>`;
   const form = $('#chgFilters', main); let data = { rows: [] };
-  const load = async () => { data = await api('GET', '/api/changes'); if (main.isConnected) draw(); };
+  const rail = yearRail(main, form, { title: '연도 폴더', counts: () => Object.fromEntries(Object.entries(data.rows.reduce((m, r) => { const y = String(r.created_at || '').slice(0, 4); if (y) m[y] = (m[y] || 0) + 1; return m; }, {}))) }); // 15.336 날짜 기준 연도 폴더
+  const load = async () => { data = await api('GET', '/api/changes'); if (!main.isConnected) return; yearOptions(form.elements.year, data.rows.map(r => String(r.created_at).slice(0, 4)), todayStr().slice(0, 4), true); rail.draw(); draw(); };
   main.qReload = () => load().catch(fail);
   const live = r => !['verified', 'rejected', 'void'].includes(r.status);
   const draw = () => {
     const v = formObj(form), q = (v.q || '').trim().toLowerCase(), all = data.rows;
     qTiles('chgTiles', [['진행 중', all.filter(live).length], ['요청', all.filter(r => r.status === 'requested').length, all.some(r => r.status === 'requested') ? 'yellow' : ''], ['영향평가', all.filter(r => r.status === 'evaluating').length], ['승인(적용 대기)', all.filter(r => r.status === 'approved').length], ['적용(검증 대기)', all.filter(r => r.status === 'applied').length], ['검증완료', all.filter(r => r.status === 'verified').length, 'green']]);
     $('#chgTools', main).innerHTML = '<button type="button" class="btn primary" id="chgNewBtn">＋ 변경 요청</button>';
-    const rows = all.filter(r => (v.st === 'live' ? live(r) : !v.st || r.status === v.st) && (!v.kind || r.kind === v.kind) && (!v.src || r.source_type === v.src) && (!q || [r.change_no, r.title, r.item, r.vendor, r.first_lot, r.requester_name, r.source_no].join(' ').toLowerCase().includes(q)));
+    const rows = all.filter(r => (!v.year || String(r.created_at).startsWith(v.year)) && (v.st === 'live' ? live(r) : !v.st || r.status === v.st) && (!v.kind || r.kind === v.kind) && (!v.src || r.source_type === v.src) && (!q || [r.change_no, r.title, r.item, r.vendor, r.first_lot, r.requester_name, r.source_no].join(' ').toLowerCase().includes(q)));
     $('#chgList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>번호</th><th>출처</th><th>유형</th><th>변경 내용</th><th>대상 품목</th><th>요청</th><th>적용(예정)일</th><th>초물 LOT</th><th>영향</th><th>단계</th><th></th></tr></thead><tbody>${rows.map(r => { const yes = Object.entries(r.impact).filter(([, x]) => x.v === 'yes').map(([k]) => CHG_IMPACT_LABEL[k]);
       return `<tr data-chg-row="${r.id}" class="${['rejected', 'void'].includes(r.status) ? 'row-off' : ''}"><td class="nowrap" data-card-primary><b>${esc(r.change_no)}</b></td><td>${esc(r.source_label)}${r.source_no || r.vendor ? `<div class="small muted">${esc(r.source_no || r.vendor)}</div>` : ''}</td><td class="nowrap">${esc(r.kind_label)}</td><td><b>${esc(r.title)}</b>${r.after_text ? `<div class="small muted">→ ${esc(r.after_text)}</div>` : ''}</td><td>${esc(r.item)}</td><td class="nowrap">${esc(r.requester_name)}<div class="small muted">${esc(String(r.created_at).slice(0, 10))}</div></td><td class="nowrap">${esc(r.apply_date || r.plan_date || '')}${!r.apply_date && r.plan_date ? ' <span class="small muted">예정</span>' : ''}</td><td>${esc(r.first_lot)}</td><td class="small">${yes.length ? yes.map(esc).join(', ') : '<span class="muted">—</span>'}</td><td><span class="chip ${CHG_CHIP[r.status]}">${esc(r.status_label)}</span></td><td><button type="button" class="btn small" data-chg-open="${r.id}">열기</button></td></tr>`; }).join('')}</tbody></table></div>`
       : `<div class="empty">${all.length ? '조건에 맞는 변경이 없습니다.' : '등록된 변경이 없습니다. 원자재·설비·작업 방법을 바꿀 때 「＋ 변경 요청」으로 시작합니다.'}</div>`;
@@ -1646,9 +1651,9 @@ async function trNew(pre = {}) {
   const v = await promptBox('교육 계획 등록', `${pre.doc_label ? `<p class="small">관련 문서 <b>${esc(pre.doc_label)}</b></p>` : ''}<div class="form-grid">
     <label class="span3">교육명 *<input name="title" required maxlength="200" value="${esc(pre.title || '')}"></label>
     <label>유형 *<select name="kind">${TR_KINDS.map(k => `<option${(pre.kind || '정기 교육') === k ? ' selected' : ''}>${k}</option>`).join('')}</select></label>
-    <label>예정일 *<input type="date" name="plan_date" required value="${todayStr()}"></label><label>시간(h)<input type="number" step="0.5" min="0.5" max="200" name="hours"></label>
+    <label>예정일 *<input type="date" name="plan_date" required value="${esc(pre.plan_date || todayStr())}"></label><label>시간(h)<input type="number" step="0.5" min="0.5" max="200" name="hours"></label>
     <label>강사<input name="instructor" maxlength="50" value="${esc(ME?.name || '')}"></label><label>장소<input name="place" maxlength="100"></label><label>평가 방법<input name="eval_method" maxlength="50" list="trEval"><datalist id="trEval"><option value="필기 시험"><option value="실기 확인"><option value="구두 확인"><option value="설문"></datalist></label>
-    <label class="span3">교육 내용<textarea name="content" rows="2" maxlength="2000"></textarea></label></div>${trPicker(people, [])}`, { wide: true,
+    <label class="span3">교육 내용<textarea name="content" rows="2" maxlength="2000"></textarea></label></div>${trPicker(people, pre.attendees || [])}`, { wide: true,
     onOpen: trBindPicker,
     submit: async vals => { const { att = [], ...rest } = vals; return api('POST', '/api/trainings', { ...rest, doc_id: pre.doc_id || null, change_id: pre.change_id || null, attendees: att.map(n => ({ user_name: n })), request_id: crypto.randomUUID() }); } });
   if (!v) return null; toast('교육 계획을 등록했습니다. 대상자는 「참석 확인」을 누를 수 있습니다.'); if (location.hash !== '#/quality/training') location.hash = '#/quality/training'; else qReload(); return v;
@@ -1661,7 +1666,8 @@ async function trOpen(id) {
   const m = modal(`<h3>${esc(t.title)} <span class="chip ${TR_CHIP[t.status]}">${esc(t.status_label)}</span></h3>
     ${qStepper(['planned', 'done', 'evaluated'], TR_STATUS_LABEL, t.status)}
     <p class="small muted">${esc(t.kind)}${t.doc_label ? ` · 관련 문서 ${esc(t.doc_label)}` : ''}${t.change_id ? ` · 변경 #${t.change_id}` : ''} · 등록 ${esc(t.created_by)}</p>
-    ${me && !me.attended && ['planned', 'done'].includes(t.status) ? '<p><button type="button" class="btn primary" data-tr-attend>참석 확인(본인)</button></p>' : ''}
+    ${me && !me.attended && !t.test && ['planned', 'done'].includes(t.status) ? '<p><button type="button" class="btn primary" data-tr-attend>참석 확인(본인)</button></p>' : ''}${t.test ? '<p class="small muted">이 교육은 테스트에 <b>합격하면 참석·이수가 자동</b>으로 기록됩니다(따로 참석 확인하지 않음).</p>' : ''}
+    ${trTestCell(t, list.me) || (can ? '' : '')}${can ? ` <button type="button" class="btn small" data-tt-edit>📝 ${t.test ? '테스트 고치기·결과' : '테스트 만들기'}</button>` : ''}
     <form class="stack" data-tr-form>
       <fieldset class="vendor-sec"><legend>교육</legend><div class="form-grid">
         <label class="span3">교육명<input name="title" required maxlength="200" value="${esc(t.title)}"${dis}></label>
@@ -1684,6 +1690,8 @@ async function trOpen(id) {
   $('[data-tr-rpt]', m.el).onclick = () => trReport(t).catch(fail); // 15.312
   $('[data-tr-allok]', m.el)?.addEventListener('click', () => $$('[data-att]', form).forEach(tr => { if ($('[data-a-att]', tr).checked && !$('[data-a-result]', tr).value) $('[data-a-result]', tr).value = '이수'; }));
   form.addEventListener('click', e => { const d = e.target.closest('[data-a-del]'); if (d) d.closest('tr').remove(); });
+  $('[data-tt-edit]', m.el)?.addEventListener('click', () => { m.close(); ttEdit(t.id, () => qReload()).catch(fail); }); // 15.334
+  m.el.addEventListener('click', e => { const tk = e.target.closest('[data-tt-take]'); if (tk) { m.close(); ttTake(t.id, () => qReload()).catch(fail); } });
   $('[data-tr-attend]', m.el)?.addEventListener('click', async () => { try { await api('POST', `/api/trainings/${t.id}/attend`); toast('참석을 확인했습니다.'); m.close(); qReload(); } catch (e) { fail(e); } });
   $('[data-tr-add]', m.el)?.addEventListener('click', async () => {
     const have = atts().map(a => a.user_name), v = await promptBox('대상자 추가', trPicker(people.filter(p => !have.includes(p.name)), []), { wide: true, onOpen: trBindPicker }); if (!v?.att?.length) return;
@@ -1691,6 +1699,175 @@ async function trOpen(id) {
     tb.insertAdjacentHTML('beforeend', v.att.map(n => `<tr data-att="${esc(n)}"><td class="nowrap"><b>${esc(n)}</b></td><td>${esc(people.find(p => p.name === n)?.department || '')}</td><td><input type="checkbox" data-a-att></td><td></td><td><input type="number" min="0" max="100" step="any" data-a-score class="tr-score"></td><td><select data-a-result>${['', '이수', '미이수', '재교육'].map(x => `<option value="${x}">${x || '—'}</option>`).join('')}</select></td><td><input data-a-note maxlength="300"></td><td><button type="button" class="btn small danger" data-a-del>×</button></td></tr>`).join(''));
     toast(`${v.att.length}명을 넣었습니다. 「저장」을 눌러야 반영됩니다.`);
   });
+}
+// ───────────── 15.334 교육 후 테스트(문제 내기 · 응시 · 자동 채점 · 합격/불합격) · 개인별 교육기록 ─────────────
+const TT_TYPE_LABEL = { choice: '객관식', ox: 'O/X', short: '단답형' };
+// 목록 칸: 테스트 상태(담당) · 응시 단추(대상자)
+function trTestCell(r, me) {
+  const x = r.test; if (!x) return '';
+  const mine = x.my, att = r.attendees.some(a => a.user_name === me);
+  const take = att && x.open && r.status !== 'void' && !(mine && mine.p) && (!mine || mine.n < x.max_attempts);
+  return ` <span class="chip ${x.open ? 'green' : ''}" title="테스트 ${x.count}문항 · 합격 ${x.pass_score}점">📝 ${x.open ? '테스트 열림' : '테스트 닫힘'}</span>${mine?.p ? ' <span class="chip green">합격</span>' : mine && !take ? ' <span class="chip red">불합격</span>' : ''}${take ? ` <button type="button" class="btn small primary" data-tt-take="${r.id}">📝 테스트 응시</button>` : ''}`;
+}
+async function ttEdit(trainingId, onDone = () => {}) {
+  const d = await api('GET', `/api/trainings/${trainingId}/test`);
+  const t0 = d.test || { pass_score: 70, max_attempts: 2, time_limit_min: 0, open: false, questions: [] };
+  const taken = (d.attempts || []).length, lock = taken > 0;
+  let qs = JSON.parse(JSON.stringify(t0.questions.length ? t0.questions : [{ type: 'choice', q: '', options: ['', '', '', ''], answer: 0, points: 1 }]));
+  const m = modal(`<h3>📝 교육 후 테스트 · ${esc(d.training.title)}</h3>
+    <p class="small muted">문항을 만들고 「응시 열기」를 켜면 대상자가 시스템에서 바로 풉니다. 자동 채점해 <b>합격 점수 이상이면 이수</b>, 응시 횟수를 다 써도 못 넘으면 <b>재교육</b>으로 대상자 결과에 들어갑니다.${lock ? ` <b>이미 ${taken}번 응시해 문항은 바꿀 수 없습니다</b>(합격 점수·횟수·열기만).` : ''}</p>
+    <form class="stack" data-tt-form>
+      <div class="form-grid tt-set"><label>합격 점수(100점 만점)<input type="number" name="pass_score" min="1" max="100" value="${t0.pass_score}"></label><label>응시 횟수(재응시 포함)<input type="number" name="max_attempts" min="1" max="10" value="${t0.max_attempts}"></label><label>제한 시간(분, 0 = 없음)<input type="number" name="time_limit_min" min="0" max="180" value="${t0.time_limit_min}"></label>
+        <label class="chk"><input type="checkbox" name="open" value="1"${t0.open ? ' checked' : ''}> 응시 열기(대상자가 풀 수 있음)</label>
+        <label>자격 시험 <span class="hint">(합격하면 이 자격 부여·갱신)</span><input name="qual_kind" maxlength="100" list="ttQualKinds" value="${esc(t0.qual_kind || '')}" placeholder="예) 수입검사원 · 비우면 일반 테스트"><datalist id="ttQualKinds">${['수입검사원', '출하검사원', '내부심사원', '세탁 작업자', '커팅/융착 작업자', '지게차 운전'].map(k => `<option value="${k}">`).join('')}</datalist></label>
+        <label>자격 유효기간(개월) <span class="hint">(0 = 만료 없음)</span><input type="number" name="qual_months" min="0" max="120" value="${t0.qual_months ?? 24}"></label></div>
+      <div data-tt-qs></div>
+      ${lock ? '' : '<div class="actions" style="justify-content:flex-start"><button type="button" class="btn" data-tt-addq="choice">＋ 객관식</button><button type="button" class="btn" data-tt-addq="ox">＋ O/X</button><button type="button" class="btn" data-tt-addq="short">＋ 단답형</button><span class="grow"></span><button type="button" class="btn" data-tt-bank>📚 문제은행에서 가져오기</button><button type="button" class="btn" data-tt-tobank>문제은행에 저장</button></div>'}
+      ${d.attempts?.length ? `<fieldset class="vendor-sec"><legend>응시 결과 (${new Set(d.attempts.map(a => a.user_name)).size}명)</legend><div class="table-wrap"><table class="grid" data-no-filter><thead><tr><th>이름</th><th>회차</th><th class="r">점수</th><th>결과</th><th>제출</th></tr></thead><tbody>${d.attempts.map(a => `<tr><td>${esc(a.user_name)}</td><td>${a.attempt_no}회</td><td class="r"><b>${a.score}</b></td><td><span class="chip ${a.passed ? 'green' : 'red'}">${a.passed ? '합격' : '불합격'}</span></td><td class="small">${esc(String(a.submitted_at).slice(0, 16))}</td></tr>`).join('')}</tbody></table></div></fieldset>` : ''}
+      <div class="actions"><span class="grow small muted" data-tt-sum></span><button type="button" class="btn" data-tt-preview>미리 보기</button><button class="btn primary">저장</button></div>
+    </form>`, { wide: true });
+  const form = $('[data-tt-form]', m.el), box = $('[data-tt-qs]', m.el), dis = lock ? ' disabled' : '';
+  const read = () => { $$('[data-q]', box).forEach(card => { const i = Number(card.dataset.q), q = qs[i]; q.q = $('[data-f="q"]', card).value; q.points = Number($('[data-f="points"]', card).value) || 1;
+    if (q.type === 'choice') { q.options = $$('[data-f="opt"]', card).map(x => x.value); const c = $('[data-f="ans"]:checked', card); q.answer = c ? Number(c.value) : -1; }
+    else if (q.type === 'ox') { const c = $('[data-f="ans"]:checked', card); q.answer = c ? c.value : ''; } else q.answer = $('[data-f="ans"]', card).value; }); };
+  const draw = () => {
+    box.innerHTML = qs.map((q, i) => `<fieldset class="tt-q" data-q="${i}"><legend>${i + 1}번 · ${TT_TYPE_LABEL[q.type]}</legend>
+      <div class="tt-q-head"><label class="grow">문제 *<textarea data-f="q" rows="2" maxlength="500"${dis}>${esc(q.q)}</textarea></label><label class="tt-pts">배점<input type="number" data-f="points" min="1" max="20" value="${q.points}"${dis}></label></div>
+      ${q.type === 'choice' ? `<div class="tt-opts">${q.options.map((o, j) => `<div class="tt-opt"><label class="tt-ans" title="정답"><input type="radio" name="ans${i}" data-f="ans" value="${j}"${q.answer === j ? ' checked' : ''}${dis}> 정답</label><input data-f="opt" maxlength="200" value="${esc(o)}" placeholder="보기 ${j + 1}" aria-label="${i + 1}번 보기 ${j + 1}"${dis}>${lock || q.options.length <= 2 ? '' : `<button type="button" class="btn small" data-tt-delopt="${i}:${j}" aria-label="보기 빼기">×</button>`}</div>`).join('')}${lock || q.options.length >= 6 ? '' : `<button type="button" class="btn small" data-tt-addopt="${i}">＋ 보기</button>`}</div>`
+      : q.type === 'ox' ? `<div class="tt-ox-set">정답 <label class="tt-ans"><input type="radio" name="ans${i}" data-f="ans" value="O"${q.answer === 'O' ? ' checked' : ''}${dis}> O</label><label class="tt-ans"><input type="radio" name="ans${i}" data-f="ans" value="X"${q.answer === 'X' ? ' checked' : ''}${dis}> X</label></div>`
+      : `<label>정답 * <span class="hint">(여러 개면 「,」로 · 띄어쓰기·대소문자 무시)</span><input data-f="ans" maxlength="200" value="${esc(q.answer || '')}" placeholder="예) 5S, 정리정돈"${dis}></label>`}
+      ${lock ? '' : `<div class="tt-q-tools"><button type="button" class="btn small" data-tt-up="${i}"${i ? '' : ' disabled'} aria-label="위로">↑</button><button type="button" class="btn small" data-tt-down="${i}"${i < qs.length - 1 ? '' : ' disabled'} aria-label="아래로">↓</button><button type="button" class="btn small danger" data-tt-delq="${i}">문항 빼기</button></div>`}</fieldset>`).join('');
+    sum();
+  };
+  const sum = () => { const tot = qs.reduce((s, q) => s + (Number(q.points) || 0), 0); $('[data-tt-sum]', m.el).textContent = `${qs.length}문항 · 총 ${tot}점 → 100점으로 환산`; };
+  draw();
+  box.addEventListener('input', e => { if (e.target.matches('[data-f="points"]')) { read(); sum(); } });
+  m.el.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.ttAddq) { read(); const type = b.dataset.ttAddq; qs.push(type === 'choice' ? { type, q: '', options: ['', '', '', ''], answer: -1, points: 1 } : { type, q: '', answer: '', points: 1 }); draw(); $$('[data-q]', box).at(-1)?.querySelector('textarea')?.focus(); return; }
+    if (b.dataset.ttDelq) { read(); qs.splice(Number(b.dataset.ttDelq), 1); draw(); return; }
+    if (b.dataset.ttUp || b.dataset.ttDown) { read(); const i = Number(b.dataset.ttUp ?? b.dataset.ttDown), j = b.dataset.ttUp ? i - 1 : i + 1; [qs[i], qs[j]] = [qs[j], qs[i]]; draw(); return; }
+    if (b.dataset.ttAddopt) { read(); qs[Number(b.dataset.ttAddopt)].options.push(''); draw(); return; }
+    if (b.dataset.ttDelopt) { read(); const [i, j] = b.dataset.ttDelopt.split(':').map(Number), q = qs[i]; q.options.splice(j, 1); if (q.answer === j) q.answer = -1; else if (q.answer > j) q.answer--; draw(); return; }
+    if (b.matches('[data-tt-bank]')) { read(); qbPick().then(add => { if (add?.length) { qs = [...qs.filter(q => (q.q || '').trim()), ...add]; draw(); toast(`${add.length}문항을 넣었습니다.`); } }).catch(fail); return; } // 15.341
+    if (b.matches('[data-tt-tobank]')) { read(); promptBox('문제은행에 저장', `<p class="small muted">지금 문항 ${qs.length}개를 문제은행에 넣습니다(같은 분류의 같은 문제는 건너뜀).</p><label>분류 *<input name="category" required maxlength="50" value="${esc(d.training.title.slice(0, 50))}"></label>`, { submit: v => api('POST', '/api/question-bank', { category: v.category, questions: qs }) }).then(r => { if (r) toast(`문제은행에 ${r.created}개 넣었습니다${r.skipped ? ` (같은 문제 ${r.skipped}개 건너뜀)` : ''}.`); }).catch(fail); return; }
+    if (b.matches('[data-tt-preview]')) { read(); ttTakeView({ training: d.training, test: { ...t0, ...formObj(form), questions: qs.map(({ answer: _a, ...x }) => x) }, preview: true }); }
+  });
+  form.onsubmit = async e => {
+    e.preventDefault(); read(); const v = formObj(form);
+    try { await api('PUT', `/api/trainings/${trainingId}/test`, { pass_score: v.pass_score, max_attempts: v.max_attempts, time_limit_min: v.time_limit_min, open: !!form.elements.open.checked, qual_kind: v.qual_kind, qual_months: v.qual_months, ...(lock ? {} : { questions: qs }), revision: d.test?.revision });
+      toast(form.elements.open.checked ? '테스트를 저장하고 응시를 열었습니다. 대상자 「할 일」에 「테스트 응시」가 뜹니다.' : '테스트를 저장했습니다(응시는 닫힘).'); m.close(); onDone(); }
+    catch (err) { fail(err); }
+  };
+}
+// 응시 화면(미리 보기 겸용)
+function ttTakeView(d, onDone = () => {}) {
+  const q = d.test.questions, limit = Number(d.test.time_limit_min) || 0, rid = crypto.randomUUID(); let busy = false, timer = null;
+  const used = (d.mine || []).length;
+  const m = modal(`<h3>📝 ${esc(d.training.title)} · 테스트${d.preview ? ' <span class="chip">미리 보기</span>' : ''}</h3>
+    ${d.test.qual_kind ? `<p class="tt-qual">🎖 자격 시험 · 합격하면 <b>${esc(d.test.qual_kind)}</b> 자격${Number(d.test.qual_months) ? `(${d.test.qual_months}개월)` : ''}</p>` : ''}
+    <p class="small muted">${q.length}문항 · 합격 ${d.test.pass_score}점 이상${d.preview ? '' : ` · ${used + 1}번째 응시(최대 ${d.test.max_attempts}번)`}${limit ? ` · 제한 ${limit}분` : ''}</p>
+    ${limit && !d.preview ? '<div class="tt-timer" data-tt-timer aria-live="polite"></div>' : ''}
+    <form class="stack tt-take" data-tt-take-form>${q.map((x, i) => `<fieldset class="tt-tq" data-tq="${i}"><legend><b>${i + 1}.</b> ${esc(x.q)} <span class="small muted">(${x.points}점)</span></legend>
+      ${x.type === 'choice' ? x.options.map((o, j) => `<label class="tt-choice"><input type="radio" name="a${i}" value="${j}"><span>${['①', '②', '③', '④', '⑤', '⑥'][j]} ${esc(o)}</span></label>`).join('')
+      : x.type === 'ox' ? `<div class="tt-ox"><label class="tt-choice tt-o"><input type="radio" name="a${i}" value="O"><span>O</span></label><label class="tt-choice tt-x"><input type="radio" name="a${i}" value="X"><span>X</span></label></div>`
+      : `<input name="a${i}" maxlength="200" autocomplete="off" placeholder="답을 쓰세요" aria-label="${i + 1}번 답">`}</fieldset>`).join('')}
+      <div class="actions"><span class="grow small muted" data-tt-prog></span>${d.preview ? '<button type="button" class="btn" data-no-close>닫기</button>' : '<button class="btn primary">제출하고 채점</button>'}</div></form>`, { wide: true, onClose: () => clearInterval(timer) });
+  const form = $('[data-tt-take-form]', m.el);
+  const answers = () => q.map((x, i) => x.type === 'short' ? (form.elements['a' + i].value || '') : (form.querySelector(`[name="a${i}"]:checked`)?.value ?? ''));
+  const prog = () => { $('[data-tt-prog]', m.el).textContent = `응답 ${answers().filter(a => a !== '').length} / ${q.length}`; };
+  form.addEventListener('input', prog); form.addEventListener('change', prog); prog();
+  $('[data-no-close]', m.el)?.addEventListener('click', () => m.close());
+  const submit = async (auto = false) => {
+    if (busy || d.preview) return; const a = answers(), blank = a.filter(x => x === '').length;
+    if (!auto && blank && !await confirmBox(`답하지 않은 문항이 ${blank}개 있습니다(오답 처리). 제출할까요?`)) return;
+    busy = true; clearInterval(timer); const btn = $('button.primary', form); if (btn) { btn.disabled = true; btn.textContent = '채점 중…'; }
+    try {
+      const r = await api('POST', `/api/trainings/${d.training.id}/test/submit`, { answers: a, request_id: rid });
+      m.close(); ttResult(d, r); onDone();
+    } catch (err) { fail(err); busy = false; if (btn) { btn.disabled = false; btn.textContent = '제출하고 채점'; } }
+  };
+  form.onsubmit = e => { e.preventDefault(); submit(); };
+  if (limit && !d.preview) { const end = Date.now() + limit * 60000, el = $('[data-tt-timer]', m.el); const tick = () => { const s = Math.max(0, Math.round((end - Date.now()) / 1000)); el.textContent = `남은 시간 ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; el.classList.toggle('tt-timer-low', s <= 60); if (!s) { toast('제한 시간이 끝나 자동 제출합니다.'); submit(true); } }; tick(); timer = setInterval(tick, 1000); }
+}
+function ttResult(d, r) {
+  const left = (r.max_attempts || d.test.max_attempts) - r.attempt_no;
+  const m = modal(`<div class="tt-result ${r.passed ? 'tt-pass' : 'tt-fail'}"><div class="tt-score"><b>${r.score}</b><span>점</span></div>
+    <h2>${r.passed ? '합격' : '불합격'}</h2><p>합격 점수 ${r.pass_score}점 · ${r.attempt_no}번째 응시</p>
+    <div class="tt-marks">${r.detail.map((ok, i) => `<span class="${ok ? 'ok' : 'no'}" title="${i + 1}번 ${ok ? '맞음' : '틀림'}">${i + 1}<b>${ok ? '○' : '✕'}</b></span>`).join('')}</div>
+    ${r.qual ? `<p class="tt-qual">🎖 자격 <b>${esc(r.qual.kind)}</b> ${r.qual.renewed ? '갱신' : '부여'}${r.qual.expire_date ? ` · ${esc(r.qual.expire_date)}까지` : ''}</p>` : ''}
+    <p class="small muted">${r.passed ? '교육 결과가 「이수」로 기록되었습니다.' : left > 0 ? `다시 응시할 수 있습니다(${left}번 남음). 교육 자료를 다시 보고 응시하세요.` : '응시 횟수를 다 썼습니다. 결과가 「재교육」으로 기록되었습니다. 품질 담당에게 재교육을 요청하세요.'}</p>
+    <button type="button" class="btn primary" data-ok>확인</button></div>`);
+  $('[data-ok]', m.el).onclick = () => m.close();
+}
+async function ttTake(trainingId, onDone = () => {}) {
+  const d = await api('GET', `/api/trainings/${trainingId}/test`);
+  if (!d.test) return toast('이 교육에는 테스트가 없습니다.', 'err');
+  if (!d.can_take) return toast(d.passed ? '이미 합격했습니다.' : !d.test.open ? '테스트가 닫혀 있습니다.' : !d.is_attendee ? '이 교육의 대상자가 아닙니다.' : '응시 횟수를 다 썼습니다.', 'err');
+  ttTakeView(d, onDone);
+}
+// ── 개인별 교육기록 ──
+async function trRecord(name) {
+  const d = await api('GET', '/api/training-records?user=' + encodeURIComponent(name)), p = d.person, rows = d.rows;
+  const att = rows.filter(r => r.attended), hours = att.reduce((s, r) => s + (Number(r.hours) || 0), 0);
+  const res = r => r.result ? `<span class="chip ${r.result === '이수' ? 'green' : 'red'}">${esc(r.result)}</span>` : '<span class="muted small">—</span>';
+  const testCell = r => !r.test ? '<span class="muted small">—</span>' : r.attempts.length ? r.attempts.map(a => `<span class="chip ${a.passed ? 'green' : 'red'}" title="${esc(String(a.submitted_at).slice(0, 16))}">${a.attempt_no}회 ${a.score}점</span>`).join(' ') : `<span class="small muted">미응시${r.test.open ? '(열림)' : ''}</span>`;
+  const m = modal(`<div class="tr-record"><h3>개인별 교육기록 · ${esc(p.name)} <span class="small muted">${esc([p.dept, p.position].filter(Boolean).join(' · '))}</span></h3>
+    <div class="ip-tiles tr-rec-tiles"><div class="ip-tile"><span>교육 대상</span><b>${rows.length}</b></div><div class="ip-tile"><span>참석</span><b>${att.length}</b></div><div class="ip-tile"><span>교육 시간(h)</span><b>${fmtNum(hours)}</b></div><div class="ip-tile green"><span>이수</span><b>${rows.filter(r => r.result === '이수').length}</b></div><div class="ip-tile ${rows.some(r => ['미이수', '재교육'].includes(r.result)) ? 'red' : ''}"><span>미이수·재교육</span><b>${rows.filter(r => ['미이수', '재교육'].includes(r.result)).length}</b></div></div>
+    <h4>교육 이력</h4>${rows.length ? `<div class="table-wrap"><table class="grid tr-rec-grid" data-no-filter><thead><tr><th>실시·예정일</th><th>교육명</th><th>유형</th><th class="r">시간</th><th>참석</th><th>테스트</th><th class="r">점수</th><th>결과</th><th>강사</th></tr></thead><tbody>${rows.map(r => `<tr><td class="nowrap">${esc(r.done_date || r.plan_date)}${r.done_date ? '' : ' <span class="small muted">(예정)</span>'}</td><td><b>${esc(r.title)}</b>${r.doc_label ? `<div class="small muted">${esc(r.doc_label)}</div>` : ''}</td><td class="nowrap">${esc(r.kind)}</td><td class="r">${r.hours ?? ''}</td><td>${r.attended ? '✔' : '<span class="muted">—</span>'}</td><td>${testCell(r)}</td><td class="r">${r.score ?? ''}</td><td>${res(r)}</td><td>${esc(r.instructor || '')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">교육 이력이 없습니다.</div>'}
+    <h4>자격</h4>${d.quals.length ? `<div class="table-wrap"><table class="grid" data-no-filter><thead><tr><th>자격명</th><th>번호</th><th>발급처</th><th>취득일</th><th>만료일</th><th>상태</th></tr></thead><tbody>${d.quals.map(q => `<tr><td><b>${esc(q.kind)}</b></td><td>${esc(q.cert_no)}</td><td>${esc(q.issuer)}</td><td>${esc(q.acquired_date || '')}</td><td>${esc(q.expire_date || '')}</td><td>${esc(q.status_label)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="small muted">등록된 자격이 없습니다.</p>'}
+    <div class="actions no-print"><span class="grow small muted">${esc(d.today)} 기준</span><button type="button" class="btn" data-rec-xlsx>엑셀</button><button type="button" class="btn" data-rec-print>인쇄</button></div></div>`, { wide: true });
+  $('[data-rec-print]', m.el).onclick = async () => { try { const co = await rptCompany();
+    rptWindow(`개인별 교육기록 · ${p.name}`, rptRow([[['성명', p.name], ['부서·직급', [p.dept, p.position].filter(Boolean).join(' · ')]], [['교육 대상·참석', `${rows.length}건 · ${att.length}건`], ['교육 시간(h)', fmtNum(hours)]], [['이수', `${rows.filter(r => r.result === '이수').length}건`], ['미이수·재교육', `${rows.filter(r => ['미이수', '재교육'].includes(r.result)).length}건`]]])
+      + rptBlock('교육 이력', `<table class="rpt-list"><thead><tr><th>No</th><th>일자</th><th>교육명</th><th>유형</th><th>시간</th><th>참석</th><th>테스트</th><th>점수</th><th>결과</th></tr></thead><tbody>${rows.map((r, i) => `<tr><td class="c">${i + 1}</td><td>${esc(r.done_date || r.plan_date)}</td><td>${esc(r.title)}</td><td>${esc(r.kind)}</td><td class="c">${r.hours ?? ''}</td><td class="c">${r.attended ? '○' : ''}</td><td>${r.attempts.map(x => `${x.attempt_no}회 ${x.score}점${x.passed ? '(합)' : ''}`).join(', ')}</td><td class="c">${r.score ?? ''}</td><td class="c">${esc(r.result || '')}</td></tr>`).join('')}</tbody></table>`)
+      + rptBlock('자격', d.quals.length ? `<table class="rpt-list"><thead><tr><th>자격명</th><th>번호</th><th>발급처</th><th>취득일</th><th>만료일</th><th>상태</th></tr></thead><tbody>${d.quals.map(q => `<tr><td>${esc(q.kind)}</td><td>${esc(q.cert_no)}</td><td>${esc(q.issuer)}</td><td>${esc(q.acquired_date || '')}</td><td>${esc(q.expire_date || '')}</td><td>${esc(q.status_label)}</td></tr>`).join('')}</tbody></table>` : '없음')
+      + '<div class="rpt-sign"><span>본인</span><span>품질 담당</span><span>승인</span></div>', co); } catch (err) { fail(err); } };
+  $('[data-rec-xlsx]', m.el).onclick = () => { const t = $('.tr-rec-grid', m.el); if (t) tableToXlsx(t, `교육기록_${p.name}`); };
+}
+// ── 15.341 문제은행 ── 분류별 문항 목록 · 추가/수정/삭제 · 테스트 만들 때 골라 넣기
+async function qbEdit(row = null, cats = [], onDone = () => {}) {
+  const q0 = row || { type: 'choice', q: '', options: ['', '', '', ''], answer: 0, points: 1, category: cats[0] || '' };
+  const m = modal(`<h3>${row ? '문항 수정' : '문항 추가'} · 문제은행</h3><form class="stack" data-qb-form><div class="form-grid">
+    <label>분류<input name="category" maxlength="50" list="qbCats" value="${esc(q0.category || '')}" placeholder="예) 세탁 · 검사 · 안전"><datalist id="qbCats">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist></label>
+    <label>유형<select name="type">${Object.entries(TT_TYPE_LABEL).map(([k, l]) => `<option value="${k}"${q0.type === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+    <label>배점<input type="number" name="points" min="1" max="20" value="${q0.points}"></label>
+    <label class="span3">문제 *<textarea name="q" rows="2" maxlength="500" required>${esc(q0.q)}</textarea></label></div>
+    <div data-qb-ans></div><div class="actions"><span class="grow"></span><button class="btn primary">저장</button></div></form>`, { wide: true });
+  const f = $('[data-qb-form]', m.el), ans = $('[data-qb-ans]', m.el); let opts = q0.type === 'choice' ? [...q0.options] : ['', '', '', ''];
+  const drawAns = () => { const t = f.type.value;
+    ans.innerHTML = t === 'choice' ? `<fieldset class="vendor-sec"><legend>보기 · 정답</legend>${opts.map((o, j) => `<div class="tt-opt"><label class="tt-ans"><input type="radio" name="ans" value="${j}"${q0.type === 'choice' && q0.answer === j ? ' checked' : ''}> 정답</label><input data-o="${j}" maxlength="200" value="${esc(o)}" placeholder="보기 ${j + 1}"></div>`).join('')}</fieldset>`
+      : t === 'ox' ? `<div class="tt-ox-set">정답 <label class="tt-ans"><input type="radio" name="ans" value="O"${q0.answer === 'O' ? ' checked' : ''}> O</label><label class="tt-ans"><input type="radio" name="ans" value="X"${q0.answer === 'X' ? ' checked' : ''}> X</label></div>`
+      : `<label>정답 * <span class="hint">(여러 개면 「,」로)</span><input name="ans_text" maxlength="200" value="${esc(q0.type === 'short' ? q0.answer : '')}"></label>`; };
+  f.type.addEventListener('change', drawAns); drawAns();
+  f.onsubmit = async e => { e.preventDefault(); const t = f.type.value, o = { category: f.category.value, type: t, q: f.q.value, points: f.points.value };
+    if (t === 'choice') { o.options = [...ans.querySelectorAll('[data-o]')].map(x => x.value); o.answer = Number(f.querySelector('[name=ans]:checked')?.value ?? -1); } else if (t === 'ox') o.answer = f.querySelector('[name=ans]:checked')?.value || ''; else o.answer = f.ans_text.value;
+    try { if (row) await api('PUT', `/api/question-bank/${row.id}`, o); else { const r = await api('POST', '/api/question-bank', o); if (r.skipped) toast('같은 분류에 같은 문제가 이미 있어 넣지 않았습니다.', 'err'); } m.close(); toast('문제은행에 저장했습니다.'); onDone(); } catch (err) { fail(err); } };
+}
+// 테스트 만들기 창에서 은행 문항 고르기(분류별·무작위 N개)
+async function qbPick() {
+  const d = await api('GET', '/api/question-bank'); if (!d.rows.length) { toast('문제은행이 비어 있습니다. 교육·자격관리 › 문제은행 탭에서 문항을 넣으세요.', 'err'); return null; }
+  return new Promise(resolve => {
+    let done = false;
+    const m = modal(`<h3>📚 문제은행에서 가져오기</h3><div class="toolbar"><label class="lf-sel">분류<select data-qb-cat><option value="">전체</option>${d.categories.map(c => `<option value="${esc(c)}">${esc(c || '(분류 없음)')}</option>`).join('')}</select></label><label class="lf-sel">무작위<input type="number" data-qb-n min="1" max="50" placeholder="개수" style="width:6em"></label><button type="button" class="btn small" data-qb-rand>무작위로 고르기</button></div>
+      <div class="qb-pick" data-qb-list></div><div class="actions"><span class="grow small muted" data-qb-cnt></span><button type="button" class="btn" data-qb-cancel>취소</button><button type="button" class="btn primary" data-qb-ok>넣기</button></div>`, { wide: true, onClose: () => { if (!done) resolve(null); } });
+    const list = $('[data-qb-list]', m.el), cat = $('[data-qb-cat]', m.el);
+    const draw = () => { const rs = d.rows.filter(r => !cat.value || r.category === cat.value); list.innerHTML = rs.map(r => `<label class="chk qb-row"><input type="checkbox" value="${r.id}"> <span class="chip small">${esc(TT_TYPE_LABEL[r.type])}</span> ${esc(r.q)} <span class="muted small">${esc(r.category || '')} · ${r.points}점</span></label>`).join(''); cnt(); };
+    const cnt = () => { $('[data-qb-cnt]', m.el).textContent = `${list.querySelectorAll('input:checked').length}개 고름`; };
+    cat.addEventListener('change', draw); list.addEventListener('change', cnt); draw();
+    $('[data-qb-rand]', m.el).onclick = () => { const n = Number($('[data-qb-n]', m.el).value) || 5, boxes = [...list.querySelectorAll('input')]; boxes.forEach(b => { b.checked = false; }); boxes.sort(() => Math.random() - 0.5).slice(0, n).forEach(b => { b.checked = true; }); cnt(); };
+    $('[data-qb-cancel]', m.el).onclick = () => m.close();
+    $('[data-qb-ok]', m.el).onclick = () => { const ids = [...list.querySelectorAll('input:checked')].map(b => Number(b.value)); done = true; m.close(); resolve(d.rows.filter(r => ids.includes(r.id)).map(({ id: _i, category: _c, created_by: _b, updated_at: _u, ...q }) => q)); };
+  });
+}
+function drawQbTab(host, data, can, reload) {
+  const cats = data.categories, byCat = cats.map(c => [c, data.rows.filter(r => r.category === c)]);
+  host.innerHTML = `<div class="toolbar"><span class="small muted">분류 ${cats.length}개 · 문항 ${data.rows.length}개. 문항은 테스트에 넣을 때 복사되므로 여기서 고쳐도 이미 만든 테스트는 바뀌지 않습니다.</span><span class="grow"></span>${can ? '<button type="button" class="btn primary" data-qb-new>＋ 문항</button>' : ''}</div>
+    ${data.rows.length ? byCat.map(([c, rs]) => `<details class="qb-cat" open><summary><b>📁 ${esc(c || '(분류 없음)')}</b> <span class="muted small">${rs.length}문항</span></summary><div class="table-wrap"><table class="grid" data-no-filter><thead><tr><th>유형</th><th>문제</th><th>정답</th><th class="r">배점</th><th></th></tr></thead><tbody>${rs.map(r => `<tr><td class="nowrap">${esc(TT_TYPE_LABEL[r.type])}</td><td>${esc(r.q)}${r.type === 'choice' ? `<div class="small muted">${r.options.map((o, j) => `${['①', '②', '③', '④', '⑤', '⑥'][j]} ${esc(o)}`).join(' ')}</div>` : ''}</td><td class="nowrap">${r.type === 'choice' ? ['①', '②', '③', '④', '⑤', '⑥'][r.answer] : esc(r.answer)}</td><td class="r">${r.points}</td><td class="nowrap">${can ? `<button type="button" class="btn small" data-qb-edit="${r.id}">수정</button> <button type="button" class="btn small danger" data-qb-del="${r.id}">삭제</button>` : ''}</td></tr>`).join('')}</tbody></table></div></details>`).join('') : '<div class="empty">문제은행이 비어 있습니다. 「＋ 문항」으로 넣거나, 테스트 만들기 창의 「문제은행에 저장」으로 모으세요.</div>'}`;
+  host.onclick = async e => {
+    if (e.target.closest('[data-qb-new]')) return qbEdit(null, cats, reload).catch(fail);
+    const ed = e.target.closest('[data-qb-edit]'); if (ed) return qbEdit(data.rows.find(r => r.id === Number(ed.dataset.qbEdit)), cats, reload).catch(fail);
+    const dl = e.target.closest('[data-qb-del]'); if (dl && await confirmBox('이 문항을 문제은행에서 지울까요? (이미 만든 테스트는 그대로)')) { try { await api('DELETE', `/api/question-bank/${dl.dataset.qbDel}`); toast('지웠습니다.'); reload(); } catch (err) { fail(err); } }
+  };
 }
 async function qualEdit(r = null, can = true) {
   const people = await qPeople(), v0 = r || { status: 'valid' };
@@ -1708,39 +1885,50 @@ async function pageTraining(main) {
   const tab0 = sessionStorage.getItem('qTrTab') || 'plan';
   main.innerHTML = `<h1>교육·자격관리 <span class="dept">품질</span></h1>
   <p class="muted">연간 교육 계획(OJT·정기·직무·외부·문서 개정 교육)과 실적(참석·시간·평가), 개인별 교육 이력, 검사원·심사원 등 자격의 만료일을 관리합니다. 교육 대상자는 본인이 「참석 확인」을 누릅니다.</p>
-  <div class="seg q-tabs" id="trTabs"><button type="button" data-tab="plan">교육 계획·실적</button><button type="button" data-tab="people">개인별 이력</button><button type="button" data-tab="qual">자격 관리</button></div>
+  <div class="seg q-tabs" id="trTabs"><button type="button" data-tab="plan">교육 계획·실적</button><button type="button" data-tab="cal">연간 교육 캘린더</button><button type="button" data-tab="bank" hidden>문제은행</button><button type="button" data-tab="people">개인별 이력</button><button type="button" data-tab="qual">자격 관리</button></div>
   <div class="ip-tiles" id="trTiles"></div>
   <form class="toolbar list-filters" data-read-only id="trFilters"><label class="lf-sel">연도<select name="year"></select></label><label class="lf-sel" data-only="plan">상태<select name="st"><option value="">전체</option>${Object.entries(TR_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}<option value="mine">내 참석 확인 대기</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="교육명·강사·대상자·자격명"></label><span class="grow"></span><span id="trTools" class="ip-tools"></span></form>
   <div id="trList"></div>`;
   const form = $('#trFilters', main); let tab = tab0, tr = { rows: [] }, ql = { rows: [] };
+  const trRail = yearRail(main, form, { title: '연도 폴더', counts: () => Object.fromEntries(Object.entries(tr.rows.filter(r => r.status !== 'void').reduce((m, r) => { const y = String(r.plan_date || '').slice(0, 4); if (y) m[y] = (m[y] || 0) + 1; return m; }, {}))) }); // 15.335
   const load = async () => { [tr, ql] = await Promise.all([api('GET', '/api/trainings'), api('GET', '/api/qualifications')]); if (!main.isConnected) return;
-    const ys = [...new Set([todayStr().slice(0, 4), ...tr.rows.map(r => r.plan_date.slice(0, 4))])].sort().reverse(), cur = form.elements.year.value || todayStr().slice(0, 4);
-    form.elements.year.innerHTML = ys.map(y => `<option${y === cur ? ' selected' : ''}>${y}</option>`).join('') + '<option value="">전체</option>'; draw(); };
+    yearOptions(form.elements.year, tr.rows.map(r => r.plan_date.slice(0, 4)), todayStr().slice(0, 4), true); trRail.draw(); draw(); }; // 15.335 연도 폴더
   main.qReload = () => load().catch(fail);
-  const waitMine = r => ['planned', 'done'].includes(r.status) && r.attendees.some(a => a.user_name === tr.me && !a.attended);
+  const waitMine = r => !r.test && ['planned', 'done'].includes(r.status) && r.attendees.some(a => a.user_name === tr.me && !a.attended); // 15.336 테스트 있는 교육은 합격하면 참석 자동
   const draw = () => {
     $$('#trTabs button', main).forEach(b => b.classList.toggle('on', b.dataset.tab === tab)); $$('[data-only]', form).forEach(x => { x.hidden = x.dataset.only !== tab; });
     const v = formObj(form), q = (v.q || '').trim().toLowerCase(), yr = r => !v.year || String(r).startsWith(v.year);
     const rows = tr.rows.filter(r => yr(r.plan_date));
-    if (tab === 'plan') {
+    { const bb = main.querySelector('#trTabs [data-tab="bank"]'); if (bb) bb.hidden = !tr.can_manage; } // 15.341 문제은행은 품질만
+    if (tab === 'bank') { qTiles('trTiles', []); $('#trTools', main).innerHTML = ''; const host = $('#trList', main); host.innerHTML = '<p class="muted">불러오는 중…</p>'; const reload = () => api('GET', '/api/question-bank').then(d => { if (tab === 'bank' && host.isConnected) drawQbTab(host, d, tr.can_manage, reload); }).catch(fail); reload(); return; }
+    if (tab === 'cal') { // 15.338 연간 교육 캘린더: 유형 × 월, 실시·평가완료 = ✔(실시 월), 아래 이수율
+      const Y = Number(v.year || todayStr().slice(0, 4)), rs = tr.rows.filter(r => r.plan_date.startsWith(String(Y)) && (!q || [r.title, r.instructor, r.kind].join(' ').toLowerCase().includes(q)));
+      const pct = r => { const n = r.attendees.length, p = r.attendees.filter(a => a.result === '이수').length; return n ? `이수 ${p}/${n}` : ''; };
+      const items = rs.map(r => ({ id: r.id, row: r.kind, month: Number(r.plan_date.slice(5, 7)), done_month: r.done_date && r.done_date.startsWith(String(Y)) ? Number(r.done_date.slice(5, 7)) : null, state: r.status === 'void' ? 'cancel' : ['done', 'evaluated'].includes(r.status) ? 'done' : calLate(r.plan_date) ? 'late' : 'plan', label: r.title, sub: pct(r), title: `${r.title} · ${r.status_label}${r.test ? ' · 테스트' : ''}`, attr: `data-tr-open="${r.id}"` }));
+      const lv = items.filter(x => x.state !== 'cancel'), dn = lv.filter(x => x.state === 'done').length, att = rs.filter(r => r.status !== 'void').flatMap(r => r.attendees), pass = att.filter(a => a.result === '이수').length;
+      qTiles('trTiles', [['계획', lv.length], ['실시', `${dn}${lv.length ? ` (${Math.round(dn / lv.length * 100)}%)` : ''}`, 'green'], ['지연', lv.filter(x => x.state === 'late').length, lv.some(x => x.state === 'late') ? 'red' : ''], ['이수율', att.length ? `${Math.round(pass / att.length * 100)}% (${pass}/${att.length})` : '—'], ['교육 시간 합(h)', rs.filter(r => r.status !== 'void').reduce((s, r) => s + (r.hours || 0), 0)]]);
+      $('#trTools', main).innerHTML = tr.can_manage ? '<button type="button" class="btn primary" id="trNewBtn">＋ 교육 계획</button>' : '';
+      $('#trList', main).innerHTML = annualCalHtml(items, Y, { rowTitle: '교육 유형', rows: TR_KINDS, empty: `${Y}년 교육 계획이 없습니다.` });
+    } else if (tab === 'plan') {
       qTiles('trTiles', [['계획', rows.filter(r => r.status === 'planned').length, ''], ['실시', rows.filter(r => r.status === 'done').length, ''], ['평가완료', rows.filter(r => r.status === 'evaluated').length, 'green'], ['교육 시간 합(h)', rows.filter(r => r.status !== 'void').reduce((s, r) => s + (r.hours || 0) * r.attendees.filter(a => a.attended).length, 0)], ['내 참석 확인 대기', tr.rows.filter(waitMine).length, tr.rows.some(waitMine) ? 'yellow' : '']]);
       $('#trTools', main).innerHTML = tr.can_manage ? '<button type="button" class="btn primary" id="trNewBtn">＋ 교육 계획</button>' : '';
       const list = rows.filter(r => (v.st === 'mine' ? waitMine(r) : !v.st || r.status === v.st) && (!q || [r.title, r.instructor, r.kind, r.doc_label, ...r.attendees.map(a => a.user_name)].join(' ').toLowerCase().includes(q)));
-      $('#trList', main).innerHTML = list.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>예정일</th><th>교육명</th><th>유형</th><th>강사</th><th>참석 / 대상</th><th>시간</th><th>실시일</th><th>관련 문서</th><th>상태</th><th></th></tr></thead><tbody>${list.map(r => `<tr data-tr-row="${r.id}" class="${r.status === 'void' ? 'row-off' : r.status === 'planned' && r.plan_date < tr.today ? 'ip-over' : ''}"><td class="nowrap">${esc(r.plan_date)}</td><td data-card-primary><b>${esc(r.title)}</b></td><td class="nowrap">${esc(r.kind)}</td><td>${esc(r.instructor)}</td><td class="nowrap">${r.attendees.filter(a => a.attended).length} / ${r.attendees.length}</td><td>${r.hours ?? ''}</td><td class="nowrap">${esc(r.done_date || '')}</td><td class="small">${esc(r.doc_label)}</td><td><span class="chip ${TR_CHIP[r.status]}">${esc(r.status_label)}</span></td><td class="nowrap">${waitMine(r) ? `<button type="button" class="btn small primary" data-tr-att="${r.id}">참석 확인</button> ` : ''}<button type="button" class="btn small" data-tr-open="${r.id}">열기</button></td></tr>`).join('')}</tbody></table></div>`
+      $('#trList', main).innerHTML = list.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>예정일</th><th>교육명</th><th>유형</th><th>강사</th><th>참석 / 대상</th><th>시간</th><th>실시일</th><th>관련 문서</th><th>상태</th><th></th></tr></thead><tbody>${list.map(r => `<tr data-tr-row="${r.id}" class="${r.status === 'void' ? 'row-off' : r.status === 'planned' && r.plan_date < tr.today ? 'ip-over' : ''}"><td class="nowrap">${esc(r.plan_date)}</td><td data-card-primary><b>${esc(r.title)}</b>${trTestCell(r, tr.me)}</td><td class="nowrap">${esc(r.kind)}</td><td>${esc(r.instructor)}</td><td class="nowrap">${r.attendees.filter(a => a.attended).length} / ${r.attendees.length}</td><td>${r.hours ?? ''}</td><td class="nowrap">${esc(r.done_date || '')}</td><td class="small">${esc(r.doc_label)}</td><td><span class="chip ${TR_CHIP[r.status]}">${esc(r.status_label)}</span></td><td class="nowrap">${waitMine(r) ? `<button type="button" class="btn small primary" data-tr-att="${r.id}">참석 확인</button> ` : ''}<button type="button" class="btn small" data-tr-open="${r.id}">열기</button></td></tr>`).join('')}</tbody></table></div>`
         : `<div class="empty">${tr.rows.length ? '조건에 맞는 교육이 없습니다.' : '등록된 교육이 없습니다. 「＋ 교육 계획」으로 연간 교육을 넣으세요.'}</div>`;
     } else if (tab === 'people') {
       const by = new Map();
       for (const r of rows.filter(r => r.status !== 'void')) for (const a of r.attendees) { const p = by.get(a.user_name) || { name: a.user_name, dept: a.dept, n: 0, att: 0, hours: 0, fail: 0, list: [] }; p.n++; if (a.attended) { p.att++; p.hours += r.hours || 0; } if (['미이수', '재교육'].includes(a.result)) p.fail++; p.list.push({ r, a }); by.set(a.user_name, p); }
-      const people = [...by.values()].filter(p => !q || [p.name, p.dept].join(' ').toLowerCase().includes(q)).sort((a, b) => a.dept.localeCompare(b.dept, 'ko') || a.name.localeCompare(b.name, 'ko'));
+      for (const p of by.values()) { p.pass = p.list.filter(x => x.a.result === '이수').length; p.tests = p.list.filter(x => x.r.test).length; } // 15.334
+      const people = [...by.values()].filter(p => (tr.can_manage || p.name === tr.me) && (!q || [p.name, p.dept].join(' ').toLowerCase().includes(q))).sort((a, b) => a.dept.localeCompare(b.dept, 'ko') || a.name.localeCompare(b.name, 'ko')); // 15.334 다른 사람 기록은 품질만
       qTiles('trTiles', [['교육 대상 인원', by.size], ['참석 합계(회)', [...by.values()].reduce((s, p) => s + p.att, 0)], ['교육 시간 합(h)', [...by.values()].reduce((s, p) => s + p.hours, 0)], ['미이수·재교육', [...by.values()].reduce((s, p) => s + p.fail, 0), [...by.values()].some(p => p.fail) ? 'red' : '']]);
-      $('#trTools', main).innerHTML = '';
-      $('#trList', main).innerHTML = people.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>이름</th><th>부서</th><th>대상</th><th>참석</th><th>시간(h)</th><th>미이수·재교육</th><th>자격</th><th>교육 이력</th></tr></thead><tbody>${people.map(p => { const qs = ql.rows.filter(x => x.user_name === p.name && x.status === 'valid'); return `<tr><td class="nowrap" data-card-primary><b>${esc(p.name)}</b></td><td>${esc(p.dept)}</td><td>${p.n}</td><td>${p.att}</td><td>${p.hours}</td><td>${p.fail ? `<span class="chip red">${p.fail}</span>` : '0'}</td><td class="small">${qs.map(x => esc(x.kind)).join(', ')}</td><td class="small">${p.list.sort((x, y) => y.r.plan_date.localeCompare(x.r.plan_date)).slice(0, 6).map(({ r, a }) => `<a href="#/quality/training" data-tr-open="${r.id}">${esc(r.done_date || r.plan_date)} ${esc(r.title)}</a>${a.result ? ` (${esc(a.result)})` : a.attended ? '' : ' <span class="muted">미참석</span>'}`).join('<br>')}${p.list.length > 6 ? `<br><span class="muted">외 ${p.list.length - 6}건</span>` : ''}</td></tr>`; }).join('')}</tbody></table></div>` : '<div class="empty">이 기간의 교육 이력이 없습니다.</div>';
+      $('#trTools', main).innerHTML = `<button type="button" class="btn primary" data-tr-rec="${esc(tr.me)}">📋 내 교육기록</button>`;
+      $('#trList', main).innerHTML = people.length ? `<p class="small muted">이름을 누르면 그 사람의 <b>개인별 교육기록</b>(교육·참석·테스트 점수·결과·자격)이 열리고 인쇄·엑셀로 받을 수 있습니다.${tr.can_manage ? '' : ' 다른 사람의 기록은 품질 담당만 봅니다.'}</p><div class="table-wrap"><table class="grid ip-table"><thead><tr><th>이름</th><th>부서</th><th>대상</th><th>참석</th><th>시간(h)</th><th>이수</th><th>미이수·재교육</th><th>자격</th><th>교육 이력</th></tr></thead><tbody>${people.map(p => { const qs = ql.rows.filter(x => x.user_name === p.name && x.status === 'valid'); return `<tr><td class="nowrap" data-card-primary><button type="button" class="link-btn" data-tr-rec="${esc(p.name)}"><b>${esc(p.name)}</b></button></td><td>${esc(p.dept)}</td><td>${p.n}</td><td>${p.att}</td><td>${p.hours}</td><td>${p.pass}</td><td>${p.fail ? `<span class="chip red">${p.fail}</span>` : '0'}</td><td class="small">${qs.map(x => esc(x.kind)).join(', ')}</td><td class="small">${p.list.sort((x, y) => y.r.plan_date.localeCompare(x.r.plan_date)).slice(0, 6).map(({ r, a }) => `<a href="#/quality/training" data-tr-open="${r.id}">${esc(r.done_date || r.plan_date)} ${esc(r.title)}</a>${a.result ? ` (${esc(a.result)})` : a.attended ? '' : ' <span class="muted">미참석</span>'}`).join('<br>')}${p.list.length > 6 ? `<br><span class="muted">외 ${p.list.length - 6}건</span>` : ''}</td></tr>`; }).join('')}</tbody></table></div>` : '<div class="empty">이 기간의 교육 이력이 없습니다.</div>';
     } else {
       const live = r => r.status === 'valid', dd = r => live(r) && r.expire_date ? ipDday(r.expire_date, ql.today) : null;
       qTiles('trTiles', [['유효 자격', ql.rows.filter(live).length, 'green'], ['90일 안 만료', ql.rows.filter(r => { const d = dd(r); return d !== null && d >= 0 && d <= 90; }).length, ql.rows.some(r => { const d = dd(r); return d !== null && d >= 0 && d <= 90; }) ? 'yellow' : ''], ['만료 지남', ql.rows.filter(r => { const d = dd(r); return d !== null && d < 0; }).length, ql.rows.some(r => { const d = dd(r); return d !== null && d < 0; }) ? 'red' : '']]);
       $('#trTools', main).innerHTML = ql.can_manage ? '<button type="button" class="btn primary" id="qlNewBtn">＋ 자격 등록</button>' : '';
       const list = ql.rows.filter(r => !q || [r.user_name, r.kind, r.cert_no, r.issuer].join(' ').toLowerCase().includes(q));
-      $('#trList', main).innerHTML = list.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>이름</th><th>자격명</th><th>자격번호</th><th>발급처</th><th>취득일</th><th>만료일</th><th>상태</th><th></th></tr></thead><tbody>${list.map(r => { const d = dd(r); return `<tr class="${d === null ? (live(r) ? '' : 'row-off') : d < 0 ? 'ip-over' : d <= 90 ? 'ip-soon' : ''}"><td class="nowrap" data-card-primary><b>${esc(r.user_name)}</b></td><td>${esc(r.kind)}</td><td>${esc(r.cert_no)}</td><td>${esc(r.issuer)}</td><td class="nowrap">${esc(r.acquired_date || '')}</td><td class="nowrap">${r.expire_date ? esc(r.expire_date) + qDd(r.expire_date, ql.today, live(r), 90) : '<span class="muted">없음</span>'}</td><td><span class="chip ${live(r) ? 'green' : ''}">${esc(r.status_label)}</span></td><td class="nowrap">${ql.can_manage ? `<button type="button" class="btn small" data-ql-edit="${r.id}">수정</button> <button type="button" class="btn small danger" data-ql-del="${r.id}">삭제</button>` : ''}</td></tr>`; }).join('')}</tbody></table></div>` : `<div class="empty">${ql.rows.length ? '조건에 맞는 자격이 없습니다.' : '등록된 자격이 없습니다. 검사원·내부심사원 등 자격을 넣으면 만료일을 D-day로 보여 줍니다.'}</div>`;
+      $('#trList', main).innerHTML = list.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>이름</th><th>자격명</th><th>자격번호</th><th>발급처</th><th>취득일</th><th>만료일</th><th>상태</th><th></th></tr></thead><tbody>${list.map(r => { const d = dd(r); return `<tr class="${d === null ? (live(r) ? '' : 'row-off') : d < 0 ? 'ip-over' : d <= 90 ? 'ip-soon' : ''}"><td class="nowrap" data-card-primary><b>${esc(r.user_name)}</b></td><td>${esc(r.kind)}</td><td>${esc(r.cert_no)}</td><td>${esc(r.issuer)}</td><td class="nowrap">${esc(r.acquired_date || '')}</td><td class="nowrap">${r.expire_date ? esc(r.expire_date) + qDd(r.expire_date, ql.today, live(r), 90) : '<span class="muted">없음</span>'}</td><td><span class="chip ${live(r) ? 'green' : ''}">${esc(r.status_label)}</span></td><td class="nowrap">${ql.can_manage && live(r) && d !== null && d <= 90 ? `<button type="button" class="btn small primary" data-ql-retrain="${r.id}" title="만료 전에 재교육(또는 자격 시험) 계획">재교육 계획</button> ` : ''}${ql.can_manage ? `<button type="button" class="btn small" data-ql-edit="${r.id}">수정</button> <button type="button" class="btn small danger" data-ql-del="${r.id}">삭제</button>` : ''}</td></tr>`; }).join('')}</tbody></table></div>` : `<div class="empty">${ql.rows.length ? '조건에 맞는 자격이 없습니다.' : '등록된 자격이 없습니다. 검사원·내부심사원 등 자격을 넣으면 만료일을 D-day로 보여 줍니다.'}</div>`;
     }
   };
   main.addEventListener('click', async e => {
@@ -1749,7 +1937,10 @@ async function pageTraining(main) {
     if (e.target.closest('#trNewBtn')) return trNew().catch(fail);
     if (e.target.closest('#qlNewBtn')) return qualEdit().catch(fail);
     const o = e.target.closest('[data-tr-open]'); if (o) { e.preventDefault(); return trOpen(Number(o.dataset.trOpen)).catch(fail); }
+    const tk = e.target.closest('[data-tt-take]'); if (tk) return ttTake(Number(tk.dataset.ttTake), () => load()).catch(fail); // 15.334
+    const rc = e.target.closest('[data-tr-rec]'); if (rc) return trRecord(rc.dataset.trRec).catch(fail);
     const a = e.target.closest('[data-tr-att]'); if (a) { try { await api('POST', `/api/trainings/${a.dataset.trAtt}/attend`); toast('참석을 확인했습니다.'); load(); } catch (err) { fail(err); } return; }
+    const rt = e.target.closest('[data-ql-retrain]'); if (rt) { const r = ql.rows.find(x => x.id === Number(rt.dataset.qlRetrain)); const due = r.expire_date && r.expire_date > todayStr() ? new Date(new Date(r.expire_date + 'T00:00:00Z').getTime() - 30 * 864e5).toISOString().slice(0, 10) : todayStr(); return trNew({ title: `${r.kind} 재교육(자격 갱신)`, kind: '직무 교육', plan_date: due < todayStr() ? todayStr() : due, attendees: [r.user_name] }).catch(fail); } // 15.338
     const qe = e.target.closest('[data-ql-edit]'); if (qe) return qualEdit(ql.rows.find(r => r.id === Number(qe.dataset.qlEdit))).catch(fail);
     const qd = e.target.closest('[data-ql-del]'); if (qd) { const r = ql.rows.find(x => x.id === Number(qd.dataset.qlDel)); if (!await confirmBox(`${r.user_name} · ${r.kind} 자격을 지울까요?`)) return; try { await api('DELETE', `/api/qualifications/${r.id}?revision=${r.revision}`); toast('지웠습니다.'); load(); } catch (err) { fail(err); } }
   });
@@ -1798,29 +1989,174 @@ async function supOpen(vendor, year) {
     if (e.target.closest('[data-sup-chg]')) { m.close(); chgNew({ source_type: 'supplier', vendor, kind: 'material' }).catch(fail); }
   });
 }
+// 15.338 공통 연간 캘린더: 행(구분) × 1~12월, 칸마다 ○ 계획 · ✔ 실시 · 빨강 지연 · ✕ 취소, 아래 월별 누적(계획 월 기준 계획 · 실시 월 기준 실시).
+// items: { id, row, month(계획 월), done_month(실시 월, 없으면 계획 월), state: 'plan'|'done'|'late'|'cancel', label, sub, title, attr: 'data-…="…"' }
+function annualCalHtml(items, Y, { rowTitle = '구분', rows = null, empty = '' } = {}) {
+  const y0 = Number(todayStr().slice(0, 4)), curM = Number(todayStr().slice(5, 7)), now = i => Y === y0 && i + 1 === curM ? 'sp-now' : '';
+  const order = rows || [...new Set(items.map(x => x.row))];
+  if (!items.length) return `<div class="empty">${empty || `${Y}년 계획이 없습니다.`}</div>`;
+  const live = items.filter(x => x.state !== 'cancel'), done = live.filter(x => x.state === 'done'), max = Math.max(1, live.length);
+  let cp = 0, cd = 0; const cum = Array.from({ length: 12 }, (_, i) => { cp += live.filter(x => x.month === i + 1).length; cd += done.filter(x => (x.done_month || x.month) === i + 1).length; return [cp, cd]; });
+  const chip = x => `<button type="button" class="sp-chip ${{ done: 'sp-done', late: 'sp-late', cancel: 'sp-cancel', plan: 'sp-plan' }[x.state]}" ${x.attr || ''} title="${esc(x.title || x.label)}">${x.state === 'done' ? '✔' : x.state === 'cancel' ? '✕' : '○'} ${esc(x.label)}${x.sub ? `<small>${esc(x.sub)}</small>` : ''}</button>`;
+  return `<div class="sp-legend small"><span class="sp-chip sp-plan">○ 계획</span><span class="sp-chip sp-done">✔ 실시</span><span class="sp-chip sp-late">○ 지연</span><span class="muted">칸을 누르면 열립니다</span></div>
+    <div class="table-wrap sp-wrap"><table class="grid sp-cal" data-no-filter data-no-sort data-keep-cols data-no-reorder><thead><tr><th class="sp-v">${esc(rowTitle)}</th>${Array.from({ length: 12 }, (_, i) => `<th class="${now(i)}">${i + 1}월</th>`).join('')}<th>실시</th></tr></thead><tbody>
+    ${order.filter(r => items.some(x => x.row === r)).map(r => { const xs = items.filter(x => x.row === r); return `<tr><td class="sp-v" data-card-primary><b>${esc(r)}</b></td>${Array.from({ length: 12 }, (_, i) => `<td class="${now(i)}">${xs.filter(x => x.month === i + 1).map(chip).join('')}</td>`).join('')}<td class="nowrap small">${xs.filter(x => x.state === 'done').length} / ${xs.filter(x => x.state !== 'cancel').length}</td></tr>`; }).join('')}
+    </tbody><tfoot><tr class="sp-cum"><th class="sp-v">누적 계획·실시</th>${cum.map(([a, b], i) => `<td class="${now(i)}"><div class="sp-bar" title="${i + 1}월까지 계획 ${a} · 실시 ${b}"><i style="height:${Math.round(a / max * 100)}%"></i><b style="height:${Math.round(b / max * 100)}%"></b></div><span>${b}/${a}</span></td>`).join('')}<td class="nowrap"><b>${done.length}</b> / ${live.length}</td></tr></tfoot></table></div>`;
+}
+const calLate = (date, y0 = todayStr()) => !!date && date.slice(0, 7) < y0.slice(0, 7);
+// 15.340 분류 폴더 창: 조회 줄의 고르기 칸(예: 인증 종류·구분·설비 종류)을 왼쪽 폴더로(문서관리처럼). 고르기 칸의 첫 「전체」가 맨 위.
+function selectRail(main, form, field, { title = '분류', icon = '📁', counts = () => ({}), allLabel = '전체' } = {}) {
+  const sel = form.elements[field]; sel.closest('label').hidden = true;
+  const ex = document.createElement('div'); ex.className = 'stock-ex cat-ex';
+  ex.innerHTML = `<details class="stock-tree-box" open><summary>${icon} ${esc(title)}</summary><nav class="stock-tree cat-tree" aria-label="${esc(title)}"></nav></details><section class="stock-ex-main"></section>`;
+  form.before(ex); const sec = ex.lastElementChild, box = ex.firstElementChild, nav = ex.querySelector('nav');
+  for (let n = ex.nextElementSibling; n;) { const nx = n.nextElementSibling; sec.append(n); n = nx; }
+  if (window.matchMedia?.('(max-width: 860px)').matches) box.open = false;
+  const draw = () => { const c = counts() || {};
+    $('summary', box).textContent = `${icon} ${title} · ${sel.value ? sel.selectedOptions[0]?.textContent : allLabel}`;
+    nav.innerHTML = [...sel.options].map(o => { const on = sel.value === o.value; return `<div class="st-row${on ? ' on' : ''}" style="--d:0"><span class="st-tw"></span><button type="button" class="st-node" data-cat="${esc(o.value)}" aria-current="${on}"><span class="st-ic">${o.value ? (on ? '📂' : '📁') : '🗂'}</span>${esc(o.value ? o.textContent : allLabel)}${c[o.value] != null ? ` <span class="st-n">${fmtNum(c[o.value])}</span>` : ''}</button></div>`; }).join(''); };
+  nav.addEventListener('click', e => { const b = e.target.closest('[data-cat]'); if (!b) return; sel.value = b.dataset.cat; sel.dispatchEvent(new Event('change', { bubbles: true })); draw(); if (window.matchMedia?.('(max-width: 860px)').matches) box.open = false; });
+  sel.addEventListener('change', draw); draw(); return { draw };
+}
+const countBy = (rows, f) => rows.reduce((m, r) => { const k = f(r); m[k] = (m[k] || 0) + 1; m[''] = (m[''] || 0) + 1; return m; }, { '': 0 });
+// 15.340 수입·출하검사 월별 불합격률(업체·품목 × 월)
+async function inspTrend() {
+  const y0 = Number(todayStr().slice(0, 4));
+  const m = modal(`<h3>수입·출하검사 월별 불합격률</h3><form class="toolbar list-filters" data-tr-f><label class="lf-sel">연도<select name="year">${[0, 1, 2, 3].map(i => `<option>${y0 - i}</option>`).join('')}</select></label><label class="lf-sel">구분<select name="kind"><option>수입검사</option><option>출하검사</option></select></label><label class="lf-sel">기준<select name="by"><option value="vendor">업체(거래처)별</option><option value="item">품목별</option></select></label><span class="grow"></span><button type="button" class="btn" data-tr-x>엑셀</button></form><div data-tr-body><p class="muted">불러오는 중…</p></div>`, { wide: true });
+  const f = $('[data-tr-f]', m.el), body = $('[data-tr-body]', m.el);
+  const load = async () => {
+    const v = formObj(f), d = await api('GET', '/api/inspection-trend?' + new URLSearchParams(v)); if (!m.el.isConnected) return;
+    const names = [...new Set(d.rows.map(r => r.name))], cell = (n, mo) => d.rows.find(r => r.name === n && r.m === mo);
+    const pct = (fl, j) => j ? Math.round(fl / j * 1000) / 10 : null;
+    const td = x => { if (!x) return '<td class="muted">·</td>'; const j = x.fail + x.pass, p = pct(x.fail, j); return `<td class="r ${x.fail ? 'tr-bad' : ''}" title="검사 ${x.total} · 판정 ${j} · 불합격 ${x.fail}">${p == null ? `<span class="muted">${x.total}</span>` : `${x.fail}/${j}<small>${p}%</small>`}</td>`; };
+    const sum = rs => { const t = rs.reduce((a, x) => ({ fail: a.fail + x.fail, pass: a.pass + x.pass, total: a.total + x.total }), { fail: 0, pass: 0, total: 0 }); return t; };
+    body.innerHTML = names.length ? `<div class="table-wrap"><table class="grid tr-trend" data-no-filter><thead><tr><th>${d.by === 'item' ? '품목' : '업체'}</th>${Array.from({ length: 12 }, (_, i) => `<th>${i + 1}월</th>`).join('')}<th>합계</th></tr></thead><tbody>${names.map(n => { const all = sum(d.rows.filter(r => r.name === n)); return `<tr><td><b>${esc(n)}</b></td>${Array.from({ length: 12 }, (_, i) => td(cell(n, i + 1))).join('')}${td(all)}</tr>`; }).join('')}</tbody>
+      <tfoot><tr><th>전체</th>${Array.from({ length: 12 }, (_, i) => { const rs = d.rows.filter(r => r.m === i + 1); return rs.length ? td(sum(rs)) : '<td class="muted">·</td>'; }).join('')}${td(sum(d.rows))}</tr></tfoot></table></div><p class="small muted">칸 = 불합격/판정 건수와 불합격률(판정 전 검사는 회색 건수). 빨강 = 불합격 있음.</p>` : `<div class="empty">${d.year}년 ${d.kind} 기록이 없습니다.</div>`;
+  };
+  f.addEventListener('change', () => load().catch(fail));
+  $('[data-tr-x]', m.el).onclick = () => { const t = $('.tr-trend', m.el); if (t) tableToXlsx(t, `월별불합격률_${formObj(f).kind}_${formObj(f).year}`); };
+  await load();
+}
+// 15.335 연도 폴더 창: 연간 기록 화면 왼쪽에 「📁 2027 · 2026 …」(문서관리 폴더처럼). 조회 줄의 연도 칸(select[name=year])을 대신 고른다.
+function yearOptions(sel, years, def = todayStr().slice(0, 4), all = false) {
+  const cur = sel.value || def, y0 = Number(todayStr().slice(0, 4));
+  const ys = [...new Set([String(y0 + 1), String(y0), ...years.map(String).filter(y => /^\d{4}$/.test(y))])].sort().reverse();
+  sel.innerHTML = ys.map(y => `<option${y === cur ? ' selected' : ''}>${y}</option>`).join('') + (all ? `<option value=""${cur === '' ? ' selected' : ''}>전체</option>` : '');
+  if (![...sel.options].some(o => o.value === cur)) sel.value = def;
+}
+function yearRail(main, form, { counts = () => ({}), title = '연도 폴더' } = {}) {
+  const sel = form.elements.year; sel.closest('label').hidden = true;
+  const ex = document.createElement('div'); ex.className = 'stock-ex yr-ex';
+  ex.innerHTML = `<details class="stock-tree-box" open><summary>📁 ${esc(title)}</summary><nav class="stock-tree yr-tree" aria-label="${esc(title)}"></nav></details><section class="stock-ex-main"></section>`;
+  form.before(ex); const sec = ex.lastElementChild, box = ex.firstElementChild, nav = ex.querySelector('nav');
+  for (let n = ex.nextElementSibling; n;) { const nx = n.nextElementSibling; sec.append(n); n = nx; }
+  if (window.matchMedia?.('(max-width: 860px)').matches) box.open = false;
+  const thisY = todayStr().slice(0, 4);
+  const draw = () => { const c = counts() || {};
+    $('summary', box).textContent = `📁 ${title} · ${sel.value ? sel.value + '년' : '전체'}`;
+    nav.innerHTML = [...sel.options].map(o => { const y = o.value, on = sel.value === y; return `<div class="st-row${on ? ' on' : ''}" style="--d:0"><span class="st-tw"></span><button type="button" class="st-node" data-yr="${y}" aria-current="${on}"><span class="st-ic">${y ? (on ? '📂' : '📁') : '🗂'}</span>${y ? `${y}년` : '전체 연도'}${y === thisY ? ' <small class="yr-now">올해</small>' : y > thisY ? ' <small class="yr-now">계획</small>' : ''}${c[y] != null ? ` <span class="st-n">${fmtNum(c[y])}</span>` : ''}</button></div>`; }).join(''); };
+  nav.addEventListener('click', e => { const b = e.target.closest('[data-yr]'); if (!b) return; sel.value = b.dataset.yr; sel.dispatchEvent(new Event('change', { bubbles: true })); draw(); if (window.matchMedia?.('(max-width: 860px)').matches) box.open = false; });
+  sel.addEventListener('change', draw);
+  draw(); return { draw };
+}
+// ── 15.335 협력업체 품질: 업체 품질 카드 · 연간 평가계획·실적(연간 캘린더) ──
+const SP_KIND_LABEL = { regular: '정기평가(서류)', audit: '현장심사', reeval: '재평가', new: '신규 등록평가' };
 async function pageSuppliers(main) {
+  const y0 = Number(todayStr().slice(0, 4)); let tab = 'card'; try { tab = sessionStorage.getItem('qSupTab') === 'plan' ? 'plan' : 'card'; } catch { /* 편의 */ }
   main.innerHTML = `<h1>협력업체 품질 <span class="dept">품질</span></h1>
-  <p class="muted">매입처별 품질 카드입니다. 수입검사 건수·불합격률과 <b>공급사 COA 미수령</b>(발주 때 COA를 요청한 입고)은 자동으로 모이고, 연 1회 유효성평가(품질 50%·납기 30%·대응 20% → A~D 등급)를 남깁니다. 업체의 4M 변경 통보는 「변경점 접수」로 변경관리에 올립니다.</p>
+  <p class="muted">매입처별 품질 카드(수입검사 건수·불합격률·<b>공급사 COA 미수령</b> 자동 집계, 연 1회 유효성평가: 품질 50%·납기 30%·대응 20% → A~D 등급)와 <b>연간 평가계획</b>을 관리합니다. 「연간 평가계획·실적」에서 업체별 평가 월을 정하고, 실시하면 연간 캘린더에 누적됩니다(유효성평가를 저장하면 그 해 정기·재평가 계획이 자동으로 실시 처리). 왼쪽 연도 폴더로 해를 고릅니다.</p>
+  <div class="seg q-tabs" id="supTabs"><button type="button" data-tab="card">업체 품질 카드</button><button type="button" data-tab="plan">연간 평가계획·실적</button></div>
   <div class="ip-tiles" id="supTiles"></div>
-  <form class="toolbar list-filters" data-read-only id="supFilters"><label class="lf-sel">연도<select name="year">${[0, 1, 2, 3].map(i => { const y = Number(todayStr().slice(0, 4)) - i; return `<option>${y}</option>`; }).join('')}</select></label><label class="lf-sel">보기<select name="show"><option value="active">이 해 수입검사 있는 업체</option><option value="">매입처 전체</option><option value="coa">COA 미수령 있음</option><option value="noeval">미평가</option><option value="low">C·D 등급</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="업체명"></label></form>
+  <form class="toolbar list-filters" data-read-only id="supFilters"><label class="lf-sel">연도<select name="year"><option>${y0}</option></select></label><label class="lf-sel" data-only="card">보기<select name="show"><option value="active">이 해 수입검사 있는 업체</option><option value="">매입처 전체</option><option value="coa">COA 미수령 있음</option><option value="noeval">미평가</option><option value="low">C·D 등급</option></select></label><label class="lf-sel" data-only="plan">상태<select name="pst"><option value="">전체(취소 빼고)</option><option value="planned">계획</option><option value="late">지연</option><option value="done">실시</option><option value="cancelled">취소</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="업체명"></label><span class="grow"></span><span id="supTools" class="ip-tools"></span></form>
   <div id="supList"></div>`;
-  const form = $('#supFilters', main); let data = { rows: [], year: Number(todayStr().slice(0, 4)) };
-  const load = async () => { data = await api('GET', '/api/supplier-quality?year=' + form.elements.year.value); if (main.isConnected) draw(); };
+  const form = $('#supFilters', main); let data = { rows: [], year: y0 }, plan = { rows: [], years: [], vendors: [] };
+  yearOptions(form.elements.year, []);
+  const rail = yearRail(main, form, { title: '연도 폴더', counts: () => Object.fromEntries(plan.years.map(x => [String(x.year), x.n])) });
+  const load = async () => { const y = form.elements.year.value; [data, plan] = await Promise.all([api('GET', '/api/supplier-quality?year=' + y), api('GET', '/api/supplier-plans?year=' + y)]); if (!main.isConnected) return; yearOptions(form.elements.year, plan.years.map(x => x.year)); rail.draw(); draw(); };
   main.qReload = () => load().catch(fail);
-  const draw = () => {
+  const curM = Number(todayStr().slice(5, 7));
+  const late = p => p.status === 'planned' && (p.year < y0 || (p.year === y0 && p.plan_month < curM));
+  const drawCard = () => {
     const v = formObj(form), q = (v.q || '').trim().toLowerCase(), all = data.rows, act = all.filter(r => r.iqc_total);
     const judged = act.reduce((s, r) => s + r.iqc_judged, 0), failN = act.reduce((s, r) => s + r.iqc_fail, 0), miss = all.reduce((s, r) => s + r.coa_missing, 0);
-    qTiles('supTiles', [['수입검사 업체', act.length], ['수입검사', act.reduce((s, r) => s + r.iqc_total, 0)], ['불합격률', judged ? `${Math.round(failN / judged * 1000) / 10}%` : '—', failN ? 'yellow' : ''], ['COA 미수령', miss, miss ? 'red' : ''], ['미평가(검사 있는 업체)', act.filter(r => !r.eval).length], ['C·D 등급', all.filter(r => r.eval && ['C', 'D'].includes(r.eval.grade)).length, all.some(r => r.eval && ['C', 'D'].includes(r.eval.grade)) ? 'red' : '']]);
+    qTiles('supTiles', [['수입검사 업체', act.length], ['수입검사', act.reduce((s, r) => s + r.iqc_total, 0)], ['불합격률', judged ? `${Math.round(failN / judged * 1000) / 10}%` : '—', failN ? 'yellow' : ''], ['COA 미수령', miss, miss ? 'red' : ''], ['미평가(검사 있는 업체)', act.filter(r => !r.eval).length, act.some(r => !r.eval) ? 'yellow' : ''], ['C·D 등급', all.filter(r => r.eval && ['C', 'D'].includes(r.eval.grade)).length, all.some(r => r.eval && ['C', 'D'].includes(r.eval.grade)) ? 'red' : '']]);
+    $('#supTools', main).innerHTML = '';
     const rows = all.filter(r => (v.show === 'active' ? r.iqc_total > 0 : v.show === 'coa' ? r.coa_missing > 0 : v.show === 'noeval' ? r.iqc_total > 0 && !r.eval : v.show === 'low' ? r.eval && ['C', 'D'].includes(r.eval.grade) : true) && (!q || r.vendor.toLowerCase().includes(q)));
-    $('#supList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>업체</th><th>수입검사</th><th>불합격</th><th>불합격률</th><th>COA 미수령</th><th>${data.year} 평가</th><th>최근 평가</th><th>변경점(진행/전체)</th><th></th></tr></thead><tbody>${rows.map(r => `<tr data-sup-row="${esc(r.vendor)}" class="${r.eval && r.eval.grade === 'D' ? 'ip-over' : r.coa_missing ? 'ip-soon' : ''}"><td data-card-primary><b>${esc(r.vendor)}</b></td><td>${r.iqc_total}</td><td>${r.iqc_fail ? `<span class="chip red">${r.iqc_fail}</span>` : 0}</td><td>${r.fail_rate == null ? '<span class="muted">—</span>' : r.fail_rate + '%'}</td><td>${r.coa_req ? (r.coa_missing ? `<span class="chip red">${r.coa_missing}</span> / ${r.coa_req}` : `0 / ${r.coa_req}`) : '<span class="muted">—</span>'}</td><td>${r.eval ? `${r.eval.total} <span class="chip ${SUP_GRADE_CHIP[r.eval.grade]}">${r.eval.grade}</span>` : '<span class="muted">미평가</span>'}</td><td class="small">${r.last_eval && (!r.eval || r.last_eval.year !== r.eval.year) ? `${r.last_eval.year} · ${r.last_eval.grade}` : ''}</td><td>${r.changes_open} / ${r.changes_total}</td><td class="nowrap"><button type="button" class="btn small" data-sup-open="${esc(r.vendor)}">카드</button>${data.can_manage ? ` <button type="button" class="btn small primary" data-sup-eval="${esc(r.vendor)}">${r.eval ? '재평가' : '평가'}</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
+    const pl = k => plan.rows.filter(p => p.vendor_key === k && p.status !== 'cancelled');
+    $('#supList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>업체</th><th>수입검사</th><th>불합격</th><th>불합격률</th><th>COA 미수령</th><th>${data.year} 평가</th><th>${data.year} 평가계획</th><th>최근 평가</th><th>변경점(진행/전체)</th><th></th></tr></thead><tbody>${rows.map(r => { const ps = pl(r.key); return `<tr><td data-card-primary><b>${esc(r.vendor)}</b></td><td>${r.iqc_total}</td><td>${r.iqc_fail ? `<span class="chip red">${r.iqc_fail}</span>` : 0}</td><td>${r.fail_rate == null ? '—' : r.fail_rate + '%'}</td><td>${r.coa_missing ? `<span class="chip red">${r.coa_missing}</span>` : 0}</td>
+      <td>${r.eval ? `${r.eval.total} <span class="chip ${SUP_GRADE_CHIP[r.eval.grade]}">${r.eval.grade}</span>` : '<span class="muted small">미평가</span>'}</td>
+      <td class="small">${ps.length ? ps.map(p => `<span class="chip ${p.status === 'done' ? 'green' : late(p) ? 'red' : ''}">${p.plan_month}월 ${esc(SP_KIND_LABEL[p.kind] || '')}${p.status === 'done' ? ' ✔' : late(p) ? ' 지연' : ''}</span>`).join(' ') : '<span class="muted">—</span>'}</td>
+      <td class="small">${r.last_eval ? `${r.last_eval.year} ${esc(r.last_eval.grade)}` : '—'}</td><td>${r.changes_open} / ${r.changes_total}</td>
+      <td class="nowrap"><button type="button" class="btn small" data-sup-open="${esc(r.vendor)}">카드</button>${data.can_manage ? ` <button type="button" class="btn small primary" data-sup-eval="${esc(r.vendor)}">${r.eval ? '재평가' : '평가'}</button>` : ''}</td></tr>`; }).join('')}</tbody></table></div>`
       : `<div class="empty">${all.length ? '조건에 맞는 업체가 없습니다. 「보기」를 「매입처 전체」로 바꿔 보세요.' : '매입처가 없습니다. 관리 › 거래처에서 매입처를 등록하세요.'}</div>`;
   };
-  main.addEventListener('click', e => {
+  const drawPlan = () => {
+    const v = formObj(form), q = (v.q || '').trim().toLowerCase(), live = plan.rows.filter(p => p.status !== 'cancelled'), Y = Number(form.elements.year.value);
+    const done = live.filter(p => p.status === 'done'), lateN = live.filter(late).length;
+    const thisMonth = Y === y0 ? live.filter(p => p.plan_month === curM && p.status === 'planned').length : 0;
+    qTiles('supTiles', [['계획', live.length], ['실시', `${done.length}${live.length ? ` (${Math.round(done.length / live.length * 100)}%)` : ''}`, 'green'], ['지연', lateN, lateN ? 'red' : ''], [Y === y0 ? `이번 달(${curM}월) 예정` : '남은 계획', Y === y0 ? thisMonth : live.filter(p => p.status === 'planned').length, thisMonth ? 'yellow' : '']]);
+    $('#supTools', main).innerHTML = plan.can_manage ? `<button type="button" class="btn" data-sp-copy>${Y - 1}년 계획 가져오기</button><button type="button" class="btn primary" data-sp-new>＋ 평가 계획</button>` : '';
+    const rows = plan.rows.filter(p => (v.pst === 'late' ? late(p) : v.pst ? p.status === v.pst : p.status !== 'cancelled') && (!q || p.vendor.toLowerCase().includes(q)));
+    const vendors = [...new Set(rows.map(p => p.vendor))].sort((a, b) => a.localeCompare(b, 'ko'));
+    // 월별 누적(계획 월 기준 계획 누적 · 실시일 기준 실시 누적)
+    let cp = 0, cd = 0; const cum = Array.from({ length: 12 }, (_, i) => { cp += live.filter(p => p.plan_month === i + 1).length; cd += done.filter(p => Number(String(p.done_date).slice(5, 7)) === i + 1).length; return [cp, cd]; });
+    const max = Math.max(1, live.length);
+    const cell = (p) => { const cls = p.status === 'done' ? 'sp-done' : p.status === 'cancelled' ? 'sp-cancel' : late(p) ? 'sp-late' : 'sp-plan';
+      return `<button type="button" class="sp-chip ${cls}" data-sp="${p.id}" title="${esc(`${p.vendor} · ${SP_KIND_LABEL[p.kind]} · ${p.plan_month}월 계획${p.status === 'done' ? ` · ${p.done_date} 실시 ${p.result}` : late(p) ? ' · 지연' : ''}`)}">${p.status === 'done' ? '✔' : p.status === 'cancelled' ? '✕' : '○'} ${esc(SP_KIND_LABEL[p.kind].replace(/\(.*\)/, ''))}${p.status === 'done' ? `<small>${esc(String(p.done_date).slice(5).replace('-', '/'))}</small>` : ''}</button>`; };
+    $('#supList', main).innerHTML = `<div class="sp-legend small"><span class="sp-chip sp-plan">○ 계획</span><span class="sp-chip sp-done">✔ 실시</span><span class="sp-chip sp-late">○ 지연</span><span class="muted">칸을 누르면 실시·수정·취소</span></div>
+      ${rows.length ? `<div class="table-wrap sp-wrap"><table class="grid sp-cal" data-no-filter data-no-sort data-keep-cols data-no-reorder><thead><tr><th class="sp-v">업체</th>${Array.from({ length: 12 }, (_, i) => `<th class="${Y === y0 && i + 1 === curM ? 'sp-now' : ''}">${i + 1}월</th>`).join('')}<th>실시</th></tr></thead><tbody>
+        ${vendors.map(vn => { const ps = rows.filter(p => p.vendor === vn); return `<tr><td class="sp-v" data-card-primary><b>${esc(vn)}</b></td>${Array.from({ length: 12 }, (_, i) => `<td class="${Y === y0 && i + 1 === curM ? 'sp-now' : ''}">${ps.filter(p => p.plan_month === i + 1).map(cell).join('')}</td>`).join('')}<td class="nowrap small">${ps.filter(p => p.status === 'done').length} / ${ps.filter(p => p.status !== 'cancelled').length}</td></tr>`; }).join('')}
+        </tbody><tfoot><tr class="sp-cum"><th class="sp-v">누적 계획·실시</th>${cum.map(([a, b], i) => `<td class="${Y === y0 && i + 1 === curM ? 'sp-now' : ''}"><div class="sp-bar" title="${i + 1}월까지 계획 ${a} · 실시 ${b}"><i style="height:${Math.round(a / max * 100)}%"></i><b style="height:${Math.round(b / max * 100)}%"></b></div><span>${b}/${a}</span></td>`).join('')}<td class="nowrap"><b>${done.length}</b> / ${live.length}</td></tr></tfoot></table></div>`
+      : `<div class="empty">${plan.rows.length ? '조건에 맞는 계획이 없습니다.' : `${Y}년 평가계획이 없습니다.${plan.can_manage ? ` 「＋ 평가 계획」으로 업체·평가 월을 정하거나 「${Y - 1}년 계획 가져오기」를 누르세요.` : ''}`}</div>`}`;
+  };
+  const draw = () => {
+    $$('#supTabs button', main).forEach(b => { b.classList.toggle('on', b.dataset.tab === tab); b.setAttribute('aria-selected', b.dataset.tab === tab); });
+    $$('[data-only]', form).forEach(x => { x.hidden = x.dataset.only !== tab; });
+    tab === 'plan' ? drawPlan() : drawCard();
+  };
+  const spNew = async () => {
+    const vendors = plan.vendors.length ? plan.vendors : data.rows.map(r => r.vendor), Y = form.elements.year.value;
+    const have = new Set(plan.rows.filter(p => p.status !== 'cancelled').map(p => p.vendor));
+    const v = await promptBox(`${Y}년 평가 계획`, `<div class="form-grid"><label>평가 종류 *<select name="kind">${Object.entries(SP_KIND_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label>계획 월 *<select name="plan_month">${Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}"${Number(Y) === y0 && i + 1 === curM ? ' selected' : ''}>${i + 1}월</option>`).join('')}</select></label><label>담당<input name="owner_name" maxlength="50" value="${esc(ME?.name || '')}"></label><label class="span3">메모<input name="note" maxlength="500"></label></div>
+      <fieldset class="vendor-sec"><legend>업체 * <span class="hint">(여러 곳 고르면 같은 달로 한꺼번에)</span></legend><input type="search" data-sp-q placeholder="업체 찾기" aria-label="업체 찾기" class="sp-q"><div class="sp-pick">${vendors.map(n => `<label class="chk"><input type="checkbox" name="vendors" value="${esc(n)}"> ${esc(n)}${have.has(n) ? ' <span class="chip small">계획 있음</span>' : ''}</label>`).join('') || '<p class="muted small">매입처가 없습니다.</p>'}</div><p class="small"><button type="button" class="link-btn" data-sp-all>보이는 업체 모두 고르기</button></p></fieldset>`,
+      { wide: true, onOpen: el => { const qi = $('[data-sp-q]', el); qi.addEventListener('input', () => { const s = qi.value.trim().toLowerCase(); $$('.sp-pick label', el).forEach(l => { l.hidden = !!s && !l.textContent.toLowerCase().includes(s); }); }); $('[data-sp-all]', el).onclick = () => $$('.sp-pick label:not([hidden]) input', el).forEach(c => { c.checked = true; }); },
+        submit: vals => { const vs = [].concat(vals.vendors || []); if (!vs.length) throw new Error('업체를 하나 이상 고르세요.'); return api('POST', '/api/supplier-plans', { year: Y, vendors: vs, kind: vals.kind, plan_month: vals.plan_month, owner_name: vals.owner_name, note: vals.note, request_id: crypto.randomUUID() }); } });
+    if (v) { toast(`${v.created}개 업체 평가를 계획했습니다.`); await load(); }
+  };
+  const spOpen = async id => {
+    const p = plan.rows.find(x => x.id === id); if (!p) return;
+    const can = plan.can_manage, card = data.rows.find(r => r.key === p.vendor_key);
+    const m = modal(`<h3>${esc(p.vendor)} · ${p.year}년 ${p.plan_month}월 ${esc(SP_KIND_LABEL[p.kind])} <span class="chip ${p.status === 'done' ? 'green' : late(p) ? 'red' : ''}">${p.status === 'done' ? '실시' : p.status === 'cancelled' ? '취소' : late(p) ? '지연' : '계획'}</span></h3>
+      ${p.status === 'done' ? `<p>실시일 <b>${esc(p.done_date)}</b>${p.result ? ` · 결과 <b>${esc(p.result)}</b>` : ''}${p.eval_id ? ' <span class="chip">유효성평가 연결</span>' : ''}</p>` : ''}
+      <form class="stack" data-sp-form><div class="form-grid">
+        <label>평가 종류<select name="kind"${can && p.status === 'planned' ? '' : ' disabled'}>${Object.entries(SP_KIND_LABEL).map(([k, l]) => `<option value="${k}"${p.kind === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label>계획 월<select name="plan_month"${can && p.status === 'planned' ? '' : ' disabled'}>${Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}"${p.plan_month === i + 1 ? ' selected' : ''}>${i + 1}월</option>`).join('')}</select></label>
+        <label>담당<input name="owner_name" maxlength="50" value="${esc(p.owner_name)}"${can && p.status === 'planned' ? '' : ' disabled'}></label>
+        <label class="span3">메모<input name="note" maxlength="500" value="${esc(p.note)}"${can && p.status === 'planned' ? '' : ' disabled'}></label></div>
+        ${can && p.status === 'planned' ? `<fieldset class="vendor-sec"><legend>실시 기록</legend><div class="form-grid"><label>실시일<input type="date" name="done_date" value="${todayStr() < `${p.year}-12-31` ? (todayStr().slice(0, 4) === String(p.year) ? todayStr() : `${p.year}-${String(p.plan_month).padStart(2, '0')}-01`) : `${p.year}-12-31`}" min="${p.year}-01-01" max="${todayStr() < `${p.year}-12-31` ? todayStr() : `${p.year}-12-31`}"></label><label class="span2">결과<input name="result" maxlength="200" placeholder="예) 적합 · 시정 2건 · 현장 5S 양호"></label></div>
+          ${p.kind === 'audit' ? `<p class="small muted">현장심사는 심사 관리의 「협력사 심사」를 실시하면 자동으로 실시 처리됩니다. <button type="button" class="btn small" data-sp-aud>심사 관리에 심사 계획 만들기</button></p>` : ''}
+          ${['regular', 'reeval'].includes(p.kind) ? `<p class="small muted">정기·재평가는 「유효성평가」(품질·납기·대응 점수 → 등급)를 저장하면 자동으로 실시 처리됩니다. ${card ? '<button type="button" class="btn small" data-sp-eval>유효성평가 입력</button>' : ''}</p>` : ''}</fieldset>` : ''}
+        <div class="actions"><button type="button" class="btn" data-sp-hist>이력</button>${can && p.status === 'planned' ? '<button type="button" class="btn danger" data-sp-del>삭제</button><button type="button" class="btn" data-sp-cancel>계획 취소</button>' : ''}${can && p.status !== 'planned' ? `<button type="button" class="btn" data-sp-undo>${p.status === 'done' ? '실시 취소' : '다시 계획'}</button>` : ''}<span class="grow"></span>${can && p.status === 'planned' ? '<button type="button" class="btn" data-sp-save>계획 저장</button><button type="button" class="btn primary" data-sp-done>✔ 실시 처리</button>' : ''}</div></form>`, { wide: true });
+    const f = $('[data-sp-form]', m.el), put = async (body, msg) => { try { await api('PUT', `/api/supplier-plans/${p.id}`, { ...body, revision: p.revision }); toast(msg); m.close(); await load(); } catch (err) { fail(err); } };
+    $('[data-sp-hist]', m.el).onclick = () => qHistory(`${p.vendor} ${p.year} 평가계획`, p.history, {});
+    $('[data-sp-save]', m.el)?.addEventListener('click', () => { const v = formObj(f); put({ action: 'edit', kind: v.kind, plan_month: v.plan_month, owner_name: v.owner_name, note: v.note }, '계획을 저장했습니다.'); });
+    $('[data-sp-done]', m.el)?.addEventListener('click', () => { const v = formObj(f); put({ action: 'done', done_date: v.done_date, result: v.result, note: v.note }, '실시로 기록했습니다. 연간 캘린더에 누적됩니다.'); });
+    $('[data-sp-undo]', m.el)?.addEventListener('click', async () => { if (await confirmBox(p.status === 'done' ? '실시 기록을 지우고 계획으로 되돌릴까요?' : '다시 계획으로 되돌릴까요?')) put({ action: 'undo' }, '계획으로 되돌렸습니다.'); });
+    $('[data-sp-cancel]', m.el)?.addEventListener('click', async () => { const v = await promptBox('평가 계획 취소', '<label>사유 *<input name="reason" required maxlength="300" placeholder="예) 거래 중단"></label>'); if (v) put({ action: 'cancel', reason: v.reason }, '계획을 취소했습니다.'); });
+    $('[data-sp-del]', m.el)?.addEventListener('click', async () => { if (!await confirmBox('이 계획을 지울까요?')) return; try { await api('DELETE', `/api/supplier-plans/${p.id}`); toast('지웠습니다.'); m.close(); await load(); } catch (err) { fail(err); } });
+    $('[data-sp-aud]', m.el)?.addEventListener('click', () => { m.close(); audOpen(null, { kind: 'supplier', target: p.vendor, title: `${p.vendor} 현장심사`, plan_date: `${p.year}-${String(p.plan_month).padStart(2, '0')}-15` }).catch(fail); }); // 15.338
+    $('[data-sp-eval]', m.el)?.addEventListener('click', () => { m.close(); supEval(card, data.year).catch(fail); });
+  };
+  main.addEventListener('click', async e => {
+    const tb = e.target.closest('#supTabs [data-tab]'); if (tb) { tab = tb.dataset.tab; try { sessionStorage.setItem('qSupTab', tab); } catch { /* 편의 */ } draw(); return; }
     const o = e.target.closest('[data-sup-open]'); if (o) return supOpen(o.dataset.supOpen, data.year).catch(fail);
     const ev = e.target.closest('[data-sup-eval]'); if (ev) return supEval(data.rows.find(r => r.vendor === ev.dataset.supEval), data.year).catch(fail);
-    const t = e.target.closest('[data-q-tile]'); if (t) { form.elements.show.value = ['active', 'active', 'active', 'coa', 'noeval', 'low'][Number(t.dataset.qTile)]; draw(); }
+    const t = e.target.closest('[data-q-tile]'); if (t) { if (tab === 'plan') form.elements.pst.value = ['', 'done', 'late', 'planned'][Number(t.dataset.qTile)]; else form.elements.show.value = ['active', 'active', 'active', 'coa', 'noeval', 'low'][Number(t.dataset.qTile)]; draw(); return; }
+    if (e.target.closest('[data-sp-new]')) return spNew().catch(fail);
+    if (e.target.closest('[data-sp-copy]')) { const Y = Number(form.elements.year.value); if (!await confirmBox(`${Y - 1}년 평가계획(업체·종류·월)을 ${Y}년으로 복사할까요? 이미 같은 업체·종류가 있으면 건너뜁니다.`)) return; try { const r = await api('POST', '/api/supplier-plans/copy', { from: Y - 1, to: Y }); toast(`${r.created}건을 가져왔습니다.`); await load(); } catch (err) { fail(err); } return; }
+    const sp = e.target.closest('[data-sp]'); if (sp) return spOpen(Number(sp.dataset.sp)).catch(fail);
   });
-  form.elements.year.addEventListener('change', () => load().catch(fail)); form.addEventListener('input', e => { if (e.target.name !== 'year') draw(); }); form.elements.show.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  form.elements.year.addEventListener('change', () => load().catch(fail)); form.addEventListener('input', e => { if (e.target.name !== 'year') draw(); }); form.addEventListener('change', e => { if (e.target.name !== 'year') draw(); }); form.onsubmit = e => e.preventDefault();
   await load();
 }
 
@@ -1867,7 +2203,8 @@ async function eqLog(e, kind = 'pm', pmKey = '') {
     ${kind === 'pm' ? '<label class="span2">메모<input name="description" maxlength="1000"></label>' : ''}</div>`, { wide: true,
     onOpen: el => { box = el; const draw = () => { const it = item(), c = $('[data-pm-checks]', el); if (!c || !it) return; c.innerHTML = it.checks.length ? `<table class="grid pm-checks" data-no-sort data-no-filter data-keep-cols data-no-reorder><thead><tr><th>점검 항목</th><th>결과</th><th>메모</th></tr></thead><tbody>${it.checks.map((n, i) => `<tr><td>${esc(n)}</td><td class="nowrap"><label class="chk"><input type="radio" name="ck${i}" value="1" checked> 양호</label> <label class="chk"><input type="radio" name="ck${i}" value="0"> 이상</label></td><td><input name="ckn${i}" maxlength="200"></td></tr>`).join('')}</tbody></table>` : '<p class="small muted">점검표가 없는 항목입니다. 수행만 기록합니다.</p>'; }; $('[name=pm_key]', el)?.addEventListener('change', draw); draw(); },
     submit: async vals => { const it = kind === 'pm' ? item() : null; const checks = it ? it.checks.map((n, i) => ({ item: n, ok: vals['ck' + i] === '1', note: vals['ckn' + i] || '' })) : []; return api('POST', `/api/equipment/${e.id}/logs`, { ...vals, checks, revision: e.revision, request_id: crypto.randomUUID() }); } });
-  if (v) { toast(kind === 'pm' ? `수행을 기록했습니다${v.log_result === '이상' ? ' — 점검 이상이 있습니다' : ''}.` : '기록했습니다.', v.log_result === '이상' ? 'err' : 'ok'); qReload(); }
+  if (v) { toast(kind === 'pm' ? `수행을 기록했습니다${v.log_result === '이상' ? ' — 점검 이상이 있습니다' : ''}.` : '기록했습니다.', v.log_result === '이상' ? 'err' : 'ok'); qReload();
+    if ((v.log_result === '이상' || kind === 'failure') && v.log_id && await confirmBox(`${kind === 'failure' ? '고장' : '점검 이상'}을 부적합·CAPA(공정 이상)로 등록할까요? 등록하면 설비 기록에 연결되고 할 일에서 빠집니다.`)) await pmToCapa(e, v.log_id, kind === 'failure' ? '설비 고장' : `PM 점검 이상(${(e.pm_items.find(p => p.key === pmKey) || {}).name || ''})`); } // 15.339
   return v;
 }
 async function eqOpen(id) {
@@ -1887,17 +2224,18 @@ async function pageEquipment(main) {
   main.innerHTML = `<h1>설비 대장·이력 <span class="dept">생산 · 공무</span></h1>
   <p class="muted">생산설비(호기·위치·제조사)와 예방보전(PM) 항목·주기, 고장·수리 이력을 관리합니다. PM 일정은 「예방보전(PM) 일정」에서 한눈에 봅니다. 등록·기록은 생산·품질 담당이 합니다.</p>
   <div class="ip-tiles" id="eqTiles"></div>
-  <form class="toolbar list-filters" data-read-only id="eqFilters"><label class="lf-sel">상태<select name="st"><option value="live">폐기 빼고</option><option value="">전체</option>${Object.entries(EQ_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}<option value="due">PM 7일 안·지남</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="설비번호·설비명·호기·위치·제조사"></label><span class="grow"></span><span id="eqTools" class="ip-tools"></span></form>
+  <form class="toolbar list-filters" data-read-only id="eqFilters"><label class="lf-sel">종류<select name="kind"><option value="">전체</option></select></label><label class="lf-sel">상태<select name="st"><option value="live">폐기 빼고</option><option value="">전체</option>${Object.entries(EQ_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}<option value="due">PM 7일 안·지남</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="설비번호·설비명·호기·위치·제조사"></label><span class="grow"></span><span id="eqTools" class="ip-tools"></span></form>
   <div id="eqList"></div>`;
   const form = $('#eqFilters', main); let data = { rows: [], today: todayStr() };
-  const load = async () => { data = await api('GET', '/api/equipment'); if (main.isConnected) draw(); };
+  const eqRail = selectRail(main, form, 'kind', { title: '설비 종류', icon: '🏭', counts: () => countBy(data.rows.filter(r => r.status !== 'disposed'), r => r.kind || '(종류 없음)') }); // 15.340
+  const load = async () => { data = await api('GET', '/api/equipment'); if (!main.isConnected) return; const ks = [...new Set(data.rows.map(r => r.kind || '(종류 없음)'))].sort((a, b) => a.localeCompare(b, 'ko')), cur = form.elements.kind.value; form.elements.kind.innerHTML = '<option value="">전체</option>' + ks.map(k => `<option${k === cur ? ' selected' : ''}>${esc(k)}</option>`).join(''); eqRail.draw(); draw(); };
   main.qReload = () => load().catch(fail);
   const due = r => r.status !== 'disposed' && r.next_pm && ipDday(r.next_pm, data.today) <= 7;
   const draw = () => {
     const v = formObj(form), q = (v.q || '').trim().toLowerCase(), all = data.rows;
     qTiles('eqTiles', [['설비(폐기 빼고)', all.filter(r => r.status !== 'disposed').length], ['가동', all.filter(r => r.status === 'running').length, 'green'], ['정비 중', all.filter(r => r.status === 'maintenance').length, all.some(r => r.status === 'maintenance') ? 'yellow' : ''], ['PM 7일 안·지남', all.filter(due).length, all.some(due) ? 'red' : ''], ['올해 고장', all.reduce((s, r) => s + r.fails_year, 0)], ['올해 비가동(h)', all.reduce((s, r) => s + r.downtime_year, 0)]]);
     $('#eqTools', main).innerHTML = data.can_manage ? '<button type="button" class="btn primary" id="eqNewBtn">＋ 설비 등록</button>' : '';
-    const rows = all.filter(r => (v.st === 'live' ? r.status !== 'disposed' : v.st === 'due' ? due(r) : !v.st || r.status === v.st) && (!q || [r.equip_no, r.name, r.unit_name, r.location, r.maker, r.model, r.kind].join(' ').toLowerCase().includes(q)));
+    const rows = all.filter(r => (!v.kind || (r.kind || '(종류 없음)') === v.kind) && (v.st === 'live' ? r.status !== 'disposed' : v.st === 'due' ? due(r) : !v.st || r.status === v.st) && (!q || [r.equip_no, r.name, r.unit_name, r.location, r.maker, r.model, r.kind].join(' ').toLowerCase().includes(q)));
     $('#eqList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>설비번호</th><th>설비명</th><th>호기</th><th>위치</th><th>제조사 · 모델</th><th>PM 항목</th><th>다음 PM</th><th>올해 고장 · 비가동</th><th>상태</th><th></th></tr></thead><tbody>${rows.map(r => `<tr data-eq-row="${r.id}" class="${due(r) ? (ipDday(r.next_pm, data.today) < 0 ? 'ip-over' : 'ip-soon') : ''}${r.status === 'disposed' ? ' row-off' : ''}"><td class="nowrap" data-card-primary><b>${esc(r.equip_no)}</b></td><td><b>${esc(r.name)}</b>${r.kind ? `<div class="small muted">${esc(r.kind)}</div>` : ''}</td><td>${esc(r.unit_name)}</td><td>${esc(r.location)}</td><td>${esc([r.maker, r.model].filter(Boolean).join(' · '))}</td><td>${r.pm_items.length}</td><td class="nowrap">${esc(r.next_pm || '')}${qDd(r.next_pm, data.today, r.status !== 'disposed', 7)}</td><td class="nowrap">${r.fails_year}건 · ${r.downtime_year}h</td><td><span class="chip ${EQ_STATUS_CHIP[r.status]}">${esc(r.status_label)}</span></td><td><button type="button" class="btn small" data-eq-open="${r.id}">열기</button></td></tr>`).join('')}</tbody></table></div>`
       : `<div class="empty">${all.length ? '조건에 맞는 설비가 없습니다.' : '등록된 설비가 없습니다. 「＋ 설비 등록」으로 세탁기·커팅기 등과 PM 항목을 넣으세요.'}</div>`;
   };
@@ -1909,16 +2247,62 @@ async function pageEquipment(main) {
   form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
   await load();
 }
+// ── 15.339 PM 연간 캘린더 ── 설비 × 월: PM 항목의 그 해 예정(직전·다음 예정일에서 주기로 앞뒤로) vs 실제 수행 기록.
+// 일·주 단위 주기는 달마다 「수행 n / 예정 m」으로 묶는다.
+function pmAddC(date, n, unit) {
+  const [y, m, d] = date.split('-').map(Number);
+  if (unit === 'day' || unit === 'week') return new Date(Date.UTC(y, m - 1, d) + n * (unit === 'week' ? 7 : 1) * 864e5).toISOString().slice(0, 10);
+  const months = unit === 'year' ? n * 12 : n, t = new Date(Date.UTC(y, m - 1 + months, 1)), last = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate();
+  t.setUTCDate(Math.min(d, last)); return t.toISOString().slice(0, 10);
+}
+function pmPlanDates(p, Y) {
+  const anchor = p.next_due || p.last_done; if (!anchor) return [];
+  const out = [], from = `${Y}-01-01`, to = `${Y}-12-31`; let d = anchor, guard = 0;
+  while (d > from && guard++ < 800) d = pmAddC(d, -p.cycle, p.unit);
+  while (d <= to && guard++ < 1600) { if (d >= from) out.push(d); d = pmAddC(d, p.cycle, p.unit); }
+  return out;
+}
+function pmCalItems(data, Y) {
+  const items = [], curM = todayStr().slice(0, 7);
+  for (const e of data.equipment) for (const p of e.pm_items) {
+    const plan = pmPlanDates(p, Y), logs = data.logs.filter(l => l.equipment_id === e.id && l.pm_key === p.key), dense = p.unit === 'day' || p.unit === 'week';
+    for (let m = 1; m <= 12; m++) {
+      const mm = `${Y}-${String(m).padStart(2, '0')}`, exp = plan.filter(d => d.startsWith(mm)).length, done = logs.filter(l => l.log_date.startsWith(mm)), bad = done.some(l => l.result === '이상');
+      if (!exp && !done.length) continue;
+      const state = done.length >= Math.max(1, exp) ? 'done' : mm < curM ? 'late' : 'plan';
+      items.push({ row: `${e.equip_no} ${e.name}`, month: m, done_month: m, state, label: p.name + (bad ? ' ⚠' : ''), sub: dense ? `${done.length}/${exp}` : done.length ? done.map(l => l.log_date.slice(5).replace('-', '/')).join(' ') : '',
+        title: `${e.equip_no} ${e.name} · ${p.name} (${p.cycle}${PM_UNIT_LABEL[p.unit] || ''}마다)${done.length ? ` · 수행 ${done.map(l => `${l.log_date} ${l.result}`).join(', ')}` : ''}`, attr: `data-pm-do="${e.id}" data-key="${p.key}"` });
+    }
+  }
+  return items;
+}
+// PM 점검 이상·고장 → 부적합·CAPA(출처 「공정 이상」) 등록하고 설비 기록에 연결
+async function pmToCapa(e, logId, what) {
+  const nc = await ncNew({ source_type: 'process', kind: '공정 이상', title: `${e.equip_no} ${e.name} · ${what}`, item: `${e.equip_no} ${e.name}` });
+  if (nc && logId) { try { await api('POST', `/api/equipment/logs/${logId}/nc`, { nc_id: nc.id }); toast(`${nc.nc_no}로 등록하고 설비 기록에 연결했습니다.`); } catch (err) { fail(err); } }
+  return nc;
+}
 async function pagePm(main) {
   main.innerHTML = `<h1>예방보전(PM) 일정 <span class="dept">생산 · 공무</span></h1>
   <p class="muted">모든 설비의 예방보전 항목을 다음 예정일 순으로 봅니다. 「수행」으로 점검표를 체크하면 직전 수행일과 다음 예정일(수행일 + 주기)이 바뀌고 설비 이력에 남습니다. 점검 중 「이상」이 하나라도 있으면 결과가 「이상」으로 기록됩니다.</p>
+  <div class="seg q-tabs" id="pmTabs"><button type="button" data-tab="list">기한 목록</button><button type="button" data-tab="cal">연간 PM 캘린더</button></div>
   <div class="ip-tiles" id="pmTiles"></div>
-  <form class="toolbar list-filters" data-read-only id="pmFilters"><label class="lf-sel">기한<select name="due"><option value="30">30일 안·지남</option><option value="7">7일 안·지남</option><option value="over">지남</option><option value="">전체</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="설비·호기·위치·PM 항목"></label></form>
+  <form class="toolbar list-filters" data-read-only id="pmFilters"><label class="lf-sel" data-only="cal">연도<select name="year">${[1, 0, -1, -2].map(i => { const y = Number(todayStr().slice(0, 4)) + i; return `<option${i === 0 ? ' selected' : ''}>${y}</option>`; }).join('')}</select></label><label class="lf-sel">기한<select name="due"><option value="30">30일 안·지남</option><option value="7">7일 안·지남</option><option value="over">지남</option><option value="">전체</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="설비·호기·위치·PM 항목"></label></form>
   <div id="pmList"></div>`;
-  const form = $('#pmFilters', main); let data = { rows: [], today: todayStr() };
-  const load = async () => { data = await api('GET', '/api/equipment'); if (main.isConnected) draw(); };
+  const form = $('#pmFilters', main); let data = { rows: [], today: todayStr() }, cal = null;
+  let pmTab = 'list'; try { pmTab = sessionStorage.getItem('qPmTab') === 'cal' ? 'cal' : 'list'; } catch { /* 편의 */ }
+  const load = async () => { [data, cal] = await Promise.all([api('GET', '/api/equipment'), pmTab === 'cal' ? api('GET', '/api/pm-calendar?year=' + form.elements.year.value) : Promise.resolve(null)]); if (main.isConnected) draw(); };
+  const drawCal = () => { // 15.339 연간 PM 캘린더
+    const Y = Number(form.elements.year.value), q = (formObj(form).q || '').trim().toLowerCase();
+    const items = pmCalItems(cal || { equipment: [], logs: [] }, Y).filter(x => !q || x.row.toLowerCase().includes(q) || x.label.toLowerCase().includes(q));
+    const lv = items.length, dn = items.filter(x => x.state === 'done').length, lt = items.filter(x => x.state === 'late').length, bad = (cal?.logs || []).filter(l => l.result === '이상').length;
+    qTiles('pmTiles', [['예정(칸)', lv], ['수행', `${dn}${lv ? ` (${Math.round(dn / lv * 100)}%)` : ''}`, 'green'], ['지연', lt, lt ? 'red' : ''], ['점검 이상', bad, bad ? 'red' : '']]);
+    $('#pmList', main).innerHTML = annualCalHtml(items, Y, { rowTitle: '설비', empty: `${Y}년 예방보전 예정이 없습니다. 「설비 대장·이력」에서 PM 항목(주기·직전 수행일)을 넣으세요.` });
+  };
   main.qReload = () => load().catch(fail);
   const draw = () => {
+    $$('#pmTabs button', main).forEach(b => b.classList.toggle('on', b.dataset.tab === pmTab)); $$('[data-only]', form).forEach(x => { x.hidden = x.dataset.only !== pmTab; }); form.elements.due.closest('label').hidden = pmTab === 'cal';
+    if (pmTab === 'cal') return drawCal();
     const v = formObj(form), q = (v.q || '').trim().toLowerCase();
     const items = data.rows.filter(e => e.status !== 'disposed').flatMap(e => e.pm_items.map(p => ({ e, p, d: ipDday(p.next_due, data.today) }))).sort((a, b) => (a.p.next_due || '9').localeCompare(b.p.next_due || '9'));
     qTiles('pmTiles', [['PM 항목', items.length], ['지남', items.filter(x => x.d < 0).length, items.some(x => x.d < 0) ? 'red' : ''], ['7일 안', items.filter(x => x.d >= 0 && x.d <= 7).length, items.some(x => x.d >= 0 && x.d <= 7) ? 'yellow' : ''], ['30일 안', items.filter(x => x.d >= 0 && x.d <= 30).length]]);
@@ -1927,11 +2311,12 @@ async function pagePm(main) {
       : `<div class="empty">${items.length ? '조건에 맞는 PM이 없습니다. 「기한」을 「전체」로 바꿔 보세요.' : 'PM 항목이 있는 설비가 없습니다. 「설비 대장·이력」에서 설비와 PM 항목을 넣으세요.'}</div>`;
   };
   main.addEventListener('click', e => {
-    const t = e.target.closest('[data-q-tile]'); if (t) { form.elements.due.value = ['', 'over', '7', '30'][Number(t.dataset.qTile)]; draw(); return; }
+    const tb = e.target.closest('#pmTabs [data-tab]'); if (tb) { pmTab = tb.dataset.tab; try { sessionStorage.setItem('qPmTab', pmTab); } catch { /* 편의 */ } load().catch(fail); return; }
+    const t = e.target.closest('[data-q-tile]'); if (t && pmTab === 'cal') return; if (t) { form.elements.due.value = ['', 'over', '7', '30'][Number(t.dataset.qTile)]; draw(); return; }
     const d = e.target.closest('[data-pm-do]'); if (d) return eqLog(data.rows.find(r => r.id === Number(d.dataset.pmDo)), 'pm', d.dataset.key).catch(fail);
     const o = e.target.closest('[data-pm-eq]'); if (o) eqOpen(Number(o.dataset.pmEq)).catch(fail);
   });
-  form.addEventListener('input', draw); form.addEventListener('change', draw); form.onsubmit = e => e.preventDefault();
+  form.addEventListener('input', draw); form.addEventListener('change', e => { if (e.target.name === 'year') load().catch(fail); else draw(); }); form.onsubmit = e => e.preventDefault();
   await load();
 }
 
@@ -2204,23 +2589,40 @@ async function audOpen(id = null, pre = {}) {
 async function pageAudits(main) {
   main.innerHTML = `<h1>심사(Audit) 관리 <span class="dept">품질</span></h1>
   <p class="muted">고객사 수검·내부심사·협력사 심사·인증심사를 <b>계획 → 실시 → 시정 중 → 종결</b>로 관리합니다. 체크리스트로 실시하고, 중대·경미 지적은 부적합·CAPA로 자동 등록되며 CAPA가 모두 종결되어야 심사를 종결합니다. 대응보고서는 파일로 붙입니다.</p>
+  <div class="seg q-tabs" id="audTabs"><button type="button" data-tab="list">심사 목록</button><button type="button" data-tab="cal">연간 심사 프로그램</button></div>
   <div class="ip-tiles" id="audTiles"></div>
-  <form class="toolbar list-filters" data-read-only id="audFilters"><label class="lf-sel">유형<select name="kind"><option value="">전체</option>${Object.entries(AUD_KIND_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">단계<select name="st"><option value="live">진행 중</option><option value="">전체</option>${Object.entries(AUD_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="list-search">찾기<input type="search" name="q" placeholder="번호·심사명·대상·심사원"></label><span class="grow"></span><span id="audTools" class="ip-tools"></span></form>
+  <form class="toolbar list-filters" data-read-only id="audFilters"><label class="lf-sel">연도<select name="year"><option>${todayStr().slice(0, 4)}</option></select></label><label class="lf-sel">유형<select name="kind"><option value="">전체</option>${Object.entries(AUD_KIND_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">단계<select name="st"><option value="live">진행 중</option><option value="">전체</option>${Object.entries(AUD_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="list-search">찾기<input type="search" name="q" placeholder="번호·심사명·대상·심사원"></label><span class="grow"></span><span id="audTools" class="ip-tools"></span></form>
   <div id="audList"></div>`;
   const form = $('#audFilters', main); let data = { rows: [], today: todayStr() };
-  const load = async () => { data = await api('GET', '/api/audits'); if (main.isConnected) draw(); };
+  const rail = yearRail(main, form, { title: '연도 폴더', counts: () => Object.fromEntries(Object.entries(data.rows.reduce((m, r) => { const y = String(r.plan_date || '').slice(0, 4); if (y) m[y] = (m[y] || 0) + 1; return m; }, {}))) }); // 15.335
+  const load = async () => { data = await api('GET', '/api/audits'); if (!main.isConnected) return; yearOptions(form.elements.year, data.rows.map(r => String(r.plan_date).slice(0, 4)), todayStr().slice(0, 4), true); rail.draw(); draw(); };
   main.qReload = () => load().catch(fail);
   const live = r => !['closed', 'void'].includes(r.status);
+  let audTab = 'list'; try { audTab = sessionStorage.getItem('qAudTab') === 'cal' ? 'cal' : 'list'; } catch { /* 편의 */ }
   const draw = () => {
+    $$('#audTabs button', main).forEach(b => b.classList.toggle('on', b.dataset.tab === audTab));
+    if (audTab === 'cal') return drawCal();
     const v = formObj(form), q = (v.q || '').trim().toLowerCase(), all = data.rows, open = all.reduce((s, r) => s + (live(r) ? r.open_findings : 0), 0);
     qTiles('audTiles', [['진행 중', all.filter(live).length], ['계획', all.filter(r => r.status === 'planned').length], ['시정 중', all.filter(r => r.status === 'correcting').length, all.some(r => r.status === 'correcting') ? 'yellow' : ''], ['열린 지적', open, open ? 'red' : ''], ['종결', all.filter(r => r.status === 'closed').length, 'green']]);
     $('#audTools', main).innerHTML = data.can_manage ? '<button type="button" class="btn primary" id="audNewBtn">＋ 심사 계획</button>' : '';
-    const rows = all.filter(r => (!v.kind || r.kind === v.kind) && (v.st === 'live' ? live(r) : !v.st || r.status === v.st) && (!q || [r.audit_no, r.title, r.target, r.auditors].join(' ').toLowerCase().includes(q)));
+    const rows = all.filter(r => (!v.year || String(r.plan_date).startsWith(v.year)) && (!v.kind || r.kind === v.kind) && (v.st === 'live' ? live(r) : !v.st || r.status === v.st) && (!q || [r.audit_no, r.title, r.target, r.auditors].join(' ').toLowerCase().includes(q)));
     $('#audList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>번호</th><th>유형</th><th>심사명</th><th>대상</th><th>예정일</th><th>실시일</th><th>지적(중·경·권고)</th><th>열린 지적</th><th>단계</th><th></th></tr></thead><tbody>${rows.map(r => { const c = g => r.findings.filter(f => f.grade === g).length; return `<tr data-aud-row="${r.id}" class="${r.status === 'void' ? 'row-off' : r.status === 'planned' && r.plan_date < data.today ? 'ip-over' : ''}"><td class="nowrap" data-card-primary><b>${esc(r.audit_no)}</b></td><td class="nowrap">${esc(r.kind_label)}${r.cert_label ? `<div class="small muted">${esc(r.cert_label)}</div>` : ''}</td><td><b>${esc(r.title)}</b></td><td>${esc(r.target)}</td><td class="nowrap">${esc(r.plan_date)}${r.status === 'planned' ? qDd(r.plan_date, data.today, true, 14) : ''}</td><td class="nowrap">${esc(r.done_date || '')}</td><td class="nowrap">${c('major')} · ${c('minor')} · ${c('obs')}</td><td>${r.open_findings ? `<span class="chip red">${r.open_findings}</span>` : 0}</td><td><span class="chip ${AUD_CHIP[r.status]}">${esc(r.status_label)}</span></td><td><button type="button" class="btn small" data-aud-open="${r.id}">열기</button></td></tr>`; }).join('')}</tbody></table></div>`
       : `<div class="empty">${all.length ? '조건에 맞는 심사가 없습니다.' : '등록된 심사가 없습니다. 「＋ 심사 계획」으로 내부심사·고객사 수검 일정을 넣으세요.'}</div>`;
   };
+  // 15.338 연간 심사 프로그램: 유형 × 월(계획일 월), 실시·시정 중·종결 = ✔(실시 월), 지난달까지 계획 = 지연
+  const drawCal = () => {
+    const v = formObj(form), Y = Number(v.year || todayStr().slice(0, 4)), q = (v.q || '').trim().toLowerCase();
+    const rows = data.rows.filter(r => String(r.plan_date).startsWith(String(Y)) && (!v.kind || r.kind === v.kind) && (!q || [r.audit_no, r.title, r.target, r.auditors].join(' ').toLowerCase().includes(q)));
+    const st = r => r.status === 'void' ? 'cancel' : ['done', 'correcting', 'closed'].includes(r.status) ? 'done' : calLate(r.plan_date) ? 'late' : 'plan';
+    const items = rows.map(r => ({ id: r.id, row: AUD_KIND_LABEL[r.kind] || r.kind, month: Number(r.plan_date.slice(5, 7)), done_month: r.done_date && r.done_date.startsWith(String(Y)) ? Number(r.done_date.slice(5, 7)) : null, state: st(r), label: r.target || r.title, sub: r.status === 'correcting' ? '시정 중' : r.done_date ? r.done_date.slice(5).replace('-', '/') : '', title: `${r.audit_no} ${r.title} · ${r.status_label}`, attr: `data-aud-open="${r.id}"` }));
+    const live2 = items.filter(x => x.state !== 'cancel'), dn = live2.filter(x => x.state === 'done').length, lt = live2.filter(x => x.state === 'late').length;
+    qTiles('audTiles', [['계획', live2.length], ['실시', `${dn}${live2.length ? ` (${Math.round(dn / live2.length * 100)}%)` : ''}`, 'green'], ['지연', lt, lt ? 'red' : ''], ['열린 지적', rows.reduce((s, r) => s + (live(r) ? r.open_findings : 0), 0)]]);
+    $('#audTools', main).innerHTML = data.can_manage ? '<button type="button" class="btn primary" id="audNewBtn">＋ 심사 계획</button>' : '';
+    $('#audList', main).innerHTML = (v.year ? '' : '<p class="small muted">연간 프로그램은 왼쪽에서 연도를 고르세요(전체 연도는 올해로 보입니다).</p>') + annualCalHtml(items, Y, { rowTitle: '심사 유형', rows: Object.values(AUD_KIND_LABEL), empty: `${Y}년 심사 계획이 없습니다.${data.can_manage ? ' 「＋ 심사 계획」으로 내부심사·고객사 수검·협력사 심사 일정을 넣으세요.' : ''}` });
+  };
   main.addEventListener('click', e => {
-    const t = e.target.closest('[data-q-tile]'); if (t) { form.elements.st.value = ['live', 'planned', 'correcting', 'correcting', 'closed'][Number(t.dataset.qTile)]; draw(); return; }
+    const tb = e.target.closest('#audTabs [data-tab]'); if (tb) { audTab = tb.dataset.tab; try { sessionStorage.setItem('qAudTab', audTab); } catch { /* 편의 */ } draw(); return; }
+    const t = e.target.closest('[data-q-tile]'); if (t && audTab === 'cal') return; if (t) { form.elements.st.value = ['live', 'planned', 'correcting', 'correcting', 'closed'][Number(t.dataset.qTile)]; draw(); return; }
     if (e.target.closest('#audNewBtn')) return audOpen().catch(fail);
     const o = e.target.closest('[data-aud-open]'); if (o) audOpen(Number(o.dataset.audOpen)).catch(fail);
   });
@@ -2272,17 +2674,18 @@ async function pageValidations(main) {
   main.innerHTML = `<h1>밸리데이션 <span class="dept">품질</span></h1>
   <p class="muted">설비 적격성(IQ·OQ·PQ), 공정·시험법·세척 밸리데이션을 단계별로 수행하고 프로토콜·보고서를 붙입니다. 판정(적합·부적합)은 품질책임자가 하며, 적합이면 재밸리데이션 기한(판정일 + 주기)을 D-day로 봅니다. 변경관리 영향평가에서 「재밸리데이션 있음」이면 바로 만들 수 있습니다.</p>
   <div class="ip-tiles" id="valTiles"></div>
-  <form class="toolbar list-filters" data-read-only id="valFilters"><label class="lf-sel">종류<select name="kind"><option value="">전체</option>${Object.entries(VAL_KIND_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">상태<select name="st"><option value="">전체</option>${Object.entries(VAL_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}<option value="due">재밸리데이션 60일 안·지남</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="번호·이름·대상"></label><span class="grow"></span><span id="valTools" class="ip-tools"></span></form>
+  <form class="toolbar list-filters" data-read-only id="valFilters"><label class="lf-sel">연도<select name="year"><option>${todayStr().slice(0, 4)}</option></select></label><label class="lf-sel">종류<select name="kind"><option value="">전체</option>${Object.entries(VAL_KIND_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">상태<select name="st"><option value="">전체</option>${Object.entries(VAL_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}<option value="due">재밸리데이션 60일 안·지남</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="번호·이름·대상"></label><span class="grow"></span><span id="valTools" class="ip-tools"></span></form>
   <div id="valList"></div>`;
   const form = $('#valFilters', main); let data = { rows: [], today: todayStr() };
-  const load = async () => { data = await api('GET', '/api/validations'); if (main.isConnected) draw(); };
+  const rail = yearRail(main, form, { title: '연도 폴더', counts: () => Object.fromEntries(Object.entries(data.rows.reduce((m, r) => { const y = String(r.created_at || '').slice(0, 4); if (y) m[y] = (m[y] || 0) + 1; return m; }, {}))) }); // 15.336 날짜 기준 연도 폴더
+  const load = async () => { data = await api('GET', '/api/validations'); if (!main.isConnected) return; yearOptions(form.elements.year, data.rows.map(r => String(r.created_at).slice(0, 4)), todayStr().slice(0, 4), true); rail.draw(); draw(); };
   main.qReload = () => load().catch(fail);
   const due = r => r.status === 'pass' && r.valid_until && ipDday(r.valid_until, data.today) <= 60;
   const draw = () => {
     const v = formObj(form), q = (v.q || '').trim().toLowerCase(), all = data.rows;
     qTiles('valTiles', [['계획·수행', all.filter(r => ['planned', 'running'].includes(r.status)).length, ''], ['적합', all.filter(r => r.status === 'pass').length, 'green'], ['부적합', all.filter(r => r.status === 'fail').length, all.some(r => r.status === 'fail') ? 'red' : ''], ['재밸리데이션 60일 안·지남', all.filter(due).length, all.some(due) ? 'yellow' : '']]);
     $('#valTools', main).innerHTML = data.can_manage ? '<button type="button" class="btn primary" id="valNewBtn">＋ 밸리데이션</button>' : '';
-    const rows = all.filter(r => (!v.kind || r.kind === v.kind) && (v.st === 'due' ? due(r) : !v.st || r.status === v.st) && (!q || [r.val_no, r.title, r.target_label].join(' ').toLowerCase().includes(q)));
+    const rows = all.filter(r => (!v.year || String(r.created_at).startsWith(v.year)) && (!v.kind || r.kind === v.kind) && (v.st === 'due' ? due(r) : !v.st || r.status === v.st) && (!q || [r.val_no, r.title, r.target_label].join(' ').toLowerCase().includes(q)));
     $('#valList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>번호</th><th>이름</th><th>종류</th><th>대상</th><th>단계 진행</th><th>판정</th><th>재밸리데이션 기한</th><th></th></tr></thead><tbody>${rows.map(r => `<tr data-val-row="${r.id}" class="${r.status === 'void' ? 'row-off' : due(r) ? (ipDday(r.valid_until, data.today) < 0 ? 'ip-over' : 'ip-soon') : ''}"><td class="nowrap" data-card-primary><b>${esc(r.val_no)}</b></td><td><b>${esc(r.title)}</b></td><td class="nowrap">${esc(r.kind_label)}</td><td>${esc(r.target_label)}</td><td class="nowrap">${r.stages.map(s => `<span class="val-dot ${s.result === '적합' ? 'ok' : s.result === '부적합' ? 'ng' : s.done_date ? 'on' : ''}" title="${esc(s.key)} ${esc(s.result || '')}">${esc(s.key.split('(')[0])}</span>`).join('')}</td><td><span class="chip ${VAL_CHIP[r.status]}">${esc(r.status_label)}</span></td><td class="nowrap">${esc(r.valid_until || '')}${qDd(r.valid_until, data.today, r.status === 'pass', 60)}</td><td><button type="button" class="btn small" data-val-open="${r.id}">열기</button></td></tr>`).join('')}</tbody></table></div>`
       : `<div class="empty">${all.length ? '조건에 맞는 밸리데이션이 없습니다.' : '등록된 밸리데이션이 없습니다. 「＋ 밸리데이션」으로 설비 IQ·OQ·PQ나 시험법 밸리데이션을 넣으세요.'}</div>`;
   };
@@ -2342,6 +2745,7 @@ async function pageKpi(main) {
   <form class="toolbar list-filters" data-read-only id="kpiFilters"><label class="lf-sel">연도<select name="year">${[y0 + 1, y0, y0 - 1, y0 - 2].map(y => `<option${y === y0 ? ' selected' : ''}>${y}</option>`).join('')}</select></label><span class="grow"></span><span id="kpiTools" class="ip-tools"></span></form>
   <div id="kpiList"></div>`;
   const form = $('#kpiFilters', main); let data = { rows: [] };
+  yearRail(main, form, { title: '연도 폴더' }); // 15.335
   const load = async () => { data = await api('GET', '/api/kpi?year=' + form.elements.year.value); if (main.isConnected) draw(); };
   main.qReload = () => load().catch(fail);
   const draw = () => {
@@ -2396,10 +2800,11 @@ async function pageRisks(main) {
   <p class="muted">위험·기회를 등록하고 <b>발생가능성 × 영향도(1~5) = 점수</b>(15 이상 상 · 8 이상 중 · 그 아래 하)로 평가합니다. 대응계획·담당을 정해 「대응 중」으로, 대응 뒤 재평가해 종결합니다. 매트릭스 칸을 누르면 그 칸의 리스크만 봅니다.</p>
   <div class="ip-tiles" id="riskTiles"></div>
   <div class="risk-wrap"><div id="riskMatrix"></div><div class="risk-list-wrap">
-  <form class="toolbar list-filters" data-read-only id="riskFilters"><label class="lf-sel">상태<select name="st"><option value="live">종결 빼고</option><option value="">전체</option>${Object.entries(RISK_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">구분<select name="kind"><option value="">전체</option><option value="risk">위험</option><option value="opportunity">기회</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="번호·내용·분야·담당"></label><span class="grow"></span><span id="riskTools" class="ip-tools"></span></form>
+  <form class="toolbar list-filters" data-read-only id="riskFilters"><label class="lf-sel">연도<select name="year"><option>${todayStr().slice(0, 4)}</option></select></label><label class="lf-sel">상태<select name="st"><option value="live">종결 빼고</option><option value="">전체</option>${Object.entries(RISK_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">구분<select name="kind"><option value="">전체</option><option value="risk">위험</option><option value="opportunity">기회</option></select></label><label class="list-search">찾기<input type="search" name="q" placeholder="번호·내용·분야·담당"></label><span class="grow"></span><span id="riskTools" class="ip-tools"></span></form>
   <div id="riskList"></div></div></div>`;
   const form = $('#riskFilters', main); let data = { rows: [], today: todayStr() }, cell = null;
-  const load = async () => { data = await api('GET', '/api/risks'); if (main.isConnected) draw(); };
+  const rail = yearRail(main, form, { title: '연도 폴더', counts: () => Object.fromEntries(Object.entries(data.rows.reduce((m, r) => { const y = String(r.created_at || '').slice(0, 4); if (y) m[y] = (m[y] || 0) + 1; return m; }, {}))) }); // 15.336 날짜 기준 연도 폴더
+  const load = async () => { data = await api('GET', '/api/risks'); if (!main.isConnected) return; yearOptions(form.elements.year, data.rows.map(r => String(r.created_at).slice(0, 4)), todayStr().slice(0, 4), true); rail.draw(); draw(); };
   main.qReload = () => load().catch(fail);
   const live = r => r.status !== 'closed', over = r => live(r) && r.due_date && r.due_date < data.today;
   const draw = () => {
@@ -2408,7 +2813,7 @@ async function pageRisks(main) {
     const cnt = (l, i) => open.filter(r => r.likelihood === l && r.impact === i).length;
     $('#riskMatrix', main).innerHTML = `<table class="risk-matrix" aria-label="리스크 매트릭스(진행 중 위험)"><tbody>${[5, 4, 3, 2, 1].map(l => `<tr><th>${l}</th>${[1, 2, 3, 4, 5].map(i => { const s = l * i, n = cnt(l, i); return `<td class="rm-${riskGradeOf(s)}${cell && cell[0] === l && cell[1] === i ? ' on' : ''}" data-cell="${l},${i}" title="가능성 ${l} × 영향 ${i} = ${s}">${n || ''}</td>`; }).join('')}</tr>`).join('')}<tr><th></th>${[1, 2, 3, 4, 5].map(i => `<th>${i}</th>`).join('')}</tr></tbody></table><div class="small muted risk-ax">세로 발생가능성 · 가로 영향도${cell ? ' · <button type="button" class="btn small" data-cell-clear>칸 선택 풀기</button>' : ''}</div>`;
     $('#riskTools', main).innerHTML = data.can_manage ? '<button type="button" class="btn primary" id="riskNew">＋ 리스크·기회</button>' : '';
-    const rows = all.filter(r => (v.st === 'live' ? live(r) : !v.st || r.status === v.st) && (!v.kind || r.kind === v.kind) && (!cell || (r.likelihood === cell[0] && r.impact === cell[1] && r.kind === 'risk' && live(r))) && (!q || [r.risk_no, r.content, r.area, r.owner_name].join(' ').toLowerCase().includes(q)));
+    const rows = all.filter(r => (!v.year || String(r.created_at).startsWith(v.year)) && (v.st === 'live' ? live(r) : !v.st || r.status === v.st) && (!v.kind || r.kind === v.kind) && (!cell || (r.likelihood === cell[0] && r.impact === cell[1] && r.kind === 'risk' && live(r))) && (!q || [r.risk_no, r.content, r.area, r.owner_name].join(' ').toLowerCase().includes(q)));
     $('#riskList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>번호</th><th>구분 · 분야</th><th>내용</th><th>점수</th><th>대응계획</th><th>담당 · 기한</th><th>재평가</th><th>상태</th><th></th></tr></thead><tbody>${rows.map(r => `<tr data-risk-row="${r.id}" class="${r.status === 'closed' ? 'row-off' : over(r) ? 'ip-over' : ''}"><td class="nowrap" data-card-primary><b>${esc(r.risk_no)}</b></td><td class="nowrap">${esc(r.kind_label)}${r.area ? `<div class="small muted">${esc(r.area)}</div>` : ''}</td><td><b>${esc(r.content)}</b></td><td class="nowrap">${r.likelihood}×${r.impact}=<b>${r.score}</b> <span class="chip ${RISK_GRADE_CHIP[r.grade]}">${r.grade}</span></td><td class="small">${esc(r.plan)}</td><td class="nowrap">${esc(r.owner_name)}${r.due_date ? `<div class="small">${esc(r.due_date)}${qDd(r.due_date, data.today, live(r), 14)}</div>` : ''}</td><td class="nowrap">${r.re_score ? `${r.re_score} <span class="chip ${RISK_GRADE_CHIP[r.re_grade]}">${r.re_grade}</span>` : ''}</td><td><span class="chip ${r.status === 'closed' ? 'green' : 'yellow'}">${esc(r.status_label)}</span></td><td><button type="button" class="btn small" data-risk-open="${r.id}">열기</button></td></tr>`).join('')}</tbody></table></div>`
       : `<div class="empty">${all.length ? '조건에 맞는 리스크가 없습니다.' : '등록된 리스크가 없습니다. 공급망·설비·인력·법규 등에서 위험과 기회를 찾아 넣으세요.'}</div>`;
   };
@@ -2535,6 +2940,8 @@ async function notifyCheck(first = false) {
     for (const [type, g] of Object.entries(tasks.approvals.requests || {})) if (g.count) now[`${REQ[type]?.label || type} 승인 대기`] = g.count;
     for (const q of tasks.approvals.quality || []) now[q.label] = q.count;
     if (tasks.approvals.training_attend?.count) now['교육 참석 확인'] = tasks.approvals.training_attend.count;
+    if (tasks.approvals.training_test?.count) now['교육 테스트 응시'] = tasks.approvals.training_test.count; // 15.334
+    if (tasks.approvals.pm_issue?.count) now['설비 점검 이상·고장'] = tasks.approvals.pm_issue.count; // 15.339
     for (const q of alerts.quality_alerts || []) now[q.label] = q.count;
     if (alerts.overdue_po_count) now['납기 지난 미입고 발주'] = alerts.overdue_po_count;
     let seen = {}; try { seen = JSON.parse(localStorage.getItem(NOTIFY_SEEN()) || '{}'); if (Array.isArray(seen)) seen = {}; } catch {}
@@ -2808,16 +3215,18 @@ async function pageRiskAssess(main) {
   main.innerHTML = `<h1>위험성평가 <span class="dept">생산</span></h1>
   <p class="muted"><b>작업 위험성평가</b>(산업안전, 「사업장 위험성평가에 관한 지침」: 유해·위험요인 파악 → 위험성 결정 → 감소대책 → 공유) · <b>공정 FMEA</b>(품질, AIAG-VDA: 고장 모드·영향·원인 → S·O·D → AP) · <b>HAZOP</b>(설비·배관, 변수 × 가이드워드 → 이탈)을 한 곳에서 작성 → 검토 요청 → 책임자 승인합니다. 감소대책은 「개선 조치 추적」에서 완료·재평가하고, 설비·공정이 바뀌거나 재해가 나면 「개정」합니다.</p>
   <div class="ip-tiles" id="raTiles"></div>
-  <form class="toolbar list-filters" data-read-only id="raFilters"><label class="lf-sel">방법<select name="method"><option value="">전체</option>${Object.entries(RA_METHOD_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">상태<select name="st"><option value="live">폐지 빼고</option><option value="">전체</option>${Object.entries(RA_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="list-search">찾기<input type="search" name="q" placeholder="번호·평가명·공정·설비·품목"></label><span class="grow"></span><span id="raTools" class="ip-tools"></span></form>
+  <form class="toolbar list-filters" data-read-only id="raFilters"><label class="lf-sel">연도<select name="year"><option>${todayStr().slice(0, 4)}</option></select></label><label class="lf-sel">방법<select name="method"><option value="">전체</option>${Object.entries(RA_METHOD_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="lf-sel">상태<select name="st"><option value="live">폐지 빼고</option><option value="">전체</option>${Object.entries(RA_STATUS_LABEL).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="list-search">찾기<input type="search" name="q" placeholder="번호·평가명·공정·설비·품목"></label><span class="grow"></span><span id="raTools" class="ip-tools"></span></form>
   <div id="raListBox"></div>`;
   const form = $('#raFilters', main); let data = { rows: [], today: todayStr() };
-  const load = async () => { data = await raList(); if (main.isConnected) draw(); };
+  const raY = r => String(r.assess_date || r.created_at || '').slice(0, 4);
+  const rail = yearRail(main, form, { title: '연도 폴더', counts: () => Object.fromEntries(Object.entries(data.rows.reduce((m, r) => { const y = String((r.assess_date || r.created_at) || '').slice(0, 4); if (y) m[y] = (m[y] || 0) + 1; return m; }, {}))) }); // 15.335
+  const load = async () => { data = await raList(); if (!main.isConnected) return; yearOptions(form.elements.year, data.rows.map(raY), todayStr().slice(0, 4), true); rail.draw(); draw(); };
   main.qReload = () => load().catch(fail);
   const draw = () => {
     const v = formObj(form), q = (v.q || '').trim().toLowerCase(), all = data.rows, live = all.filter(r => r.status !== 'obsolete');
     qTiles('raTiles', [['작성·검토 중', live.filter(r => r.status !== 'approved').length, live.some(r => r.status === 'review') ? 'yellow' : ''], ['승인', live.filter(r => r.status === 'approved').length, 'green'], ['남은 높음 위험', live.reduce((n, r) => n + r.rows.filter(x => x.grade === 'H' && !(x.done && x.grade2 && x.grade2 !== 'H')).length, 0), live.some(r => r.rows.some(x => x.grade === 'H' && !x.done)) ? 'red' : ''], ['개선 조치 진행', live.reduce((n, r) => n + r.counts.open, 0)], ['조치 기한 지남', live.reduce((n, r) => n + r.counts.over, 0), live.some(r => r.counts.over) ? 'red' : ''], ['재평가 예정 지남', live.filter(r => r.review_over).length, live.some(r => r.review_over) ? 'red' : '']]);
     $('#raTools', main).innerHTML = (data.can_manage ? Object.entries(RA_METHOD_LABEL).map(([k, l]) => `<button type="button" class="btn${k === 'kosha' ? ' primary' : ''}" data-ra-new="${k}">＋ ${l}</button>`).join('') : '') + '<a class="btn" href="#/prod/risk/actions">개선 조치 추적</a>';
-    const rows = all.filter(r => (!v.method || r.method === v.method) && (v.st === 'live' ? r.status !== 'obsolete' : !v.st || r.status === v.st) && (!q || [r.ra_no, r.title, r.process, r.item, r.team, r.equipment?.equip_no, r.equipment?.name].join(' ').toLowerCase().includes(q)));
+    const rows = all.filter(r => (!v.year || raY(r) === v.year) && (!v.method || r.method === v.method) && (v.st === 'live' ? r.status !== 'obsolete' : !v.st || r.status === v.st) && (!q || [r.ra_no, r.title, r.process, r.item, r.team, r.equipment?.equip_no, r.equipment?.name].join(' ').toLowerCase().includes(q)));
     const g = r => `${r.counts.H ? `<span class="chip red">${r.method === 'fmea' ? 'H' : '높음'} ${r.counts.H}</span> ` : ''}${r.counts.M ? `<span class="chip yellow">${r.method === 'fmea' ? 'M' : '보통'} ${r.counts.M}</span> ` : ''}${r.counts.L ? `<span class="chip green">${r.method === 'fmea' ? 'L' : '낮음'} ${r.counts.L}</span>` : ''}` || '<span class="muted">—</span>';
     $('#raListBox', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid ip-table"><thead><tr><th>번호</th><th>방법</th><th>평가명 · 공정</th><th>설비 · 품목</th><th>평가일</th><th>위험 분포</th><th>개선 조치</th><th>재평가 예정</th><th>상태</th><th></th></tr></thead><tbody>${rows.map(r => `<tr data-ra-row="${r.id}" class="${r.status === 'obsolete' ? 'row-off' : r.counts.over || r.review_over ? 'ip-over' : ''}"><td class="nowrap" data-card-primary><b>${esc(r.ra_no)}</b>${r.rev ? `<div class="small muted">Rev.${r.rev}</div>` : ''}</td><td class="nowrap">${esc(r.method_label)}${r.method === 'kosha' ? `<div class="small muted">${esc(r.kind_label)}</div>` : ''}</td><td><b>${esc(r.title)}</b>${r.process ? `<div class="small muted">${esc(r.process)}</div>` : ''}</td><td>${r.equipment ? esc(`${r.equipment.equip_no} ${r.equipment.name}`) : ''}${r.item ? `<div class="small muted">${esc(r.item)}</div>` : ''}</td><td class="nowrap">${esc(r.assess_date || '')}</td><td class="nowrap">${g(r)}</td><td class="nowrap">${r.counts.open || r.counts.done ? `${r.counts.open ? `진행 ${r.counts.open}` : ''}${r.counts.over ? ` <span class="chip red">지남 ${r.counts.over}</span>` : ''}${r.counts.done ? `<div class="small muted">완료 ${r.counts.done}</div>` : ''}` : '<span class="muted">—</span>'}</td><td class="nowrap">${esc(r.next_review || '')}${r.review_over ? ' <span class="chip red">지남</span>' : ''}</td><td class="nowrap"><span class="chip ${RA_STATUS_CHIP[r.status]}">${esc(r.status_label)}</span></td><td><button type="button" class="btn small" data-ra-open="${r.id}">열기</button></td></tr>`).join('')}</tbody></table></div>`
       : `<div class="empty">${all.length ? '조건에 맞는 평가서가 없습니다.' : '등록된 위험성평가가 없습니다. 오른쪽 위 「＋ 작업 위험성평가」로 공정·작업별 유해·위험요인부터 찾아 넣으세요.'}</div>`;

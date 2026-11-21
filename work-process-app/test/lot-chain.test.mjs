@@ -1432,3 +1432,190 @@ test('15.333 quality document folders: add (with parents), validate, move docs, 
   assert.equal((await prod('PUT', '/api/qdoc-folders', { action: 'add', path: 'x' })).status, 403);
   assert.equal((await prod('POST', '/api/qdocs/move', { ids: [d1.id], folder: '' })).status, 403);
 });
+
+test('15.334 training test: build, hide answers, auto-grade choice/OX/short (spaces·case), pass → 이수, attempts used → 재교육, lock questions after attempts, personal records only own unless quality', async () => {
+  const t = (await admin('POST', '/api/trainings', { title: '테스트 교육', kind: 'OJT', plan_date: today, attendees: ['생산'], request_id: rid() })).body;
+  const qs = [{ type: 'choice', q: '온도?', options: ['40', '60'], answer: 1, points: 1 }, { type: 'ox', q: '격리?', answer: 'O', points: 1 }, { type: 'short', q: '5S?', answer: '5S, 오에스', points: 2 }];
+  assert.equal((await admin('PUT', `/api/trainings/${t.id}/test`, { questions: [{ type: 'choice', q: 'x', options: ['a'], answer: 0 }] })).status, 400, 'choice needs 2+ options');
+  assert.equal((await prod('PUT', `/api/trainings/${t.id}/test`, { questions: qs })).status, 403);
+  assert.equal((await admin('PUT', `/api/trainings/${t.id}/test`, { questions: qs, pass_score: 75, max_attempts: 2, open: true })).status, 200);
+  const view = (await prod('GET', `/api/trainings/${t.id}/test`)).body;
+  assert.ok(view.can_take); assert.ok(view.test.questions.every(q => !('answer' in q)));
+  const s1 = (await prod('POST', `/api/trainings/${t.id}/test/submit`, { answers: [1, 'x', ''], request_id: rid() })).body;
+  assert.deepEqual([s1.score, s1.passed, s1.detail], [25, false, [1, 0, 0]]);
+  const id2 = rid(), s2 = (await prod('POST', `/api/trainings/${t.id}/test/submit`, { answers: [1, 'o', ' 오 에스 '], request_id: id2 })).body;
+  assert.deepEqual([s2.score, s2.passed, s2.result], [100, true, '이수']);
+  assert.equal((await prod('POST', `/api/trainings/${t.id}/test/submit`, { answers: [1, 'O', '5S'], request_id: id2 })).body.duplicate, true, 'replay');
+  assert.equal((await prod('POST', `/api/trainings/${t.id}/test/submit`, { answers: [1, 'O', '5S'] })).status, 400, 'already passed');
+  const att = (await admin('GET', '/api/trainings')).body.rows.find(r => r.id === t.id).attendees[0]; assert.deepEqual([att.score, att.result], [100, '이수']);
+  assert.match((await admin('PUT', `/api/trainings/${t.id}/test`, { questions: [...qs, { type: 'ox', q: '추가', answer: 'X' }], revision: 1 })).body.error, /문항을 바꿀 수 없습니다/);
+  const rec = (await prod('GET', '/api/training-records')).body; assert.equal(rec.person.name, '생산'); assert.deepEqual(rec.rows.find(r => r.id === t.id).attempts.map(a => a.score), [25, 100]);
+  assert.equal((await prod('GET', '/api/training-records?user=' + encodeURIComponent('관리자'))).status, 403);
+  assert.ok((await admin('GET', '/api/training-records')).body.people.some(p => p.user_name === '생산'));
+});
+
+test('15.335 supplier annual evaluation plan: bulk plan, edit/done/undo/cancel, eval auto-marks plan done, copy to next year, quality only', async () => {
+  const Y = Number(today.slice(0, 4));
+  const r = await admin('POST', '/api/supplier-plans', { year: Y, vendors: ['계획공급A', '계획공급B'], kind: 'regular', plan_month: 3, request_id: rid() });
+  assert.equal(r.body.created, 2);
+  assert.equal((await prod('POST', '/api/supplier-plans', { year: Y, vendors: ['x'], kind: 'regular', plan_month: 1 })).status, 403);
+  assert.equal((await admin('POST', '/api/supplier-plans', { year: Y, vendors: ['x'], kind: 'nope', plan_month: 1 })).status, 400);
+  await admin('POST', '/api/supplier-plans', { year: Y, vendors: ['계획공급C'], kind: 'audit', plan_month: 1, request_id: rid() });
+  let list = (await admin('GET', '/api/supplier-plans?year=' + Y)).body;
+  const a = list.rows.find(p => p.vendor === '계획공급A'), c = list.rows.find(p => p.vendor === '계획공급C');
+  assert.equal(list.years.find(y => y.year === Y).n, 3);
+  assert.equal((await admin('PUT', `/api/supplier-plans/${c.id}`, { action: 'done', done_date: `${Y + 1}-01-01`, revision: c.revision })).status, 400, 'date in that year and not future');
+  const cd = (await admin('PUT', `/api/supplier-plans/${c.id}`, { action: 'done', done_date: today, result: '적합', revision: c.revision })).body;
+  assert.deepEqual([cd.status, cd.result], ['done', '적합']);
+  const ev = await admin('POST', '/api/supplier-evals', { vendor: '계획공급A', year: Y, quality_score: 90, delivery_score: 90, response_score: 90 });
+  assert.equal(ev.status, 200, JSON.stringify(ev.body));
+  list = (await admin('GET', '/api/supplier-plans?year=' + Y)).body;
+  const a2 = list.rows.find(p => p.id === a.id); assert.equal(a2.status, 'done'); assert.match(a2.result, /A등급/); assert.equal(a2.eval_id, ev.body.id);
+  const b = list.rows.find(p => p.vendor === '계획공급B');
+  assert.equal((await admin('PUT', `/api/supplier-plans/${b.id}`, { action: 'cancel', revision: b.revision })).status, 400, 'reason');
+  assert.equal((await admin('PUT', `/api/supplier-plans/${b.id}`, { action: 'cancel', reason: '거래 중단', revision: b.revision })).body.status, 'cancelled');
+  assert.equal((await admin('DELETE', `/api/supplier-plans/${a.id}`)).status, 400, 'done cannot be deleted');
+  const cp = (await admin('POST', '/api/supplier-plans/copy', { from: Y, to: Y + 1 })).body; assert.equal(cp.created, 2, 'cancelled not copied');
+  assert.equal((await admin('POST', '/api/supplier-plans/copy', { from: Y, to: Y + 1 })).body.created, 0, 'no duplicates');
+  assert.ok((await prod('GET', '/api/supplier-plans?year=' + Y)).body.rows.length >= 3, 'readable');
+});
+
+test('15.336 passing a training test marks attendance automatically; trainings with a test do not ask for separate attendance', async () => {
+  const t = (await admin('POST', '/api/trainings', { title: '자동 참석 교육', kind: 'OJT', plan_date: today, attendees: ['생산'], request_id: rid() })).body;
+  const todo = async () => ((await prod('GET', '/api/my-tasks')).body?.approvals?.training_attend?.items || []).map(x => x.id);
+  assert.ok((await todo()).includes(t.id), 'no test yet → attendance to-do');
+  await admin('PUT', `/api/trainings/${t.id}/test`, { questions: [{ type: 'ox', q: 'O?', answer: 'O', points: 1 }], pass_score: 60, max_attempts: 2, open: true });
+  assert.ok(!(await todo()).includes(t.id), 'with a test → no separate attendance to-do');
+  await prod('POST', `/api/trainings/${t.id}/test/submit`, { answers: ['X'], request_id: rid() });
+  let a = (await admin('GET', '/api/trainings')).body.rows.find(r => r.id === t.id).attendees[0]; assert.equal(a.attended, 0, 'fail does not mark attendance');
+  await prod('POST', `/api/trainings/${t.id}/test/submit`, { answers: ['O'], request_id: rid() });
+  a = (await admin('GET', '/api/trainings')).body.rows.find(r => r.id === t.id).attendees[0];
+  assert.deepEqual([a.attended, a.result], [1, '이수']); assert.ok(a.confirmed_at);
+});
+
+test('15.338 supplier audit carried out → that vendor\'s 현장심사 plan of the year is marked done', async () => {
+  const Y = Number(today.slice(0, 4));
+  await admin('POST', '/api/supplier-plans', { year: Y, vendors: ['심사공급'], kind: 'audit', plan_month: 1, request_id: rid() });
+  const a = (await admin('POST', '/api/audits', { title: '심사공급 현장심사', kind: 'supplier', target: '심사 공급', plan_date: today, request_id: rid() })).body;
+  const r = await admin('PUT', `/api/audits/${a.id}`, { ...a, checklist: a.checklist, status: 'done', done_date: today, revision: a.revision });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const p = (await admin('GET', '/api/supplier-plans?year=' + Y)).body.rows.find(x => x.vendor === '심사공급');
+  assert.deepEqual([p.status, p.result], ['done', `심사 ${a.audit_no}`]);
+});
+
+test('15.339 maintenance operator: PM checklist + breakdown only; abnormal/breakdown shows in plant to-do until linked to CAPA; PM calendar API', async () => {
+  const op = client();
+  await admin('POST', '/api/admin/users', { name: '공무작업', password: 'password', roles: ['operator_maint'] });
+  assert.equal((await op('POST', '/api/auth/login', { name: '공무작업', password: 'password' })).status, 200);
+  const eq = (await admin('POST', '/api/equipment', { name: '세탁기 3호', pm_items: [{ name: '필터 점검', cycle: 1, unit: 'month', checks: ['필터 막힘', '누수'], last_done: `${today.slice(0, 4)}-01-05` }], request_id: rid() })).body;
+  const due = (await op('GET', '/api/operator/pm-due')).body; const e = due.equipment.find(x => x.id === eq.id); assert.ok(e && e.pm_items[0].checks.length === 2);
+  const lg = await op('POST', `/api/equipment/${eq.id}/logs`, { kind: 'pm', pm_key: e.pm_items[0].key, checks: [{ item: '필터 막힘', ok: true }, { item: '누수', ok: false, note: '배수구 누수' }], revision: e.revision, request_id: rid() });
+  assert.equal(lg.status, 200, JSON.stringify(lg.body)); assert.equal(lg.body.log_result, '이상'); assert.ok(lg.body.log_id);
+  assert.equal((await op('POST', `/api/equipment/${eq.id}/logs`, { kind: 'repair', description: 'x', revision: lg.body.revision })).status, 403, 'operator: pm/failure only');
+  for (const u of ['/api/equipment', '/api/ncs', '/api/pm-calendar']) assert.equal((await op('GET', u)).status, 403, u);
+  let todo = (await prod('GET', '/api/my-tasks')).body.approvals.pm_issue; assert.ok(todo.items.some(x => x.equip_no === eq.equip_no));
+  const nc = (await prod('POST', '/api/ncs', { source_type: 'process', kind: '공정 이상', title: '세탁기 3호 누수', found_date: today, request_id: rid() })).body;
+  assert.equal((await prod('POST', `/api/equipment/logs/${lg.body.log_id}/nc`, { nc_id: nc.id })).status, 200);
+  todo = (await prod('GET', '/api/my-tasks')).body.approvals.pm_issue; assert.ok(!todo || !todo.items.some(x => x.equip_no === eq.equip_no), 'linked → off the list');
+  const cal = (await admin('GET', '/api/pm-calendar?year=' + today.slice(0, 4))).body; assert.ok(cal.equipment.some(x => x.id === eq.id)); assert.ok(cal.logs.some(l => l.equipment_id === eq.id && l.result === '이상'));
+});
+
+test('15.340 inspection monthly fail-rate API: by vendor/item, judged only in denominator', async () => {
+  const r = await admin('GET', '/api/inspection-trend?year=' + today.slice(0, 4) + '&kind=수입검사&by=vendor');
+  assert.equal(r.status, 200); assert.ok(Array.isArray(r.body.rows)); assert.equal(r.body.by, 'vendor');
+  const i = await admin('GET', '/api/inspection-trend?year=' + today.slice(0, 4) + '&kind=출하검사&by=item'); assert.deepEqual([i.body.kind, i.body.by], ['출하검사', 'item']);
+});
+
+test('15.341 question bank (dedupe per category, quality only) · qualification exam grants/renews qualification with expiry', async () => {
+  const qs = [{ type: 'ox', q: '불량은 격리?', answer: 'O', points: 1 }, { type: 'choice', q: '건조 온도?', options: ['40', '60'], answer: 1, points: 1 }];
+  assert.deepEqual((await admin('POST', '/api/question-bank', { category: '세탁', questions: qs })).body, { created: 2, skipped: 0 });
+  assert.equal((await admin('POST', '/api/question-bank', { category: '세탁', questions: [qs[0]] })).body.skipped, 1);
+  assert.equal((await prod('GET', '/api/question-bank')).status, 403);
+  const bank = (await admin('GET', '/api/question-bank')).body; assert.deepEqual(bank.categories, ['세탁']); assert.equal(bank.rows.find(r => r.type === 'choice').answer, 1);
+  const t = (await admin('POST', '/api/trainings', { title: '세탁 검사원 자격 시험', kind: '직무 교육', plan_date: today, attendees: ['생산'], request_id: rid() })).body;
+  assert.equal((await admin('PUT', `/api/trainings/${t.id}/test`, { questions: bank.rows.map(({ id, category, created_by, updated_at, ...q }) => q), pass_score: 50, max_attempts: 2, open: true, qual_kind: '세탁 검사원', qual_months: 24 })).status, 200);
+  assert.equal((await prod('GET', `/api/trainings/${t.id}/test`)).body.test.qual_kind, '세탁 검사원');
+  const r = (await prod('POST', `/api/trainings/${t.id}/test/submit`, { answers: ['O', 1], request_id: rid() })).body;
+  assert.equal(r.qual.kind, '세탁 검사원'); assert.equal(r.qual.renewed, false);
+  const q = (await admin('GET', '/api/qualifications')).body.rows.find(x => x.user_name === '생산' && x.kind === '세탁 검사원');
+  assert.equal(q.status, 'valid'); assert.equal(q.acquired_date, today); assert.equal(q.expire_date.slice(0, 4), String(Number(today.slice(0, 4)) + 2));
+});
+
+test('15.343 env checks: zones (warehouse/line), AM/PM temp·humidity with out-of-range action, line cleaning sheet, confirm → approve sign-off, locks, operator entry, my-tasks', async () => {
+  const z = (await prod('POST', '/api/env/zones', { area: 'line', name: '1라인', temp_min: 15, temp_max: 28, hum_min: 30, hum_max: 70 })).body;
+  assert.ok(z.id && z.clean_items.length >= 5, 'line zone gets default cleaning items');
+  const w = (await prod('POST', '/api/env/zones', { area: 'warehouse', name: '원자재 창고', temp_max: 30 })).body; assert.deepEqual(w.clean_items, []);
+  assert.equal((await prod('POST', '/api/env/zones', { area: 'line', name: '1라인' })).status, 400, 'duplicate name');
+  const cal0 = (await prod('GET', `/api/env/day?area=line&date=${today}`)).body.cal; // 15.344 주말·공휴일이면 특근 지정 뒤 점검
+  if (cal0.rest) assert.equal((await prod('POST', '/api/env/days', { kind: 'workday', day: today, area: 'line' })).status, 200);
+  const base = { area: 'line', kind: 'th', date: today };
+  assert.equal((await prod('POST', '/api/env/records', { ...base, entries: [{ zone_id: z.id, slot: 'am', temp: 31, hum: 50 }] })).status, 400, 'out of range needs action');
+  const am = (await prod('POST', '/api/env/records', { ...base, entries: [{ zone_id: z.id, slot: 'am', temp: 31, hum: 50, action: '에어컨 가동' }] })).body;
+  assert.equal(am.deviations, 1); assert.deepEqual(am.missing, ['1라인 오후']);
+  const op = client(); await admin('POST', '/api/admin/users', { name: '라인작업', password: 'password', roles: ['operator'] });
+  assert.equal((await op('POST', '/api/auth/login', { name: '라인작업', password: 'password' })).status, 200);
+  assert.equal((await op('POST', '/api/env/records', { area: 'warehouse', kind: 'th', date: today, entries: [{ zone_id: w.id, slot: 'am', temp: 20, hum: 40 }] })).status, 403, 'production operator: line only');
+  assert.equal((await op('POST', '/api/env/records', { ...base, entries: [{ zone_id: z.id, slot: 'pm', temp: 22, hum: 45 }] })).status, 200);
+  const day = (await op('GET', `/api/env/day?area=line&date=${today}`)).body; assert.equal(day.can.confirm, false); assert.equal(day.records.length, 2);
+  const th = day.sheets.th; assert.equal(th.status, 'open');
+  const res = z.clean_items.map(item => ({ item, v: 'O' })); res[0].v = 'X';
+  assert.equal((await prod('POST', '/api/env/records', { area: 'line', kind: 'clean', date: today, entries: [{ zone_id: z.id, results: res }] })).status, 400, 'X needs action');
+  assert.equal((await prod('POST', '/api/env/records', { area: 'line', kind: 'clean', date: today, entries: [{ zone_id: z.id, results: res, action: '재청소' }] })).body.deviations, 1);
+  assert.equal((await op('PUT', `/api/env/sheets/${th.id}`, { action: 'confirm', revision: th.revision })).status, 403);
+  const c = await prod('PUT', `/api/env/sheets/${th.id}`, { action: 'confirm', revision: th.revision }); assert.equal(c.status, 200, JSON.stringify(c.body)); assert.equal(c.body.confirmed_by, '생산');
+  assert.equal((await prod('POST', '/api/env/records', { ...base, entries: [{ zone_id: z.id, slot: 'pm', temp: 22, hum: 45 }] })).status, 400, 'confirmed sheet is locked');
+  assert.equal((await prod('PUT', `/api/env/sheets/${th.id}`, { action: 'approve', revision: c.body.revision })).status, 403, 'production (not approver) cannot approve');
+  assert.ok((await admin('GET', '/api/my-tasks')).body.approvals.quality.some(q => q.key === 'env_approve'));
+  const a = (await admin('PUT', `/api/env/sheets/${th.id}`, { action: 'approve', revision: c.body.revision })).body; assert.equal(a.status, 'approved');
+  assert.equal((await admin('PUT', `/api/env/sheets/${th.id}`, { action: 'unapprove', revision: a.revision })).status, 400, 'reason required');
+  const mon = (await prod('GET', `/api/env/month?area=line&ym=${today.slice(0, 7)}`)).body;
+  assert.equal(mon.sheets.length, 2); assert.ok(mon.records.some(r => r.kind === 'clean' && !r.ok)); assert.equal(mon.years[0].year, today.slice(0, 4));
+  assert.equal((await prod('DELETE', `/api/env/zones/${z.id}`)).status, 400, 'zone with records cannot be deleted');
+  assert.equal((await prod('DELETE', `/api/env/zones/${w.id}`)).status, 200);
+});
+
+test('15.344 env rest days: weekends/public holidays (with substitute rules) blocked unless 특근; company holidays; line zone/whole-line 비가동', async () => {
+  const h27 = (await prod('GET', '/api/env/holidays?year=2027')).body.builtin.map(x => `${x.day} ${x.name}`);
+  for (const d of ['2027-02-09 대체공휴일(설날)', '2027-07-19 대체공휴일(제헌절)', '2027-12-27 대체공휴일(성탄절)', '2027-09-15 추석']) assert.ok(h27.includes(d), d);
+  assert.ok((await prod('GET', '/api/env/holidays?year=2028')).body.builtin.some(x => x.day === '2028-10-05' && /추석/.test(x.name)), '2028 추석·개천절 겹침 → 10/5');
+  const z = (await prod('POST', '/api/env/zones', { area: 'line', name: '휴무검사 라인' })).body;
+  const sun = '2026-11-15', mon = '2026-11-16', fri = '2026-11-20';
+  const rec = (date, zone = z.id) => prod('POST', '/api/env/records', { area: 'line', kind: 'th', date, entries: [{ zone_id: zone, slot: 'am', temp: 20, hum: 40 }] });
+  let r = await rec(sun); assert.equal(r.status, 400); assert.match(r.body.error || r.body.message || JSON.stringify(r.body), /휴무일/);
+  assert.equal((await prod('GET', `/api/env/day?area=line&date=${sun}`)).body.cal.rest, true);
+  assert.equal((await prod('POST', '/api/env/days', { kind: 'workday', day: mon, area: 'line' })).status, 400, 'weekday needs no 특근');
+  assert.equal((await prod('POST', '/api/env/days', { kind: 'workday', day: sun, area: 'line', note: '주말 특근' })).status, 200);
+  const dc = (await prod('GET', `/api/env/day?area=line&date=${sun}`)).body.cal; assert.equal(dc.rest, false); assert.equal(dc.workday.note, '주말 특근');
+  assert.equal((await rec(sun)).status, 200, '특근 day → can check');
+  assert.equal((await prod('GET', `/api/env/day?area=warehouse&date=${sun}`)).body.cal.rest, true, '특근 is per area');
+  assert.equal((await prod('DELETE', `/api/env/days/${dc.workday.id}`)).status, 400, 'records exist → cannot cancel 특근');
+  // 비가동: 구역 / 라인 전체(0), 창고 불가, 기록 있으면 불가
+  assert.equal((await prod('POST', '/api/env/days', { kind: 'off', day: mon, area: 'warehouse', note: 'x' })).status, 400);
+  assert.equal((await prod('POST', '/api/env/days', { kind: 'off', day: mon, area: 'line', zone_id: z.id })).status, 400, 'reason required');
+  assert.equal((await prod('POST', '/api/env/days', { kind: 'off', day: mon, area: 'line', zone_id: z.id, note: '생산 계획 없음' })).status, 200);
+  r = await rec(mon); assert.equal(r.status, 400, 'off zone blocked');
+  const m = (await prod('GET', `/api/env/month?area=line&ym=2026-11`)).body;
+  assert.equal(m.days[sun].workday.note, '주말 특근'); assert.ok(m.days[mon].off.some(o => o.zone_id === z.id)); assert.equal(m.days['2026-11-08'].rest, true);
+  const off = m.days[mon].off.find(o => o.zone_id === z.id); assert.equal((await prod('DELETE', `/api/env/days/${off.id}`)).status, 200);
+  assert.equal((await rec(mon)).status, 200);
+  assert.equal((await prod('POST', '/api/env/days', { kind: 'off', day: mon, area: 'line', zone_id: 0, note: '정전' })).status, 400, 'records exist → no whole-line off');
+  // 회사 휴일
+  assert.equal((await prod('POST', '/api/env/days', { kind: 'holiday', day: fri, note: '창립기념일' })).status, 200);
+  const fc = (await prod('GET', `/api/env/day?area=warehouse&date=${fri}`)).body.cal; assert.deepEqual([fc.rest, fc.holiday], [true, '창립기념일']);
+  assert.equal((await prod('POST', '/api/env/days', { kind: 'holiday', day: '2026-12-25', note: 'x' })).status, 400, 'already public holiday');
+  assert.equal((await prod('DELETE', `/api/env/days/${fc.company.id}`)).status, 200);
+});
+
+test('15.345 zone check conditions on/off: warehouse defaults to humidity off, records need only enabled values, at least one on', async () => {
+  const w = (await prod('POST', '/api/env/zones', { area: 'warehouse', name: '완제품 창고(조건)', temp_min: 5, temp_max: 35 })).body;
+  assert.deepEqual([w.temp_on, w.hum_on], [true, false], 'warehouse: humidity off by default');
+  const l = (await prod('POST', '/api/env/zones', { area: 'line', name: '조건 라인' })).body; assert.deepEqual([l.temp_on, l.hum_on], [true, true]);
+  assert.equal((await prod('PUT', `/api/env/zones/${w.id}`, { temp_on: false, hum_on: false, revision: w.revision })).status, 400, 'at least one on');
+  const mon = '2026-11-16';
+  const r = await prod('POST', '/api/env/records', { area: 'warehouse', kind: 'th', date: mon, entries: [{ zone_id: w.id, slot: 'am', temp: 20, hum: 99 }] });
+  assert.equal(r.status, 200, JSON.stringify(r.body)); assert.equal(r.body.deviations, 0, 'humidity ignored when off');
+  const rec = (await prod('GET', `/api/env/day?area=warehouse&date=${mon}`)).body.records.find(x => x.zone_id === w.id); assert.deepEqual([rec.temp, rec.hum], [20, null]);
+  assert.equal((await prod('POST', '/api/env/records', { area: 'warehouse', kind: 'th', date: mon, entries: [{ zone_id: w.id, slot: 'pm', hum: 50 }] })).status, 400, 'temperature still required');
+  const w2 = (await prod('PUT', `/api/env/zones/${w.id}`, { hum_on: true, hum_max: 60, revision: w.revision })).body; assert.equal(w2.hum_on, true);
+  assert.equal((await prod('POST', '/api/env/records', { area: 'warehouse', kind: 'th', date: mon, entries: [{ zone_id: w.id, slot: 'pm', temp: 20 }] })).status, 400, 'humidity required once on');
+});

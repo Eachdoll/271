@@ -673,6 +673,48 @@
       "when": 1800010415000,
       "tag": "0095_qdoc_folders",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "6",
+      "when": 1800010416000,
+      "tag": "0096_training_tests",
+      "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "6",
+      "when": 1800010417000,
+      "tag": "0097_supplier_eval_plans",
+      "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "6",
+      "when": 1800010418000,
+      "tag": "0098_question_bank",
+      "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "6",
+      "when": 1800010419000,
+      "tag": "0099_env_checks",
+      "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "6",
+      "when": 1800010420000,
+      "tag": "0100_env_days",
+      "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "6",
+      "when": 1800010421000,
+      "tag": "0101_env_zone_checks",
+      "breakpoints": true
     }
   ]
 }
