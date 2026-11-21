@@ -21,9 +21,10 @@ const envOffOf = (c, zid) => c.off.find(o => o.zone_id === zid) || c.off.find(o 
 async function pageEnv(main, { operator = false, area: fixedArea = '' } = {}) {
   let area = fixedArea || (envSs('envArea') === 'warehouse' ? 'warehouse' : 'line');
   let tab = operator ? 'day' : (['day', 'month', 'setup'].includes(envSs('envTab')) ? envSs('envTab') : 'day');
-  let date = todayStr(), d = null, mon = null, setup = null, rail = null;
+  let date = todayStr(), d = null, mon = null, setup = null, rail = null, jump = null;
+  try { const j = JSON.parse(sessionStorage.getItem('envJump') || 'null'); if (j && (!fixedArea || j.area === fixedArea)) { jump = j; area = j.area; tab = 'day'; sessionStorage.removeItem('envJump'); } } catch { /* 편의 */ } // 15.349 구역 QR
   main.innerHTML = `<h1>환경점검 <span class="dept">${operator ? esc(ENV_AREA_L[area]) : '생산'}</span></h1>
-  ${operator ? '' : '<p class="muted">창고·라인의 구역별로 매일 <b>온습도(오전·오후)</b>를, 라인은 <b>청소 체크시트</b>도 점검합니다. 점검자가 기록하면 확인자가 확인하고 승인자가 승인합니다(확인되면 기록이 잠김). 기준을 벗어나거나 불량이면 조치 내용을 적고, 필요하면 부적합·CAPA로 넘깁니다. 구역·기준·청소 항목은 「구역 설정」에서 고칩니다.</p>'}
+  ${operator ? '' : '<p class="muted">창고·라인의 구역별로 매일 <b>온습도(오전·오후)</b>를, 라인은 <b>청소 체크시트</b>도 점검합니다. 점검자가 기록하면 확인자가 확인하고 승인자가 승인합니다(확인되면 기록이 잠김). 기준을 벗어나거나 불량이면 조치 내용을 적고, 필요하면 부적합·CAPA로 넘깁니다. 구역·기준·청소 항목은 「구역 설정」에서 고칩니다. <b>토·일·공휴일은 점검하지 않는 날(빗금)</b>이며, 일하는 날이면 「특근 지정」 뒤 점검합니다. 라인이 쉬는 날은 구역별·라인 전체 「비가동」으로 지정합니다. 구역마다 온도·습도 점검을 켜고 끌 수 있고(창고는 습도 기본 끔), 회사 휴일은 「구역 설정 › 휴일 관리」에서 넣습니다. 월간 기록은 인쇄·엑셀로 점검일지를 냅니다.</p>'}
   <div class="seg q-tabs env-areas" id="envArea"${fixedArea ? ' hidden' : ''}>${Object.entries(ENV_AREA_L).map(([k, l]) => `<button type="button" data-area="${k}">${ENV_AREA_IC[k]} ${l}</button>`).join('')}</div>
   <div class="seg q-tabs" id="envTabs"${operator ? ' hidden' : ''}><button type="button" data-tab="day">일일 점검</button><button type="button" data-tab="month">월간 기록 · 인쇄</button><button type="button" data-tab="setup">구역 설정</button></div>
   <div class="ip-tiles" id="envTiles"></div>
@@ -32,7 +33,13 @@ async function pageEnv(main, { operator = false, area: fixedArea = '' } = {}) {
   const marks = () => { $$('#envArea button', main).forEach(b => b.classList.toggle('on', b.dataset.area === area)); $$('#envTabs button', main).forEach(b => b.classList.toggle('on', b.dataset.tab === tab)); };
   const load = async () => {
     marks();
-    if (tab === 'day') { d = await api('GET', `/api/env/day?area=${area}&date=${date}`); if (main.isConnected && tab === 'day') drawDay(); }
+    if (tab === 'day') { d = await api('GET', `/api/env/day?area=${area}&date=${date}`); if (main.isConnected && tab === 'day') drawDay();
+      if (jump && main.isConnected) { const z = d.zones.find(x => x.id === jump.zone); jump = null; // 15.349 QR로 들어오면 그 구역 입력 창
+        if (!z) toast('QR의 구역을 찾을 수 없습니다(사용 안 함이거나 삭제됨).', 'err');
+        else if (d.cal.rest) toast(`오늘은 휴무일이라 점검하지 않습니다. 특근이면 담당자에게 「특근 지정」을 요청하세요.`, 'err');
+        else if (envOffZ(d.cal, z.id)) toast(`${z.name}은(는) 오늘 비가동입니다.`, 'err');
+        else if (!d.can.check || (d.sheets.th && d.sheets.th.status !== 'open')) toast(`${z.name} 오늘 일지는 확인이 끝났거나 입력 권한이 없습니다.`, 'err');
+        else { $(`.env-table tr[data-zone="${z.id}"]`, body)?.scrollIntoView({ block: 'center' }); thModal(Number(todayStr() === date && new Date().getHours() >= 13) ? 'pm' : 'am', z.id); } } }
     else if (tab === 'month') { if (!$('#envMonthForm', body)) buildMonth(); await loadMonth(); }
     else { setup = await api('GET', `/api/env/zones?area=${area}`); if (main.isConnected && tab === 'setup') drawSetup(); }
   };
@@ -76,14 +83,14 @@ async function pageEnv(main, { operator = false, area: fixedArea = '' } = {}) {
     const banner = rest ? `<div class="env-rest env-hatch"><b>🚫 ${esc(envRestL(cal))} · 휴무</b> <span>점검하지 않는 날입니다(점검일지 대상 아님).</span>${d.can.confirm ? ' <button type="button" class="btn small primary" data-env-work>특근 지정(점검하기)</button>' : ''}</div>`
       : cal.workday ? `<div class="env-rest env-work"><span class="chip yellow">특근</span> <b>${esc(envRestL({ ...cal, rest: true }))}</b> <span class="small muted">${esc(cal.workday.note)} · 지정 ${esc(cal.workday.by)}</span>${d.can.confirm && !d.records.length && !anyLocked ? ` <button type="button" class="btn small" data-env-work-del="${cal.workday.id}">특근 취소</button>` : ''}</div>${allOff ? envAllOffBanner() : ''}`
       : allOff ? `<div class="env-rest env-hatch"><b>⏸ 라인 전체 비가동</b> <span>${esc(allOff.note)} · 지정 ${esc(allOff.by)}</span>${canDays ? ` <button type="button" class="btn small" data-env-off-del="${allOff.id}">비가동 취소</button>` : ''}</div>` : '';
-    body.innerHTML = `<div class="toolbar env-datebar"><button type="button" class="btn" data-env-day="-1" aria-label="전날">◀</button><label class="lf-sel">점검일<input type="date" name="env_date" value="${date}" max="${d.today}"></label><button type="button" class="btn" data-env-day="1" aria-label="다음 날"${date >= d.today ? ' disabled' : ''}>▶</button>${date !== d.today ? '<button type="button" class="btn" data-env-today>오늘</button>' : ''}<span class="small muted">${ENV_AREA_IC[area]} ${ENV_AREA_L[area]} · ${esc(date)} (${wd})${cal.holiday ? ` · <b class="env-hol">${esc(cal.holiday)}</b>` : ''}</span><span class="grow"></span>${area === 'line' && !rest && !allOff && canDays && zs.length && !d.records.some(r => !r.skipped) ? '<button type="button" class="btn" data-env-off="0">라인 전체 비가동</button>' : ''}</div>
+    body.innerHTML = `<div class="toolbar env-datebar"><button type="button" class="btn" data-env-day="-1" aria-label="전날">◀</button><label class="lf-sel">점검일<input type="date" name="env_date" value="${date}" max="${d.today}"></label><button type="button" class="btn" data-env-day="1" aria-label="다음 날"${date >= d.today ? ' disabled' : ''}>▶</button>${date !== d.today ? '<button type="button" class="btn" data-env-today>오늘</button>' : ''}<span class="small muted">${ENV_AREA_IC[area]} ${ENV_AREA_L[area]} · ${esc(date)} (${wd})${cal.holiday ? ` · <b class="env-hol">${esc(cal.holiday)}</b>` : ''}</span><span class="grow"></span>${d.pending > 1 ? `<button type="button" class="btn" data-bulk="env">확인 완료 일지 한꺼번에 승인 (${d.pending})</button>` : ''}${area === 'line' && !rest && !allOff && canDays && zs.length && !d.records.some(r => !r.skipped) ? '<button type="button" class="btn" data-env-off="0">라인 전체 비가동</button>' : ''}</div>
     ${banner}
     ${!zs.length ? `<div class="empty">${ENV_AREA_L[area]} 구역이 없습니다. ${d.can.setup ? '「구역 설정」에서 구역(예: ' + (area === 'line' ? '1라인·커팅실·세탁실' : '1동 원자재 창고·완제품 창고') + ')을 추가하세요.' : '생산·물류 담당자에게 구역 설정을 요청하세요.'}</div>` : `
     <section class="env-sec"><div class="env-sec-head"><h2>🌡 ${thName} 점검일지</h2><span class="grow"></span>${d.can.check && !thLocked && !rest && nTh ? '<button type="button" class="btn primary" data-env-th="am">오전 점검 입력</button><button type="button" class="btn primary" data-env-th="pm">오후 점검 입력</button>' : ''}${capaBtn(s, dev)}</div>
       ${rest && !s ? '' : signHtml(s, 'th')}
       <div class="table-wrap"><table class="grid env-table" data-keep-cols><thead><tr><th>구역</th>${TN ? '<th>기준 온도</th>' : ''}${HN ? '<th>기준 습도</th>' : ''}${['오전', '오후'].map(L => `${TN ? `<th class="r">${L} 온도</th>` : ''}${HN ? `<th class="r">${L} 습도</th>` : ''}<th>${L} 점검자</th>`).join('')}<th>조치</th>${area === 'line' ? '<th>가동</th>' : ''}</tr></thead>
       <tbody>${zs.map(z => { const a = rec(z, 'am'), p = rec(z, 'pm'), off = envOffZ(cal, z.id) && !a && !p; const act = [a, p].filter(r => r && !r.ok && r.action).map(r => `${r.slot_label}: ${r.action}`).join(' / ');
-        return `<tr class="${off ? 'env-hatch' : [a, p].some(r => r && !r.ok) ? 'ip-over' : ''}"><td data-card-primary><b>${esc(z.name)}</b>${z.active ? '' : ' <span class="chip">사용 안 함</span>'}</td>${rngTd(z)}${off ? offCell(z, SW * 2 + 1) : `${cell(z, a)}${cell(z, p)}<td class="small">${esc(act)}</td>`}${area === 'line' ? `<td class="nowrap">${offBtn(z)}</td>` : ''}</tr>`; }).join('')}</tbody></table></div></section>
+        return `<tr data-zone="${z.id}" class="${off ? 'env-hatch' : [a, p].some(r => r && !r.ok) ? 'ip-over' : ''}"><td data-card-primary><b>${esc(z.name)}</b>${z.active ? '' : ' <span class="chip">사용 안 함</span>'}</td>${rngTd(z)}${off ? offCell(z, SW * 2 + 1) : `${cell(z, a)}${cell(z, p)}<td class="small">${esc(act)}</td>`}${area === 'line' ? `<td class="nowrap">${offBtn(z)}</td>` : ''}</tr>`; }).join('')}</tbody></table></div></section>
     ${area === 'line' ? `<section class="env-sec"><div class="env-sec-head"><h2>🧹 청소 체크시트</h2><span class="grow"></span>${capaBtn(c, clBad)}</div>
       ${rest && !c ? '' : signHtml(c, 'clean')}
       <div class="table-wrap"><table class="grid env-table" data-keep-cols><thead><tr><th>구역</th><th class="r">항목</th><th class="r">양호</th><th class="r">불량</th><th class="r">해당 없음</th><th>점검자</th><th>조치</th><th></th></tr></thead>
@@ -102,8 +109,8 @@ async function pageEnv(main, { operator = false, area: fixedArea = '' } = {}) {
     if (v) { toast(kind === 'workday' ? '특근으로 지정했습니다. 이제 점검할 수 있습니다.' : `${zn} 비가동으로 지정했습니다.`); load().catch(fail); }
   };
   // 온습도 입력 창(오전/오후 한 번에): 기준 밖이면 빨간색 + 조치 칸 필수
-  const thModal = slot => {
-    const s = d.sheets.th, zs = d.zones.filter(z => z.active && !envOffZ(d.cal, z.id)), L = slot === 'am' ? '오전' : '오후';
+  const thModal = (slot, only = 0) => {
+    const s = d.sheets.th, zs = d.zones.filter(z => z.active && !envOffZ(d.cal, z.id) && (!only || z.id === only)), L = slot === 'am' ? '오전' : '오후';
     const old = z => d.records.find(r => r.zone_id === z.id && r.slot === slot && s && r.sheet_id === s.id);
     const m = modal(`<h3>${ENV_AREA_IC[area]} ${ENV_AREA_L[area]} · ${L} 온습도 점검 <span class="small muted">${esc(date)}</span></h3>
       <form class="stack" data-env-th-form><p class="small muted">점검한 구역만 넣으면 됩니다(이미 넣은 값은 고쳐 씀). 점검하지 못한 구역은 「미점검」을 체크하고 사유를 적으세요.</p>
@@ -198,12 +205,12 @@ async function pageEnv(main, { operator = false, area: fixedArea = '' } = {}) {
     const signTd = s => `<td class="small">${s?.confirmed_by ? esc(s.confirmed_by) : ''}</td><td class="small">${s?.approved_by ? esc(s.approved_by) : ''}</td>`;
     const work = days.filter(dd => !dayOff(dd)), appr = sheets.filter(s => s.status === 'approved').length, bad = recs.filter(r => !r.ok).length, pastNo = work.filter(dd => dd <= mon.today && !sh(dd)).length;
     qTiles('envTiles', [['점검일지', sheets.length], ['승인 완료', appr, appr && appr === sheets.length ? 'green' : ''], ['결재 대기', sheets.length - appr, sheets.length - appr ? 'yellow' : ''], [kind === 'th' ? '기준 이탈' : '불량', bad, bad ? 'red' : ''], ['기록 없는 근무일', pastNo, pastNo ? 'yellow' : ''], ['휴무·비가동일', days.length - work.length]]);
-    const z = zs.find(x => String(x.id) === zsel.value); let html;
+    const z = zs.find(x => String(x.id) === zsel.value); let html, charts = '';
     const T = 'class="grid keep-table env-month" data-no-filter data-no-sort data-keep-cols data-no-reorder';
     if (!z) html = `<table ${T}><thead><tr><th>일자</th><th>상태</th>${kind === 'th' ? '<th class="r">오전</th><th class="r">오후</th><th class="r">이탈</th>' : '<th class="r">점검 구역</th><th class="r">불량</th>'}<th>점검자</th><th>확인</th><th>승인</th></tr></thead><tbody>${days.map(dd => { const s = sh(dd), rs = recs.filter(r => r.check_date === dd), bd = rs.filter(r => !r.ok).length, off = dayOff(dd) && !s;
       if (off) return `<tr class="env-hatch"><td class="nowrap">${dayLabel(dd)}</td><td colspan="${kind === 'th' ? 7 : 6}" class="env-off-t">${C(dd).rest ? '휴무' : `라인 전체 비가동 · ${esc(C(dd).off.find(o => o.zone_id === 0)?.note || '')}`}</td></tr>`;
       return `<tr class="${bd ? 'ip-over' : ''}"><td class="nowrap">${dayLabel(dd)}</td><td>${s ? `<span class="chip ${ENV_ST_CHIP[s.status]}">${ENV_ST_L[s.status]}</span>` : '<span class="muted">—</span>'}</td>${kind === 'th' ? `<td class="r">${rs.filter(r => r.slot === 'am').length || ''}</td><td class="r">${rs.filter(r => r.slot === 'pm').length || ''}</td>` : `<td class="r">${rs.length || ''}</td>`}<td class="r${bd ? ' env-out' : ''}">${bd || ''}</td><td class="small">${esc([...new Set(rs.map(r => r.checked_by))].join(', '))}</td>${signTd(s)}</tr>`; }).join('')}</tbody></table>`;
-    else if (kind === 'th') html = `<p class="small muted">${esc(z.name)} · ${[z.temp_on && `기준 온도 ${envRange(z.temp_min, z.temp_max, '℃')}`, z.hum_on && `습도 ${envRange(z.hum_min, z.hum_max, '%')}`].filter(Boolean).join(' · ')}${z.hum_on ? '' : ' · 습도 점검 안 함'}${z.temp_on ? '' : ' · 온도 점검 안 함'} · 빗금 = 휴무·비가동</p><table ${T}><thead><tr><th>일자</th>${['오전', '오후'].map(L => `${z.temp_on ? `<th class="r">${L} 온도</th>` : ''}${z.hum_on ? `<th class="r">${L} 습도</th>` : ''}<th>점검자</th>`).join('')}<th>조치</th><th>확인</th><th>승인</th></tr></thead><tbody>${days.map(dd => { const s = sh(dd), g = slot => recs.find(r => r.check_date === dd && r.zone_id === z.id && r.slot === slot), a = g('am'), p = g('pm');
+    else if (kind === 'th' && (charts = envCharts(z, days, recs)) !== null) html = `<p class="small muted">${esc(z.name)} · ${[z.temp_on && `기준 온도 ${envRange(z.temp_min, z.temp_max, '℃')}`, z.hum_on && `습도 ${envRange(z.hum_min, z.hum_max, '%')}`].filter(Boolean).join(' · ')}${z.hum_on ? '' : ' · 습도 점검 안 함'}${z.temp_on ? '' : ' · 온도 점검 안 함'} · 빗금 = 휴무·비가동</p><table ${T}><thead><tr><th>일자</th>${['오전', '오후'].map(L => `${z.temp_on ? `<th class="r">${L} 온도</th>` : ''}${z.hum_on ? `<th class="r">${L} 습도</th>` : ''}<th>점검자</th>`).join('')}<th>조치</th><th>확인</th><th>승인</th></tr></thead><tbody>${days.map(dd => { const s = sh(dd), g = slot => recs.find(r => r.check_date === dd && r.zone_id === z.id && r.slot === slot), a = g('am'), p = g('pm');
       if (!a && !p && envOffZ(C(dd), z.id)) { const o = envOffOf(C(dd), z.id); return `<tr class="env-hatch"><td class="nowrap">${dayLabel(dd)}</td><td colspan="${(1 + z.temp_on + z.hum_on) * 2 + 3}" class="env-off-t">${C(dd).rest ? '휴무' : `비가동 · ${esc(o?.note || '')}`}</td></tr>`; }
       const nv = z.temp_on + z.hum_on, c3 = r => !r ? '<td></td>'.repeat(nv + 1) : r.skipped ? `<td colspan="${nv}" class="muted">미점검</td><td class="small">${esc(r.checked_by)}</td>` : `${z.temp_on ? `<td class="r${envOutT(z, r.temp) ? ' env-out' : ''}">${envFmt(r.temp)}</td>` : ''}${z.hum_on ? `<td class="r${envOutH(z, r.hum) ? ' env-out' : ''}">${envFmt(r.hum)}</td>` : ''}<td class="small">${esc(r.checked_by)}</td>`;
       return `<tr class="${[a, p].some(r => r && !r.ok) ? 'ip-over' : ''}"><td class="nowrap">${dayLabel(dd)}</td>${c3(a)}${c3(p)}<td class="small">${esc([a, p].filter(r => r && (!r.ok || r.skipped)).map(r => `${r.slot_label}: ${r.action}`).join(' / '))}</td>${signTd(s)}</tr>`; }).join('')}</tbody></table>`;
@@ -215,20 +222,22 @@ async function pageEnv(main, { operator = false, area: fixedArea = '' } = {}) {
         <tr class="env-cs-sign"><td>확인</td>${days.map(dd => `<td class="c small${hz(dd)}">${esc((sh(dd)?.confirmed_by || '').slice(0, 3))}</td>`).join('')}</tr>
         <tr class="env-cs-sign"><td>승인</td>${days.map(dd => `<td class="c small${hz(dd)}">${esc((sh(dd)?.approved_by || '').slice(0, 3))}</td>`).join('')}</tr></tbody></table>
         ${recs.some(r => r.zone_id === z.id && !r.ok) ? `<p class="small"><b>불량 조치</b> ${recs.filter(r => r.zone_id === z.id && !r.ok).map(r => `${r.check_date.slice(5)} ${esc(r.action)}`).join(' / ')}</p>` : ''}`; }
-    $('#envMonthOut', body).innerHTML = (zs.length || sheets.length) ? `<div class="table-wrap">${html}</div>` : `<div class="empty">${ENV_AREA_L[area]} 구역이 없습니다. 「구역 설정」에서 구역을 추가하세요.</div>`;
+    $('#envMonthOut', body).innerHTML = (zs.length || sheets.length) ? `${charts}<div class="table-wrap">${html}</div>` : `<div class="empty">${ENV_AREA_L[area]} 구역이 없습니다. 「구역 설정」에서 구역을 추가하세요.</div>`;
+    monthDrawn();
   };
+  const monthDrawn = () => envChartHover($('#envMonthOut', body)); // 15.349
   const monthTitle = () => { const f = $('#envMonthForm', body), z = f.elements.zone.selectedOptions[0]; return `${mon.ym.replace('-', '년 ')}월 ${ENV_AREA_L[area]} ${f.elements.kind.value === 'th' ? '온습도 점검일지' : '청소 체크시트'}${f.elements.zone.value ? ' · ' + z.textContent : ''}`; };
   const printMonth = async () => { const t = $('#envMonthOut table', body); if (!t) return; const co = await rptCompany();
-    rptWindow(monthTitle(), `<div class="env-print">${t.outerHTML.replace('class="grid keep-table env-month', 'class="rpt-list env-month')}</div><div class="rpt-sign"><span>작성</span><span>검토</span><span>승인</span></div>`, co); };
+    rptWindow(monthTitle(), `${$('#envMonthOut .env-charts', body)?.outerHTML || ''}<div class="env-print">${t.outerHTML.replace('class="grid keep-table env-month', 'class="rpt-list env-month')}</div><div class="rpt-sign"><span>작성</span><span>검토</span><span>승인</span></div>`, co); };
 
   // ── 구역 설정 ──
   const drawSetup = () => {
     const zs = setup.zones.filter(z => z.area === area), can = setup.can_setup;
     qTiles('envTiles', [['구역', zs.length], ['사용 중', zs.filter(z => z.active).length, 'green'], ['사용 안 함', zs.filter(z => !z.active).length], ...(area === 'line' ? [['청소 항목 있는 구역', zs.filter(z => z.active && z.clean_items.length).length]] : [])]);
-    body.innerHTML = `<div class="toolbar"><span class="small muted">${ENV_AREA_IC[area]} ${ENV_AREA_L[area]} 구역 ${zs.length}개. 기준(온도·습도 하한·상한)을 넣으면 벗어난 값이 빨간색으로 표시되고 조치 내용을 적어야 저장됩니다.${area === 'line' ? ' 청소 체크시트 항목은 구역마다 고칠 수 있고, 한 구역 항목을 다른 라인 구역에 그대로 적용할 수 있습니다.' : ''}</span><span class="grow"></span>${can ? '<button type="button" class="btn primary" data-env-zone-new>＋ 구역 추가</button>' : ''}</div>
+    body.innerHTML = `<div class="toolbar"><span class="small muted">${ENV_AREA_IC[area]} ${ENV_AREA_L[area]} 구역 ${zs.length}개. 기준(온도·습도 하한·상한)을 넣으면 벗어난 값이 빨간색으로 표시되고 조치 내용을 적어야 저장됩니다.${area === 'line' ? ' 청소 체크시트 항목은 구역마다 고칠 수 있고, 한 구역 항목을 다른 라인 구역에 그대로 적용할 수 있습니다.' : ''}</span><span class="grow"></span>${zs.some(z => z.active) ? '<button type="button" class="btn" data-env-qr-all>구역 QR 일괄 발행</button>' : ''}${can ? '<button type="button" class="btn primary" data-env-zone-new>＋ 구역 추가</button>' : ''}</div>
     ${zs.length ? `<div class="table-wrap"><table class="grid env-table" data-no-filter><thead><tr><th>순서</th><th>구역</th><th>기준 온도</th><th>기준 습도</th>${area === 'line' ? '<th>청소 항목</th>' : ''}<th>사용</th><th>비고</th><th></th></tr></thead><tbody>${zs.map((z, i) => `<tr class="${z.active ? '' : 'muted'}"><td class="nowrap">${can ? `<button type="button" class="btn small" data-env-up="${z.id}"${i ? '' : ' disabled'} aria-label="위로">▲</button><button type="button" class="btn small" data-env-down="${z.id}"${i < zs.length - 1 ? '' : ' disabled'} aria-label="아래로">▼</button>` : i + 1}</td>
       <td data-card-primary><b>${esc(z.name)}</b></td><td class="nowrap">${z.temp_on ? envRange(z.temp_min, z.temp_max, '℃') : '<span class="chip">끔</span>'}</td><td class="nowrap">${z.hum_on ? envRange(z.hum_min, z.hum_max, '%') : '<span class="chip">끔</span>'}</td>${area === 'line' ? `<td class="small">${z.clean_items.length}개${z.clean_items.length ? ` <span class="muted">${esc(z.clean_items.slice(0, 2).join(' · '))}${z.clean_items.length > 2 ? ' …' : ''}</span>` : ''}</td>` : ''}<td>${z.active ? '<span class="chip green">사용</span>' : '<span class="chip">사용 안 함</span>'}</td><td class="small">${esc(z.note)}</td>
-      <td class="nowrap">${can ? `<button type="button" class="btn small" data-env-zone="${z.id}">수정</button>${area === 'line' && z.clean_items.length ? ` <button type="button" class="btn small" data-env-apply="${z.id}">항목 다른 구역에 적용</button>` : ''}${z.used ? '' : ` <button type="button" class="btn small danger" data-env-zone-del="${z.id}">삭제</button>`}` : ''}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">${ENV_AREA_L[area]} 구역이 없습니다.${can ? ' 「＋ 구역 추가」로 넣으세요.' : ''}</div>`}`;
+      <td class="nowrap">${z.active ? `<button type="button" class="btn small" data-env-qr="${z.id}">QR</button> ` : ''}${can ? `<button type="button" class="btn small" data-env-zone="${z.id}">수정</button>${area === 'line' && z.clean_items.length ? ` <button type="button" class="btn small" data-env-apply="${z.id}">항목 다른 구역에 적용</button>` : ''}${z.used ? '' : ` <button type="button" class="btn small danger" data-env-zone-del="${z.id}">삭제</button>`}` : ''}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">${ENV_AREA_L[area]} 구역이 없습니다.${can ? ' 「＋ 구역 추가」로 넣으세요.' : ''}</div>`}`;
     body.insertAdjacentHTML('beforeend', '<div id="envHol"></div>'); drawHol().catch(fail);
   };
   // 15.344 휴일 관리: 법정 공휴일(대체·선거일 포함, 자동) + 회사 휴일(추가·삭제). 토·일·휴일은 점검하지 않음(특근 지정 시 예외).
@@ -292,6 +301,8 @@ async function pageEnv(main, { operator = false, area: fixedArea = '' } = {}) {
     else if (b.matches('[data-env-print]')) printMonth().catch(fail);
     else if (b.matches('[data-env-xlsx]')) { const t = $('#envMonthOut table', body); if (t) tableToXlsx(t, monthTitle()); }
     else if (b.matches('[data-env-zone-new]')) zoneModal(null);
+    else if (b.matches('[data-env-qr-all]')) envZoneQr(setup.zones.filter(z => z.area === area && z.active), ENV_AREA_L[area]);
+    else if (b.dataset.envQr) envZoneQr(setup.zones.filter(z => z.id === Number(b.dataset.envQr)), ENV_AREA_L[area]);
     else if (b.dataset.envZone) zoneModal(setup.zones.find(z => z.id === Number(b.dataset.envZone)));
     else if (b.dataset.envUp) move(Number(b.dataset.envUp), -1);
     else if (b.dataset.envDown) move(Number(b.dataset.envDown), 1);
@@ -308,4 +319,70 @@ async function pageEnv(main, { operator = false, area: fixedArea = '' } = {}) {
   });
   main.addEventListener('change', e => { if (e.target.matches('[data-hol-year]')) { holYear = e.target.value; drawHol().catch(fail); return; } if (e.target.name === 'env_date' && e.target.value) { date = e.target.value > d.today ? d.today : e.target.value; load().catch(fail); } });
   await load();
+}
+
+// 15.348 오퍼레이터 처음 화면: 환경점검 단추에 오늘 미입력 구역 수 표시(휴무면 「휴무」)
+async function envOpBadges(root) {
+  const tiles = { line: root.querySelector('a.op-big[href="#/operator/env-line"]'), warehouse: root.querySelector('a.op-big[href="#/operator/env-wh"]') };
+  if (!tiles.line && !tiles.warehouse) return;
+  let d; try { d = await api('GET', '/api/env/today'); } catch { return; }
+  const hm = String(d.now || '').slice(11, 16);
+  for (const s of d.rows) { const t = tiles[s.area]; if (!t || !t.isConnected) continue; t.querySelector('.op-env-badge')?.remove();
+    const miss = s.rest ? 0 : s.am_missing + (hm >= '13:00' ? s.pm_missing : 0) + (s.area === 'line' ? s.clean_missing : 0);
+    t.insertAdjacentHTML('beforeend', s.rest ? '<span class="op-env-badge rest">오늘 휴무</span>' : miss ? `<span class="op-env-badge">미입력 ${miss}</span>` : s.zones ? '<span class="op-env-badge ok">오늘 완료</span>' : ''); }
+}
+
+// ── 15.349 온습도 추이 그래프(구역·월) ── 온도와 습도는 단위가 달라 그래프를 따로(두 축 한 그래프 금지). 오전·오후 두 선 + 기준 하한·상한 점선, 날짜에 마우스를 대면 값.
+function envChartSvg(key, label, unit, days, am, pm, lo, hi) {
+  const vals = [...am, ...pm].filter(v => v != null); if (!vals.length) return '';
+  let y0 = Math.min(...vals, lo ?? Infinity), y1 = Math.max(...vals, hi ?? -Infinity); const pad = Math.max(1, (y1 - y0) * 0.12); y0 = Math.floor(y0 - pad); y1 = Math.ceil(y1 + pad);
+  const W = 720, H = 210, L = 40, R = 12, T = 12, B = 26, n = days.length, x = i => L + (n <= 1 ? 0 : i * (W - L - R) / (n - 1)), y = v => T + (y1 - v) * (H - T - B) / (y1 - y0 || 1);
+  const ticks = []; const step = Math.max(1, Math.ceil((y1 - y0) / 4)); for (let v = Math.ceil(y0 / step) * step; v <= y1; v += step) ticks.push(v);
+  const path = arr => { let d = '', pen = false; arr.forEach((v, i) => { if (v == null) { pen = false; return; } d += `${pen ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`; pen = true; }); return d; };
+  const out = v => v != null && ((lo != null && v < lo) || (hi != null && v > hi));
+  const dots = (arr, cls) => arr.map((v, i) => v == null ? '' : `<circle class="${cls}${out(v) ? ' env-c-out' : ''}" cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="4"/>`).join('');
+  const lim = (v, t) => v == null ? '' : `<line class="env-c-lim" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text class="env-c-limt" x="${W - R - 2}" y="${y(v) - 4}" text-anchor="end">${t} ${v}${unit}</text>`;
+  const hit = days.map((d, i) => `<rect class="env-c-hit" data-i="${i}" x="${(x(i) - (W - L - R) / (2 * Math.max(1, n - 1))).toFixed(1)}" y="${T}" width="${((W - L - R) / Math.max(1, n - 1)).toFixed(1)}" height="${H - T - B}"/>`).join('');
+  return `<figure class="env-chart" data-chart="${key}" data-unit="${unit}" data-days='${JSON.stringify(days.map(d => d.slice(5)))}' data-am='${JSON.stringify(am)}' data-pm='${JSON.stringify(pm)}'>
+    <figcaption><b>${label}</b> <span class="env-c-leg"><i class="s1"></i>오전 <i class="s2"></i>오후 <i class="lim"></i>기준</span></figcaption>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${label} 일별 오전·오후 추이${lo != null || hi != null ? `, 기준 ${lo ?? ''}~${hi ?? ''}${unit}` : ''}">
+      ${ticks.map(v => `<line class="env-c-grid" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text class="env-c-ax" x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v}</text>`).join('')}
+      ${days.map((d, i) => (i % Math.ceil(n / 10) === 0 || i === n - 1) ? `<text class="env-c-ax" x="${x(i)}" y="${H - 8}" text-anchor="middle">${+d.slice(8)}</text>` : '').join('')}
+      ${lim(hi, '상한')}${lim(lo, '하한')}
+      <path class="env-c-l s1" d="${path(am)}"/><path class="env-c-l s2" d="${path(pm)}"/>${dots(am, 'env-c-d s1')}${dots(pm, 'env-c-d s2')}
+      <line class="env-c-cross" x1="0" x2="0" y1="${T}" y2="${H - B}" hidden/>${hit}
+    </svg><div class="env-c-tip" hidden></div></figure>`;
+}
+function envCharts(z, days, recs) {
+  const g = (slot, f) => days.map(dd => { const r = recs.find(x => x.check_date === dd && x.zone_id === z.id && x.slot === slot && !x.skipped); return r ? r[f] : null; });
+  const t = z.temp_on ? envChartSvg('t', '온도 추이(℃)', '℃', days, g('am', 'temp'), g('pm', 'temp'), z.temp_min, z.temp_max) : '';
+  const h = z.hum_on ? envChartSvg('h', '습도 추이(%)', '%', days, g('am', 'hum'), g('pm', 'hum'), z.hum_min, z.hum_max) : '';
+  return t || h ? `<div class="env-charts">${t}${h}</div>` : '';
+}
+function envChartHover(host) {
+  host.querySelectorAll('.env-chart').forEach(fig => {
+    const svg = fig.querySelector('svg'), tip = fig.querySelector('.env-c-tip'), cross = fig.querySelector('.env-c-cross'), days = JSON.parse(fig.dataset.days), am = JSON.parse(fig.dataset.am), pm = JSON.parse(fig.dataset.pm), u = fig.dataset.unit;
+    const show = rect => { const i = Number(rect.dataset.i), cx = Number(rect.getAttribute('x')) + Number(rect.getAttribute('width')) / 2; cross.setAttribute('x1', cx); cross.setAttribute('x2', cx); cross.hidden = false;
+      tip.innerHTML = `<b>${esc(days[i])}</b><br><i class="s1"></i>오전 ${am[i] ?? '—'}${am[i] != null ? u : ''}<br><i class="s2"></i>오후 ${pm[i] ?? '—'}${pm[i] != null ? u : ''}`; tip.hidden = false;
+      const br = svg.getBoundingClientRect(), fr = fig.getBoundingClientRect(), px = br.left - fr.left + cx * br.width / svg.viewBox.baseVal.width; tip.style.left = `${Math.min(Math.max(px + 10, 0), fr.width - 130)}px`; };
+    svg.addEventListener('pointerover', e => { const r = e.target.closest('.env-c-hit'); if (r) show(r); });
+    svg.addEventListener('pointerleave', () => { tip.hidden = true; cross.hidden = true; });
+  });
+}
+// ── 15.349 구역 QR: 휴대폰 카메라로 찍으면 그 구역 입력으로(로그인 뒤에도 이어짐) ──
+const envZoneUrl = z => `${location.origin}/?envzone=${z.id}&area=${z.area}`;
+function envZoneQr(zs, areaL) {
+  if (!zs.length) return toast('QR을 만들 구역이 없습니다.', 'err');
+  const m = modal(`<div class="qr-issue-head"><h3>구역 QR · ${esc(areaL)}${zs.length > 1 ? ` <span class="small muted">${zs.length}장</span>` : ''}</h3><button type="button" class="btn qr-pdf" data-print>PDF출력</button></div>
+    <p class="small muted no-print">구역 출입구·온습도계 옆에 붙이세요. 휴대폰 카메라로 찍으면 그 구역의 오늘 점검 입력이 바로 열립니다(로그인 필요).</p>
+    <div class="cert qr-issue">${zs.map(z => `<div class="qr-card"><div class="qr-card-code">${qrSvg(envZoneUrl(z))}</div><div class="qr-card-no">${esc(z.name)}</div><div class="qr-card-sub">환경점검 · ${esc(areaL)}${z.temp_on ? ' · 온도' : ''}${z.hum_on ? ' · 습도' : ''}${z.area === 'line' && z.clean_items.length ? ' · 청소' : ''}</div></div>`).join('')}</div>`, { wide: zs.length > 1 });
+  m.el.parentElement.classList.add('lr-cert-wrap');
+  $('[data-print]', m.el).onclick = () => rcPrint(`구역QR_${areaL}`);
+}
+// QR로 들어온 주소(?envzone=ID&area=…) → 로그인 뒤 맞는 화면으로(오퍼레이터는 오퍼레이터 화면)
+try { const u = new URL(location.href), z = u.searchParams.get('envzone'); if (z && /^\d+$/.test(z)) { sessionStorage.setItem('envJump', JSON.stringify({ zone: Number(z), area: u.searchParams.get('area') === 'warehouse' ? 'warehouse' : 'line' })); history.replaceState(null, '', u.pathname + '#/env-jump'); } } catch { /* 편의 */ }
+function envJumpGo() {
+  let j = null; try { j = JSON.parse(sessionStorage.getItem('envJump') || 'null'); } catch { /* 편의 */ }
+  const op = !ME?.is_admin && (ME?.roles || []).some(r => r.startsWith('operator'));
+  location.replace(!j ? '#/' : op ? (j.area === 'line' ? '#/operator/env-line' : '#/operator/env-wh') : '#/prod/env');
 }

@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.345';
+const APP_VERSION = '15.350';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -529,12 +529,39 @@ function helpDodge(main, details) {
   const left = Math.min(...hits.map(b => b.left));
   details.style.right = `${parseFloat(getComputedStyle(details).right) + (r.right - left) + 8}px`;
 }
+// 15.347 화면 설명이 없던 화면의 도움말(화면 코드에 설명 문단이 없을 때만 넣음)
+const ROUTE_HELP = {
+  '#/sales/quotes': '거래처에 보낼 견적서를 만들고 출력합니다. 확정된 견적은 수주로 이어 받아 품목·단가를 다시 입력하지 않게 합니다. 업무 흐름: 견적 → 수주 → 생산의뢰·출하 → 매출전표.',
+  '#/sales/orders': '고객 주문(수주)을 등록하고 납기·진행(생산의뢰·출하·매출전표)을 봅니다. 수주에서 생산의뢰·구매의뢰를 만들고, 출하지시와 분할 매출전표로 이어집니다.',
+  '#/sales/mr': '영업이 생산팀에 보내는 생산의뢰 목록입니다. 수주를 고르거나 직접 품목·수량·납기를 넣어 의뢰하면 생산 › 생산의뢰 접수로 넘어가 생산계획이 잡힙니다.',
+  '#/sales/pr': '영업이 구매팀에 보내는 구매의뢰 목록입니다. 의뢰가 접수되면 구매가 발주로 이어 받고, 입고되면 진행 상태가 바뀝니다.',
+  '#/sales/bills': '매출전표 목록입니다. 수주·출하를 골라 전표를 잡고(나눠 잡기 가능), 거래명세서를 출력하며, 전표를 골라 세금계산서에 담습니다. 마감한 달·거래처의 전표는 고칠 수 없습니다.',
+  '#/sales/returns': '고객에게서 돌아온 물건(반입·반품)을 기록합니다. 반입하면 재고에 다시 잡히고 매출에서 차감되며, 품질 문제면 VOC·CAPA로, 불량품은 불량·폐기나 공급사 반출로 이어집니다.',
+  '#/sales/delivery-status': '거래처·품목별로 언제 얼마나 납품(출하)했는지 봅니다. 매출전표가 아직 없는 출하도 함께 보여 마감 전에 빠진 전표를 찾을 수 있습니다.',
+  '#/purchase/bills': '매입전표 목록입니다. 입고를 골라 전표를 잡고, 전표를 골라 매입 세금계산서에 담은 뒤 지급확인으로 이어집니다. 마감한 달·거래처의 전표는 고칠 수 없습니다.',
+  '#/purchase/returns': '공급사로 돌려보낸 물건(반출·반품)을 기록합니다. 반출하면 재고에서 빠지고 매입에서 차감됩니다. 수입검사 불합격·불량품 처리와 함께 씁니다.',
+  '#/purchase/receipt-status': '거래처·품목별로 언제 얼마나 입고됐는지 봅니다. 매입전표가 아직 없는 입고도 함께 보여 마감 전에 빠진 전표를 찾을 수 있습니다.',
+  '#/purchase/notes': '받을어음·지급어음을 등록하고 만기일자로 관리합니다. 만기가 다가오면 표시되고, 만기 회수·결제를 기록하면 입금·지급과 거래처 잔액에 반영됩니다.',
+  '#/prod/orders': '영업이 보낸 생산의뢰를 접수합니다. 접수하면 완제품 계획생산(또는 반제품 계획)으로 이어지고, 실적이 쌓이면 진행이 갱신됩니다. 반려하려면 사유를 적으세요.',
+  '#/prod/semi': '반제품(봉투 등) 생산 계획과 진행을 봅니다. 커팅/융착·세탁 작업 실적이 계획에 자동으로 쌓이고, 반제품 LOT는 완제품 포장에 투입됩니다.',
+  '#/logistics/receipts': '입고 건마다 입고증(입고번호 묶음)을 보고 출력합니다. 입고증의 LOT는 LOT·QR 관리에서 라벨로 발행하고, 수입검사 대상이면 품질 › 분석 관리로 넘어갑니다.',
+  '#/admin': '데이터 백업(내려받기·복원), 회사 사진 저장소, 가입 초대코드를 관리합니다. 사용자 승인·권한은 「회원 관리」, 결재선은 「결재선 설정」, 접속 국가 제한은 「접속 보안」에서 합니다.',
+  '#/me': '내 부서·직급과 지정 담당 업무를 보고, 최근 로그인 기록(IP·장소)을 확인하며 비밀번호를 바꿉니다. 모르는 접속이 보이면 비밀번호를 바꾸고 관리자에게 알리세요. 언어·다크 모드는 오른쪽 위 「화면 설정」에서 바꿉니다.',
+};
+function routeHelp(main, route) {
+  const t = ROUTE_HELP[route]; if (!t || main.querySelector('details.help, .report-heading p.muted')) return; // 머리 줄 안 설명이 있으면 그대로
+  if ([...main.querySelectorAll(':scope > p.muted, :scope > section > p.muted')].some(p => p.textContent.trim().length >= (p.parentElement === main ? 20 : 80))) return; // foldHelp와 같은 기준
+  const h1 = main.querySelector('h1'); if (!h1) return;
+  const at = h1.closest('.report-heading') || (h1.parentElement === main ? h1 : h1.closest('#main > *')); if (!at) return;
+  const p = document.createElement('p'); p.className = 'muted'; p.textContent = t; if (at.classList.contains('report-heading')) p.dataset.inline = '1'; at.after(p); // 머리 줄 오른쪽에 단추가 있는 화면은 도움말을 줄 아래에
+}
 function foldHelp(main) {
   for (const p of main.querySelectorAll(':scope > p.muted, :scope > section > p.muted, #receiptContent > p.muted')) {
     if (p.textContent.trim().length < (p.parentElement === main ? 20 : 80) || p.closest('details')) continue; // 15.279 화면 바로 아래 짧은 설명도 도움말로(화면마다 같은 모양)
     const details = document.createElement('details'); details.className = 'help';
     details.innerHTML = '<summary title="이 화면 설명">도움말</summary>'; p.replaceWith(details); details.append(p); // 15.180 오른쪽 위 단추
-    if (details.parentElement === main) requestAnimationFrame(() => { const h1 = $('h1', main); if (h1 && details.isConnected) { details.style.top = `${h1.offsetTop}px`; helpDodge(main, details); } }); // 제목 줄 높이에(위치 표시와 겹치지 않게)
+    if (p.dataset.inline) details.classList.add('help-inline'); // 15.347
+    if (details.parentElement === main && !p.dataset.inline) requestAnimationFrame(() => { const h1 = $('h1', main); if (h1 && details.isConnected) { details.style.top = `${h1.offsetTop}px`; helpDodge(main, details); } }); // 제목 줄 높이에(위치 표시와 겹치지 않게)
   }
 }
 function applyView(main, route) {
@@ -688,6 +715,7 @@ const PAGES = {
   '#/prod/equipment': main => pageEquipment(main), // 15.307 공무
   '#/prod/pm': main => pagePm(main), // 15.307 공무
   '#/prod/env': main => pageEnv(main), // 15.343 환경점검
+  '#/env-jump': () => envJumpGo(), // 15.349 구역 QR로 들어옴
   '#/prod/risk': main => pageRiskAssess(main), // 15.313 위험성평가
   '#/prod/risk/actions': main => pageRiskActions(main),
   '#/prod/reliability': main => pageReliability(main),
@@ -789,10 +817,18 @@ function managedTabs(main, route) {
 // 지금 화면 단계만 색, 나머지는 회색(누르면 그 화면으로). 두 흐름에 걸친 화면은 위 칩으로 흐름을 바꿔 봄(이 기기에 기억).
 const PROCESS_FLOWS = [
   { key: 'order', name: '주문 · 출하 · 매출', steps: [['#/sales/quotes', '견적'], ['#/sales/orders', '수주'], ['#/sales/mr', '생산의뢰'], ['#/prod/orders', '생산의뢰 접수'], ['#/prod/finished/plan', '생산계획'], ['#/prod/finished', '생산실적'], ['#/logistics/ship-orders', '출하지시'], ['#/logistics/ship', '출하'], ['#/sales/bills', '매출전표'], ['#/sales/tax', '세금계산서'], ['#/purchase/payments', '입금확인']] },
+  // 15.346 흐름이 없던 메뉴(마감·장부·연령표·반품·샘플·세탁 검수·재고·검사규격)도 업무 흐름에 연결
+  { key: 'arclose', name: '매출 마감 · 채권', on: ['#/sales/calendar', '#/sales/reps', '#/sales/delivery-status', '#/sales/tax-check', '#/sales/closing', '#/sales/book', '#/sales/aging', '#/purchase/payments'], steps: [['#/sales/bills', '매출전표'], ['#/sales/delivery-status', '납품현황'], ['#/sales/tax-check', '매출 발행 체크'], ['#/sales/tax', '매출 세금계산서'], ['#/sales/closing', '매출 마감'], ['#/purchase/payments', '입금확인'], ['#/sales/book', '거래처별 장부'], ['#/sales/aging', '채권 연령표']] },
+  { key: 'apclose', name: '매입 마감 · 채무', on: ['#/purchase/calendar', '#/purchase/receipt-status', '#/purchase/tax-check', '#/purchase/closing', '#/purchase/book', '#/purchase/notes', '#/purchase/aging', '#/purchase/disbursements'], steps: [['#/purchase/bills', '매입전표'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/tax-check', '매입 발행 체크'], ['#/purchase/tax', '매입 세금계산서'], ['#/purchase/closing', '매입 마감'], ['#/purchase/disbursements', '지급확인'], ['#/purchase/notes', '어음 관리'], ['#/purchase/book', '거래처별 장부'], ['#/purchase/aging', '채무 연령표']] },
+  { key: 'returns', name: '반품(반입 · 반출)', on: ['#/sales/returns', '#/purchase/returns'], steps: [['#/logistics/ship', '출하'], ['#/sales/returns', '고객 반입(반품)'], ['#/quality/voc/list', 'VOC·원인 분석'], ['#/purchase/laundry', '불량·폐기'], ['#/purchase/returns', '공급사 반출'], ['#/quality/capa', '재발 방지(CAPA)']] },
+  { key: 'sample', name: '샘플 의뢰', on: ['#/sales/sample/product', '#/sales/sample/goods', '#/purchase/sample/list', '#/prod/list'], steps: [['#/sales/sample/product', '제품 샘플의뢰'], ['#/prod/list', '제품 샘플 제작(생산)'], ['#/sales/sample/goods', '상품 샘플의뢰'], ['#/purchase/sample/list', '상품 샘플 구매'], ['#/dev/request', '개발의뢰로 전환']] },
+  { key: 'laundry', name: '세탁 검수 · 불량', on: ['#/purchase/laundry', '#/purchase/laundry-reports'], steps: [['#/prod/semi/wash', '세탁(호기별)'], ['#/purchase/laundry-reports', '세탁 검수·성적서'], ['#/purchase/laundry', '불량·폐기 관리'], ['#/quality/capa', '부적합·CAPA']] },
+  { key: 'stock', name: '입고 · 재고 · LOT', on: ['#/logistics/receipt/new', '#/logistics/receipts', '#/logistics/stock', '#/logistics/lots', '#/purchase/stock'], steps: [['#/logistics/receipt/new', '입고 입력'], ['#/logistics/receipts', '입고증'], ['#/logistics/lots', 'LOT·QR 발행'], ['#/logistics/stock', '재고 현황(창고·위치·LOT)'], ['#/purchase/stock', '안전재고·구매 재고'], ['#/purchase/po', '발주']] },
+  { key: 'master', name: '기준정보 · 초기 설정', on: ['#/admin/bom', '#/admin/bom-sheet', '#/purchase/vendors', '#/purchase/prices', '#/logistics/warehouses', '#/quality/specs', '#/admin/users', '#/admin/approval', '#/admin/security'], steps: [['#/admin/bom', '제품·BOM'], ['#/admin/bom-sheet', 'BOM 소요량표'], ['#/purchase/vendors', '거래처'], ['#/purchase/prices', '거래처별 단가'], ['#/logistics/warehouses', '창고·위치'], ['#/quality/specs', '검사규격'], ['#/admin/users', '사용자·권한'], ['#/admin/approval', '결재선'], ['#/admin/security', '접속 보안']] }, // 15.346 처음 쓸 때 넣는 순서
   { key: 'cost', name: '원가 산출', on: ['#/purchase/cost', '#/purchase/cost/materials', '#/purchase/cost/rates', '#/purchase/cost/trend'], steps: [['#/purchase/cost/rates', '공통 기준(인건비·경비율)'], ['#/purchase/cost/materials', '원가 백데이터(단가 시점)'], ['#/purchase/cost', '품목별 원가·리비전'], ['#/purchase/cost/trend', '원가 추이·마진']] }, // 15.318
   { key: 'buy', name: '구매 · 입고 · 매입', steps: [['#/sales/orders', '수주'], ['#/sales/pr', '구매의뢰'], ['#/purchase/po', '발주'], ['#/logistics/receive', '입고확인'], ['#/quality/inspections', '수입검사'], ['#/purchase/bills', '매입전표'], ['#/purchase/tax', '매입 세금계산서'], ['#/purchase/disbursements', '지급확인']] },
   // 15.287 품질: 분석의뢰 · 수입검사 · 출하검사 · VOC (분석 관리 목록의 검사구분 칩을 누르면 그 흐름으로)
-  { key: 'qreq', name: '품질 분석의뢰', steps: [['#/quality/request', '분석의뢰·접수'], ['#/quality/list', '분석 진행·결과'], ['#/quality/inspections', '검사 이력']] },
+  { key: 'qreq', name: '품질 분석의뢰', steps: [['#/dev/specs', '검사규격 항목설정'], ['#/quality/request', '분석의뢰·접수'], ['#/quality/list', '분석 진행·결과'], ['#/quality/inspections', '검사 이력']] },
   { key: 'qin', name: '수입검사', on: ['#/quality/list', '#/quality/inspections'], steps: [['#/purchase/po', '발주'], ['#/logistics/receive', '입고확인'], ['#/quality/list', '수입검사'], ['#/quality/inspections', '판정·이력'], ['#/purchase/bills', '매입전표']] },
   { key: 'qout', name: '출하검사', on: ['#/quality/list', '#/quality/inspections'], steps: [['#/prod/finished', '생산실적'], ['#/quality/list', '출하검사'], ['#/quality/inspections', '판정·이력'], ['#/logistics/ship-orders', '출하지시'], ['#/logistics/ship', '출하']] },
   { key: 'voc', name: 'VOC 처리', on: ['#/quality/voc/request', '#/quality/voc/list', '#/prod/lot-trace'], steps: [['#/quality/voc/request', 'VOC 접수'], ['#/quality/voc/list', 'VOC 처리'], ['#/prod/lot-trace', 'LOT 연결 조회'], ['#/quality/capa', 'CAPA(재발 방지)']] },
@@ -819,7 +855,7 @@ const FLOW_KEY = 'wpa:flow', FLOW_FOLD = 'wpa:flow-fold';
 const flowStore = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } return null; };
 function processGuide(main, route) {
   $('.proc-guide', main)?.remove();
-  const FLOW_ALIAS = { '#/logistics/receipt/new': '#/logistics/receive', '#/logistics/receipts': '#/logistics/receive' }; // 15.290 입고 입력·입고증 목록도 「입고확인」 단계
+  const FLOW_ALIAS = { '#/logistics/receipt/new': '#/logistics/receive', '#/logistics/receipts': '#/logistics/receive', '#/sales/calendar': '#/sales/closing', '#/sales/reps': '#/sales/book', '#/purchase/calendar': '#/purchase/closing' }; // 15.346 달력·담당자별 현황은 마감·장부 흐름으로 // 15.290 입고 입력·입고증 목록도 「입고확인」 단계
   const r0 = TAB_ON[route] || route, r = PROCESS_FLOWS.some(f => f.steps.some(([h]) => h === r0)) ? r0 : FLOW_ALIAS[navRoute(r0)] || navRoute(r0), flows = PROCESS_FLOWS.filter(f => f.steps.some(([h]) => h === r) && (!f.on || f.on.includes(r))); if (!flows.length) return; // 15.287 on: 이 흐름을 보여 줄 화면(품질 화면에서만) 의뢰 화면(별칭)도 제 단계로
   const anchor = $('.manage-tabs', main) || $('h1', main); if (!anchor || anchor.closest('.modal')) return;
   const box = document.createElement('nav'); box.className = 'proc-guide'; box.setAttribute('aria-label', '업무 흐름 안내');
@@ -835,7 +871,7 @@ function processGuide(main, route) {
     const fb = e.target.closest('[data-pg-flow]'); if (fb) { flowStore(FLOW_KEY, fb.dataset.pgFlow); draw(); return; }
     if (e.target.closest('[data-pg-fold]')) { flowStore(FLOW_FOLD, flowStore(FLOW_FOLD) === '1' ? '0' : '1'); draw(); }
   });
-  draw(); anchor.after(box);
+  draw(); (anchor.closest('.report-heading') || anchor).after(box); // 15.346 제목이 머리 줄(flex) 안에 있으면 그 줄 아래로(휴대폰 가로 넘침 방지)
 }
 // 15.213 메뉴 찾기: 화면 이름 일부를 치면 「부서 › 묶음 › 화면」 목록이 뜨고, Enter·누르면 그 화면으로.
 function bindNavFind() {
@@ -985,7 +1021,7 @@ async function render() {
   refreshNavBadges();
   const seq = render.seq = (render.seq || 0) + 1; // 15.317 빠르게 메뉴를 옮기면 앞 화면의 늦게 끝난 그리기가 새 화면에 탭·경로(HOME 등)를 덮어쓰던 것: 앞 그리기는 페이지 뒤 단계를 건너뜀
   const page = canSeeRoute(route) ? PAGES[location.hash || '#/'] || pageHome : pageNoMenu;
-  try { await page($('#main')); if (seq !== render.seq) return; if (page === pageHome || page === pageTasks) applyMenuAccess($('#main')); if (page !== pageNoMenu) { favoriteTools($('#main'), route); focusToggle($('#main')); } if (POPOUT || document.body.classList.contains('focus-mode')) focusBar(); if (POPOUT) document.title = `${screenTitle($('#main')) || '화면'} · 분리한 창`; applyView($('#main'), route); foldHelp($('#main')); erpEntryBar($('#main'), route); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  try { await page($('#main')); if (seq !== render.seq) return; if (page === pageHome || page === pageTasks) applyMenuAccess($('#main')); if (page !== pageNoMenu) { favoriteTools($('#main'), route); focusToggle($('#main')); } if (POPOUT || document.body.classList.contains('focus-mode')) focusBar(); if (POPOUT) document.title = `${screenTitle($('#main')) || '화면'} · 분리한 창`; applyView($('#main'), route); routeHelp($('#main'), route); foldHelp($('#main')); if (typeof assistMount === 'function') { assistMount(); assistRemember(route, $('#main')); } erpEntryBar($('#main'), route); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   if (seq !== render.seq) return;
   try { autoRememberLists($('#main')); } catch { /* 15.281 조회 조건 기억은 편의 기능 */ }
   try { managedTabs($('#main'), route.split('?')[0]); } catch { /* 15.213 */ }
@@ -1426,7 +1462,7 @@ function tasksCard(tasks) {
   if (a.production_requests?.count) todo.push(`<li><a href="#/prod/orders"><b>생산의뢰 접수 대기 ${a.production_requests.count}건</b></a><div class="small muted">${a.production_requests.items.map(r => `<button type="button" class="link-btn" data-open-mr="${r.id}">${esc(r.req_no)}</button> ${esc(r.customer)}${r.ship_text || r.ship_date ? ' · 출고 ' + esc(r.ship_text || r.ship_date) : ''}`).join(' / ')}${more(a.production_requests.count, a.production_requests.items.length)}</div></li>`);
   if (a.purchase_requests?.count) todo.push(`<li><a href="#/sales/pr"><b>구매의뢰 결재 차례 ${a.purchase_requests.count}건</b></a><div class="small muted">${a.purchase_requests.items.map(r => `<button type="button" class="link-btn" data-task-pr="${r.id}">${esc(r.doc_no)}</button> ${esc(r.title || r.first_item || '')}${r.item_count > 1 ? ` 외 ${r.item_count - 1}건` : ''} · ${esc(r.author_name)}`).join(' / ')}${more(a.purchase_requests.count, a.purchase_requests.items.length)}</div></li>`);
   if (a.purchase_orders_waiting?.count) todo.push(`<li><a href="#/purchase/po/new"><b>발주 대기 구매의뢰 ${a.purchase_orders_waiting.count}건</b></a><div class="small muted">${a.purchase_orders_waiting.items.map(r => `<button type="button" class="link-btn" data-task-pr="${r.id}">${esc(r.doc_no)}</button> ${esc(r.title || r.first_item || '')} · ${esc(r.author_name)}`).join(' / ')}${more(a.purchase_orders_waiting.count, a.purchase_orders_waiting.items.length)}</div></li>`);
-  for (const q of a.quality || []) todo.push(`<li><a href="${q.href}"><b>${esc(q.label)} ${q.count}건</b></a>${['coa', 'docs'].includes(q.key) && q.count > 1 ? ` <button type="button" class="btn small" data-bulk="${q.key}">한꺼번에 승인</button>` : ''}</li>`); // 15.309 품질 승인·처리 대기 · 15.312 일괄 승인
+  for (const q of a.quality || []) todo.push(`<li><a href="${q.href}"><b>${esc(q.label)} ${q.count}건</b></a>${['coa', 'docs', 'env_approve'].includes(q.key) && q.count > 1 ? ` <button type="button" class="btn small" data-bulk="${q.key === 'env_approve' ? 'env' : q.key}">한꺼번에 승인</button>` : ''}</li>`); // 15.309 품질 승인·처리 대기 · 15.312 일괄 승인
   if (a.training_attend?.count) todo.push(`<li><a href="#/quality/training"><b>교육 참석 확인 ${a.training_attend.count}건</b></a><div class="small muted">${a.training_attend.items.map(t => `${esc(t.plan_date)} ${esc(t.title)}`).join(' / ')} — 교육·자격관리에서 「참석 확인」을 누르세요.</div></li>`);
   if (a.training_test?.count) todo.push(`<li><a href="#/quality/training"><b>교육 테스트 응시 ${a.training_test.count}건</b></a><div class="small muted">${a.training_test.items.map(t => `${esc(t.plan_date)} ${esc(t.title)}`).join(' / ')} — 교육·자격관리에서 「📝 테스트 응시」를 누르세요.</div></li>`); // 15.334
   if (a.pm_issue?.count) todo.push(`<li><a href="#/prod/pm"><b>설비 점검 이상·고장 ${a.pm_issue.count}건</b></a><div class="small muted">${a.pm_issue.items.map(t => `${esc(t.log_date)} ${esc(t.equip_no)} ${esc(t.kind === 'failure' ? '고장' : t.pm_name + ' 이상')}`).join(' / ')} — 설비 이력에서 수리 기록 또는 부적합·CAPA로 처리하세요.</div></li>`); // 15.339
@@ -1979,6 +2015,13 @@ async function pageHome(main) {
       row('#/prod/equipment', q.eqMaintenance, '정비 중 설비', 'yellow'),
       row('#/prod/equipment', q.eqFailMonth, '이번 달 고장'),
       row('#/quality/pqc', q.pqcOutMonth, '이번 달 공정 기준 이탈', 'red'),
+    ]) : '' },
+    { key: 'ov:env', label: '환경점검', html: (d.env || []).length ? card('production', 'Environment Check', '환경점검(오늘)', '#/prod/env', [ // 15.348
+      ...d.env.flatMap(s => s.rest ? [row('#/prod/env', '휴무', `${s.area_label} 오늘`, '', s.holiday || '')] : [
+        row('#/prod/env', s.am_missing, `${s.area_label} 오전 미입력 구역`, 'yellow'), row('#/prod/env', s.pm_missing, `${s.area_label} 오후 미입력 구역`, 'yellow'),
+        s.area === 'line' ? row('#/prod/env', s.clean_missing, '라인 청소 미체크 구역', 'yellow') : '', row('#/prod/env', s.dev, `${s.area_label} 오늘 이탈·불량`, 'red')]),
+      ...d.env.map(s => row('#/prod/env', s.confirmed, `${s.area_label} 승인 대기 일지`, 'yellow')),
+      ...d.env.map(s => s.open_past ? row('#/prod/env', s.open_past, `${s.area_label} 지난 일지 확인 안 됨`, 'red') : ''),
     ]) : '' },
     { key: 'ov:requests', label: '의뢰 접수 대기', html: card('requests', 'Requests', '의뢰 접수 대기', '#/quality/list', [
       row('#/quality/request', r.analysis.pending, '분석 접수대기', 'yellow'),

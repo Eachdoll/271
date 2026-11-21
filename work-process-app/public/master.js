@@ -308,7 +308,7 @@ async function pageVendors(main) {
       } catch (error) { fail(error); }
     });
   };
-  fillRepList($('#vendorRepList', main)); // 15.224 영업담당자 이름 고르기
+  if (ME.is_admin || ME.roles.some(r => ['sales', 'purchase'].includes(r))) fillRepList($('#vendorRepList', main)); // 15.224 영업담당자 이름 고르기 · 15.346 권한 있는 사람만(다른 부서는 403 요청이 나던 문제)
   $('#vendorAdd', main).onclick = () => openVendorForm(null, load).catch(fail); // 15.274 등록은 팝업
   filters.onsubmit = event => { event.preventDefault(); load().catch(fail); };
   const fillCodes = $('#vendorFillCodes', main);

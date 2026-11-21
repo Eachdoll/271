@@ -4653,3 +4653,56 @@ tr.env-hatch > td { color: var(--muted); }
 /* 15.345 점검 조건 켜기/끄기 */
 .env-cond { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 10px; }
 .env-cond label.chk { display: inline-flex !important; flex-direction: row !important; align-items: center; gap: 6px; margin: 0; font-weight: 600; }
+/* 15.346 흐름 막대가 부모(그리드·flex)를 넓히지 않게: 단계는 막대 안에서 가로 스크롤 */
+.proc-guide { min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden; }
+.proc-guide .pg-steps { min-width: 0; max-width: 100%; }
+/* 15.347 머리 줄 오른쪽에 단추가 있는 화면: 도움말을 줄 아래에(겹침 방지) */
+#main > details.help.help-inline { position: static !important; display: block; margin: 0 0 8px; }
+
+/* 15.348 오퍼레이터 환경점검 단추 배지 */
+.op-big { position: relative; }
+.op-env-badge { position: absolute; top: 10px; right: 10px; padding: 3px 9px; border-radius: 999px; font-size: 13px; font-weight: 800; background: var(--red); color: #fff; }
+.op-env-badge.ok { background: color-mix(in srgb, #2e7d32 85%, #000); }
+.op-env-badge.rest { background: var(--muted); }
+
+/* 15.349 온습도 추이 그래프(검증한 2색: 오전 파랑 · 오후 주황, 다크는 다크용 단계) */
+.env-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; margin: 8px 0 12px; }
+.env-chart { --s1: #2a78d6; --s2: #eb6834; position: relative; margin: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .env-chart { --s1: #3987e5; --s2: #d95926; } }
+:root[data-theme="dark"] .env-chart { --s1: #3987e5; --s2: #d95926; }
+.env-chart figcaption { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; font-size: 13px; margin-bottom: 4px; }
+.env-c-leg { display: inline-flex; gap: 10px; align-items: center; color: var(--muted); }
+.env-c-leg i, .env-c-tip i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+.env-chart i.s1 { background: var(--s1); } .env-chart i.s2 { background: var(--s2); } .env-c-leg i.lim { height: 0; border-top: 2px dashed var(--muted); }
+.env-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.env-c-grid { stroke: var(--line); stroke-width: 1; }
+.env-c-ax, .env-c-limt { fill: var(--muted); font-size: 11px; }
+.env-c-lim { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.env-c-l { fill: none; stroke-width: 2; stroke-linejoin: round; } .env-c-l.s1 { stroke: var(--s1); } .env-c-l.s2 { stroke: var(--s2); }
+.env-c-d { stroke: var(--panel); stroke-width: 2; } .env-c-d.s1 { fill: var(--s1); } .env-c-d.s2 { fill: var(--s2); }
+.env-c-d.env-c-out { stroke: var(--red); stroke-width: 2.5; r: 5.5; }
+.env-c-hit { fill: transparent; cursor: crosshair; }
+.env-c-cross { stroke: var(--muted); stroke-width: 1; }
+.env-c-tip { position: absolute; top: 34px; z-index: 2; min-width: 110px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font-size: 12px; line-height: 1.5; box-shadow: 0 4px 14px rgba(0,0,0,.12); pointer-events: none; }
+.env-print + .rpt-sign, .rpt-modal .env-charts { break-inside: avoid; }
+
+/* 15.350 도움말 챗봇 */
+.assist-btn { position: fixed; right: 18px; bottom: 18px; z-index: 60; width: 52px; height: 52px; border-radius: 50%; border: 0; background: var(--accent); color: #fff; font-size: 24px; box-shadow: 0 6px 18px rgba(0,0,0,.22); cursor: pointer; }
+.assist-btn:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
+.assist-panel { position: fixed; right: 18px; bottom: 18px; z-index: 61; width: min(400px, calc(100vw - 24px)); height: min(560px, calc(100vh - 110px)); display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); color: var(--text); box-shadow: 0 12px 36px rgba(0,0,0,.25); overflow: hidden; }
+.assist-panel[hidden] { display: none; }
+.assist-panel header { display: flex; align-items: center; gap: 8px; padding: 10px 44px 10px 14px; border-bottom: 1px solid var(--line); position: relative; }
+.assist-panel header .modal-x { position: absolute; right: 8px; top: 6px; }
+.assist-log { flex: 1; overflow-y: auto; padding: 12px; display: grid; gap: 10px; align-content: start; }
+.assist-msg { max-width: 92%; padding: 9px 12px; border-radius: 12px; line-height: 1.55; font-size: 14px; }
+.assist-msg p { margin: 0 0 6px; }
+.assist-msg.me { justify-self: end; background: var(--accent); color: #fff; }
+.assist-msg.bot { justify-self: start; background: color-mix(in srgb, var(--accent) 8%, var(--panel)); border: 1px solid var(--line); }
+.assist-msg.wait { color: var(--muted); }
+.assist-try { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.assist-card { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); }
+.assist-card p { margin: 4px 0 6px; font-size: 13px; }
+.assist-form { display: flex; gap: 6px; padding: 10px; border-top: 1px solid var(--line); }
+.assist-form input { flex: 1; min-width: 0; }
+@media (max-width: 700px) { .assist-btn { bottom: 76px; right: 14px; width: 48px; height: 48px; } .assist-panel { right: 8px; left: 8px; width: auto; bottom: 70px; height: min(70vh, 520px); } }
+@media print { .assist-btn, .assist-panel { display: none !important; } }

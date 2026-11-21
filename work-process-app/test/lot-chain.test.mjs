@@ -1619,3 +1619,19 @@ test('15.345 zone check conditions on/off: warehouse defaults to humidity off, r
   const w2 = (await prod('PUT', `/api/env/zones/${w.id}`, { hum_on: true, hum_max: 60, revision: w.revision })).body; assert.equal(w2.hum_on, true);
   assert.equal((await prod('POST', '/api/env/records', { area: 'warehouse', kind: 'th', date: mon, entries: [{ zone_id: w.id, slot: 'pm', temp: 20 }] })).status, 400, 'humidity required once on');
 });
+
+test('15.348 env today status · pending list for bulk approve (approver areas only) · operator may read today', async () => {
+  const t = (await prod('GET', '/api/env/today')).body; assert.ok(Array.isArray(t.rows) && t.rows.length === 2); const line = t.rows.find(r => r.area === 'line');
+  for (const k of ['rest', 'zones', 'am_missing', 'pm_missing', 'clean_missing', 'dev', 'confirmed', 'open_past']) assert.ok(k in line, k);
+  assert.deepEqual((await prod('GET', '/api/env/pending')).body.rows, [], 'production (not approver) sees nothing');
+  const p = (await admin('GET', '/api/env/pending')).body.rows; assert.ok(Array.isArray(p));
+  const dash = (await prod('GET', '/api/dashboard')).body; assert.ok(Array.isArray(dash.env) && dash.env.length === 2);
+  const day = (await admin('GET', '/api/env/day?area=line')).body; assert.equal(typeof day.pending, 'number');
+});
+
+test('15.349 quality report includes env table · 15.350 assist: no AI binding → ai:false, empty question → 400', async () => {
+  const r = await prod('GET', `/api/reports/dept?section=quality&from=2026-11-01&to=2026-11-30`); assert.equal(r.status, 200, JSON.stringify(r.body).slice(0, 200));
+  const env = r.body.tables.find(t => t.title === '환경점검(창고·라인)'); assert.ok(env); assert.ok(env.rows.some(x => x[0] === '라인' && x[1] >= 1), JSON.stringify(env.rows));
+  assert.deepEqual((await prod('POST', '/api/assist', { q: '특근 지정 방법', context: [{ title: 'x', text: 'y' }] })).body, { ai: false });
+  assert.equal((await prod('POST', '/api/assist', { q: '' })).status, 400);
+});
