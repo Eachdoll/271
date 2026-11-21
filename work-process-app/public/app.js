@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.323';
+const APP_VERSION = '15.328';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -863,7 +863,7 @@ function bindNavFind() {
   if (!bindNavFind.once) { bindNavFind.once = true; // 문서 이벤트는 한 번만(화면마다 메뉴를 다시 그려도 쌓이지 않게). 누른 단추 글자가 바뀌어 떨어져도 경로로 판단.
     document.addEventListener('click', e => { const path = e.composedPath(); if (!path.some(n => n.classList?.contains('nav-search'))) $$('.nav-find-list').forEach(l => { l.hidden = true; }); if (!path.some(n => n.classList?.contains('prefs-menu'))) $$('.prefs-menu[open]').forEach(d => { d.open = false; }); }); }
   // 화면 설정: 언어·화면 모드·메뉴 위치·밀도 단추를 「⚙ 화면 설정」 안으로 모은다(theme.js·i18n.js가 머리줄에 넣는 단추를 옮김)
-  const gather = () => { const pop = $('.who .prefs-pop'); if (!pop) return; $$('.who > .lang-select, .who > .theme-toggle, .who > .skin-select, .who > .skin-face').forEach(x => pop.append(x)); };
+  const gather = () => { const pop = $('.who .prefs-pop'); if (!pop) return; $$('.who > .lang-select, .who > .theme-toggle, .who > .skin-select, .who > .font-select, .who > .pcmode-toggle, .who > .skin-face').forEach(x => pop.append(x)); };
   if (typeof applySkin === 'function' && ME?.ui) applySkin(ME.ui.skin || 'default'); // 15.220 계정에 저장된 스킨
   gather(); new MutationObserver(gather).observe($('.who'), { childList: true });
 }
@@ -895,7 +895,7 @@ function shell() {
   <header class="top">
     <button class="menu-btn" aria-label="메뉴">☰</button>
     <a href="#/" class="brand"><img class="brand-logo" src="/assets/seoulsemi-logo-blue.png" alt="SEOUL SEMITECH"> <span class="brand-text">서울세미텍 시스템</span><span class="app-version">버전 ${APP_VERSION}</span></a>
-    <div class="who"><details class="prefs-menu"><summary class="btn small" title="언어·화면 모드·메뉴 위치·화면 밀도">⚙ 화면 설정</summary><div class="prefs-pop"></div></details><a href="#/me" title="내 정보">${esc(ME.name)}${ME.is_admin ? ' <span class="tag">관리자</span>' : ''}${roles ? ` <span class="tag soft">${esc(roles)}</span>` : ''}</a>
+    <div class="who"><details class="prefs-menu"><summary class="btn small" title="언어·화면 모드·메뉴 위치·화면 밀도·글꼴">⚙ 화면 설정</summary><div class="prefs-pop"></div></details><a href="#/me" title="내 정보">${esc(ME.name)}${ME.is_admin ? ' <span class="tag">관리자</span>' : ''}${roles ? ` <span class="tag soft">${esc(roles)}</span>` : ''}</a>
       <button class="btn small" id="logout">로그아웃</button></div>
   </header>
   <div class="layout"><nav class="side"><div class="nav-search" role="search"><input type="search" id="navFind" placeholder="메뉴·번호 찾기" aria-label="메뉴·번호 찾기(NC-·COA-·CHG-·LOT 등)" autocomplete="off"><div class="nav-find-list" hidden></div></div>${nav}<div class="side-account"><a href="#/me">내 정보</a><button type="button" class="btn small" id="logoutSide">로그아웃</button></div></nav><main id="main"></main></div>
@@ -980,7 +980,7 @@ async function render() {
   refreshNavBadges();
   const seq = render.seq = (render.seq || 0) + 1; // 15.317 빠르게 메뉴를 옮기면 앞 화면의 늦게 끝난 그리기가 새 화면에 탭·경로(HOME 등)를 덮어쓰던 것: 앞 그리기는 페이지 뒤 단계를 건너뜀
   const page = canSeeRoute(route) ? PAGES[location.hash || '#/'] || pageHome : pageNoMenu;
-  try { await page($('#main')); if (seq !== render.seq) return; if (page === pageHome || page === pageTasks) applyMenuAccess($('#main')); if (page !== pageNoMenu) favoriteTools($('#main'), route); applyView($('#main'), route); foldHelp($('#main')); erpEntryBar($('#main'), route); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  try { await page($('#main')); if (seq !== render.seq) return; if (page === pageHome || page === pageTasks) applyMenuAccess($('#main')); if (page !== pageNoMenu) { favoriteTools($('#main'), route); focusToggle($('#main')); } if (POPOUT || document.body.classList.contains('focus-mode')) focusBar(); if (POPOUT) document.title = `${screenTitle($('#main')) || '화면'} · 분리한 창`; applyView($('#main'), route); foldHelp($('#main')); erpEntryBar($('#main'), route); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   if (seq !== render.seq) return;
   try { autoRememberLists($('#main')); } catch { /* 15.281 조회 조건 기억은 편의 기능 */ }
   try { managedTabs($('#main'), route.split('?')[0]); } catch { /* 15.213 */ }
@@ -1185,6 +1185,79 @@ function readRecent() { try { const v = JSON.parse(localStorage.getItem(recentKe
 const screenTitle = main => { const h = $('h1', main); if (!h) return ''; const c = h.cloneNode(true); c.querySelectorAll('.dept, .view-switch, .fav-toggle, button, a').forEach(x => x.remove()); return c.textContent.replace(/\s+/g, ' ').trim().slice(0, 40); };
 const FAVORITE_SKIP = ['#/', '#/tasks', '#/favorites', '#/me'];
 // 화면 제목 옆 ☆(자주 쓰는 화면에 추가)과 최근 연 화면 기록. 자주 쓰는 화면은 서버(내 설정)에 저장해 다른 기기에서도 보인다.
+// 15.324 크게 보기(전체 화면) · 새 창으로 분리: 화면 제목 옆 ⤢ → 메뉴·탭·위쪽 줄을 숨기고 이 화면만 꽉 차게(브라우저 전체 화면),
+// 오른쪽 위 「⧉ 새 창으로 분리」(다른 모니터로) · 「↙ 창 안으로」(원래대로). 분리한 창의 「↙ 창 안으로」는 그 창을 닫고 원래 창에서 같은 화면을 연다.
+const POPOUT = typeof location !== 'undefined' && /[?&]pop(=|&|$)/.test(location.search || ''); // URLSearchParams 없는 환경(시작 시험)에서도
+let fsByUs = false;
+function focusBar() {
+  // 15.327 막대는 화면 위쪽 흐름 안에(제목·표 머리글을 가리지 않게, 스크롤하면 같이 올라감). 스크롤해 막대가 안 보이면 오른쪽 아래 작은 「↙」 단추.
+  let bar = document.getElementById('focusBar'); if (!bar) { bar = document.createElement('div'); bar.id = 'focusBar'; bar.className = 'focus-bar'; bar.setAttribute('role', 'toolbar'); bar.setAttribute('aria-label', '크게 보기'); }
+  const main = document.getElementById('main'); if (main && bar.nextElementSibling !== main) main.before(bar);
+  bar.innerHTML = POPOUT ? `<span class="fb-title">${esc(screenTitle($('#main')) || '')} <span class="muted small">· 분리한 창</span></span><span class="grow"></span><button type="button" class="btn small primary" data-fb-in title="이 창을 닫고 원래 창에서 이 화면 보기">↙ 창 안으로</button>`
+    : `<span class="fb-title muted small">크게 보기 · Esc로 원래대로</span><span class="grow"></span><button type="button" class="btn small" data-fb-pop title="이 화면을 새 창으로 분리(다른 모니터로 옮겨 보기)">⧉ 새 창으로 분리</button><button type="button" class="btn small primary" data-fb-exit title="원래 크기로(Esc)">↙ 창 안으로</button>`;
+  let fab = document.getElementById('focusFab');
+  if (!fab) { fab = document.createElement('button'); fab.type = 'button'; fab.id = 'focusFab'; fab.className = 'focus-fab'; fab.textContent = '↙'; document.body.append(fab); }
+  fab.toggleAttribute('data-fb-in', POPOUT); fab.toggleAttribute('data-fb-exit', !POPOUT); fab.setAttribute('aria-label', '창 안으로'); fab.title = POPOUT ? '이 창을 닫고 원래 창에서 이 화면 보기' : '원래 크기로(Esc)';
+  if (!focusBar.io && 'IntersectionObserver' in window) focusBar.io = new IntersectionObserver(es => { const f = document.getElementById('focusFab'); if (f) f.hidden = es[0].isIntersecting; });
+  if (focusBar.io) { focusBar.io.disconnect(); focusBar.io.observe(bar); } else fab.hidden = false;
+  return bar;
+}
+// 15.327 크게 보기 ↔ 창 안으로: 위쪽 줄·메뉴가 생기고 없어져도 보던 줄이 화면의 같은 자리에 오게(전체 화면 전환 뒤 한 번 더).
+function keepScroll(change) {
+  const main = document.getElementById('main'), hdr = document.querySelector('header.top'), focus = document.body.classList.contains('focus-mode');
+  const y = (!focus && hdr && hdr.offsetParent ? Math.max(0, hdr.getBoundingClientRect().bottom) : 0) + 70;
+  let el = window.scrollY > 0 ? document.elementFromPoint(Math.min(innerWidth / 2, 420), Math.min(y, innerHeight - 10)) : null;
+  el = el?.closest('tr, li, .card, section, form, .table-wrap, h1, h2, .ip-tiles, .proc-guide, .oc-node, .dm-card, fieldset') || null; if (el && !main?.contains(el)) el = null;
+  const top = el ? el.getBoundingClientRect().top : 0;
+  change();
+  if (!el) return;
+  const fix = () => { if (el.isConnected) window.scrollBy(0, el.getBoundingClientRect().top - top); };
+  fix(); requestAnimationFrame(fix);
+  const once = () => { fix(); window.removeEventListener('resize', once); }; window.addEventListener('resize', once); setTimeout(() => window.removeEventListener('resize', once), 1500);
+}
+function enterFocus() {
+  keepScroll(() => { document.body.classList.add('focus-mode'); focusBar(); });
+  const el = document.documentElement; if (el.requestFullscreen && !document.fullscreenElement) el.requestFullscreen().then(() => { fsByUs = true; }).catch(() => { /* 전체 화면을 못 써도 크게 보기는 됨 */ });
+  document.querySelector('#focusBar [data-fb-exit]')?.focus({ preventScroll: true });
+}
+function exitFocus() {
+  keepScroll(() => { document.body.classList.remove('focus-mode'); document.getElementById('focusBar')?.remove(); document.getElementById('focusFab')?.remove(); focusBar.io?.disconnect(); });
+  if (document.fullscreenElement && fsByUs) document.exitFullscreen().catch(() => {}); fsByUs = false;
+  document.querySelector('#main h1 .focus-toggle')?.focus({ preventScroll: true });
+}
+function popOut() {
+  const w = window.open(`${location.pathname}?pop=1${location.hash || '#/'}`, 'wpa-pop-' + (location.hash || '#/').replace(/[^a-z0-9]/gi, '_'), `popup=yes,width=${screen.availWidth},height=${screen.availHeight},left=0,top=0`);
+  if (!w) { toast('새 창이 막혔습니다. 주소창 오른쪽에서 이 사이트의 팝업을 허용하세요.', 'err'); return; }
+  exitFocus(); toast('새 창으로 분리했습니다. 그 창의 「↙ 창 안으로」를 누르면 여기로 돌아옵니다.');
+}
+// 15.327 분리한 창 → 창 안으로: 저장 안 한 입력이 있으면 먼저 묻고, 원래 창은 같은 화면이면 목록만 새로 불러(조건·스크롤 그대로) 새 창에서 저장한 내용이 보이게.
+async function popIn() {
+  const dirty = document.querySelector('.modal-wrap[data-dirty="1"]') || document.querySelector('#main form[data-dirty]:not(.list-filters):not([data-read-only])');
+  if (dirty && !await confirmBox('저장하지 않은 입력이 있습니다. 창 안으로 돌아가면 이 창의 입력은 사라집니다. 돌아갈까요?')) return;
+  const h = location.hash || '#/';
+  try {
+    const o = window.opener;
+    if (o && !o.closed) {
+      if ((o.location.hash || '#/') === h) { const om = o.document.getElementById('main'); if (om?.qReload) om.qReload(); else if (!o.document.querySelector('#main form[data-dirty]:not(.list-filters)') && typeof o.render === 'function') o.render(); }
+      else o.location.hash = h;
+      o.focus(); window.close(); return;
+    }
+  } catch { /* 다른 창에 못 닿으면 이 창에서 */ }
+  location.href = location.pathname + h;
+}
+if (typeof document !== 'undefined') {
+  document.addEventListener('click', e => { if (e.target.closest('[data-fb-exit]')) exitFocus(); else if (e.target.closest('[data-fb-pop]')) popOut(); else if (e.target.closest('[data-fb-in]')) popIn(); else if (e.target.closest('#main h1 .focus-toggle')) enterFocus(); });
+  // Esc로 브라우저 전체 화면을 끝내면 크게 보기도 끝냄(열린 창이 있으면 그 창을 닫으려던 것이니 크게 보기는 둠)
+  document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && fsByUs) { fsByUs = false; if (document.body.classList.contains('focus-mode') && !document.querySelector('.modal-wrap')) exitFocus(); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !POPOUT && document.body.classList.contains('focus-mode') && !document.querySelector('.modal-wrap')) exitFocus(); });
+  if (POPOUT) document.body.classList.add('focus-mode', 'popout');
+}
+// 15.327 ⤢ 크게 보기 단추: ☆가 없는 화면(대시보드·내 정보)에도. ☆ 뒤, 없으면 부서 표시 앞.
+function focusToggle(main) {
+  const h1 = main && main.querySelector('h1'); if (POPOUT || !h1 || h1.querySelector('.focus-toggle') || h1.closest('.modal')) return;
+  const fz = document.createElement('button'); fz.type = 'button'; fz.className = 'focus-toggle'; fz.textContent = '⤢'; fz.title = '크게 보기(전체 화면) — 메뉴·탭을 숨기고 이 화면만 크게, 새 창으로 분리도 됩니다'; fz.setAttribute('aria-label', '크게 보기(전체 화면)');
+  const fav = h1.querySelector('.fav-toggle'); if (fav) fav.after(fz); else h1.insertBefore(fz, h1.querySelector('.dept, .view-switch, .dash-date') || null);
+}
 function favoriteTools(main, route) {
   const path = String(route || '#/').split('?')[0], title = screenTitle(main);
   if (!title || FAVORITE_SKIP.includes(path) || !PAGES[path]) return;
@@ -1194,6 +1267,7 @@ function favoriteTools(main, route) {
   const button = document.createElement('button'); button.type = 'button'; button.className = 'fav-toggle';
   const paint = () => { const on = favs().some(f => f.href === path); button.textContent = on ? '★' : '☆'; button.setAttribute('aria-pressed', String(on)); button.setAttribute('aria-label', on ? '자주 쓰는 화면에서 빼기' : '자주 쓰는 화면에 추가'); button.title = button.getAttribute('aria-label'); };
   paint(); h1.insertBefore(button, h1.querySelector('.dept, .view-switch') || null); // 제목 글자 바로 뒤(부서 표시·전환 버튼 앞)
+  focusToggle(main); // 15.324
   button.onclick = async () => {
     const on = favs().some(f => f.href === path);
     const next = on ? favs().filter(f => f.href !== path) : [...favs(), { href: path, label: title }].slice(-20);
@@ -1909,7 +1983,7 @@ async function pageHome(main) {
     { key: 'alerts', label: '확인이 필요한 일', html: alertsCard(alerts) },
     { key: 'overview', label: 'Overview(부서별 지금 처리할 것)', html: `<section class="dash-section" aria-labelledby="dashNow"><h2 id="dashNow">Overview <span class="dash-sub">부서별 지금 처리할 것</span></h2><div class="dash-overview">${applyWidgetPref(cards, pref).map(c => c.html).join('')}</div></section>` },
     { key: 'pipeline', label: 'Request Pipeline(의뢰 종류별 진행)', html: `<section class="dash-section" aria-labelledby="dashProgress"><h2 id="dashProgress">Request Pipeline <span class="dash-sub">의뢰 종류별 진행</span></h2>
-  <div class="table-wrap"><table class="grid keep-table progress-table">
+  <div class="table-wrap"><table class="grid keep-table progress-table" data-no-filter>
     <caption class="sr-only">의뢰 종류별 진행 현황 (건수)</caption>
     <thead><tr><th scope="col">구분</th><th scope="col">접수대기</th><th scope="col">대기</th><th scope="col">진행</th><th scope="col">완료</th></tr></thead>
     <tbody>${['analysis', 'rnd_analysis', 'development', 'sample', 'sample_goods', 'voc'].filter(t => r[t]).map((t) => `<tr><th scope="row"><a href="${REQ[t].list}">${REQ[t].label}의뢰</a></th><td>${num(r[t].pending)}</td><td>${num(r[t].waiting)}</td><td>${num(r[t].progress)}</td><td>${num(r[t].done)}</td></tr>`).join('')}</tbody>
